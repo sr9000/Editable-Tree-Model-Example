@@ -167,9 +167,11 @@ class TreeItem:
     def insert_columns(self, position: int, columns: int) -> bool:
         if 0 <= position <= len(self.item_data):
             self.item_data[position:position] = [None] * columns
-            return all(
+            if not all(
                 child.insert_columns(position, columns) for child in self.child_items
-            )
+            ):
+                raise IndexError("Failed to insert columns in child items")
+            return True
         return False
 
     def remove_columns(self, begin: int, columns: int) -> bool:
@@ -177,7 +179,9 @@ class TreeItem:
         end = begin + columns
         if 0 <= begin and end <= len(self.item_data):
             del self.item_data[begin:end]
-            return all(
+            if not all(
                 child.remove_columns(begin, columns) for child in self.child_items
-            )
+            ):
+                raise IndexError("Failed to remove columns in child items")
+            return True
         return False
