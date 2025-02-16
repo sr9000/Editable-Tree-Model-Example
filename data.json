@@ -1,0 +1,82 @@
+[
+  {
+    "title": "Getting Started",
+    "description": "Hello and welcome to Qt!"
+  },
+  {
+    "title": "Get and Install Qt",
+    "description": "You can get Qt, its modules and tools via Qt Online Installer or Qt Maintenance Tool.",
+    "items": [
+      {
+        "title": "Using Qt Online Installer",
+        "description": "You can download Qt Online Installer via Qt Account."
+      },
+      {
+        "title": "Using Qt Maintenance Tool",
+        "description": "Once Qt is installed, you can use Qt Maintenance Tool under <install_dir> to add components and to update or remove installed components."
+      },
+      {
+        "title": "Building Qt from sources",
+        "description": "You can also build Qt yourself."
+      }
+    ]
+  },
+  {
+    "title": "Create Your First Applications",
+    "description": "Learn the basics of Qt and Qt Quick development by following the tutorials that illustrate how to use Qt Creator or Qt Design Studio to create simple applications and build and run them on target platforms."
+  },
+  {
+    "title": "Examples And Tutorials",
+    "description": "Qt Examples And Tutorials",
+    "items": [
+      {
+        "title": "Running the Examples",
+        "description": "Open and run examples within Qt Creator's Welcome mode."
+      },
+      {
+        "title": "Application Examples",
+        "description": "Examples that illustrate how to use Qt to create desktop and mobile applications."
+      },
+      {
+        "title": "Desktop",
+        "description": "Examples that illustrate how to create desktop applications."
+      },
+      {
+        "title": "Mobile",
+        "description": "Examples that illustrate how to create mobile applications."
+      },
+      {
+        "title": "...",
+        "description": "...lots of other examples"
+      }
+    ]
+  },
+  {
+    "title": "Explore Qt",
+    "description": "We invite you to explore the rest of Qt.",
+    "items": [
+      {
+        "title": "Reference Documentation",
+        "description": "The documentation for Qt is available in HTML, PDF and online formats.",
+        "items": [
+          {
+            "title": "Qt Overviews",
+            "description": "List of topics about application development"
+          },
+          {
+            "title": "Examples and Tutorials",
+            "description": "List of code samples and tutorials"
+          },
+          {
+            "title": "Qt Reference Pages",
+            "description": "List of C++ and QML APIs"
+          }
+        ]
+      },
+      {
+        "title": "Participate in the Qt Community",
+        "description": "Qt's vibrant and active community site http://qt.io, houses a wiki, a forum, and additional learning guides and presentations."
+      }
+    ]
+  }
+]
