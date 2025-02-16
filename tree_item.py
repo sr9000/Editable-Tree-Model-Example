@@ -172,7 +172,7 @@ class TreeItem:
             )
         return False
 
-    def remove_columns(self, begin: int, columns: int):
+    def remove_columns(self, begin: int, columns: int) -> bool:
         """declared but not implemented in c++"""
         end = begin + columns
         if 0 <= begin and end <= len(self.item_data):
