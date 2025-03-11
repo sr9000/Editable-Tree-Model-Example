@@ -164,13 +164,11 @@
 #             statusBar()->showMessage(tr("Position: (%1,%2) in top level").arg(row).arg(column));
 #     }
 # }
-import sys
 
 import yaml
 from PySide6.QtCore import QCoreApplication, Qt, QItemSelectionModel
 from PySide6.QtWidgets import (
     QMainWindow,
-    QApplication,
 )
 
 from mainwindow import Ui_MainWindow
@@ -185,13 +183,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setupConnections()
 
     def setupModel(self, yaml_filename: str):
-        headers = ["Title", "Description"]
-
         with open(yaml_filename) as file:
             data = yaml.safe_load(file)
 
-        root_value = {"title": "Title", "description": "Description", "items": data}
-        self.model = TreeModel([root_value], self)
+        self.model = TreeModel(data, self, ["Title", "Description"])
         self.view.setModel(self.model)
 
         for column in range(self.model.columnCount()):
@@ -226,7 +221,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         for column in range(model.columnCount(index)):
             child = model.index(0, column, index)
             model.setData(child, "[No data]", Qt.ItemDataRole.EditRole)
-            if not model.headerData(column, Qt.Orientation.Horizontal).isValid():
+            if model.headerData(column, Qt.Orientation.Horizontal) is None:
                 model.setHeaderData(
                     column,
                     Qt.Orientation.Horizontal,
@@ -237,6 +232,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.view.selectionModel().setCurrentIndex(
             model.index(0, 0, index), QItemSelectionModel.SelectionFlag.ClearAndSelect
         )
+        self.view.expand(model.index(0, 0, index))
         self.updateActions()
 
     def insertColumn(self):
@@ -304,10 +300,3 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.statusBar().showMessage(f"Position: ({row},{column})")
             else:
                 self.statusBar().showMessage(f"Position: ({row},{column}) in top level")
-
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())

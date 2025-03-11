@@ -216,18 +216,21 @@ from tree_item import TreeItem
 
 def setup_model_data(items: list[Mapping[str, Any]], root: TreeItem) -> None:
     for it in items:
-        if it:
-            root.append_child(
-                TreeItem([it["title"], it["description"]], it.get("items", None), root)
-            )
+        root.append_child(
+            TreeItem([it["title"], it["description"]], it.get("items", None), root)
+        )
 
 
 class TreeModel(QAbstractItemModel):
     def __init__(
-        self, items: list[Mapping[str, Any]], /, parent: Optional[Any] = None
+        self,
+        items: list[Mapping[str, Any]],
+        /,
+        parent: Optional[Any] = None,
+        values: list[Any] = None,
     ) -> None:
         super().__init__(parent)
-        self.root_item = TreeItem()
+        self.root_item = TreeItem(values or [])
         setup_model_data(items, self.root_item)
 
     def get_item(self, index: QModelIndex) -> TreeItem:
