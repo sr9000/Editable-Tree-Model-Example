@@ -207,33 +207,28 @@ bool TreeModel::setHeaderData(int section, Qt::Orientation orientation,
 """
 
 from contextlib import contextmanager
-from typing import List, Optional, Any
+from typing import Optional, Any, Mapping
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
 from tree_item import TreeItem
 
 
-def setup_model_data(lines: List[str], parent: TreeItem) -> None:
-    raise NotImplemented("This function needs to be reimplemented")
-    # parents = [parent]
-    # for line in lines:
-    #     data = line.split("\t")
-    #     if data:
-    #         item = TreeItem(data, parents[-1])
-    #         parents[-1].child_items.append(item)
+def setup_model_data(items: list[Mapping[str, Any]], root: TreeItem) -> None:
+    for it in items:
+        if it:
+            root.append_child(
+                TreeItem([it["title"], it["description"]], it.get("items", None), root)
+            )
 
 
 class TreeModel(QAbstractItemModel):
     def __init__(
-        self, headers: List[Any], data: str, parent: Optional[QAbstractItemModel] = None
+        self, items: list[Mapping[str, Any]], /, parent: Optional[Any] = None
     ) -> None:
         super().__init__(parent)
-        self.root_item: TreeItem = TreeItem(headers)
-
-        raise NotImplemented("This function needs to be reimplemented")
-        # self.rootItem = TreeItem(headers)
-        # setup_model_data(data.split("\n"), self.rootItem)
+        self.root_item = TreeItem()
+        setup_model_data(items, self.root_item)
 
     def get_item(self, index: QModelIndex) -> TreeItem:
         if index.isValid() and (item := index.internalPointer()):

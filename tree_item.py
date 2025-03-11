@@ -116,10 +116,25 @@ from typing import Any
 
 
 class TreeItem:
-    def __init__(self, data: list, parent: "TreeItem" = None):
-        self.parent_item: "TreeItem" = parent
-        self.item_data: list = data
+    def __init__(
+        self,
+        values: list[Any] = None,
+        items: list[Any] = None,
+        parent_item: "TreeItem" = None,
+    ) -> None:
+        self.parent_item: "TreeItem" = parent_item
+        self.item_data: list = values or []
         self.child_items: list["TreeItem"] = []
+
+        if items is None:
+            return
+
+        self.child_items: list["TreeItem"] = [
+            TreeItem(it, parent_item=self) for it in items
+        ]
+
+    def append_child(self, child: "TreeItem") -> None:
+        self.child_items.append(child)
 
     def parent(self) -> "TreeItem | None":
         return self.parent_item
@@ -152,7 +167,7 @@ class TreeItem:
     def insert_children(self, position: int, count: int, columns: int) -> bool:
         if 0 <= position <= len(self.child_items):
             self.child_items[position:position] = [
-                TreeItem([None] * columns, self) for _ in range(count)
+                TreeItem([None] * columns, parent_item=self) for _ in range(count)
             ]
             return True
         return False
