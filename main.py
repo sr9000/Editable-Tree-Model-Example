@@ -1,30 +1,25 @@
 import sys
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QMainWindow,
-    QApplication,
-    QLabel,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QApplication
+
+from ui import MainWindow
 
 
-class AppDemo(QMainWindow):
-    def __init__(self):
-        super(AppDemo, self).__init__()
+def main():
+    filename = "data.yaml"
 
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        layout = QVBoxLayout(self.central_widget)
+    if len(sys.argv) == 2:
+        filename = sys.argv[1]
+    elif not filename:
+        print("Usage: python main.py <file-name.yaml>")
+        sys.exit(1)
 
-        label = QLabel("Hello World", self)
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(label)
+    app = QApplication(sys.argv)
+    window = MainWindow(filename)
+    window.show()
+
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = AppDemo()
-    window.show()
-    sys.exit(app.exec())
+    main()
