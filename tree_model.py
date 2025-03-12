@@ -128,6 +128,19 @@ QModelIndex TreeModel::parent(const QModelIndex &index) const
 
 // https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/editabletreemodel/treemodel.cpp?h=6.8
 
+QVariant TreeModel::data(const QModelIndex &index, int role) const
+{
+    if (!index.isValid())
+        return {};
+
+    if (role != Qt::DisplayRole && role != Qt::EditRole)
+        return {};
+
+    TreeItem *item = getItem(index);
+
+    return item->data(index.column());
+}
+
 bool TreeModel::insertColumns(int position, int columns, const QModelIndex &parent)
 {
     beginInsertColumns(parent, position, position + columns - 1);
