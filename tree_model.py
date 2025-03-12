@@ -271,7 +271,10 @@ class TreeModel(QAbstractItemModel):
         return QModelIndex()
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
-        if index.isValid() and role == Qt.ItemDataRole.DisplayRole:
+        if index.isValid() and role in (
+            Qt.ItemDataRole.DisplayRole,
+            Qt.ItemDataRole.EditRole,
+        ):
             return self.get_item(index).data(index.column())
 
     def headerData(
