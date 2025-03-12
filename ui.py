@@ -173,6 +173,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
 )
 
+from delegate import ComboBoxDelegate
 from mainwindow import Ui_MainWindow
 from tree_model import TreeModel
 
@@ -194,6 +195,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         for column in range(self.model.columnCount()):
             self.view.resizeColumnToContents(column)
 
+        self.view.setItemDelegate(ComboBoxDelegate())
         self.view.expandAll()
 
     def setupConnections(self):
