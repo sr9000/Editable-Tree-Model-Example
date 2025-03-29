@@ -167,6 +167,8 @@ void MainWindow::updateActions()
 }
 """
 
+import functools
+
 import yaml
 from PySide6.QtCore import QCoreApplication, Qt, QItemSelectionModel
 from PySide6.QtWidgets import (
@@ -176,6 +178,7 @@ from PySide6.QtWidgets import (
 from delegate import ComboBoxDelegate
 from mainwindow import Ui_MainWindow
 from tree_model import TreeModel
+from tree_view import show_context_menu
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -208,6 +211,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.removeRowAction.triggered.connect(self.removeRow)
         self.removeColumnAction.triggered.connect(self.removeColumn)
         self.insertChildAction.triggered.connect(self.insertChild)
+
+        self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.view.customContextMenuRequested.connect(
+            functools.partial(show_context_menu, self.view)
+        )
 
         self.updateActions()
 
