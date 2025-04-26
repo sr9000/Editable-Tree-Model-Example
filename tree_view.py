@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtWidgets import QTreeView, QMenu
+from PySide6.QtWidgets import QMenu, QTreeView
 
 
 def show_context_menu(tree_view: QTreeView, position: QPoint):

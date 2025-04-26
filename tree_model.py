@@ -220,7 +220,7 @@ bool TreeModel::setHeaderData(int section, Qt::Orientation orientation,
 """
 
 from contextlib import contextmanager
-from typing import Optional, Any, Mapping
+from typing import Any, Mapping, Optional
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 

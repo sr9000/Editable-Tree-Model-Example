@@ -1,8 +1,8 @@
-from PySide6.QtCore import Qt, QModelIndex, QAbstractItemModel
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 from PySide6.QtWidgets import (
     QComboBox,
-    QStyleOptionViewItem,
     QStyledItemDelegate,
+    QStyleOptionViewItem,
     QWidget,
 )
 

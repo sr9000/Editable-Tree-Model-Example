@@ -170,12 +170,11 @@ void MainWindow::updateActions()
 import functools
 
 import yaml
-from PySide6.QtCore import QCoreApplication, Qt, QItemSelectionModel
-from PySide6.QtWidgets import (
-    QMainWindow,
-)
+from PySide6.QtCore import QCoreApplication, QItemSelectionModel, Qt
+from PySide6.QtWidgets import QMainWindow
 
 from delegate import ComboBoxDelegate
+from header_view_editor import HeaderViewEditorMixin
 from mainwindow import Ui_MainWindow
 from tree_model import TreeModel
 from tree_view import show_context_menu
@@ -185,10 +184,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, yaml_filename: str, parent=None):
         super().__init__(parent)
         self.setupUi(self)
-        self.setupModel(yaml_filename)
-        self.setupConnections()
+        self.setup_model(yaml_filename)
+        self.setup_connections()
 
-    def setupModel(self, yaml_filename: str):
+    def setup_model(self, yaml_filename: str):
         with open(yaml_filename) as file:
             data = yaml.safe_load(file)
 
@@ -201,25 +200,26 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.view.setItemDelegate(ComboBoxDelegate())
         self.view.expandAll()
 
-    def setupConnections(self):
+    def setup_connections(self):
         self.exitAction.triggered.connect(QCoreApplication.quit)
-        self.view.selectionModel().selectionChanged.connect(self.updateActions)
 
-        self.actionsMenu.aboutToShow.connect(self.updateActions)
-        self.insertRowAction.triggered.connect(self.insertRow)
-        self.insertColumnAction.triggered.connect(self.insertColumn)
-        self.removeRowAction.triggered.connect(self.removeRow)
-        self.removeColumnAction.triggered.connect(self.removeColumn)
-        self.insertChildAction.triggered.connect(self.insertChild)
+        self.actionsMenu.aboutToShow.connect(self.update_actions)
+        self.insertRowAction.triggered.connect(self.insert_row)
+        self.insertColumnAction.triggered.connect(self.insert_column)
+        self.removeRowAction.triggered.connect(self.remove_row)
+        self.removeColumnAction.triggered.connect(self.remove_column)
+        self.insertChildAction.triggered.connect(self.insert_child)
 
+        self.header_editor = HeaderViewEditorMixin(self.view.header())
+        self.view.selectionModel().selectionChanged.connect(self.update_actions)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.view.customContextMenuRequested.connect(
             functools.partial(show_context_menu, self.view)
         )
 
-        self.updateActions()
+        self.update_actions()
 
-    def insertChild(self):
+    def insert_child(self):
         index = self.view.selectionModel().currentIndex()
         model = self.view.model()
 
@@ -245,9 +245,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             model.index(0, 0, index), QItemSelectionModel.SelectionFlag.ClearAndSelect
         )
         self.view.expand(model.index(0, 0, index))
-        self.updateActions()
+        self.update_actions()
 
-    def insertColumn(self):
+    def insert_column(self):
         model = self.view.model()
         column = self.view.selectionModel().currentIndex().column()
         changed = model.insertColumn(column + 1)
@@ -260,50 +260,50 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 Qt.ItemDataRole.EditRole,
             )
 
-        self.updateActions()
+        self.update_actions()
 
         return changed
 
-    def insertRow(self):
+    def insert_row(self):
         index = self.view.selectionModel().currentIndex()
         model = self.view.model()
 
         if not model.insertRow(index.row() + 1, index.parent()):
             return
 
-        self.updateActions()
+        self.update_actions()
 
         for column in range(model.columnCount(index.parent())):
             child = model.index(index.row() + 1, column, index.parent())
             model.setData(child, "[No data]", Qt.ItemDataRole.EditRole)
 
-    def removeColumn(self):
+    def remove_column(self):
         model = self.view.model()
         column = self.view.selectionModel().currentIndex().column()
         changed = model.removeColumn(column)
 
         if changed:
-            self.updateActions()
+            self.update_actions()
 
         return changed
 
-    def removeRow(self):
+    def remove_row(self):
         index = self.view.selectionModel().currentIndex()
         model = self.view.model()
 
         if model.removeRow(index.row(), index.parent()):
-            self.updateActions()
+            self.update_actions()
 
-    def updateActions(self):
-        hasSelection = not self.view.selectionModel().selection().isEmpty()
-        self.removeRowAction.setEnabled(hasSelection)
-        self.removeColumnAction.setEnabled(hasSelection)
+    def update_actions(self):
+        has_selection = not self.view.selectionModel().selection().isEmpty()
+        self.removeRowAction.setEnabled(has_selection)
+        self.removeColumnAction.setEnabled(has_selection)
 
-        hasCurrent = self.view.selectionModel().currentIndex().isValid()
-        self.insertRowAction.setEnabled(hasCurrent)
-        self.insertColumnAction.setEnabled(hasCurrent)
+        has_current = self.view.selectionModel().currentIndex().isValid()
+        self.insertRowAction.setEnabled(has_current)
+        self.insertColumnAction.setEnabled(has_current)
 
-        if hasCurrent:
+        if has_current:
             self.view.closePersistentEditor(self.view.selectionModel().currentIndex())
             row = self.view.selectionModel().currentIndex().row()
             column = self.view.selectionModel().currentIndex().column()
