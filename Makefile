@@ -1,0 +1,4 @@
+lint:
+	autoflake .
+	isort .
+	black .

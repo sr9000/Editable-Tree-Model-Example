@@ -1,5 +1,27 @@
-from PySide6.QtCore import QModelIndex, Qt
-from PySide6.QtWidgets import QHeaderView, QLineEdit
+from PySide6.QtCore import QEvent, QModelIndex, QObject, Qt
+from PySide6.QtGui import QKeyEvent
+from PySide6.QtWidgets import QHeaderView, QLineEdit, QWidget
+
+
+class EscapableLineEdit(QLineEdit):
+    class EscapeFinishFilter(QObject):
+        def __init__(self, finishable_line_edit: QLineEdit):
+            super().__init__()
+            self.edit = finishable_line_edit
+
+        def eventFilter(self, watched, event, /) -> bool:
+            if event.type() == QEvent.Type.KeyPress and isinstance(event, QKeyEvent):
+                if event.key() == Qt.Key.Key_Escape:
+                    self.edit.setText("")
+                    self.edit.editingFinished.emit()
+                    return True
+            return False
+
+    def __init__(self, parent: QWidget = None, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.filter = self.EscapeFinishFilter(self)
+        self.installEventFilter(self.filter)
 
 
 class HeaderViewEditorMixin:
@@ -8,14 +30,15 @@ class HeaderViewEditorMixin:
 
         # This block sets up the edit line by making setting the parent
         # to the Headers Viewport.
-        self.line = QLineEdit(parent=self.header.viewport())  # Create
+        self.line = EscapableLineEdit(parent=self.header.viewport())  # Create
         self.line.setAlignment(Qt.AlignmentFlag.AlignTop)  # Set the Alignmnet
         self.line.setHidden(True)  # Hide it till its needed
 
         # This is needed because I am having a werid issue that I believe has
         # to do with it losing focus after editing is done.
         self.line.blockSignals(True)
-        self.sectionedit = 0
+
+        self.section = 0
 
         # Connects to double-click
         self.header.sectionDoubleClicked.connect(self.edit_header)
@@ -27,17 +50,15 @@ class HeaderViewEditorMixin:
         self.line.blockSignals(True)
         self.line.setHidden(True)
 
-        # oldname = self.model().headerData(self.sectionedit, Qt.Orientation.Horizontal)
-        newname = str(self.line.text())
-
-        self.header.model().setHeaderData(
-            self.sectionedit, Qt.Orientation.Horizontal, newname
-        )
+        if new_data := str(self.line.text()):
+            self.header.model().setHeaderData(
+                self.section, Qt.Orientation.Horizontal, new_data
+            )
         self.line.setText("")
         self.header.setCurrentIndex(QModelIndex())
 
     def edit_header(self, section):
-        self.sectionedit = section
+        self.section = section
 
         # This block sets up the geometry for the line edit
         edit_geometry = self.line.geometry()
@@ -46,7 +67,7 @@ class HeaderViewEditorMixin:
         self.line.setGeometry(edit_geometry)
 
         self.line.setText(
-            self.header.model().headerData(self.sectionedit, Qt.Orientation.Horizontal)
+            self.header.model().headerData(self.section, Qt.Orientation.Horizontal)
         )
         self.line.setHidden(False)  # Make it visiable
         self.line.blockSignals(False)  # Let it send signals
