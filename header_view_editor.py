@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QHeaderView, QLineEdit, QWidget
 
 
 class EscapableLineEdit(QLineEdit):
-    class EscapeFinishFilter(QObject):
+    class Filter(QObject):
         def __init__(self, finishable_line_edit: QLineEdit):
             super().__init__()
             self.edit = finishable_line_edit
@@ -20,7 +20,7 @@ class EscapableLineEdit(QLineEdit):
     def __init__(self, parent: QWidget = None, **kwargs):
         super().__init__(parent, **kwargs)
 
-        self.filter = self.EscapeFinishFilter(self)
+        self.filter = self.Filter(self)
         self.installEventFilter(self.filter)
 
 
