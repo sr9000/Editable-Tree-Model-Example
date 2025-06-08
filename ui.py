@@ -308,3 +308,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.statusBar().showMessage(f"Position: ({row},{column})")
             else:
                 self.statusBar().showMessage(f"Position: ({row},{column}) in top level")
+
+    def copy_action(self):
+        index = self.view.selectionModel().currentIndex()
+        model = self.view.model()
