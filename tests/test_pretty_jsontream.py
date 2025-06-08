@@ -1,8 +1,8 @@
 import json
 from io import StringIO
-from typing import Any
+from typing import Any, Type
 
-from jsontream import StreamingJSONEncoderWrapper
+from jsontream import new_streaming_json_factory
 
 
 # Custom encoder for testing delegation
@@ -14,17 +14,17 @@ class CustomJSONEncoder(json.JSONEncoder):
 
 
 # Helper function to use json.dump with the encoder
-def dump_to_string(obj: Any, encoder: StreamingJSONEncoderWrapper, **kwargs) -> str:
+def dump_to_string(obj: Any, encoder_cls: Type[json.JSONEncoder], **kwargs) -> str:
     output = StringIO()
-    json.dump(obj, output, cls=lambda *_, **__: encoder, **kwargs)
+    json.dump(obj, output, cls=encoder_cls, **kwargs)
     return output.getvalue()
 
 
 # Test with custom separators and indentation
 def test_custom_separators_and_indentation():
     # Create encoder instances
-    default_encoder = StreamingJSONEncoderWrapper(base_encoder_class=json.JSONEncoder)
-    custom_encoder = StreamingJSONEncoderWrapper(base_encoder_class=CustomJSONEncoder)
+    default_encoder = new_streaming_json_factory(base_encoder_class=json.JSONEncoder)
+    custom_encoder = new_streaming_json_factory(base_encoder_class=CustomJSONEncoder)
 
     # Custom separators and indentation
     separators = (", ", ": ")  # Custom separators for compact output
