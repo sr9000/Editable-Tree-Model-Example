@@ -273,10 +273,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.update_actions()
 
-        for column in range(model.columnCount(index.parent())):
-            child = model.index(index.row() + 1, column, index.parent())
-            model.setData(child, "[No data]", Qt.ItemDataRole.EditRole)
-
     def remove_column(self):
         model = self.view.model()
         column = self.view.selectionModel().currentIndex().column()

@@ -288,7 +288,7 @@ class TreeModel(QAbstractItemModel):
             Qt.ItemDataRole.DisplayRole,
             Qt.ItemDataRole.EditRole,
         ):
-            return self.get_item(index).data(index.column())
+            return str(self.get_item(index).data(index.column()))
 
     def headerData(
         self,
