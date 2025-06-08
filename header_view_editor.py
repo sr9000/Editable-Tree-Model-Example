@@ -1,4 +1,4 @@
-from PySide6.QtCore import QEvent, QModelIndex, QObject, Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QHeaderView, QLineEdit, QWidget
 
@@ -15,6 +15,15 @@ class EscapableLineEdit(QLineEdit):
                     self.edit.setText("")
                     self.edit.editingFinished.emit()
                     return True
+
+                if event.key() in (
+                    Qt.Key.Key_Up,
+                    Qt.Key.Key_Down,
+                    Qt.Key.Key_PageUp,
+                    Qt.Key.Key_PageDown,
+                ):
+                    return True  # dirty hack -- disable up/down keys to prevent moving in parent
+
             return False
 
     def __init__(self, parent: QWidget = None, **kwargs):
@@ -55,7 +64,6 @@ class HeaderViewEditorMixin:
                 self.section, Qt.Orientation.Horizontal, new_data
             )
         self.line.setText("")
-        self.header.setCurrentIndex(QModelIndex())
 
     def edit_header(self, section):
         self.section = section
