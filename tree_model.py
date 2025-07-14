@@ -229,9 +229,12 @@ from tree_item import TreeItem
 
 def setup_model_data(items: list[Mapping[str, Any]], root: TreeItem) -> None:
     for it in items:
-        root.append_child(
-            TreeItem([it["title"], it["description"]], it.get("items", None), root)
-        )
+        if val := it.get("value"):
+            root.append_child(
+                TreeItem(
+                    [val.get("title"), val.get("description")], it.get("items"), root
+                )
+            )
 
 
 class TreeModel(QAbstractItemModel):

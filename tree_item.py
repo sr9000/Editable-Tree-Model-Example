@@ -131,11 +131,12 @@ class TreeItem:
 
         self.child_items: list["TreeItem"] = [
             TreeItem(
-                [it["title"], it["description"]],
-                it.get("items", None),
+                [val.get("title"), val.get("description")],
+                it.get("items"),
                 parent_item=self,
             )
             for it in items
+            if (val := it.get("value"))
         ]
 
     def append_child(self, child: "TreeItem") -> None:

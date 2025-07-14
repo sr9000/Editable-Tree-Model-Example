@@ -1,5 +1,5 @@
 import json
-from typing import Any, Callable, Iterable, Type
+from typing import Any, Iterable, Type
 
 
 def new_streaming_json_factory(
