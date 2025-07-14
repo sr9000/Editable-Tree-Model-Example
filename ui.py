@@ -170,12 +170,13 @@ void MainWindow::updateActions()
 import functools
 
 import yaml
-from PySide6.QtCore import QCoreApplication, QItemSelectionModel, Qt
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QMainWindow
 
 from delegate import ComboBoxDelegate
 from header_view_editor import HeaderViewEditorMixin
 from mainwindow import Ui_MainWindow
+from model_actions import action_insert_child, action_insert_column, action_insert_row
 from tree_model import TreeModel
 from tree_view import show_context_menu
 
@@ -223,42 +224,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         index = self.view.selectionModel().currentIndex()
         model = self.view.model()
 
-        if model.columnCount(index) == 0:
-            if not model.insertColumn(0, index):
-                return
-
-        if not model.insertRow(0, index):
+        if not action_insert_child(self.view, index, model):
             return
 
-        for column in range(model.columnCount(index)):
-            child = model.index(0, column, index)
-            model.setData(child, "[No data]", Qt.ItemDataRole.EditRole)
-            if model.headerData(column, Qt.Orientation.Horizontal) is None:
-                model.setHeaderData(
-                    column,
-                    Qt.Orientation.Horizontal,
-                    "[No header]",
-                    Qt.ItemDataRole.EditRole,
-                )
-
-        self.view.selectionModel().setCurrentIndex(
-            model.index(0, 0, index), QItemSelectionModel.SelectionFlag.ClearAndSelect
-        )
-        self.view.expand(model.index(0, 0, index))
         self.update_actions()
 
     def insert_column(self):
         model = self.view.model()
-        column = self.view.selectionModel().currentIndex().column()
-        changed = model.insertColumn(column + 1)
+        index = self.view.selectionModel().currentIndex()
 
-        if changed:
-            model.setHeaderData(
-                column + 1,
-                Qt.Orientation.Horizontal,
-                "[No header]",
-                Qt.ItemDataRole.EditRole,
-            )
+        changed = action_insert_column(index, model)
 
         self.update_actions()
 
@@ -268,7 +243,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         index = self.view.selectionModel().currentIndex()
         model = self.view.model()
 
-        if not model.insertRow(index.row() + 1, index.parent()):
+        if not action_insert_row(index, model):
             return
 
         self.update_actions()

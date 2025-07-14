@@ -112,6 +112,7 @@ bool TreeItem::insertColumns(int position, int columns)
 }
 """
 
+from itertools import count
 from typing import Any
 
 
@@ -124,6 +125,9 @@ class TreeItem:
     ) -> None:
         self.parent_item: "TreeItem" = parent_item
         self.item_data: list = values or []
+        self.item_headers: list = ["title", "description"] + [
+            f"x{i}" for i in range(1, len(self.item_data) - 1)
+        ]
         self.child_items: list["TreeItem"] = []
 
         if items is None:
@@ -138,6 +142,16 @@ class TreeItem:
             for it in items
             if (val := it.get("value"))
         ]
+
+    def serialize(self) -> dict[str, Any]:
+        d = {
+            "value": dict(zip(self.item_headers, self.item_data)),
+        }
+
+        if self.child_items:
+            d["items"] = (x.serialize() for x in self.child_items)
+
+        return d
 
     def append_child(self, child: "TreeItem") -> None:
         self.child_items.append(child)
@@ -188,6 +202,11 @@ class TreeItem:
     def insert_columns(self, position: int, columns: int) -> bool:
         if 0 <= position <= len(self.item_data):
             self.item_data[position:position] = [None] * columns
+            for i in count(1):
+                if len(self.item_headers) == len(self.item_data):
+                    break
+                if (name := f"x{i}") not in self.item_headers:
+                    self.item_headers.append(name)
             if not all(
                 child.insert_columns(position, columns) for child in self.child_items
             ):
@@ -200,6 +219,7 @@ class TreeItem:
         end = begin + columns
         if 0 <= begin and end <= len(self.item_data):
             del self.item_data[begin:end]
+            del self.item_headers[begin:end]
             if not all(
                 child.remove_columns(begin, columns) for child in self.child_items
             ):

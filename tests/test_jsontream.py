@@ -93,6 +93,12 @@ def test_iterencode_nested_dict_generator(encoder):
     )
 
 
+def test_iterencode_map_object(encoder):
+    data = map(lambda x: x * 2, range(3))
+    result = collect_iterencode(encoder, data)
+    assert result == "[0,2,4]"
+
+
 def test_iterencode_dict_generator_invalid_tuple(encoder):
     gen = iter([("key1", 1, 2), ("key2", 2, 3)])  # Invalid tuple length (all len=3)
     with pytest.raises(TypeError, match="Only key-value \\(len=2\\) pairs are allowed"):
