@@ -43,10 +43,7 @@ class StreamingJSONEncoderWrapper(json.JSONEncoder):
         self.indent_str = "\n" + " " * (self.indent or 0)
 
         def offset(text: str) -> str:
-            if len(text) and text[0] == "\n":
-                return self.indent_str + text[1:]
-            else:
-                return text
+            return text.replace("\n", self.indent_str)
 
         self.offset = offset
 

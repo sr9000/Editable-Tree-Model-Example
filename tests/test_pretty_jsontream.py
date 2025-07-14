@@ -73,3 +73,28 @@ def test_custom_separators_and_indentation():
     )
     expected_nested = '{\n    "list": [\n        1, \n        2, \n        3\n    ], \n    "dict": {\n        "x": 1, \n        "y": 2\n    }\n}'
     assert result_nested == expected_nested
+
+    # Test 6: nested keys generator
+    def nested_keys():
+        yield "abc", dict([("key1", 1), ("key2", 2), ("key3", 3)])
+        yield "xyz", dict([("key1", 1), ("key2", 2), ("key3", 3)])
+
+    nested_keys_instance = nested_keys()
+    result_nested_keys = dump_to_string(
+        nested_keys_instance, default_encoder, separators=separators, indent=indent
+    )
+    expected_nested_keys = (
+        "{\n"
+        '    "abc": {\n'
+        '        "key1": 1, \n'
+        '        "key2": 2, \n'
+        '        "key3": 3\n'
+        "    }, \n"
+        '    "xyz": {\n'
+        '        "key1": 1, \n'
+        '        "key2": 2, \n'
+        '        "key3": 3\n'
+        "    }\n"
+        "}"
+    )
+    assert result_nested_keys == expected_nested_keys

@@ -1,7 +1,9 @@
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtWidgets import QMenu, QMessageBox, QTreeView
+from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QTreeView
 
+from jsontream import StreamingJSONEncoderWrapper
 from model_actions import action_insert_child, action_insert_column, action_insert_row
+from tree_model import TreeModel
 
 
 def show_context_menu(tree_view: QTreeView, position: QPoint):
@@ -11,14 +13,15 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     model = tree_view.model()
     data = model.data(index, Qt.ItemDataRole.DisplayRole)
 
-    if data is not None:
+    if data is not None and isinstance(model, TreeModel):
+        item = model.get_item(index)
+
         sub_menu = context_menu.addMenu(str(data))
         copy_action = sub_menu.addAction("Copy")
         copy_action.triggered.connect(
-            lambda: QMessageBox.information(
-                tree_view, "Info", f"Copy action `{str(data)}` triggered"
-            )
+            lambda: QApplication.clipboard().setText(to_json(item))
         )
+
         cut_action = sub_menu.addAction("Cut")
         delete_action = sub_menu.addAction("Delete")
 
@@ -33,3 +36,8 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
 
     # Add actions to the context menu here
     context_menu.exec(tree_view.mapToGlobal(position))
+
+
+def to_json(item):
+    encoder = StreamingJSONEncoderWrapper(separators=(",", ":"), indent=2)
+    return "".join(encoder.iterencode(item))

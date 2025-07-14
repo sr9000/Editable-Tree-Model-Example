@@ -143,15 +143,11 @@ class TreeItem:
             if (val := it.get("value"))
         ]
 
-    def serialize(self) -> dict[str, Any]:
-        d = {
-            "value": dict(zip(self.item_headers, self.item_data)),
-        }
+    def __iter__(self):
+        yield "value", dict(zip(self.item_headers, self.item_data))
 
         if self.child_items:
-            d["items"] = (x.serialize() for x in self.child_items)
-
-        return d
+            yield "items", (x for x in self.child_items)
 
     def append_child(self, child: "TreeItem") -> None:
         self.child_items.append(child)
