@@ -3,7 +3,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QTreeView
 
 from jsontream import StreamingJSONEncoderWrapper
 from model_actions import action_insert_child, action_insert_column, action_insert_row
-from tree_model import TreeModel
+from tree_model import JsonTreeModel
 
 
 def show_context_menu(tree_view: QTreeView, position: QPoint):
@@ -13,7 +13,7 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     model = tree_view.model()
     data = model.data(index, Qt.ItemDataRole.DisplayRole)
 
-    if data is not None and isinstance(model, TreeModel):
+    if data is not None and isinstance(model, JsonTreeModel):
         item = model.get_item(index)
 
         sub_menu = context_menu.addMenu(str(data))

@@ -16,9 +16,9 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QIcon, QImage, QKeySequence, QLinearGradient,
     QPainter, QPalette, QPixmap, QRadialGradient,
     QTransform)
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QHeaderView, QMainWindow,
-    QMenu, QMenuBar, QSizePolicy, QStatusBar,
-    QTabWidget, QTreeView, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QMenu, QMenuBar,
+    QSizePolicy, QStatusBar, QTabWidget, QVBoxLayout,
+    QWidget)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -49,22 +49,6 @@ class Ui_MainWindow(object):
         self.vboxLayout.setObjectName(u"vboxLayout")
         self.tabWidget = QTabWidget(self.centralWidget)
         self.tabWidget.setObjectName(u"tabWidget")
-        self.tab = QWidget()
-        self.tab.setObjectName(u"tab")
-        self.verticalLayout = QVBoxLayout(self.tab)
-        self.verticalLayout.setObjectName(u"verticalLayout")
-        self.view = QTreeView(self.tab)
-        self.view.setObjectName(u"view")
-        self.view.setAlternatingRowColors(True)
-        self.view.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
-        self.view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
-        self.view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-        self.view.setAnimated(False)
-        self.view.setAllColumnsShowFocus(True)
-
-        self.verticalLayout.addWidget(self.view)
-
-        self.tabWidget.addTab(self.tab, "")
 
         self.vboxLayout.addWidget(self.tabWidget)
 
@@ -97,7 +81,7 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
 
-        self.tabWidget.setCurrentIndex(0)
+        self.tabWidget.setCurrentIndex(-1)
 
 
         QMetaObject.connectSlotsByName(MainWindow)
@@ -137,7 +121,6 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(shortcut)
         self.rowInsertAfterAction.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+Shift+I", None))
 #endif // QT_CONFIG(shortcut)
-        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), QCoreApplication.translate("MainWindow", u"New JSON", None))
         self.fileMenu.setTitle(QCoreApplication.translate("MainWindow", u"&File", None))
         self.actionsMenu.setTitle(QCoreApplication.translate("MainWindow", u"&Actions", None))
     # retranslateUi

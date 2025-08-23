@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from enums import JsonType
+
 
 class ComboBoxDelegate(QStyledItemDelegate):
     def createEditor(
@@ -33,4 +35,25 @@ class ComboBoxDelegate(QStyledItemDelegate):
     def setModelData(
         self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex
     ):
-        model.setData(index, editor.currentText(), Qt.ItemDataRole.EditRole)
+        pass
+        # model.setData(index, editor.currentText(), Qt.ItemDataRole.EditRole)
+
+
+class JsonTypeDelegate(QStyledItemDelegate):
+    def createEditor(
+        self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex
+    ) -> QComboBox:
+        editor = QComboBox(parent)
+
+        return editor
+
+    def setEditorData(self, editor: QComboBox, index: QModelIndex):
+        for tp in JsonType:
+            editor.addItem(tp)
+
+        editor.setCurrentText(next(iter(JsonType)))
+
+    def setModelData(
+        self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex
+    ):
+        pass

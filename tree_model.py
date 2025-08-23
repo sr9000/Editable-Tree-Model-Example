@@ -224,32 +224,20 @@ from typing import Any, Mapping, Optional
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
-from tree_item import TreeItem
+from tree_item import JsonTreeItem
 
 
-def setup_model_data(items: list[Mapping[str, Any]], root: TreeItem) -> None:
-    for it in items:
-        if val := it.get("value"):
-            root.append_child(
-                TreeItem(
-                    [val.get("title"), val.get("description")], it.get("items"), root
-                )
-            )
-
-
-class TreeModel(QAbstractItemModel):
+class JsonTreeModel(QAbstractItemModel):
     def __init__(
         self,
-        items: list[Mapping[str, Any]],
+        data: Mapping[str, Any],
         /,
         parent: Optional[Any] = None,
-        values: list[Any] = None,
     ) -> None:
         super().__init__(parent)
-        self.root_item = TreeItem(values or [])
-        setup_model_data(items, self.root_item)
+        self.root_item = JsonTreeItem(None, data)
 
-    def get_item(self, index: QModelIndex) -> TreeItem:
+    def get_item(self, index: QModelIndex) -> JsonTreeItem:
         if index.isValid() and (item := index.internalPointer()):
             return item
         return self.root_item
@@ -303,7 +291,7 @@ class TreeModel(QAbstractItemModel):
             orientation == Qt.Orientation.Horizontal
             and role == Qt.ItemDataRole.DisplayRole
         ):
-            return self.root_item.data(section)
+            return ["Name", "Type", "Value"][section]
 
     @contextmanager
     def columns_insertion(self, parent: QModelIndex, position: int, columns: int):

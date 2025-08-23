@@ -171,13 +171,14 @@ import functools
 
 import yaml
 from PySide6.QtCore import QCoreApplication, Qt
-from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QMainWindow, QMessageBox, QWidget
 
-from delegate import ComboBoxDelegate
+from delegate import ComboBoxDelegate, JsonTypeDelegate
 from header_view_editor import HeaderViewEditorMixin
+from json_tab import JsonTab
 from mainwindow import Ui_MainWindow
 from model_actions import action_insert_child, action_insert_column, action_insert_row
-from tree_model import TreeModel
+from tree_model import JsonTreeModel
 from tree_view import show_context_menu
 
 
@@ -189,40 +190,51 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setup_connections()
 
     def setup_model(self, yaml_filename: str):
-        with open(yaml_filename) as file:
-            data = yaml.safe_load(file)
+        pass
 
-        self.model = TreeModel(data, self, ["Title", "Description"])
-        self.view.setModel(self.model)
-
-        for column in range(self.model.columnCount()):
-            self.view.resizeColumnToContents(column)
-
-        self.view.setItemDelegate(ComboBoxDelegate())
-        self.view.expandAll()
+        # with open(yaml_filename) as file:
+        #     data = yaml.safe_load(file)
+        #
+        # self.model = TreeModel(data, self, ["Title", "Description"])
+        # self.view.setModel(self.model)
+        #
+        # for column in range(self.model.columnCount()):
+        #     self.view.resizeColumnToContents(column)
+        #
+        # self.view.setItemDelegate(ComboBoxDelegate())
+        # self.view.expandAll()
 
     def setup_connections(self):
-        self.exitAction.triggered.connect(QCoreApplication.quit)
+        self.appExitAction.triggered.connect(QCoreApplication.quit)
+
+        self.fileCreateNewAction.triggered.connect(self.create_new_file)
 
         self.actionsMenu.aboutToShow.connect(self.update_actions)
-        self.insertRowAction.triggered.connect(self.insert_row)
-        self.insertColumnAction.triggered.connect(self.insert_column)
-        self.removeRowAction.triggered.connect(self.remove_row)
-        self.removeColumnAction.triggered.connect(self.remove_column)
-        self.insertChildAction.triggered.connect(self.insert_child)
-
-        self.header_editor = HeaderViewEditorMixin(self.view.header())
-        self.view.selectionModel().selectionChanged.connect(self.update_actions)
-        self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.view.customContextMenuRequested.connect(
-            functools.partial(show_context_menu, self.view)
-        )
+        self.rowInsertAction.triggered.connect(self.insert_row)
+        self.rowInsertAfterAction.triggered.connect(self.insert_row)
+        self.rowRemoveAction.triggered.connect(self.remove_row)
 
         self.update_actions()
 
+    def create_new_file(self):
+        try:
+            tab = JsonTab(self.update_actions, self)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to create new file:\n{e}")
+            return
+
+        tab_index = self.tabWidget.addTab(tab, "New Json")
+        self.tabWidget.setCurrentIndex(tab_index)
+
+        wg: JsonTab = self.tabWidget.currentWidget()
+
+        wg.my_view.expandAll()
+        for column in range(wg.my_model.columnCount()):
+            wg.my_view.resizeColumnToContents(column)
+
     def insert_child(self):
         index = self.view.selectionModel().currentIndex()
-        model = self.view.model()
+        model = self.view.my_model()
 
         if not action_insert_child(self.view, index, model):
             return
@@ -230,7 +242,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.update_actions()
 
     def insert_column(self):
-        model = self.view.model()
+        model = self.view.my_model()
         index = self.view.selectionModel().currentIndex()
 
         changed = action_insert_column(index, model)
@@ -241,7 +253,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def insert_row(self):
         index = self.view.selectionModel().currentIndex()
-        model = self.view.model()
+        model = self.view.my_model()
 
         if not action_insert_row(index, model):
             return
@@ -249,7 +261,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.update_actions()
 
     def remove_column(self):
-        model = self.view.model()
+        model = self.view.my_model()
         column = self.view.selectionModel().currentIndex().column()
         changed = model.removeColumn(column)
 
@@ -260,30 +272,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def remove_row(self):
         index = self.view.selectionModel().currentIndex()
-        model = self.view.model()
+        model = self.view.my_model()
 
         if model.removeRow(index.row(), index.parent()):
             self.update_actions()
 
     def update_actions(self):
-        has_selection = not self.view.selectionModel().selection().isEmpty()
-        self.removeRowAction.setEnabled(has_selection)
-        self.removeColumnAction.setEnabled(has_selection)
+        pass
 
-        has_current = self.view.selectionModel().currentIndex().isValid()
-        self.insertRowAction.setEnabled(has_current)
-        self.insertColumnAction.setEnabled(has_current)
-
-        if has_current:
-            self.view.closePersistentEditor(self.view.selectionModel().currentIndex())
-            row = self.view.selectionModel().currentIndex().row()
-            column = self.view.selectionModel().currentIndex().column()
-
-            if self.view.selectionModel().currentIndex().parent().isValid():
-                self.statusBar().showMessage(f"Position: ({row},{column})")
-            else:
-                self.statusBar().showMessage(f"Position: ({row},{column}) in top level")
+        # has_selection = not self.view.selectionModel().selection().isEmpty()
+        # self.removeRowAction.setEnabled(has_selection)
+        # self.removeColumnAction.setEnabled(has_selection)
+        #
+        # has_current = self.view.selectionModel().currentIndex().isValid()
+        # self.insertRowAction.setEnabled(has_current)
+        # self.insertColumnAction.setEnabled(has_current)
+        #
+        # if has_current:
+        #     self.view.closePersistentEditor(self.view.selectionModel().currentIndex())
+        #     row = self.view.selectionModel().currentIndex().row()
+        #     column = self.view.selectionModel().currentIndex().column()
+        #
+        #     if self.view.selectionModel().currentIndex().parent().isValid():
+        #         self.statusBar().showMessage(f"Position: ({row},{column})")
+        #     else:
+        #         self.statusBar().showMessage(f"Position: ({row},{column}) in top level")
 
     def copy_action(self):
         index = self.view.selectionModel().currentIndex()
-        model = self.view.model()
+        model = self.view.my_model()

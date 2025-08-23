@@ -114,42 +114,44 @@ bool TreeItem::insertColumns(int position, int columns)
 
 from itertools import count
 from typing import Any
+from unittest import case
+
+from enums import parse_json_type, JsonType
 
 
-class TreeItem:
+class JsonTreeItem:
     def __init__(
         self,
-        values: list[Any] = None,
-        items: list[Any] = None,
-        parent_item: "TreeItem" = None,
+        parent_item: "JsonTreeItem" = None,
+        value: Any = None,
+        name: str | int = None,
     ) -> None:
-        self.parent_item: "TreeItem" = parent_item
-        self.item_data: list = values or []
-        self.item_headers: list = ["title", "description"] + [
-            f"x{i}" for i in range(1, len(self.item_data) - 1)
-        ]
-        self.child_items: list["TreeItem"] = []
+        self.parent_item: "JsonTreeItem" = parent_item
 
-        if items is None:
-            return
+        self.json_type = parse_json_type(value)
+        self.value = value
+        self.name = name
 
-        self.child_items: list["TreeItem"] = [
-            TreeItem(
-                [val.get("title"), val.get("description")],
-                it.get("items"),
-                parent_item=self,
-            )
-            for it in items
-            if (val := it.get("value"))
-        ]
+        self.child_items: list["JsonTreeItem"] = []
 
-    def __iter__(self):
-        yield "value", dict(zip(self.item_headers, self.item_data))
+        match self.json_type:
+            case JsonType.ARRAY:
+                self.child_items = [JsonTreeItem(self, x) for i, x in enumerate(value)]
+                self.value = []
+            case JsonType.OBJECT:
+                self.child_items = [JsonTreeItem(self, v, k) for k, v in value.items()]
+                self.value = {}
 
-        if self.child_items:
-            yield "items", (x for x in self.child_items)
+    def to_json(self) -> Any:
+        match self.json_type:
+            case JsonType.ARRAY:
+                return [t.to_json() for t in self.child_items]
+            case JsonType.OBJECT:
+                return {t.name: t.to_json() for t in self.child_items}
 
-    def append_child(self, child: "TreeItem") -> None:
+        return self.value
+
+    def append_child(self, child: "JsonTreeItem") -> None:
         self.child_items.append(child)
 
     def parent(self) -> "TreeItem | None":
@@ -168,11 +170,18 @@ class TreeItem:
         )
 
     def column_count(self) -> int:
-        return len(self.item_data)
+        return 3
 
     def data(self, column: int) -> Any:
-        if 0 <= column < len(self.item_data):
-            return self.item_data[column]
+        match column:
+            case 0:
+                return self.name or "<no name>"
+            case 1:
+                return self.json_type or "<no type>"
+            case 2:
+                return self.value or "<no value>"
+
+        raise IndexError(f"`JsonTreeItem.data()` does not support {column=}")
 
     def set_data(self, column: int, value: Any) -> bool:
         if 0 <= column < len(self.item_data):
@@ -183,7 +192,8 @@ class TreeItem:
     def insert_children(self, position: int, count: int, columns: int) -> bool:
         if 0 <= position <= len(self.child_items):
             self.child_items[position:position] = [
-                TreeItem([None] * columns, parent_item=self) for _ in range(count)
+                JsonTreeItem(parent_item=self, value=[None] * columns)
+                for _ in range(count)
             ]
             return True
         return False
