@@ -8,135 +8,137 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from PySide6.QtCore import QCoreApplication, QMetaObject, QRect
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QMenu,
-    QMenuBar,
-    QStatusBar,
-    QTreeView,
-    QVBoxLayout,
-    QWidget,
-)
-
+from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
+    QMetaObject, QObject, QPoint, QRect,
+    QSize, QTime, QUrl, Qt)
+from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
+    QCursor, QFont, QFontDatabase, QGradient,
+    QIcon, QImage, QKeySequence, QLinearGradient,
+    QPainter, QPalette, QPixmap, QRadialGradient,
+    QTransform)
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QHeaderView, QMainWindow,
+    QMenu, QMenuBar, QSizePolicy, QStatusBar,
+    QTabWidget, QTreeView, QVBoxLayout, QWidget)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
-            MainWindow.setObjectName("MainWindow")
+            MainWindow.setObjectName(u"MainWindow")
         MainWindow.resize(573, 468)
-        self.exitAction = QAction(MainWindow)
-        self.exitAction.setObjectName("exitAction")
-        self.insertRowAction = QAction(MainWindow)
-        self.insertRowAction.setObjectName("insertRowAction")
-        self.removeRowAction = QAction(MainWindow)
-        self.removeRowAction.setObjectName("removeRowAction")
-        self.insertColumnAction = QAction(MainWindow)
-        self.insertColumnAction.setObjectName("insertColumnAction")
-        self.removeColumnAction = QAction(MainWindow)
-        self.removeColumnAction.setObjectName("removeColumnAction")
-        self.insertChildAction = QAction(MainWindow)
-        self.insertChildAction.setObjectName("insertChildAction")
-        self.centralwidget = QWidget(MainWindow)
-        self.centralwidget.setObjectName("centralwidget")
-        self.vboxLayout = QVBoxLayout(self.centralwidget)
+        self.appExitAction = QAction(MainWindow)
+        self.appExitAction.setObjectName(u"appExitAction")
+        self.rowInsertAction = QAction(MainWindow)
+        self.rowInsertAction.setObjectName(u"rowInsertAction")
+        self.rowRemoveAction = QAction(MainWindow)
+        self.rowRemoveAction.setObjectName(u"rowRemoveAction")
+        self.fileCreateNewAction = QAction(MainWindow)
+        self.fileCreateNewAction.setObjectName(u"fileCreateNewAction")
+        self.fileOpenAction = QAction(MainWindow)
+        self.fileOpenAction.setObjectName(u"fileOpenAction")
+        self.fileSaveAction = QAction(MainWindow)
+        self.fileSaveAction.setObjectName(u"fileSaveAction")
+        self.fileSaveAsAction = QAction(MainWindow)
+        self.fileSaveAsAction.setObjectName(u"fileSaveAsAction")
+        self.rowInsertAfterAction = QAction(MainWindow)
+        self.rowInsertAfterAction.setObjectName(u"rowInsertAfterAction")
+        self.centralWidget = QWidget(MainWindow)
+        self.centralWidget.setObjectName(u"centralWidget")
+        self.vboxLayout = QVBoxLayout(self.centralWidget)
         self.vboxLayout.setSpacing(0)
         self.vboxLayout.setContentsMargins(0, 0, 0, 0)
-        self.vboxLayout.setObjectName("vboxLayout")
-        self.view = QTreeView(self.centralwidget)
-        self.view.setObjectName("view")
+        self.vboxLayout.setObjectName(u"vboxLayout")
+        self.tabWidget = QTabWidget(self.centralWidget)
+        self.tabWidget.setObjectName(u"tabWidget")
+        self.tab = QWidget()
+        self.tab.setObjectName(u"tab")
+        self.verticalLayout = QVBoxLayout(self.tab)
+        self.verticalLayout.setObjectName(u"verticalLayout")
+        self.view = QTreeView(self.tab)
+        self.view.setObjectName(u"view")
         self.view.setAlternatingRowColors(True)
+        self.view.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
         self.view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.view.setAnimated(False)
         self.view.setAllColumnsShowFocus(True)
 
-        self.vboxLayout.addWidget(self.view)
+        self.verticalLayout.addWidget(self.view)
 
-        MainWindow.setCentralWidget(self.centralwidget)
-        self.menubar = QMenuBar(MainWindow)
-        self.menubar.setObjectName("menubar")
-        self.menubar.setGeometry(QRect(0, 0, 573, 33))
-        self.fileMenu = QMenu(self.menubar)
-        self.fileMenu.setObjectName("fileMenu")
-        self.actionsMenu = QMenu(self.menubar)
-        self.actionsMenu.setObjectName("actionsMenu")
-        MainWindow.setMenuBar(self.menubar)
-        self.statusbar = QStatusBar(MainWindow)
-        self.statusbar.setObjectName("statusbar")
-        MainWindow.setStatusBar(self.statusbar)
+        self.tabWidget.addTab(self.tab, "")
 
-        self.menubar.addAction(self.fileMenu.menuAction())
-        self.menubar.addAction(self.actionsMenu.menuAction())
-        self.fileMenu.addAction(self.exitAction)
-        self.actionsMenu.addAction(self.insertRowAction)
-        self.actionsMenu.addAction(self.insertColumnAction)
+        self.vboxLayout.addWidget(self.tabWidget)
+
+        MainWindow.setCentralWidget(self.centralWidget)
+        self.menuBar = QMenuBar(MainWindow)
+        self.menuBar.setObjectName(u"menuBar")
+        self.menuBar.setGeometry(QRect(0, 0, 573, 33))
+        self.fileMenu = QMenu(self.menuBar)
+        self.fileMenu.setObjectName(u"fileMenu")
+        self.actionsMenu = QMenu(self.menuBar)
+        self.actionsMenu.setObjectName(u"actionsMenu")
+        MainWindow.setMenuBar(self.menuBar)
+        self.statusBar = QStatusBar(MainWindow)
+        self.statusBar.setObjectName(u"statusBar")
+        MainWindow.setStatusBar(self.statusBar)
+
+        self.menuBar.addAction(self.fileMenu.menuAction())
+        self.menuBar.addAction(self.actionsMenu.menuAction())
+        self.fileMenu.addAction(self.fileCreateNewAction)
+        self.fileMenu.addAction(self.fileOpenAction)
+        self.fileMenu.addSeparator()
+        self.fileMenu.addAction(self.fileSaveAction)
+        self.fileMenu.addAction(self.fileSaveAsAction)
+        self.fileMenu.addSeparator()
+        self.fileMenu.addAction(self.appExitAction)
+        self.actionsMenu.addAction(self.rowInsertAction)
+        self.actionsMenu.addAction(self.rowInsertAfterAction)
         self.actionsMenu.addSeparator()
-        self.actionsMenu.addAction(self.removeRowAction)
-        self.actionsMenu.addAction(self.removeColumnAction)
-        self.actionsMenu.addSeparator()
-        self.actionsMenu.addAction(self.insertChildAction)
+        self.actionsMenu.addAction(self.rowRemoveAction)
 
         self.retranslateUi(MainWindow)
 
-        QMetaObject.connectSlotsByName(MainWindow)
+        self.tabWidget.setCurrentIndex(0)
 
+
+        QMetaObject.connectSlotsByName(MainWindow)
     # setupUi
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(
-            QCoreApplication.translate("MainWindow", "Editable Tree Model", None)
-        )
-        self.exitAction.setText(QCoreApplication.translate("MainWindow", "E&xit", None))
-        # if QT_CONFIG(shortcut)
-        self.exitAction.setShortcut(
-            QCoreApplication.translate("MainWindow", "Ctrl+Q", None)
-        )
-        # endif // QT_CONFIG(shortcut)
-        self.insertRowAction.setText(
-            QCoreApplication.translate("MainWindow", "Insert Row", None)
-        )
-        # if QT_CONFIG(shortcut)
-        self.insertRowAction.setShortcut(
-            QCoreApplication.translate("MainWindow", "Ctrl+I, R", None)
-        )
-        # endif // QT_CONFIG(shortcut)
-        self.removeRowAction.setText(
-            QCoreApplication.translate("MainWindow", "Remove Row", None)
-        )
-        # if QT_CONFIG(shortcut)
-        self.removeRowAction.setShortcut(
-            QCoreApplication.translate("MainWindow", "Ctrl+R, R", None)
-        )
-        # endif // QT_CONFIG(shortcut)
-        self.insertColumnAction.setText(
-            QCoreApplication.translate("MainWindow", "Insert Column", None)
-        )
-        # if QT_CONFIG(shortcut)
-        self.insertColumnAction.setShortcut(
-            QCoreApplication.translate("MainWindow", "Ctrl+I, C", None)
-        )
-        # endif // QT_CONFIG(shortcut)
-        self.removeColumnAction.setText(
-            QCoreApplication.translate("MainWindow", "Remove Column", None)
-        )
-        # if QT_CONFIG(shortcut)
-        self.removeColumnAction.setShortcut(
-            QCoreApplication.translate("MainWindow", "Ctrl+R, C", None)
-        )
-        # endif // QT_CONFIG(shortcut)
-        self.insertChildAction.setText(
-            QCoreApplication.translate("MainWindow", "Insert Child", None)
-        )
-        # if QT_CONFIG(shortcut)
-        self.insertChildAction.setShortcut(
-            QCoreApplication.translate("MainWindow", "Ctrl+N", None)
-        )
-        # endif // QT_CONFIG(shortcut)
-        self.fileMenu.setTitle(QCoreApplication.translate("MainWindow", "&File", None))
-        self.actionsMenu.setTitle(
-            QCoreApplication.translate("MainWindow", "&Actions", None)
-        )
-
+        MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Editable Tree Model", None))
+        self.appExitAction.setText(QCoreApplication.translate("MainWindow", u"&Exit", None))
+#if QT_CONFIG(shortcut)
+        self.appExitAction.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+Q", None))
+#endif // QT_CONFIG(shortcut)
+        self.rowInsertAction.setText(QCoreApplication.translate("MainWindow", u"&Insert Row", None))
+#if QT_CONFIG(shortcut)
+        self.rowInsertAction.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+I", None))
+#endif // QT_CONFIG(shortcut)
+        self.rowRemoveAction.setText(QCoreApplication.translate("MainWindow", u"&Remove Row", None))
+#if QT_CONFIG(shortcut)
+        self.rowRemoveAction.setShortcut(QCoreApplication.translate("MainWindow", u"Del", None))
+#endif // QT_CONFIG(shortcut)
+        self.fileCreateNewAction.setText(QCoreApplication.translate("MainWindow", u"Create &New", None))
+#if QT_CONFIG(shortcut)
+        self.fileCreateNewAction.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+N", None))
+#endif // QT_CONFIG(shortcut)
+        self.fileOpenAction.setText(QCoreApplication.translate("MainWindow", u"&Open File", None))
+#if QT_CONFIG(shortcut)
+        self.fileOpenAction.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+O", None))
+#endif // QT_CONFIG(shortcut)
+        self.fileSaveAction.setText(QCoreApplication.translate("MainWindow", u"&Save File", None))
+#if QT_CONFIG(shortcut)
+        self.fileSaveAction.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+S", None))
+#endif // QT_CONFIG(shortcut)
+        self.fileSaveAsAction.setText(QCoreApplication.translate("MainWindow", u"Save File &as ...", None))
+#if QT_CONFIG(shortcut)
+        self.fileSaveAsAction.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+Shift+S", None))
+#endif // QT_CONFIG(shortcut)
+        self.rowInsertAfterAction.setText(QCoreApplication.translate("MainWindow", u"Insert Row &after", None))
+#if QT_CONFIG(shortcut)
+        self.rowInsertAfterAction.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+Shift+I", None))
+#endif // QT_CONFIG(shortcut)
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), QCoreApplication.translate("MainWindow", u"New JSON", None))
+        self.fileMenu.setTitle(QCoreApplication.translate("MainWindow", u"&File", None))
+        self.actionsMenu.setTitle(QCoreApplication.translate("MainWindow", u"&Actions", None))
     # retranslateUi
+

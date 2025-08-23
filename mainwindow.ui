@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>Editable Tree Model</string>
   </property>
-  <widget class="QWidget" name="centralwidget">
+  <widget class="QWidget" name="centralWidget">
    <layout class="QVBoxLayout">
     <property name="spacing">
      <number>0</number>
@@ -22,27 +22,44 @@
      <number>0</number>
     </property>
     <item>
-     <widget class="QTreeView" name="view">
-      <property name="alternatingRowColors">
-       <bool>true</bool>
+     <widget class="QTabWidget" name="tabWidget">
+      <property name="currentIndex">
+       <number>0</number>
       </property>
-      <property name="selectionBehavior">
-       <enum>QAbstractItemView::SelectionBehavior::SelectItems</enum>
-      </property>
-      <property name="horizontalScrollMode">
-       <enum>QAbstractItemView::ScrollMode::ScrollPerPixel</enum>
-      </property>
-      <property name="animated">
-       <bool>false</bool>
-      </property>
-      <property name="allColumnsShowFocus">
-       <bool>true</bool>
-      </property>
+      <widget class="QWidget" name="tab">
+       <attribute name="title">
+        <string>New JSON</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout">
+        <item>
+         <widget class="QTreeView" name="view">
+          <property name="alternatingRowColors">
+           <bool>true</bool>
+          </property>
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SelectionMode::MultiSelection</enum>
+          </property>
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectionBehavior::SelectItems</enum>
+          </property>
+          <property name="horizontalScrollMode">
+           <enum>QAbstractItemView::ScrollMode::ScrollPerPixel</enum>
+          </property>
+          <property name="animated">
+           <bool>false</bool>
+          </property>
+          <property name="allColumnsShowFocus">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
      </widget>
     </item>
    </layout>
   </widget>
-  <widget class="QMenuBar" name="menubar">
+  <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
     <rect>
      <x>0</x>
@@ -55,70 +72,89 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <addaction name="exitAction"/>
+    <addaction name="fileCreateNewAction"/>
+    <addaction name="fileOpenAction"/>
+    <addaction name="separator"/>
+    <addaction name="fileSaveAction"/>
+    <addaction name="fileSaveAsAction"/>
+    <addaction name="separator"/>
+    <addaction name="appExitAction"/>
    </widget>
    <widget class="QMenu" name="actionsMenu">
     <property name="title">
      <string>&amp;Actions</string>
     </property>
-    <addaction name="insertRowAction"/>
-    <addaction name="insertColumnAction"/>
+    <addaction name="rowInsertAction"/>
+    <addaction name="rowInsertAfterAction"/>
     <addaction name="separator"/>
-    <addaction name="removeRowAction"/>
-    <addaction name="removeColumnAction"/>
-    <addaction name="separator"/>
-    <addaction name="insertChildAction"/>
+    <addaction name="rowRemoveAction"/>
    </widget>
    <addaction name="fileMenu"/>
    <addaction name="actionsMenu"/>
   </widget>
-  <widget class="QStatusBar" name="statusbar"/>
-  <action name="exitAction">
+  <widget class="QStatusBar" name="statusBar"/>
+  <action name="appExitAction">
    <property name="text">
-    <string>E&amp;xit</string>
+    <string>&amp;Exit</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Q</string>
    </property>
   </action>
-  <action name="insertRowAction">
+  <action name="rowInsertAction">
    <property name="text">
-    <string>Insert Row</string>
+    <string>&amp;Insert Row</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+I, R</string>
+    <string>Ctrl+I</string>
    </property>
   </action>
-  <action name="removeRowAction">
+  <action name="rowRemoveAction">
    <property name="text">
-    <string>Remove Row</string>
+    <string>&amp;Remove Row</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+R, R</string>
+    <string>Del</string>
    </property>
   </action>
-  <action name="insertColumnAction">
+  <action name="fileCreateNewAction">
    <property name="text">
-    <string>Insert Column</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+I, C</string>
-   </property>
-  </action>
-  <action name="removeColumnAction">
-   <property name="text">
-    <string>Remove Column</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+R, C</string>
-   </property>
-  </action>
-  <action name="insertChildAction">
-   <property name="text">
-    <string>Insert Child</string>
+    <string>Create &amp;New</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+N</string>
+   </property>
+  </action>
+  <action name="fileOpenAction">
+   <property name="text">
+    <string>&amp;Open File</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="fileSaveAction">
+   <property name="text">
+    <string>&amp;Save File</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+  </action>
+  <action name="fileSaveAsAction">
+   <property name="text">
+    <string>Save File &amp;as ...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+S</string>
+   </property>
+  </action>
+  <action name="rowInsertAfterAction">
+   <property name="text">
+    <string>Insert Row &amp;after</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+I</string>
    </property>
   </action>
  </widget>
