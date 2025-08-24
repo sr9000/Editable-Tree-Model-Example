@@ -219,11 +219,16 @@ bool TreeModel::setHeaderData(int section, Qt::Orientation orientation,
 }
 """
 
+import base64
+import gzip
+import zlib
 from contextlib import contextmanager
 from typing import Any, Mapping, Optional
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
+import binary
+from enums import JsonType
 from tree_item import JsonTreeItem
 
 
@@ -252,7 +257,30 @@ class JsonTreeModel(QAbstractItemModel):
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if index.isValid():
-            return Qt.ItemFlag.ItemIsEditable | QAbstractItemModel.flags(self, index)
+            default = QAbstractItemModel.flags(self, index)
+            if index.column() == 2:
+                item = index.internalPointer()
+                match item.json_type:
+                    case JsonType.NULL, JsonType.ARRAY, JsonType.OBJECT:
+                        return default
+                    case JsonType.SINGLE_LINE, JsonType.MULTI_LINE:
+                        if len(item.value) > 10_000:
+                            return default
+                    case JsonType.BYTES:
+                        binary = base64.b64decode(item.value)
+                        if len(binary) > 10_000:
+                            return default
+                    case JsonType.ZLIB:
+                        raw = base64.b64decode(item.value)
+                        uncompressed = zlib.decompress(raw)
+                        if len(uncompressed) > 10_000:
+                            return default
+                    case JsonType.GZIP:
+                        raw = base64.b64decode(item.value)
+                        uncompressed = gzip.decompress(raw)
+                        if len(uncompressed) > 10_000:
+                            return default
+            return Qt.ItemFlag.ItemIsEditable | default
         return Qt.ItemFlag.NoItemFlags
 
     def index(

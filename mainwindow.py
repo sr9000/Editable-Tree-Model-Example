@@ -49,6 +49,9 @@ class Ui_MainWindow(object):
         self.vboxLayout.setObjectName(u"vboxLayout")
         self.tabWidget = QTabWidget(self.centralWidget)
         self.tabWidget.setObjectName(u"tabWidget")
+        self.tabWidget.setDocumentMode(True)
+        self.tabWidget.setTabsClosable(True)
+        self.tabWidget.setMovable(True)
 
         self.vboxLayout.addWidget(self.tabWidget)
 

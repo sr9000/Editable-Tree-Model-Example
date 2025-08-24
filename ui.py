@@ -173,7 +173,7 @@ import yaml
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QMainWindow, QMessageBox, QWidget
 
-from delegate import ComboBoxDelegate, JsonTypeDelegate
+from delegate import ValueDelegate, JsonTypeDelegate
 from header_view_editor import HeaderViewEditorMixin
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow
@@ -216,6 +216,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.update_actions()
 
+        self.tabWidget.tabCloseRequested.connect(self.close_tab)
+
     def create_new_file(self):
         try:
             tab = JsonTab(self.update_actions, self)
@@ -228,13 +230,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         wg: JsonTab = self.tabWidget.currentWidget()
 
-        wg.my_view.expandAll()
-        for column in range(wg.my_model.columnCount()):
-            wg.my_view.resizeColumnToContents(column)
+        wg.view.expandAll()
+        for column in range(wg.model.columnCount()):
+            wg.view.resizeColumnToContents(column)
+
+    def close_tab(self):
+        pass
 
     def insert_child(self):
         index = self.view.selectionModel().currentIndex()
-        model = self.view.my_model()
+        model = self.view.model()
 
         if not action_insert_child(self.view, index, model):
             return
@@ -242,7 +247,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.update_actions()
 
     def insert_column(self):
-        model = self.view.my_model()
+        model = self.view.model()
         index = self.view.selectionModel().currentIndex()
 
         changed = action_insert_column(index, model)
@@ -253,7 +258,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def insert_row(self):
         index = self.view.selectionModel().currentIndex()
-        model = self.view.my_model()
+        model = self.view.model()
 
         if not action_insert_row(index, model):
             return
@@ -261,7 +266,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.update_actions()
 
     def remove_column(self):
-        model = self.view.my_model()
+        model = self.view.model()
         column = self.view.selectionModel().currentIndex().column()
         changed = model.removeColumn(column)
 
@@ -272,7 +277,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def remove_row(self):
         index = self.view.selectionModel().currentIndex()
-        model = self.view.my_model()
+        model = self.view.model()
 
         if model.removeRow(index.row(), index.parent()):
             self.update_actions()
@@ -300,4 +305,4 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def copy_action(self):
         index = self.view.selectionModel().currentIndex()
-        model = self.view.my_model()
+        model = self.view.model()
