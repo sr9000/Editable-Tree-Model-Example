@@ -2,28 +2,28 @@ import base64
 import gzip
 import zlib
 
+from dateutil.parser import isoparse
 from PySide6.QtCore import (
     QAbstractItemModel,
-    QModelIndex,
     QDate,
     QDateTime,
+    QModelIndex,
     QTime,
     QTimeZone,
 )
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QComboBox,
-    QSpinBox,
+    QDateEdit,
+    QDateTimeEdit,
+    QDoubleSpinBox,
     QLineEdit,
     QPlainTextEdit,
+    QSpinBox,
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QWidget,
-    QDoubleSpinBox,
-    QDateEdit,
-    QDateTimeEdit,
 )
-from dateutil.parser import isoparse
 
 import binary
 from enums import JsonType

@@ -1,7 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from PySide6.QtCore import QTimeZone, QDateTime
+from PySide6.QtCore import QDateTime, QTimeZone
 
 
 def qtdatetime(dt: datetime):

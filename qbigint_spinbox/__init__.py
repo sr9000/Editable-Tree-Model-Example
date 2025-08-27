@@ -1,13 +1,6 @@
-from typing import Optional
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QValidator, QKeyEvent, QFocusEvent
-from PySide6.QtWidgets import (
-    QAbstractSpinBox,
-    QApplication,
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-)
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFocusEvent, QKeyEvent, QValidator
+from PySide6.QtWidgets import QAbstractSpinBox
 
 
 def in_range(low: int | None, value: int, high: int | None) -> bool:

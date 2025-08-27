@@ -173,7 +173,7 @@ import yaml
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QMainWindow, QMessageBox, QWidget
 
-from delegate import ValueDelegate, JsonTypeDelegate
+from delegate import JsonTypeDelegate, ValueDelegate
 from header_view_editor import HeaderViewEditorMixin
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow

@@ -4,12 +4,7 @@ import gzip
 import zlib
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QTreeView,
-    QAbstractItemView,
-)
+from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, ValueDelegate
 from tree_model import JsonTreeModel

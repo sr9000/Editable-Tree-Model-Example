@@ -1,6 +1,9 @@
-import base64, zlib, gzip
+import base64
+import gzip
+import zlib
 from enum import StrEnum
 from typing import Any
+
 from dateutil.parser import isoparse
 
 

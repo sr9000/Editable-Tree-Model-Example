@@ -116,7 +116,7 @@ from itertools import count
 from typing import Any
 from unittest import case
 
-from enums import parse_json_type, JsonType
+from enums import JsonType, parse_json_type
 
 
 class JsonTreeItem:
