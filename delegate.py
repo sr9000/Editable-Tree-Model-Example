@@ -3,14 +3,7 @@ import gzip
 import zlib
 
 from dateutil.parser import isoparse
-from PySide6.QtCore import (
-    QAbstractItemModel,
-    QDate,
-    QDateTime,
-    QModelIndex,
-    QTime,
-    QTimeZone,
-)
+from PySide6.QtCore import QAbstractItemModel, QDate, QDateTime, QModelIndex
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QComboBox,
@@ -19,7 +12,6 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QLineEdit,
     QPlainTextEdit,
-    QSpinBox,
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QWidget,
