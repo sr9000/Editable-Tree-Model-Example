@@ -2,9 +2,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFocusEvent, QKeyEvent, QValidator
 from PySide6.QtWidgets import QAbstractSpinBox
 
+from coalesce import nn
+
 
 def in_range(low: int | None, value: int, high: int | None) -> bool:
-    return (low is None or value >= low) and (high is None or value <= high)
+    return (nn[low, value] <= value) and (value <= nn[high, value])
 
 
 class BigIntValidator(QValidator):
@@ -12,12 +14,16 @@ class BigIntValidator(QValidator):
     Validator for QBigIntSpinBox using arbitrary-precision Python ints.
 
     Behavior:
-     - Produces only QValidator.State.Acceptable or QValidator.State.Invalid (no Intermediate).
-     - Empty input -> Acceptable; returned text is prefix+suffix and cursor advances by len(prefix).
-     - Plain integer without prefix/suffix -> Acceptable iff it is within [minimum, maximum] (each bound may be None);
-       on success, returned text is prefix+number+suffix and cursor advances by len(prefix).
-     - Input with correct prefix/suffix -> Acceptable iff the inner number is empty or within the same bounds;
-       text and cursor are left unchanged.
+     - Produces Acceptable, Intermediate, or Invalid.
+     - Empty input -> Intermediate.
+     - Plain integer without prefix/suffix:
+       * in range -> Acceptable (text becomes prefix+number+suffix, cursor advances by len(prefix))
+       * out of range -> Intermediate
+       * "-" only -> Intermediate
+     - With correct prefix/suffix:
+       * inner empty or "-" -> Intermediate
+       * inner number in range -> Acceptable (text/cursor unchanged)
+       * inner number out of range -> Intermediate
      - Otherwise -> Invalid.
 
     Both minimum and maximum, when set, are enforced.
@@ -31,45 +37,49 @@ class BigIntValidator(QValidator):
         prefix = self._sb.prefix()
         suffix = self._sb.suffix()
 
-        # 0. given value are empty
-        if s == "":
-            return QValidator.State.Acceptable, prefix + suffix, pos + len(prefix)
+        # empty input is a valid partial
+        if s.strip() in ("", "-"):
+            return QValidator.State.Intermediate, s, pos
 
         maxv = self._sb.maximum()  # int|None
         minv = self._sb.minimum()
 
-        # 1. plain number (no prefix/suffix)
+        # 1) plain number (no prefix/suffix present in the string)
         try:
-            if in_range(minv, int(s), maxv):
+            n = int(s)
+            if in_range(minv, n, maxv):
                 return (
                     QValidator.State.Acceptable,
                     prefix + s + suffix,
                     pos + len(prefix),
                 )
+            else:
+                return QValidator.State.Intermediate, s, pos
         except ValueError:
             pass
 
-        # 2. with prefix/suffix
+        # 2) with prefix/suffix
         if prefix and not s.startswith(prefix):
             return QValidator.State.Invalid, s, pos
-
         if suffix and not s.endswith(suffix):
             return QValidator.State.Invalid, s, pos
 
-        number = s[len(prefix) : -len(suffix)]
+        number = s[(len(prefix)) : -len(suffix) or None]
 
-        # 2a. value is empty
-        if number == "":
-            return QValidator.State.Acceptable, s, pos
+        # 2a) inner value empty or just '-' -> partial
+        if number.strip() in ("", "-"):
+            return QValidator.State.Intermediate, s, pos
 
-        # 2b. value is a number
+        # 2b) inner value is a number
         try:
-            if in_range(minv, int(number), maxv):
+            n = int(number)
+            if in_range(minv, n, maxv):
                 return QValidator.State.Acceptable, s, pos
+            else:
+                return QValidator.State.Intermediate, s, pos
         except ValueError:
             pass
 
-        # 3. validation did not pass
         return QValidator.State.Invalid, s, pos
 
 
@@ -230,7 +240,7 @@ class QBigIntSpinBox(QAbstractSpinBox):
 
     # Helpers
     def _clamp(self, v: int) -> int:
-        return min(self._maximum or v, max(self._minimum or v, v))
+        return min(nn[self._maximum, v], max(nn[self._minimum, v], v))
 
     def lineEditEditingFinalize(self):
         text = self.lineEdit().text()
@@ -244,7 +254,7 @@ class QBigIntSpinBox(QAbstractSpinBox):
 
         # 2) Try number with prefix/suffix
         if text.startswith(self._prefix) and text.endswith(self._suffix):
-            number = text[(len(self._prefix)) : -len(self._suffix)]
+            number = text[(len(self._prefix)) : -len(self._suffix) or None]
             try:
                 self.setValue(int(number))
                 return
