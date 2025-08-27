@@ -27,6 +27,8 @@ from dateutil.parser import isoparse
 
 import binary
 from enums import JsonType
+from qbigint_spinbox import QBigIntSpinBox
+from qt2py import qtdatetime
 from tree_item import JsonTreeItem
 
 
@@ -40,7 +42,7 @@ class ValueDelegate(QStyledItemDelegate):
         editor = None
         match item.json_type:
             case JsonType.INTEGER:
-                editor = QSpinBox(parent)
+                editor = QBigIntSpinBox(parent)
             case JsonType.FLOAT:
                 editor = QDoubleSpinBox(parent)
             case JsonType.PERCENT:
@@ -54,17 +56,19 @@ class ValueDelegate(QStyledItemDelegate):
                 )
             case JsonType.BOOLEAN:
                 editor = QComboBox(parent)
-                editor.addItem("false", False)
                 editor.addItem("true", True)
-            case JsonType.SINGLE_LINE:
+                editor.addItem("false", False)
+            case JsonType.TEXT:
                 editor = QLineEdit(parent)
             case JsonType.DATE:
                 editor = QDateEdit(parent)
-            case JsonType.DATETIME, JsonType.DATETIMEZONE:
+                editor.setDisplayFormat("yyyy-MM-dd")
+            case JsonType.DATETIME | JsonType.DATETIMEZONE:
                 editor = QDateTimeEdit(parent)
+                editor.setDisplayFormat("yyyy-MM-dd HH:mm:ss.zzz")
             case JsonType.MULTI_LINE:
                 editor = QPlainTextEdit(parent)
-            case JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP:
+            case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
                 editor = QPlainTextEdit(parent)
                 f = QFont()
                 f.setCapitalization(QFont.Capitalization.AllUppercase)
@@ -79,7 +83,7 @@ class ValueDelegate(QStyledItemDelegate):
     def setEditorData(
         self,
         editor: (
-            QSpinBox
+            QBigIntSpinBox
             | QDoubleSpinBox
             | QComboBox
             | QLineEdit
@@ -93,7 +97,7 @@ class ValueDelegate(QStyledItemDelegate):
 
         match item.json_type:
             case JsonType.INTEGER:
-                editor: QSpinBox
+                editor: QBigIntSpinBox
                 editor.setValue(item.value)
             case JsonType.FLOAT:
                 editor: QDoubleSpinBox
@@ -103,8 +107,8 @@ class ValueDelegate(QStyledItemDelegate):
                 editor.setValue(item.value * 100)
             case JsonType.BOOLEAN:
                 editor: QComboBox
-                editor.setCurrentIndex(item.value * 1)
-            case JsonType.SINGLE_LINE:
+                editor.setCurrentIndex((not item.value) * 1)
+            case JsonType.TEXT:
                 editor: QLineEdit
                 editor.setText(item.value)
             case JsonType.DATE:
@@ -122,36 +126,30 @@ class ValueDelegate(QStyledItemDelegate):
                         dt.hour,
                         dt.minute,
                         dt.second,
-                        dt.microsecond,
+                        dt.microsecond // 1000,
                     )
                 )
             case JsonType.DATETIMEZONE:
                 editor: QDateTimeEdit
                 dt = isoparse(item.value)
-                editor.setDateTime(
-                    QDateTime(
-                        QDate(dt.year, dt.month, dt.day),
-                        QTime(dt.hour, dt.minute, dt.second, dt.microsecond),
-                        QTimeZone(int(dt.utcoffset().total_seconds())),
-                    )
-                )
+                editor.setDateTime(qtdatetime(dt))
             case JsonType.MULTI_LINE:
                 editor: QPlainTextEdit
                 editor.setPlainText(item.value)
             case JsonType.BYTES:
                 editor: QPlainTextEdit
-                raw = base64.b64decode(item.value)
+                raw = base64.b64decode(item.value, validate=True)
                 formatted = binary.format_hex_dump(raw)
                 editor.setPlainText(formatted)
             case JsonType.ZLIB:
                 editor: QPlainTextEdit
-                raw = base64.b64decode(item.value)
+                raw = base64.b64decode(item.value, validate=True)
                 uncompressed = zlib.decompress(raw)
                 formatted = binary.format_hex_dump(uncompressed)
                 editor.setPlainText(formatted)
             case JsonType.GZIP:
                 editor: QPlainTextEdit
-                raw = base64.b64decode(item.value)
+                raw = base64.b64decode(item.value, validate=True)
                 uncompressed = gzip.decompress(raw)
                 formatted = binary.format_hex_dump(uncompressed)
                 editor.setPlainText(formatted)

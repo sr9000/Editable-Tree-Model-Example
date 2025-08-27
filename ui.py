@@ -231,7 +231,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         wg: JsonTab = self.tabWidget.currentWidget()
 
         wg.view.expandAll()
-        for column in range(wg.model.columnCount()):
+        for column in range(wg.model.columnCount() - 1):
             wg.view.resizeColumnToContents(column)
 
     def close_tab(self):

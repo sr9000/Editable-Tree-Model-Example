@@ -1,10 +1,17 @@
+import base64
 import functools
+import gzip
+import zlib
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTreeView, QAbstractItemView
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QTreeView,
+    QAbstractItemView,
+)
 
 from delegate import JsonTypeDelegate, ValueDelegate
-from header_view_editor import HeaderViewEditorMixin
 from tree_model import JsonTreeModel
 from tree_view import show_context_menu
 
@@ -16,6 +23,7 @@ class JsonTab(QWidget):
         self.layout = QVBoxLayout(self)
 
         self.view = QTreeView(self)
+        self.view.setUniformRowHeights(True)
         self.view.setAlternatingRowColors(True)
         self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
@@ -32,6 +40,21 @@ class JsonTab(QWidget):
             {
                 "question": "The Ultimate Question of Life, the Universe, and Everything.",
                 "answer": 42,
+                "integer": 9223372036854775808,
+                "float": 3.14,
+                "percent": 0.5,
+                "single-line": "Hello, world!" * 100,
+                "multi-line": "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6",
+                "bytes": base64.b64encode(b"hello " * 10).decode(),
+                "zlib": base64.b64encode(zlib.compress(b"hello " * 10)).decode(),
+                "gzip": base64.b64encode(gzip.compress(b"hello " * 10)).decode(),
+                "date": "2024-06-01",
+                "date-time": "2024-06-01 12:34:56",
+                "dt+timezone": "2024-06-01T12:34:56.9999+00:00",
+                "boolean": True,
+                "object": {"key": "value"},
+                "array": [1, 2, 3],
+                "null": None,
             },
             self.view,
         )

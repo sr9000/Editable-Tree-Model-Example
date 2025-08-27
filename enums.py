@@ -3,6 +3,7 @@ from enum import StrEnum
 from typing import Any
 from dateutil.parser import isoparse
 
+
 def parse_json_type(value: Any) -> "JsonType":
     match value:
         case None:
@@ -24,7 +25,7 @@ def parse_json_type(value: Any) -> "JsonType":
                 return JsonType.MULTI_LINE
 
             try:
-                raw = base64.b64decode(s)
+                raw = base64.b64decode(s, validate=True)
 
                 try:
                     unzlibbed = zlib.decompress(raw)
@@ -45,7 +46,13 @@ def parse_json_type(value: Any) -> "JsonType":
             try:
                 dt = isoparse(s)
 
-                if dt.hour == 0 and dt.minute == 0 and dt.second == 0 and dt.microsecond == 0 and len(s) <= 11:
+                if (
+                    dt.hour == 0
+                    and dt.minute == 0
+                    and dt.second == 0
+                    and dt.microsecond == 0
+                    and len(s) <= 11
+                ):
                     return JsonType.DATE
 
                 if dt.tzinfo is not None:
@@ -55,7 +62,7 @@ def parse_json_type(value: Any) -> "JsonType":
             except:
                 pass
 
-            return JsonType.SINGLE_LINE
+            return JsonType.TEXT
 
         case list(_):
             return JsonType.ARRAY
@@ -67,30 +74,27 @@ def parse_json_type(value: Any) -> "JsonType":
 
 
 class JsonType(StrEnum):
-
-    # Number
+    # Basic
     INTEGER = "integer"
-
     FLOAT = "float"
+    TEXT = "text"
+    BOOLEAN = "boolean"
+    OBJECT = "object"
+    ARRAY = "array"
+    NULL = "null"
+
+    # Extra Number
     PERCENT = "percent"
 
-    # Text
-    SINGLE_LINE = "single-line"
+    # Multiline Text Format
+    MULTI_LINE = "multi-line"
+
+    # Datetime Text Format
     DATE = "date"
     DATETIME = "date-time"
     DATETIMEZONE = "dt+timezone"
 
-    MULTI_LINE = "multi-line"
+    # Advanced Text Encoding
     BYTES = "bytes"  # base64
     ZLIB = "zlib"  # base64+zlib
     GZIP = "gzip"  # base64+gzip
-
-    # Boolean
-    BOOLEAN = "boolean"
-
-    # Composite
-    OBJECT = "object"
-    ARRAY = "array"
-
-    # Empty
-    NULL = "null"

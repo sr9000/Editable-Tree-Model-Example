@@ -261,22 +261,22 @@ class JsonTreeModel(QAbstractItemModel):
             if index.column() == 2:
                 item = index.internalPointer()
                 match item.json_type:
-                    case JsonType.NULL, JsonType.ARRAY, JsonType.OBJECT:
+                    case JsonType.NULL | JsonType.ARRAY | JsonType.OBJECT:
                         return default
-                    case JsonType.SINGLE_LINE, JsonType.MULTI_LINE:
+                    case JsonType.TEXT | JsonType.MULTI_LINE:
                         if len(item.value) > 10_000:
                             return default
                     case JsonType.BYTES:
-                        binary = base64.b64decode(item.value)
+                        binary = base64.b64decode(item.value, validate=True)
                         if len(binary) > 10_000:
                             return default
                     case JsonType.ZLIB:
-                        raw = base64.b64decode(item.value)
+                        raw = base64.b64decode(item.value, validate=True)
                         uncompressed = zlib.decompress(raw)
                         if len(uncompressed) > 10_000:
                             return default
                     case JsonType.GZIP:
-                        raw = base64.b64decode(item.value)
+                        raw = base64.b64decode(item.value, validate=True)
                         uncompressed = gzip.decompress(raw)
                         if len(uncompressed) > 10_000:
                             return default
