@@ -1,129 +1,149 @@
+import re
+from decimal import Decimal
+from typing import Tuple
+
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFocusEvent, QKeyEvent, QValidator
+from PySide6.QtGui import QValidator, QKeyEvent, QFocusEvent
 from PySide6.QtWidgets import QAbstractSpinBox
+from gmpy2 import mpq
 
 from coalesce import nn
+from mpq2py import mpq_serialization
+
+PARTIAL_FLOAT = re.compile(r"[-+]?\d*\.?\d*e?[-+]?\d*", re.IGNORECASE)
 
 
-def in_range(low: int | None, value: int, high: int | None) -> bool:
+def in_range(low: mpq | None, value: mpq, high: mpq | None) -> bool:
     return (nn[low, value] <= value) and (value <= nn[high, value])
 
 
-class BigIntValidator(QValidator):
+def _to_mpq(x) -> mpq:
+    if isinstance(x, mpq):
+        return x
+    if isinstance(x, Decimal):
+        return mpq(str(x))  # avoid binary float artifacts
+
+    return mpq(x)
+
+
+class MpqValidator(QValidator):
     """
-    Validator for QBigIntSpinBox using arbitrary-precision Python ints.
+    Validator for QMpqSpinBox.
 
     Behavior:
      - Produces Acceptable, Intermediate, or Invalid.
-     - Empty input -> Intermediate.
-     - Plain integer without prefix/suffix:
+     - Empty/partial inputs (e.g. "", "-", ".", "1.", "12/", "12/-", "1e", "1e+") -> Intermediate.
+     - Plain number (int/decimal/scientific) or "a/b" (int over int):
        * in range -> Acceptable (text becomes prefix+number+suffix, cursor advances by len(prefix))
        * out of range -> Intermediate
-       * "-" only -> Intermediate
      - With correct prefix/suffix:
-       * inner empty or "-" -> Intermediate
-       * inner number in range -> Acceptable (text/cursor unchanged)
-       * inner number out of range -> Intermediate
+       * inner empty or partial -> Intermediate
+       * inner parses to mpq in range -> Acceptable (text/cursor unchanged)
+       * inner parses to mpq out of range -> Intermediate
      - Otherwise -> Invalid.
-
-    Both minimum and maximum, when set, are enforced.
     """
 
-    def __init__(self, spinbox: "QBigIntSpinBox"):
+    def __init__(self, spinbox: "QMpqSpinBox"):
         super().__init__(spinbox)
         self._sb = spinbox
 
-    def validate(self, s: str, pos: int):
+    def validate(self, s: str, pos: int) -> Tuple[QValidator.State, str, int]:
         prefix = self._sb.prefix()
         suffix = self._sb.suffix()
 
-        # empty input is a valid partial
-        if s.strip() in ("", "-"):
-            return QValidator.State.Intermediate, s, pos
-
-        maxv = self._sb.maximum()  # int|None
+        maxv = self._sb.maximum()  # mpq|None
         minv = self._sb.minimum()
 
-        # 1) plain number (no prefix/suffix present in the string)
-        try:
-            n = int(s)
-            if in_range(minv, n, maxv):
-                return (
-                    QValidator.State.Acceptable,
-                    prefix + s + suffix,
-                    pos + len(prefix),
-                )
-            else:
+        if PARTIAL_FLOAT.fullmatch(s):
+            try:
+                float(s)
+            except ValueError:
                 return QValidator.State.Intermediate, s, pos
-        except ValueError:
-            pass
 
-        # 2) with prefix/suffix
+            # 1) Try as plain number (no requirement to already contain prefix/suffix)
+            try:
+                n = mpq(s)
+                if in_range(minv, n, maxv):
+                    return (
+                        QValidator.State.Acceptable,
+                        prefix + s + suffix,
+                        pos + len(prefix),
+                    )
+                else:
+                    return QValidator.State.Intermediate, s, pos
+            except ValueError:
+                pass
+
+        # 2) With prefix/suffix
         if prefix and not s.startswith(prefix):
             return QValidator.State.Invalid, s, pos
         if suffix and not s.endswith(suffix):
             return QValidator.State.Invalid, s, pos
 
-        number = s[(len(prefix)) : -len(suffix) or None]
+        number = s[len(prefix) : -len(suffix) or None]
 
-        # 2a) inner value empty or just '-' -> partial
-        if number.strip() in ("", "-"):
-            return QValidator.State.Intermediate, s, pos
-
-        # 2b) inner value is a number
-        try:
-            n = int(number)
-            if in_range(minv, n, maxv):
-                return QValidator.State.Acceptable, s, pos
-            else:
+        if PARTIAL_FLOAT.fullmatch(number):
+            try:
+                float(number)
+            except ValueError:
                 return QValidator.State.Intermediate, s, pos
-        except ValueError:
-            pass
+
+            try:
+                n = mpq(number)
+                if in_range(minv, n, maxv):
+                    return QValidator.State.Acceptable, s, pos
+                else:
+                    return QValidator.State.Intermediate, s, pos
+            except ValueError:
+                pass
 
         return QValidator.State.Invalid, s, pos
 
 
-class QBigIntSpinBox(QAbstractSpinBox):
+class QMpqSpinBox(QAbstractSpinBox):
     """
-    Simplified big-int spinbox:
-    - Uses Python's arbitrary-precision int.
+    Big-rational spinbox built on gmpy2.mpq.
+
+    - Uses exact rationals internally (mpq).
     - Optional min/max (None = unbounded).
     - Prefix/suffix, wrapping, commit on Enter/focus-out, identical stepping behavior.
+    - Displays using mpq_serialization(value).
     """
 
     def __init__(
         self,
         parent=None,
-        value=0,
+        value=mpq(0),
         /,
-        minimum: int | None = None,
-        maximum: int | None = None,
-        single_step=1,
-        prefix="",
-        suffix="",
+        minimum: mpq = None,
+        maximum: mpq = None,
+        single_step: mpq = mpq(1),
+        prefix: str = "",
+        suffix: str = "",
     ):
         super().__init__(parent)
-        self._minimum: int | None = minimum
-        self._maximum: int | None = maximum
-        self._value: int = value
-        self._single_step: int = max(1, single_step)
+        self._minimum: mpq | None = minimum
+        self._maximum: mpq | None = maximum
+        self._value: mpq = _to_mpq(value)
+        self._single_step: mpq = max(mpq(0), _to_mpq(single_step)) or mpq(1)
+
         self._prefix: str = prefix
         self._suffix: str = suffix
 
         self.lineEdit().setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self._validator = BigIntValidator(self)
+        self._validator = MpqValidator(self)
         self.lineEdit().setValidator(self._validator)
 
         self.setValue(self._value)
 
     # Core value API
-    def value(self) -> int:
+    def value(self) -> mpq:
         return self._value
 
-    def setValue(self, expectedNewValue: int):
-        new_value = self._clamp(int(expectedNewValue))
-        new_value_string = str(new_value)
+    def setValue(self, expectedNewValue: mpq) -> None:
+        new_value = self._clamp(_to_mpq(expectedNewValue))
+        new_value_string = str(mpq_serialization(new_value))
 
         # Always update text (matches C++ approach)
         self.lineEdit().setText(self._prefix + new_value_string + self._suffix)
@@ -131,7 +151,7 @@ class QBigIntSpinBox(QAbstractSpinBox):
             self._value = new_value
 
     def cleanText(self) -> str:
-        return str(self._value)
+        return str(mpq_serialization(self._value))
 
     # Prefix/Suffix
     def prefix(self) -> str:
@@ -149,17 +169,17 @@ class QBigIntSpinBox(QAbstractSpinBox):
         self.setValue(self._value)
 
     # Step
-    def singleStep(self) -> int:
+    def singleStep(self) -> mpq:
         return self._single_step
 
-    def setSingleStep(self, step: int):
-        self._single_step = max(1, int(step))
+    def setSingleStep(self, step: mpq):
+        self._single_step = max(mpq(0), _to_mpq(step)) or mpq(1)
 
     # Range (None = unbounded)
-    def minimum(self) -> int | None:
+    def minimum(self) -> mpq | None:
         return self._minimum
 
-    def setMinimum(self, minv: int | None):
+    def setMinimum(self, minv: mpq | None):
         self._minimum = minv
 
         if self._maximum is not None:
@@ -167,10 +187,10 @@ class QBigIntSpinBox(QAbstractSpinBox):
 
         self.setValue(self._value)
 
-    def maximum(self) -> int | None:
+    def maximum(self) -> mpq | None:
         return self._maximum
 
-    def setMaximum(self, maxv: int | None):
+    def setMaximum(self, maxv: mpq | None):
         self._maximum = maxv
 
         if self._minimum is not None:
@@ -178,7 +198,7 @@ class QBigIntSpinBox(QAbstractSpinBox):
 
         self.setValue(self._value)
 
-    def setRange(self, minv: int | None, maxv: int | None):
+    def setRange(self, minv: mpq | None, maxv: mpq | None):
         # Handle None bounds; if both ints and min > max, swap
         if minv is not None and maxv is not None and minv > maxv:
             minv, maxv = maxv, minv
@@ -215,13 +235,13 @@ class QBigIntSpinBox(QAbstractSpinBox):
         if self.isReadOnly():
             return
 
-        if (self._prefix + str(self._value) + self._suffix) != self.lineEdit().text():
+        if (self._prefix + str(mpq_serialization(self._value)) + self._suffix) != self.lineEdit().text():
             self.lineEditEditingFinalize()
 
-        newValue = self._value + steps * self._single_step
+        newValue = self._value + mpq(steps) * self._single_step
 
         if self.wrapping() and self._minimum is not None and self._maximum is not None:
-            # Emulate the same wrap nuances as the C++ code
+            # Emulate wrap nuances similar to your bigint version
             if newValue > self._maximum:
                 if self._value == self._maximum:
                     newValue = self._minimum
@@ -239,7 +259,7 @@ class QBigIntSpinBox(QAbstractSpinBox):
         self.selectCleanText()
 
     # Helpers
-    def _clamp(self, v: int) -> int:
+    def _clamp(self, v: mpq) -> mpq:
         return min(nn[self._maximum, v], max(nn[self._minimum, v], v))
 
     def lineEditEditingFinalize(self):
@@ -247,7 +267,7 @@ class QBigIntSpinBox(QAbstractSpinBox):
 
         # 1) Try as plain number
         try:
-            self.setValue(int(text))
+            self.setValue(mpq(text))
             return
         except ValueError:
             pass
@@ -256,7 +276,7 @@ class QBigIntSpinBox(QAbstractSpinBox):
         if text.startswith(self._prefix) and text.endswith(self._suffix):
             number = text[(len(self._prefix)) : -len(self._suffix) or None]
             try:
-                self.setValue(int(number))
+                self.setValue(mpq(number))
                 return
             except ValueError:
                 pass
