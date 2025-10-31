@@ -225,10 +225,12 @@ import zlib
 from contextlib import contextmanager
 from typing import Any, Mapping, Optional
 
+import gmpy2
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
 import binary
 from enums import JsonType
+from mpq2py import mpq_serialization
 from tree_item import JsonTreeItem
 
 
@@ -307,7 +309,12 @@ class JsonTreeModel(QAbstractItemModel):
             Qt.ItemDataRole.DisplayRole,
             Qt.ItemDataRole.EditRole,
         ):
-            return str(self.get_item(index).data(index.column()))
+            data = self.get_item(index).data(index.column())
+            match data:
+                case gmpy2.mpq():
+                    data = mpq_serialization(data)
+
+            return str(data)
 
     def headerData(
         self,

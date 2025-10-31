@@ -2,6 +2,7 @@ import base64
 import functools
 import gzip
 import zlib
+import gmpy2
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
@@ -36,8 +37,8 @@ class JsonTab(QWidget):
                 "question": "The Ultimate Question of Life, the Universe, and Everything.",
                 "answer": 42,
                 "integer": 9223372036854775808,
-                "float": 3.14,
-                "percent": 0.5,
+                "float": gmpy2.mpq("3.14"),
+                "percent": gmpy2.mpq("50/100"),
                 "single-line": "Hello, world!" * 100,
                 "multi-line": "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6",
                 "bytes": base64.b64encode(b"hello " * 10).decode(),
@@ -64,8 +65,6 @@ class JsonTab(QWidget):
 
         self.view.selectionModel().selectionChanged.connect(update_actions_callback)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.view.customContextMenuRequested.connect(
-            functools.partial(show_context_menu, self.view)
-        )
+        self.view.customContextMenuRequested.connect(functools.partial(show_context_menu, self.view))
 
         self.file_path = None
