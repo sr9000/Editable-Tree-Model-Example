@@ -90,14 +90,18 @@ class ValueDelegate(QStyledItemDelegate):
             case JsonType.STRING:
                 editor: QLineEdit
                 editor.setText(item.value)
-            case JsonType.DATE | JsonType.DATETIME | JsonType.DATETIMEZONE:
-                editor: DateTimeEditor
-                dt = isoparse(item.value)
-                editor.setValue(dt)
             case JsonType.TIME:
                 editor: DateTimeEditor
                 tm = time.fromisoformat(item.value)
                 editor.setValue(tm)
+            case JsonType.DATE:
+                editor: DateTimeEditor
+                dt = isoparse(item.value)
+                editor.setValue(dt.date())
+            case JsonType.DATETIME | JsonType.DATETIMEZONE:
+                editor: DateTimeEditor
+                dt = isoparse(item.value)
+                editor.setValue(dt)
             case JsonType.MULTILINE:
                 editor: QPlainTextEdit
                 editor.setPlainText(item.value)

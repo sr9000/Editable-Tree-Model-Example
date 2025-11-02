@@ -1,14 +1,14 @@
 from datetime import date, datetime, time
 
 from PySide6.QtCore import Signal, Slot
-from PySide6.QtWidgets import QLineEdit, QWidget
+from PySide6.QtWidgets import QLineEdit
 
 from .enums import DateTimeCategory
 from .regex import parse_datetime_text
 from .validator import DateTimeValidator
 
 
-class DateTimeEditor(QWidget):
+class DateTimeEditor(QLineEdit):
     """
     Like QDateEdit and QDateTimeEdit BUT supports editing dates and times in different formats:
     Date Only:
@@ -28,15 +28,13 @@ class DateTimeEditor(QWidget):
       - tdatetime+ms+tz "YYYY-MM-DDThh:mm:ss.123456+hh:mm" (year, month, day, hour, minute, second, microsecond, timezone offset ([+-]HH:MM))
     """
 
-    editingFinished = Signal()
     valueChanged = Signal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._editor = QLineEdit(self)
         self._validator = DateTimeValidator(self)
-        self._editor.setValidator(self._validator)
-        self._editor.editingFinished.connect(self._on_editing_finished)
+        self.setValidator(self._validator)
+        self.editingFinished.connect(self._on_editing_finished)
         self._value = None
         self._category = None
 
@@ -58,11 +56,10 @@ class DateTimeEditor(QWidget):
     def setValue(self, value):
         self._value = value
         self._category = self.get_category(value)
-        self._editor.setText(str(value))
+        self.setText(str(value))
 
     @Slot()
     def _on_editing_finished(self):
-        text = self._editor.text()
+        text = self.text()
         self._value = parse_datetime_text(text, self._category)
         self.valueChanged.emit(self._value)
-        self.editingFinished.emit()
