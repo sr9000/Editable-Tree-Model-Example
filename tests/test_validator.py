@@ -76,7 +76,11 @@ def test_datetime_validator(text, state):
         ("202*T12:34:56", "5-02-27", {"2025-02-27T12:34:56"}),  # just typing
         ("*7", "202-<5>-<02>2", {"2025-02-27"}),  # move caret
         ("1*6", "2:3:<4>5", {"12:36", "12:34:56"}),  # also move caret
-        ("12:34:56*", ".(123)(456)", {"12:34:56.123", "12:34:56.123456"}),  # paste at once
+        (
+            "12:34:56*",
+            ".(123)(456)",
+            {"12:34:56.123", "12:34:56.123456"},
+        ),  # paste at once
     ],
 )
 def test_like_manual_input(source, pattern, accepted):
@@ -118,8 +122,12 @@ def test_like_manual_input(source, pattern, accepted):
 
         res = validator.validate(text, caret)
         if text in accepted:
-            assert res == QValidator.State.Acceptable, f"Expected Acceptable for: {text!r}"
+            assert (
+                res == QValidator.State.Acceptable
+            ), f"Expected Acceptable for: {text!r}"
         else:
-            assert res == QValidator.State.Intermediate, f"Expected Intermediate for: {text!r}"
+            assert (
+                res == QValidator.State.Intermediate
+            ), f"Expected Intermediate for: {text!r}"
 
     assert text in accepted, f"Result {text!r} is missing in accepted set: {accepted!r}"
