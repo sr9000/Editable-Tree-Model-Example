@@ -71,42 +71,55 @@ def test_datetime_validator(text, state):
 
 
 @pytest.mark.parametrize(
-    "pattern",
+    "source,pattern,accepted",
     [
-        "202{5-02-27}T12:34:56",
-        "2025-{02}-27T12:34:56",
-        "2025-02-{27}T12:34:56",
-        "2025-02-27T{12}:34:56",
-        "2025-02-27T12:{34}:56",
-        "2025-02-27T12:34:{56}",
-        "2025-02-27T12:34:56{Z}",
-        "2025-02-27T12:34:56{z}",
-        "2025-02-27T12:34:56+0{1:00}",
-        "2025-02-27T12:34:56-0{8:30}",
-        "20{25}-11-02T12:34:56",
-        "2025-1{1}-02T12:34:56",
-        "2025-11-0{2}T12:34:56",
-        "2025-0{2}-27T12:34:56",
-        "2025-02-2{7}T12:34:56",
-        "12:34:{56}+01:00",
-        "2025-02-27T12:34:56+{01:00}",
+        ("202*T12:34:56", "5-02-27", {"2025-02-27T12:34:56"}),  # just typing
+        ("*7", "202-<5>-<02>2", {"2025-02-27"}),  # move caret
+        ("1*6", "2:3:<4>5", {"12:36", "12:34:56"}),  # also move caret
+        ("12:34:56*", ".(123)(456)", {"12:34:56.123", "12:34:56.123456"}),  # paste at once
     ],
 )
-def test_like_manual_input(pattern):
-    """Type chars inside {...} one by one; non-final steps must be Intermediate and final must be Acceptable."""
-    start = pattern.index("{")
-    end = pattern.index("}", start)
-    prefix = pattern[:start]
-    chunk = pattern[start + 1 : end]
-    suffix = pattern[end + 1 :]
-
+def test_like_manual_input(source, pattern, accepted):
+    """
+    Extended input syntax:
+      - plain chars: typed at caret one by one
+      - '(...)': paste the whole chunk at caret as a single step
+      - '<', '>': move caret left and right
+    All non-final texts must be Intermediate; final must be Acceptable and equal to 'result'.
+    """
+    # initial text and caret
+    caret = source.index("*")
+    text = source.replace("*", "")
     validator = DateTimeValidator(None)
 
-    # Non-final incremental inputs must be Intermediate
-    for i in range(1, len(chunk)):
-        s = prefix + chunk[:i] + suffix
-        assert validator.validate(s, 0) == QValidator.State.Intermediate, f"Expected Intermediate for: {s!r}"
+    # helper: append new slots created by inserted content and shift existing ones
+    def insert_at(chunk: str):
+        nonlocal text, caret
+        text = text[:caret] + chunk + text[caret:]
+        caret += len(chunk)
 
-    # Final full input must be Acceptable
-    final = prefix + chunk + suffix
-    assert validator.validate(final, 0) == QValidator.State.Acceptable, f"Expected Acceptable for: {final!r}"
+    # tokenize and simulate
+    i = 0
+    steps = []  # collect texts after each mutating step
+    while i < len(pattern):
+        ch = pattern[i]
+        i += 1
+        match ch:
+            case "(":
+                j = pattern.index(")", i)
+                insert_at(pattern[i:j])
+                i = j + 1
+            case "<":
+                caret -= 1
+            case ">":
+                caret += 1
+            case _:
+                insert_at(ch)
+
+        res = validator.validate(text, caret)
+        if text in accepted:
+            assert res == QValidator.State.Acceptable, f"Expected Acceptable for: {text!r}"
+        else:
+            assert res == QValidator.State.Intermediate, f"Expected Intermediate for: {text!r}"
+
+    assert text in accepted, f"Result {text!r} is missing in accepted set: {accepted!r}"

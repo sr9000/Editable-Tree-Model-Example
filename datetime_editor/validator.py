@@ -95,6 +95,15 @@ class DateTimeValidator(QValidator):
             and len(minute) == 2
             and not second  # no second specified yet
         )
+        has_time_with_minute = (
+            hour
+            and len(hour) == 2
+            and minute
+            and len(minute) == 2
+            and not year  # no date part
+            and not second  # no second specified yet
+            and not separator  # no separator either
+        )
 
         if ends_with_separator:
             # Still typing, not acceptable yet
@@ -105,8 +114,8 @@ class DateTimeValidator(QValidator):
         elif has_complete_time and not year:
             # Just a time like 12:34:56
             return QValidator.State.Acceptable
-        elif has_datetime_with_minute:
-            # DateTime with just hour:minute like 2025-11-02T12:34
+        elif has_datetime_with_minute or has_time_with_minute:
+            # DateTime with just hour:minute like 2025-11-02T12:34 or time like 12:34
             return QValidator.State.Acceptable
 
         return QValidator.State.Intermediate
