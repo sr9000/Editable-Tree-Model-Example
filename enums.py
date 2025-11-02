@@ -6,6 +6,7 @@ from typing import Any
 
 import gmpy2
 from dateutil.parser import isoparse
+from datetime import time
 
 
 def parse_json_type(value: Any) -> "JsonType":
@@ -53,9 +54,16 @@ def parse_json_type(value: Any) -> "JsonType":
                 pass
 
             try:
+                tm = time.fromisoformat(s)
+                if tm.tzinfo is None:
+                    return JsonType.TIME
+            except:
+                pass
+
+            try:
                 dt = isoparse(s)
 
-                if dt.hour == 0 and dt.minute == 0 and dt.second == 0 and dt.microsecond == 0 and len(s) <= 11:
+                if dt.hour == dt.minute == dt.second == dt.microsecond == 0 and dt.tzinfo is None:
                     return JsonType.DATE
 
                 if dt.tzinfo is not None:
@@ -94,7 +102,7 @@ class JsonType(StrEnum):
 
     # Datetime Text Format
     DATE = "date"
-    TIME = "time"  # todo: implement
+    TIME = "time"
     DATETIME = "datetime"
     DATETIMEZONE = "dt+timezone"
 

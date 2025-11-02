@@ -1,6 +1,7 @@
 import base64
 import gzip
 import zlib
+from datetime import time
 
 from dateutil.parser import isoparse
 from gmpy2 import mpq
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 import binary
+from datetime_editor import DateTimeEditor
 from enums import JsonType
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
@@ -51,12 +53,8 @@ class ValueDelegate(QStyledItemDelegate):
                 editor.addItem("false", False)
             case JsonType.STRING:
                 editor = QLineEdit(parent)
-            case JsonType.DATE:
-                editor = QDateEdit(parent)
-                editor.setDisplayFormat("yyyy-MM-dd")
-            case JsonType.DATETIME | JsonType.DATETIMEZONE:
-                editor = QDateTimeEdit(parent)
-                editor.setDisplayFormat("yyyy-MM-dd HH:mm:ss.zzzzzzzzz")
+            case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
+                editor = DateTimeEditor(parent)
             case JsonType.MULTILINE:
                 editor = QPlainTextEdit(parent)
             case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
@@ -92,28 +90,14 @@ class ValueDelegate(QStyledItemDelegate):
             case JsonType.STRING:
                 editor: QLineEdit
                 editor.setText(item.value)
-            case JsonType.DATE:
-                editor: QDateEdit
+            case JsonType.DATE | JsonType.DATETIME | JsonType.DATETIMEZONE:
+                editor: DateTimeEditor
                 dt = isoparse(item.value)
-                editor.setDate(QDate(dt.year, dt.month, dt.day))
-            case JsonType.DATETIME:
-                editor: QDateTimeEdit
-                dt = isoparse(item.value)
-                editor.setDateTime(
-                    QDateTime(
-                        dt.year,
-                        dt.month,
-                        dt.day,
-                        dt.hour,
-                        dt.minute,
-                        dt.second,
-                        dt.microsecond // 1000,
-                    )
-                )
-            case JsonType.DATETIMEZONE:
-                editor: QDateTimeEdit
-                dt = isoparse(item.value)
-                editor.setDateTime(qtdatetime(dt))
+                editor.setValue(dt)
+            case JsonType.TIME:
+                editor: DateTimeEditor
+                tm = time.fromisoformat(item.value)
+                editor.setValue(tm)
             case JsonType.MULTILINE:
                 editor: QPlainTextEdit
                 editor.setPlainText(item.value)

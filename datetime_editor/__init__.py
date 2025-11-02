@@ -1,7 +1,7 @@
 from datetime import date, datetime, time
 
 from PySide6.QtCore import Signal, Slot
-from PySide6.QtWidgets import QLineEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLineEdit, QWidget
 
 from .enums import DateTimeCategory
 from .regex import parse_datetime_text
@@ -33,13 +33,10 @@ class DateTimeEditor(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._editor = QLineEdit()
+        self._editor = QLineEdit(self)
         self._validator = DateTimeValidator(self)
         self._editor.setValidator(self._validator)
         self._editor.editingFinished.connect(self._on_editing_finished)
-        layout = QVBoxLayout()
-        layout.addWidget(self._editor)
-        self.setLayout(layout)
         self._value = None
         self._category = None
 
