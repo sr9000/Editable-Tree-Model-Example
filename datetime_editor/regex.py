@@ -35,9 +35,7 @@ def parse_datetime_text(text, category=None):
     hour = int(parts["hour"]) if parts["hour"] else None
     minute = int(parts["minute"]) if parts["minute"] else None
     second = int(parts["second"]) if parts["second"] else None
-    microsecond = (
-        int(parts["microsecond"].ljust(6, "0")[:6]) if parts["microsecond"] else 0
-    )
+    microsecond = int(parts["microsecond"].ljust(6, "0")[:6]) if parts["microsecond"] else 0
 
     tz_sign = parts["tz_sign"]
     tz_hour = int(parts["tz_hour"]) if parts["tz_hour"] else 0

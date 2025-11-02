@@ -144,9 +144,7 @@ def test_like_manual_input(source, pattern, accepted):
         if res == QValidator.State.Acceptable:
             accepted.discard(text)
 
-        match pattern[
-            (i := i + 1) - 1  # that is an absolute dirty hack for an inline lookahead
-        ]:
+        match pattern[(i := i + 1) - 1]:  # that is an absolute dirty hack for an inline lookahead
             case "(":
                 j = pattern.index(")", i)
                 insert_at(pattern[i:j])
@@ -162,13 +160,9 @@ def test_like_manual_input(source, pattern, accepted):
 
         res = validator.validate(text, caret)
         if text in accepted:
-            assert (
-                res == QValidator.State.Acceptable
-            ), f"Expected Acceptable for: {text!r}"
+            assert res == QValidator.State.Acceptable, f"Expected Acceptable for: {text!r}"
         else:
-            assert (
-                res == QValidator.State.Intermediate
-            ), f"Expected Intermediate for: {text!r}"
+            assert res == QValidator.State.Intermediate, f"Expected Intermediate for: {text!r}"
 
     assert text in accepted, f"Result {text!r} is missing in accepted set: {accepted!r}"
     assert len(accepted) == 1, f"Some extra strings weren't accepted: {accepted!r}"

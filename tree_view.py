@@ -18,9 +18,7 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
 
         sub_menu = context_menu.addMenu(str(data))
         copy_action = sub_menu.addAction("Copy")
-        copy_action.triggered.connect(
-            lambda: QApplication.clipboard().setText(to_json(item))
-        )
+        copy_action.triggered.connect(lambda: QApplication.clipboard().setText(to_json(item)))
 
         cut_action = sub_menu.addAction("Cut")
         delete_action = sub_menu.addAction("Delete")

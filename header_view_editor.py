@@ -60,9 +60,7 @@ class HeaderViewEditorMixin:
         self.line.setHidden(True)
 
         if new_data := str(self.line.text()):
-            self.header.model().setHeaderData(
-                self.section, Qt.Orientation.Horizontal, new_data
-            )
+            self.header.model().setHeaderData(self.section, Qt.Orientation.Horizontal, new_data)
         self.line.setText("")
 
     def edit_header(self, section):
@@ -74,9 +72,7 @@ class HeaderViewEditorMixin:
         edit_geometry.moveLeft(self.header.sectionViewportPosition(section))
         self.line.setGeometry(edit_geometry)
 
-        self.line.setText(
-            self.header.model().headerData(self.section, Qt.Orientation.Horizontal)
-        )
+        self.line.setText(self.header.model().headerData(self.section, Qt.Orientation.Horizontal))
         self.line.setHidden(False)  # Make it visiable
         self.line.blockSignals(False)  # Let it send signals
         self.line.setFocus()

@@ -285,9 +285,7 @@ class JsonTreeModel(QAbstractItemModel):
             return Qt.ItemFlag.ItemIsEditable | default
         return Qt.ItemFlag.NoItemFlags
 
-    def index(
-        self, row: int, column: int, parent: QModelIndex = QModelIndex()
-    ) -> QModelIndex:
+    def index(self, row: int, column: int, parent: QModelIndex = QModelIndex()) -> QModelIndex:
         if parent.isValid() and parent.column() != 0:
             return QModelIndex()
         if childItem := self.get_item(parent).child(row):
@@ -322,10 +320,7 @@ class JsonTreeModel(QAbstractItemModel):
         orientation: Qt.Orientation,
         role: int = Qt.ItemDataRole.DisplayRole,
     ) -> Any:
-        if (
-            orientation == Qt.Orientation.Horizontal
-            and role == Qt.ItemDataRole.DisplayRole
-        ):
+        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return ["Name", "Type", "Value"][section]
 
     @contextmanager
@@ -336,9 +331,7 @@ class JsonTreeModel(QAbstractItemModel):
         finally:
             self.endInsertColumns()
 
-    def insertColumns(
-        self, position: int, columns: int, parent: QModelIndex = QModelIndex()
-    ) -> bool:
+    def insertColumns(self, position: int, columns: int, parent: QModelIndex = QModelIndex()) -> bool:
         with self.columns_insertion(parent, position, columns):
             return self.root_item.insert_columns(position, columns)
 
@@ -350,14 +343,10 @@ class JsonTreeModel(QAbstractItemModel):
         finally:
             self.endInsertRows()
 
-    def insertRows(
-        self, position: int, rows: int, parent: QModelIndex = QModelIndex()
-    ) -> bool:
+    def insertRows(self, position: int, rows: int, parent: QModelIndex = QModelIndex()) -> bool:
         if parent_item := self.get_item(parent):
             with self.rows_insertion(parent, position, rows):
-                return parent_item.insert_children(
-                    position, rows, self.root_item.column_count()
-                )
+                return parent_item.insert_children(position, rows, self.root_item.column_count())
         return False
 
     @contextmanager
@@ -374,9 +363,7 @@ class JsonTreeModel(QAbstractItemModel):
         if self.root_item.column_count() == 0:
             self.removeRows(0, self.rowCount())
 
-    def removeColumns(
-        self, position: int, columns: int, parent: QModelIndex = QModelIndex()
-    ) -> bool:
+    def removeColumns(self, position: int, columns: int, parent: QModelIndex = QModelIndex()) -> bool:
         with self.columns_removal(parent, position, columns):
             return self.root_item.remove_columns(position, columns)
 
@@ -388,17 +375,13 @@ class JsonTreeModel(QAbstractItemModel):
         finally:
             self.endRemoveRows()
 
-    def removeRows(
-        self, position: int, rows: int, parent: QModelIndex = QModelIndex()
-    ) -> bool:
+    def removeRows(self, position: int, rows: int, parent: QModelIndex = QModelIndex()) -> bool:
         if parent_item := self.get_item(parent):
             with self.rows_removal(parent, position, rows):
                 return parent_item.remove_children(position, rows)
         return False
 
-    def setData(
-        self, index: QModelIndex, value: Any, role: int = Qt.ItemDataRole.EditRole
-    ) -> bool:
+    def setData(self, index: QModelIndex, value: Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
         if role == Qt.ItemDataRole.EditRole:
             if self.get_item(index).set_data(index.column(), value):
                 roles = [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]
@@ -413,10 +396,7 @@ class JsonTreeModel(QAbstractItemModel):
         value: Any,
         role: int = Qt.ItemDataRole.EditRole,
     ) -> bool:
-        if (
-            role == Qt.ItemDataRole.EditRole
-            and orientation == Qt.Orientation.Horizontal
-        ):
+        if role == Qt.ItemDataRole.EditRole and orientation == Qt.Orientation.Horizontal:
             if self.root_item.set_data(section, value):
                 self.headerDataChanged.emit(orientation, section, section)
                 return True

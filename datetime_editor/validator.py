@@ -85,9 +85,7 @@ class DateTimeValidator(QValidator):
         ends_with_separator = input_str.endswith(":") or input_str.endswith(".")
 
         has_complete_date = year and month and len(month) == 2 and day and len(day) == 2
-        has_complete_time = (
-            hour and minute and len(minute) == 2 and second and len(second) == 2
-        )
+        has_complete_time = hour and minute and len(minute) == 2 and second and len(second) == 2
         has_datetime_with_minute = (
             has_complete_date
             and separator

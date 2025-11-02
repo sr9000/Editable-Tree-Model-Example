@@ -1,4 +1,4 @@
 lint:
 	autoflake .
 	isort .
-	black .
+	black --line-length 120 .

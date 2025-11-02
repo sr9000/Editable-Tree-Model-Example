@@ -65,9 +65,7 @@ from datetime_editor.regex import parse_datetime_text
         (
             "2025-11-02 12:34:56.123+01:00",
             DateTimeCategory.DateTimeWithTZ,
-            datetime(
-                2025, 11, 2, 12, 34, 56, 123000, tzinfo=timezone(timedelta(hours=1))
-            ),
+            datetime(2025, 11, 2, 12, 34, 56, 123000, tzinfo=timezone(timedelta(hours=1))),
         ),
         # tdatetime+ms+tz
         (

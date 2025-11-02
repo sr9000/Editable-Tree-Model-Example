@@ -65,8 +65,6 @@ class JsonTab(QWidget):
 
         self.view.selectionModel().selectionChanged.connect(update_actions_callback)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.view.customContextMenuRequested.connect(
-            functools.partial(show_context_menu, self.view)
-        )
+        self.view.customContextMenuRequested.connect(functools.partial(show_context_menu, self.view))
 
         self.file_path = None

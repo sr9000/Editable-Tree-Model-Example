@@ -165,9 +165,7 @@ class JsonTreeItem:
         return len(self.child_items)
 
     def row(self) -> int:
-        return (
-            0 if self.parent_item is None else self.parent_item.child_items.index(self)
-        )
+        return 0 if self.parent_item is None else self.parent_item.child_items.index(self)
 
     def column_count(self) -> int:
         return 3
@@ -192,8 +190,7 @@ class JsonTreeItem:
     def insert_children(self, position: int, count: int, columns: int) -> bool:
         if 0 <= position <= len(self.child_items):
             self.child_items[position:position] = [
-                JsonTreeItem(parent_item=self, value=[None] * columns)
-                for _ in range(count)
+                JsonTreeItem(parent_item=self, value=[None] * columns) for _ in range(count)
             ]
             return True
         return False
@@ -213,9 +210,7 @@ class JsonTreeItem:
                     break
                 if (name := f"x{i}") not in self.item_headers:
                     self.item_headers.append(name)
-            if not all(
-                child.insert_columns(position, columns) for child in self.child_items
-            ):
+            if not all(child.insert_columns(position, columns) for child in self.child_items):
                 raise IndexError("Failed to insert columns in child items")
             return True
         return False
@@ -226,9 +221,7 @@ class JsonTreeItem:
         if 0 <= begin and end <= len(self.item_data):
             del self.item_data[begin:end]
             del self.item_headers[begin:end]
-            if not all(
-                child.remove_columns(begin, columns) for child in self.child_items
-            ):
+            if not all(child.remove_columns(begin, columns) for child in self.child_items):
                 raise IndexError("Failed to remove columns in child items")
             return True
         return False

@@ -235,9 +235,7 @@ class QMpqSpinBox(QAbstractSpinBox):
         if self.isReadOnly():
             return
 
-        if (
-            self._prefix + str(mpq_serialization(self._value)) + self._suffix
-        ) != self.lineEdit().text():
+        if (self._prefix + str(mpq_serialization(self._value)) + self._suffix) != self.lineEdit().text():
             self.lineEditEditingFinalize()
 
         newValue = self._value + mpq(steps) * self._single_step

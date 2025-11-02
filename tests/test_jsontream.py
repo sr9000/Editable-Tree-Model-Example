@@ -33,25 +33,19 @@ def collect_iterencode(encoder: StreamingJSONEncoderWrapper, obj: Any) -> str:
 
 def test_default_raises_for_generator(encoder):
     gen = map(itself, range(3))
-    with pytest.raises(
-        TypeError, match="Generators must be handled by iterencode, not default"
-    ):
+    with pytest.raises(TypeError, match="Generators must be handled by iterencode, not default"):
         encoder.default(gen)
 
 
 def test_encode_raises_for_generator(encoder):
     gen = map(itself, range(3))
-    with pytest.raises(
-        TypeError, match="Generators must be handled by iterencode, not encode"
-    ):
+    with pytest.raises(TypeError, match="Generators must be handled by iterencode, not encode"):
         encoder.encode(gen)
 
 
 def test_iterencode_empty_generator_raises(encoder):
     gen = iter([])
-    with pytest.raises(
-        TypeError, match="Empty generators must be replaced with empty lists or dicts"
-    ):
+    with pytest.raises(TypeError, match="Empty generators must be replaced with empty lists or dicts"):
         list(encoder.iterencode(gen))
 
 
@@ -88,9 +82,7 @@ def test_iterencode_nested_dict_generator(encoder):
 
     gen = nested_gen()
     result = collect_iterencode(encoder, gen)
-    assert (
-        result == '{"outer1":{"inner1":1,"inner2":2},"outer2":{"inner3":3,"inner4":4}}'
-    )
+    assert result == '{"outer1":{"inner1":1,"inner2":2},"outer2":{"inner3":3,"inner4":4}}'
 
 
 def test_iterencode_map_object(encoder):
@@ -102,9 +94,7 @@ def test_iterencode_map_object(encoder):
 def test_iterencode_map_object_in_dict(encoder):
     data = ((k, map(lambda x: x * 2, range(3))) for k in ["map"])
     result = collect_iterencode(encoder, data)
-    expected = json.dumps(
-        {"map": [x * 2 for x in range(3)]}, separators=(",", ":")
-    )  # Set converted to list
+    expected = json.dumps({"map": [x * 2 for x in range(3)]}, separators=(",", ":"))  # Set converted to list
     assert result == expected
 
 
@@ -130,13 +120,9 @@ def test_iterencode_delegates_to_base_encoder(encoder):
 
 def test_iterencode_delegates_to_custom_encoder(encoder):
     data = {"a": {1, 2, 3}}  # Set should be handled by CustomJSONEncoder
-    encoder = StreamingJSONEncoderWrapper(
-        base_encoder_class=CustomJSONEncoder, separators=(",", ":")
-    )
+    encoder = StreamingJSONEncoderWrapper(base_encoder_class=CustomJSONEncoder, separators=(",", ":"))
     result = collect_iterencode(encoder, data)
-    expected = json.dumps(
-        {"a": [1, 2, 3]}, separators=(",", ":")
-    )  # Set converted to list
+    expected = json.dumps({"a": [1, 2, 3]}, separators=(",", ":"))  # Set converted to list
     assert result == expected
 
 

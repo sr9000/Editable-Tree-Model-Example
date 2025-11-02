@@ -7,9 +7,7 @@ def new_streaming_json_factory(
 ) -> Type[json.JSONEncoder]:
     class _Inner(StreamingJSONEncoderWrapper):
         def __init__(self, *args, **kwargs) -> None:
-            super().__init__(
-                None, *args, base_encoder_class=base_encoder_class, **kwargs
-            )
+            super().__init__(None, *args, base_encoder_class=base_encoder_class, **kwargs)
 
     return _Inner
 

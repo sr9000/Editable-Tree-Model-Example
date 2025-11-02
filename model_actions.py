@@ -27,9 +27,7 @@ def action_insert_child(view: QTreeView, index: QModelIndex, model):
                 Qt.ItemDataRole.EditRole,
             )
 
-    view.selectionModel().setCurrentIndex(
-        model.index(0, 0, index), QItemSelectionModel.SelectionFlag.ClearAndSelect
-    )
+    view.selectionModel().setCurrentIndex(model.index(0, 0, index), QItemSelectionModel.SelectionFlag.ClearAndSelect)
     view.expand(model.index(0, 0, index))
 
     return True

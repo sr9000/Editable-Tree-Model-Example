@@ -55,13 +55,7 @@ def parse_json_type(value: Any) -> "JsonType":
             try:
                 dt = isoparse(s)
 
-                if (
-                    dt.hour == 0
-                    and dt.minute == 0
-                    and dt.second == 0
-                    and dt.microsecond == 0
-                    and len(s) <= 11
-                ):
+                if dt.hour == 0 and dt.minute == 0 and dt.second == 0 and dt.microsecond == 0 and len(s) <= 11:
                     return JsonType.DATE
 
                 if dt.tzinfo is not None:
