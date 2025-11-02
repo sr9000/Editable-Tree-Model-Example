@@ -1,12 +1,12 @@
 import base64
 import gzip
 import zlib
+from datetime import time
 from enum import StrEnum
 from typing import Any
 
 import gmpy2
 from dateutil.parser import isoparse
-from datetime import time
 
 
 def parse_json_type(value: Any) -> "JsonType":

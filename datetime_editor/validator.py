@@ -51,29 +51,31 @@ class DateTimeValidator(QValidator):
             # Separator must be one of the valid characters
             if separator not in ("T", " ", "_"):
                 return QValidator.State.Invalid
-            # Separator ideally requires a complete date
-            if not (year and month and day):
+            # If there's a separator but not a complete date yet, it's still intermediate
+            if not (year and month and day and len(month) == 2 and len(day) == 2):
+                return QValidator.State.Intermediate
+            # If complete date and separator present but hour is missing, consider intermediate (still typing)
+            if not hour:
                 return QValidator.State.Intermediate
 
-        if month and int(month) > 12:
+        if month and len(month) == 2 and int(month) > 12:
+            return QValidator.State.Invalid
+        if day and len(day) == 2 and int(day) > 31:
             return QValidator.State.Invalid
 
-        if day and int(day) > 31:
-            return QValidator.State.Invalid
-
-        if hour and int(hour) > 23:
-            return QValidator.State.Invalid
-        elif hour and len(hour) == 2 and parts.get("minute") is None:
-            # if we are entering time, we might have "2" then "25"
+        if hour:
             if int(hour) > 23:
                 return QValidator.State.Invalid
+        elif separator and year and month and day:
+            # This covers cases like '2025-11-02T:34:56' where hour is missing after separator
+            return QValidator.State.Intermediate
 
         minute = parts.get("minute")
-        if minute and int(minute) > 59:
+        if minute and len(minute) == 2 and int(minute) > 59:
             return QValidator.State.Invalid
 
         second = parts.get("second")
-        if second and int(second) > 59:
+        if second and len(second) == 2 and int(second) > 59:
             return QValidator.State.Invalid
 
         # Check if we have a complete enough datetime to be acceptable

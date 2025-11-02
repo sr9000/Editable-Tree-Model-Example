@@ -123,6 +123,17 @@ from datetime_editor.regex import PARTIAL_DATETIME_RE
         ),
         # Critical case: time-only '25:00' must be hour/minute, not year/minute
         ("25:00", {"hour": "25", "minute": "00"}),
+        # Edge cases
+        ("--T::.+:", {}),  # all empty groups
+        ("2025--T::.+:", {"year": "2025"}),  # year only
+        ("-12-T::.+:", {"month": "12"}),  # month only
+        ("--22T::.+:", {"day": "22"}),  # day only
+        ("--T09::.+:", {"hour": "09"}),  # hour only
+        ("--T:08:.+:", {"minute": "08"}),  # minute only
+        ("--T::07.+:", {"second": "07"}),  # second only
+        ("--T::.123456+:", {"microsecond": "123456"}),  # micro only
+        ("--T::.+10:", {"tz_hour": "10"}),  # tz_hour only
+        ("--T::.+:20", {"tz_minute": "20"}),  # tz_minute only
     ],
 )
 def test_partial_regex_groups(text, expected):
@@ -140,8 +151,8 @@ def test_partial_regex_groups(text, expected):
     "text",
     [
         # Clearly invalid partials that should not match the structure
-        ":34",  # hour missing
-        "2025T",  # separator required between date and time
+        ":::",  # triple colons
+        "2025TT",  # double separator
     ],
 )
 def test_partial_regex_no_match(text):
