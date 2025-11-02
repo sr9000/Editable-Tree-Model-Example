@@ -2,10 +2,10 @@ import re
 from decimal import Decimal
 from typing import Tuple
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QValidator, QKeyEvent, QFocusEvent
-from PySide6.QtWidgets import QAbstractSpinBox
 from gmpy2 import mpq
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFocusEvent, QKeyEvent, QValidator
+from PySide6.QtWidgets import QAbstractSpinBox
 
 from coalesce import nn
 from mpq2py import mpq_serialization
@@ -235,7 +235,9 @@ class QMpqSpinBox(QAbstractSpinBox):
         if self.isReadOnly():
             return
 
-        if (self._prefix + str(mpq_serialization(self._value)) + self._suffix) != self.lineEdit().text():
+        if (
+            self._prefix + str(mpq_serialization(self._value)) + self._suffix
+        ) != self.lineEdit().text():
             self.lineEditEditingFinalize()
 
         newValue = self._value + mpq(steps) * self._single_step

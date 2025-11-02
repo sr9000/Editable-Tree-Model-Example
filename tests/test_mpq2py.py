@@ -2,7 +2,7 @@ import simplejson as json
 import yaml
 from gmpy2 import mpq
 
-from mpq2py import mpq_json_default, MpqSafeLoader, MpqSafeDumper
+from mpq2py import MpqSafeDumper, MpqSafeLoader, mpq_json_default
 
 json_floats = """
 {

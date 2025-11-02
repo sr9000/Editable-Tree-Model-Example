@@ -31,7 +31,7 @@ def parse_json_type(value: Any) -> "JsonType":
 
         case str(s):
             if s.find("\n") != -1:
-                return JsonType.MULTI_LINE
+                return JsonType.MULTILINE
 
             try:
                 raw = base64.b64decode(s, validate=True)
@@ -65,7 +65,7 @@ def parse_json_type(value: Any) -> "JsonType":
             except:
                 pass
 
-            return JsonType.TEXT
+            return JsonType.STRING
 
         case list(_):
             return JsonType.ARRAY
@@ -80,7 +80,7 @@ class JsonType(StrEnum):
     # Basic
     INTEGER = "integer"
     FLOAT = "float"
-    TEXT = "text"
+    STRING = "string"
     BOOLEAN = "boolean"
     OBJECT = "object"
     ARRAY = "array"
@@ -90,11 +90,12 @@ class JsonType(StrEnum):
     PERCENT = "percent"
 
     # Multiline Text Format
-    MULTI_LINE = "multi-line"
+    MULTILINE = "multiline"
 
     # Datetime Text Format
     DATE = "date"
-    DATETIME = "date-time"
+    TIME = "time"  # todo: implement
+    DATETIME = "datetime"
     DATETIMEZONE = "dt+timezone"
 
     # Advanced Text Encoding

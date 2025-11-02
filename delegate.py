@@ -3,6 +3,7 @@ import gzip
 import zlib
 
 from dateutil.parser import isoparse
+from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QDate, QDateTime, QModelIndex
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
@@ -16,7 +17,6 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
     QWidget,
 )
-from gmpy2 import mpq
 
 import binary
 from enums import JsonType
@@ -27,7 +27,9 @@ from tree_item import JsonTreeItem
 
 
 class ValueDelegate(QStyledItemDelegate):
-    def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QComboBox:
+    def createEditor(
+        self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex
+    ) -> QComboBox:
 
         item: JsonTreeItem = index.internalPointer()
 
@@ -49,15 +51,15 @@ class ValueDelegate(QStyledItemDelegate):
                 editor = QComboBox(parent)
                 editor.addItem("true", True)
                 editor.addItem("false", False)
-            case JsonType.TEXT:
+            case JsonType.STRING:
                 editor = QLineEdit(parent)
             case JsonType.DATE:
                 editor = QDateEdit(parent)
                 editor.setDisplayFormat("yyyy-MM-dd")
             case JsonType.DATETIME | JsonType.DATETIMEZONE:
                 editor = QDateTimeEdit(parent)
-                editor.setDisplayFormat("yyyy-MM-dd HH:mm:ss.zzz")
-            case JsonType.MULTI_LINE:
+                editor.setDisplayFormat("yyyy-MM-dd HH:mm:ss.zzzzzzzzz")
+            case JsonType.MULTILINE:
                 editor = QPlainTextEdit(parent)
             case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
                 editor = QPlainTextEdit(parent)
@@ -65,13 +67,23 @@ class ValueDelegate(QStyledItemDelegate):
                 f.setCapitalization(QFont.Capitalization.AllUppercase)
                 editor.setFont(f)
             case _:
-                raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.createEditor()`: {item.json_type=}")
+                raise ValueError(
+                    f"Inappropriate `JsonType` in `ValueDelegate.createEditor()`: {item.json_type=}"
+                )
 
         return editor
 
     def setEditorData(
         self,
-        editor: QBigIntSpinBox | QDoubleSpinBox | QComboBox | QLineEdit | QPlainTextEdit | QDateEdit | QDateTimeEdit,
+        editor: (
+            QBigIntSpinBox
+            | QDoubleSpinBox
+            | QComboBox
+            | QLineEdit
+            | QPlainTextEdit
+            | QDateEdit
+            | QDateTimeEdit
+        ),
         index: QModelIndex,
     ):
         item: JsonTreeItem = index.internalPointer()
@@ -89,7 +101,7 @@ class ValueDelegate(QStyledItemDelegate):
             case JsonType.BOOLEAN:
                 editor: QComboBox
                 editor.setCurrentIndex((not item.value) * 1)
-            case JsonType.TEXT:
+            case JsonType.STRING:
                 editor: QLineEdit
                 editor.setText(item.value)
             case JsonType.DATE:
@@ -114,7 +126,7 @@ class ValueDelegate(QStyledItemDelegate):
                 editor: QDateTimeEdit
                 dt = isoparse(item.value)
                 editor.setDateTime(qtdatetime(dt))
-            case JsonType.MULTI_LINE:
+            case JsonType.MULTILINE:
                 editor: QPlainTextEdit
                 editor.setPlainText(item.value)
             case JsonType.BYTES:
@@ -135,15 +147,21 @@ class ValueDelegate(QStyledItemDelegate):
                 formatted = binary.format_hex_dump(uncompressed)
                 editor.setPlainText(formatted)
             case unknown:
-                raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.setEditorData()`: {item.json_type=}")
+                raise ValueError(
+                    f"Inappropriate `JsonType` in `ValueDelegate.setEditorData()`: {item.json_type=}"
+                )
 
-    def setModelData(self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex):
+    def setModelData(
+        self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex
+    ):
         pass
         # model.setData(index, editor.currentText(), Qt.ItemDataRole.EditRole)
 
 
 class JsonTypeDelegate(QStyledItemDelegate):
-    def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QComboBox:
+    def createEditor(
+        self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex
+    ) -> QComboBox:
         editor = QComboBox(parent)
 
         return editor
@@ -154,5 +172,7 @@ class JsonTypeDelegate(QStyledItemDelegate):
 
         editor.setCurrentText(next(iter(JsonType)))
 
-    def setModelData(self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex):
+    def setModelData(
+        self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex
+    ):
         pass

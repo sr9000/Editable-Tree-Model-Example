@@ -265,7 +265,7 @@ class JsonTreeModel(QAbstractItemModel):
                 match item.json_type:
                     case JsonType.NULL | JsonType.ARRAY | JsonType.OBJECT:
                         return default
-                    case JsonType.TEXT | JsonType.MULTI_LINE:
+                    case JsonType.STRING | JsonType.MULTILINE:
                         if len(item.value) > 10_000:
                             return default
                     case JsonType.BYTES:

@@ -2,8 +2,8 @@ import base64
 import functools
 import gzip
 import zlib
-import gmpy2
 
+import gmpy2
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
 
