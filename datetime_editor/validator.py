@@ -5,7 +5,7 @@ from .regex import DATETIME_RE, PARTIAL_DATETIME_RE
 
 class DateTimeValidator(QValidator):
     def validate(self, input_str: str, pos: int):
-        input_str = input_str.strip()
+        input_str = input_str.strip().upper()
 
         if not input_str:
             return QValidator.State.Intermediate
@@ -85,9 +85,7 @@ class DateTimeValidator(QValidator):
         ends_with_separator = input_str.endswith(":") or input_str.endswith(".")
 
         has_complete_date = year and month and len(month) == 2 and day and len(day) == 2
-        has_complete_time = (
-            hour and minute and len(minute) == 2 and second and len(second) == 2
-        )
+        has_complete_time = hour and minute and len(minute) == 2 and second and len(second) == 2
         has_datetime_with_minute = (
             has_complete_date
             and separator
