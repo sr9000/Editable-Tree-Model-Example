@@ -55,7 +55,7 @@ def parse_json_type(value: Any) -> "JsonType":
 
             try:
                 tm = time.fromisoformat(s)
-                if tm.tzinfo is None:
+                if ":" in s and tm.tzinfo is None:
                     return JsonType.TIME
             except:
                 pass
