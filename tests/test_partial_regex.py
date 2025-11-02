@@ -24,26 +24,65 @@ from datetime_editor.regex import PARTIAL_DATETIME_RE
         ("12:34:", {"hour": "12", "minute": "34", "second": ""}),
         ("12:34:5", {"hour": "12", "minute": "34", "second": "5"}),
         ("12:34:56", {"hour": "12", "minute": "34", "second": "56"}),
-        ("12:34:56.", {"hour": "12", "minute": "34", "second": "56", "microsecond": ""}),
-        ("12:34:56.1", {"hour": "12", "minute": "34", "second": "56", "microsecond": "1"}),
+        (
+            "12:34:56.",
+            {"hour": "12", "minute": "34", "second": "56", "microsecond": ""},
+        ),
+        (
+            "12:34:56.1",
+            {"hour": "12", "minute": "34", "second": "56", "microsecond": "1"},
+        ),
         # Date and time
-        ("2025-11-02 12:34", {"year": "2025", "month": "11", "day": "02", "hour": "12", "minute": "34"}),
+        (
+            "2025-11-02 12:34",
+            {"year": "2025", "month": "11", "day": "02", "hour": "12", "minute": "34"},
+        ),
         (
             "2025-11-02T12:34:56",
-            {"year": "2025", "month": "11", "day": "02", "hour": "12", "minute": "34", "second": "56"},
+            {
+                "year": "2025",
+                "month": "11",
+                "day": "02",
+                "hour": "12",
+                "minute": "34",
+                "second": "56",
+            },
         ),
         # Timezone partials
         (
             "2025-11-02T12:34+",
-            {"year": "2025", "month": "11", "day": "02", "hour": "12", "minute": "34", "tz_sign": "+"},
+            {
+                "year": "2025",
+                "month": "11",
+                "day": "02",
+                "hour": "12",
+                "minute": "34",
+                "tz_sign": "+",
+            },
         ),
         (
             "2025-11-02T12:34+0",
-            {"year": "2025", "month": "11", "day": "02", "hour": "12", "minute": "34", "tz_sign": "+", "tz_hour": "0"},
+            {
+                "year": "2025",
+                "month": "11",
+                "day": "02",
+                "hour": "12",
+                "minute": "34",
+                "tz_sign": "+",
+                "tz_hour": "0",
+            },
         ),
         (
             "2025-11-02T12:34+01",
-            {"year": "2025", "month": "11", "day": "02", "hour": "12", "minute": "34", "tz_sign": "+", "tz_hour": "01"},
+            {
+                "year": "2025",
+                "month": "11",
+                "day": "02",
+                "hour": "12",
+                "minute": "34",
+                "tz_sign": "+",
+                "tz_hour": "01",
+            },
         ),
         (
             "2025-11-02T12:34+01:",
@@ -71,7 +110,17 @@ from datetime_editor.regex import PARTIAL_DATETIME_RE
                 "tz_minute": "0",
             },
         ),
-        ("2025-11-02T12:34Z", {"year": "2025", "month": "11", "day": "02", "hour": "12", "minute": "34", "utc": "Z"}),
+        (
+            "2025-11-02T12:34Z",
+            {
+                "year": "2025",
+                "month": "11",
+                "day": "02",
+                "hour": "12",
+                "minute": "34",
+                "utc": "Z",
+            },
+        ),
         # Critical case: time-only '25:00' must be hour/minute, not year/minute
         ("25:00", {"hour": "25", "minute": "00"}),
     ],
