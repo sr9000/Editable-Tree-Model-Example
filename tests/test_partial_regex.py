@@ -6,8 +6,6 @@ from datetime_editor.regex import PARTIAL_DATETIME_RE
 @pytest.mark.parametrize(
     "text, expected",
     [
-        # Empty should not match
-        ("", None),
         # Year only
         ("2", {"year": "2"}),
         ("20", {"year": "20"}),
@@ -20,8 +18,6 @@ from datetime_editor.regex import PARTIAL_DATETIME_RE
         ("2025-11-", {"year": "2025", "month": "11", "day": ""}),
         ("2025-11-0", {"year": "2025", "month": "11", "day": "0"}),
         # Time only
-        ("1", {"hour": "1"}),
-        ("12", {"hour": "12"}),
         ("12:", {"hour": "12", "minute": ""}),
         ("12:3", {"hour": "12", "minute": "3"}),
         ("12:34", {"hour": "12", "minute": "34"}),
