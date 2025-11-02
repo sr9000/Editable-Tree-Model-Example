@@ -1,6 +1,3 @@
-from typing import Any
-
-
 class _coalesce:
     def __getitem__(self, item):
         if isinstance(item, tuple):
@@ -11,9 +8,4 @@ class _coalesce:
             return item
 
 
-nn = _coalesce()  # Not None argument (the first one)
-
-# def nn(*args) -> Any:
-#     for x in args:
-#         if x is not None:
-#             return x
+nn = _coalesce()

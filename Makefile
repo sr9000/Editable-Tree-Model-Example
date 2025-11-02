@@ -1,4 +1,4 @@
 lint:
 	autoflake .
-	isort .
-	black --line-length 120 .
+	isort . --extend-skip mainwindow.py
+	black . --line-length 120 --extend-exclude mainwindow.py

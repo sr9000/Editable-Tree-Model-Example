@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time
 
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import QLineEdit, QVBoxLayout, QWidget
@@ -34,14 +34,14 @@ class DateTimeEditor(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._editor = QLineEdit()
-        self._editor.setValidator(DateTimeValidator(self))
+        self._validator = DateTimeValidator(self)
+        self._editor.setValidator(self._validator)
         self._editor.editingFinished.connect(self._on_editing_finished)
         layout = QVBoxLayout()
         layout.addWidget(self._editor)
         self.setLayout(layout)
         self._value = None
         self._category = None
-        self._validator = DateTimeValidator(self)
 
     def value(self):
         return self._value
