@@ -68,3 +68,45 @@ from datetime_editor.validator import DateTimeValidator
 def test_datetime_validator(text, state):
     validator = DateTimeValidator(None)
     assert validator.validate(text, 0) == state
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        "202{5-02-27}T12:34:56",
+        "2025-{02}-27T12:34:56",
+        "2025-02-{27}T12:34:56",
+        "2025-02-27T{12}:34:56",
+        "2025-02-27T12:{34}:56",
+        "2025-02-27T12:34:{56}",
+        "2025-02-27T12:34:56{Z}",
+        "2025-02-27T12:34:56{z}",
+        "2025-02-27T12:34:56+0{1:00}",
+        "2025-02-27T12:34:56-0{8:30}",
+        "20{25}-11-02T12:34:56",
+        "2025-1{1}-02T12:34:56",
+        "2025-11-0{2}T12:34:56",
+        "2025-0{2}-27T12:34:56",
+        "2025-02-2{7}T12:34:56",
+        "12:34:{56}+01:00",
+        "2025-02-27T12:34:56+{01:00}",
+    ],
+)
+def test_like_manual_input(pattern):
+    """Type chars inside {...} one by one; non-final steps must be Intermediate and final must be Acceptable."""
+    start = pattern.index("{")
+    end = pattern.index("}", start)
+    prefix = pattern[:start]
+    chunk = pattern[start + 1 : end]
+    suffix = pattern[end + 1 :]
+
+    validator = DateTimeValidator(None)
+
+    # Non-final incremental inputs must be Intermediate
+    for i in range(1, len(chunk)):
+        s = prefix + chunk[:i] + suffix
+        assert validator.validate(s, 0) == QValidator.State.Intermediate, f"Expected Intermediate for: {s!r}"
+
+    # Final full input must be Acceptable
+    final = prefix + chunk + suffix
+    assert validator.validate(final, 0) == QValidator.State.Acceptable, f"Expected Acceptable for: {final!r}"
