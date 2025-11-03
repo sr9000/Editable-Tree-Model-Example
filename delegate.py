@@ -3,22 +3,22 @@ import gzip
 import zlib
 from datetime import time
 
+from dateutil.parser import isoparse
+from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QDateTimeEdit,
+    QDialog,
     QDoubleSpinBox,
     QLineEdit,
     QPlainTextEdit,
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QWidget,
-    QDialog,
 )
-from dateutil.parser import isoparse
-from gmpy2 import mpq
 
 import binary
 from datetime_editor import DateTimeEditor

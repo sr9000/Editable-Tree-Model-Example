@@ -2,15 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QDialog,
-    QDialogButtonBox,
-    QHBoxLayout,
-    QVBoxLayout,
-    QWidget,
-    QPlainTextEdit,
-)
+from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QPlainTextEdit, QVBoxLayout, QWidget
 
 
 class LineNumberArea(QWidget):
