@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 import binary
 from datetime_editor import DateTimeEditor
 from enums import JsonType
-from multiline_editor import MultilineEditorDialog
+from multiline_editor import MultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
 from tree_item import JsonTreeItem
@@ -58,7 +58,7 @@ class ValueDelegate(QStyledItemDelegate):
                 editor = DateTimeEditor(parent)
             case JsonType.MULTILINE:
                 # Use a modal dialog-based editor for multiline text
-                dlg = MultilineEditorDialog(parent=parent, text=str(item.value or ""))
+                dlg = MultilineDialog(parent=parent, text=str(item.value or ""))
                 if dlg.exec() == QDialog.DialogCode.Accepted:
                     index.model().setData(index, dlg.text(), Qt.ItemDataRole.EditRole)
                 # Do not return an inline editor for multiline values

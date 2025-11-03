@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout,
 
 
 class LineNumberArea(QWidget):
-    def __init__(self, editor: "CodeEditor") -> None:
+    def __init__(self, editor: "MultilineEditor") -> None:
         super().__init__(editor)
         self._editor = editor
 
@@ -17,81 +17,77 @@ class LineNumberArea(QWidget):
         self._editor.line_number_area_paint_event(event)
 
 
-class CodeEditor(QPlainTextEdit):
+class MultilineEditor(QPlainTextEdit):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._line_numbers_enabled = True
 
-        self._lineNumberArea = LineNumberArea(self)
+        self._lineNumbersWidget = LineNumberArea(self)
 
         self.blockCountChanged.connect(self._update_line_number_area_width)
         self.updateRequest.connect(self._update_line_number_area)
 
-        self._update_line_number_area_width(0)
-
         # Better defaults for multi-line editing
-        self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance(" "))
+        # self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance("9"))
         self.setWordWrap(True)
+        self.setLineNumbersVisible(True)
 
     # Public API
     def setLineNumbersVisible(self, visible: bool) -> None:
-        self._line_numbers_enabled = visible
-        self._lineNumberArea.setVisible(visible)
-        self._update_line_number_area_width(0)
+        self._lineNumbersWidget.setVisible(visible)
+        self._update_line_number_area_width()
 
     def setWordWrap(self, enabled: bool) -> None:
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth if enabled else QPlainTextEdit.LineWrapMode.NoWrap)
 
     # Line number area plumbing
-    def line_number_area_width(self) -> int:
-        if not self._line_numbers_enabled:
+    def line_number_area_width(self, new_block_count: int = 0) -> int:
+        if not self._lineNumbersWidget.isVisible():
             return 0
-        digits = 1
-        max_count = max(1, self.blockCount())
-        while max_count >= 10:
-            max_count //= 10
-            digits += 1
-        space = 3 + self.fontMetrics().horizontalAdvance("9") * digits
+
+        max_count = max(1, new_block_count or self.blockCount())
+        digits = max(2, len(str(max_count)))
+        space = digits * self.fontMetrics().horizontalAdvance("9")
         return space
 
-    def _update_line_number_area_width(self, _newBlockCount: int) -> None:
-        self.setViewportMargins(self.line_number_area_width(), 0, 0, 0)
+    def _update_line_number_area_width(self, new_block_count: int = 0) -> None:
+        self.setViewportMargins(self.line_number_area_width(new_block_count), 0, 0, 0)
 
     def _update_line_number_area(self, rect: QRect, dy: int) -> None:
         if dy:
-            self._lineNumberArea.scroll(0, dy)
+            self._lineNumbersWidget.scroll(0, dy)
         else:
-            self._lineNumberArea.update(0, rect.y(), self._lineNumberArea.width(), rect.height())
+            self._lineNumbersWidget.update(0, rect.y(), self._lineNumbersWidget.width(), rect.height())
+
         if rect.contains(self.viewport().rect()):
-            self._update_line_number_area_width(0)
+            self._update_line_number_area_width()
 
     def resizeEvent(self, event):  # type: ignore[override]
         super().resizeEvent(event)
         cr = self.contentsRect()
-        self._lineNumberArea.setGeometry(QRect(cr.left(), cr.top(), self.line_number_area_width(), cr.height()))
+        self._lineNumbersWidget.setGeometry(QRect(cr.left(), cr.top(), self.line_number_area_width(), cr.height()))
 
     def line_number_area_paint_event(self, event) -> None:
-        if not self._line_numbers_enabled:
+        if not self._lineNumbersWidget.isVisible():
             return
-        painter = QPainter(self._lineNumberArea)
+
+        painter = QPainter(self._lineNumbersWidget)
         painter.fillRect(event.rect(), self.palette().alternateBase())
 
         block = self.firstVisibleBlock()
-        block_number = block.blockNumber()
+        block_number = 1 + block.blockNumber()
         top = self.blockBoundingGeometry(block).translated(self.contentOffset()).top()
         bottom = top + self.blockBoundingRect(block).height()
 
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
-                number = str(block_number + 1)
                 painter.setPen(self.palette().color(self.foregroundRole()))
                 painter.drawText(
                     0,
                     int(top),
-                    int(self._lineNumberArea.width()) - 5,
+                    int(self._lineNumbersWidget.width()) - 5,
                     int(self.fontMetrics().height()),
                     Qt.AlignmentFlag.AlignRight,
-                    number,
+                    str(block_number),
                 )
             block = block.next()
             top = bottom
@@ -99,28 +95,28 @@ class CodeEditor(QPlainTextEdit):
             block_number += 1
 
 
-class MultilineEditorDialog(QDialog):
+class MultilineDialog(QDialog):
     def __init__(self, parent: QWidget | None = None, text: str = "") -> None:
         super().__init__(parent)
-        self.setWindowTitle("Edit Text")
+        self.setWindowTitle("Edit Multiline Text")
         self.setModal(True)
-        self.resize(700, 500)
+        self.resize(600, 440)
 
-        self.editor = CodeEditor(self)
+        self.editor = MultilineEditor(self)
         self.editor.setPlainText(text or "")
 
         # Controls row
-        self.wrapCheck = QCheckBox("Word wrap")
-        self.wrapCheck.setChecked(True)
-        self.wrapCheck.toggled.connect(self.editor.setWordWrap)
+        self.wrapCheckBox = QCheckBox("Word wrap")
+        self.wrapCheckBox.setChecked(True)
+        self.wrapCheckBox.toggled.connect(self.editor.setWordWrap)
 
-        self.linesCheck = QCheckBox("Line numbers")
-        self.linesCheck.setChecked(True)
-        self.linesCheck.toggled.connect(self.editor.setLineNumbersVisible)
+        self.lineNumbersCheckBox = QCheckBox("Line numbers")
+        self.lineNumbersCheckBox.setChecked(True)
+        self.lineNumbersCheckBox.toggled.connect(self.editor.setLineNumbersVisible)
 
         controls = QHBoxLayout()
-        controls.addWidget(self.wrapCheck)
-        controls.addWidget(self.linesCheck)
+        controls.addWidget(self.wrapCheckBox)
+        controls.addWidget(self.lineNumbersCheckBox)
         controls.addStretch(1)
 
         # Buttons
