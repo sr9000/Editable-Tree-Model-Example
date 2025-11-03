@@ -1,5 +1,3 @@
-from binascii import Incomplete
-
 import pytest
 from PySide6.QtGui import QValidator
 
