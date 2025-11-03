@@ -1,12 +1,19 @@
 import re
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, time
+
+from dateutil.parser import isoparse
 
 from .enums import DateTimeCategory
 
 DATETIME_RE = re.compile(
-    r"^(?:(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})(?P<separator>[T _])?)?"
-    r"(?:(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(?:\.(?P<microsecond>\d+))?)?"
-    r"(?:(?P<tz_sign>[+-])(?P<tz_hour>\d{2}):(?P<tz_minute>\d{2})|(?P<utc>Z))?$",
+    r"^("
+    r"\d{4}-\d{2}-\d{2}"  # Date: YYYY-MM-DD
+    r"|\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?"  # Time: hh:mm[:ss[.123456]]
+    r"|"  # DateTime:
+    r"\d{4}-\d{2}-\d{2}[T _]"  #  YYYY-MM-DD(T _)
+    r"\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?"  # hh:mm[:ss[.123456]]
+    r"(Z|[+-]\d{2}:\d{2})?"  # [Z|(+-)hh:mm]
+    ")$",
     re.IGNORECASE,
 )
 
@@ -18,52 +25,37 @@ DATETIME_RE = re.compile(
 PARTIAL_DATETIME_RE = re.compile(
     r"^(?:(?P<year>\d{0,4})(?=-|[T _]|$)(?:-(?P<month>\d{0,2})(?:-(?P<day>\d{0,2}))?)?)?"
     r"(?:(?P<separator>[T _])?(?P<hour>\d{0,2})(?::(?P<minute>\d{0,2})(?::(?P<second>\d{0,2})(?:\.(?P<microsecond>\d*))?)?)?)?"
-    r"(?:(?P<tz_sign>[+-])(?P<tz_hour>\d{0,2})(?::(?P<tz_minute>\d{0,2}))?|(?P<utc>Z?))?$",
+    r"(?:(?P<tz_sign>[+-])(?P<tz_hour>\d{0,2})(?::(?P<tz_minute>\d{0,2}))?|(?P<utc>Z))?$",
     re.IGNORECASE,
 )
 
 
 def parse_datetime_text(text, category=None):
-    match = DATETIME_RE.match(text)
+    match = DATETIME_RE.fullmatch(text)
     if not match:
         return None
 
-    parts = match.groupdict()
-    year = int(parts["year"]) if parts["year"] else None
-    month = int(parts["month"]) if parts["month"] else None
-    day = int(parts["day"]) if parts["day"] else None
-    hour = int(parts["hour"]) if parts["hour"] else None
-    minute = int(parts["minute"]) if parts["minute"] else None
-    second = int(parts["second"]) if parts["second"] else None
-    microsecond = int(parts["microsecond"].ljust(6, "0")[:6]) if parts["microsecond"] else 0
+    try:
+        if category == DateTimeCategory.Date:
+            return date.fromisoformat(text)
+        elif category == DateTimeCategory.Time:
+            return time.fromisoformat(text)
+        elif category in (DateTimeCategory.DateTime, DateTimeCategory.DateTimeWithTZ):
+            return isoparse(text)
+    except:
+        return None
 
-    tz_sign = parts["tz_sign"]
-    tz_hour = int(parts["tz_hour"]) if parts["tz_hour"] else 0
-    tz_minute = int(parts["tz_minute"]) if parts["tz_minute"] else 0
-    utc = parts["utc"]
+    try:
+        return time.fromisoformat(text)
+    except:
+        pass
 
-    tz = None
-    if utc:
-        tz = timezone.utc
-    elif tz_sign:
-        offset = timedelta(hours=tz_hour, minutes=tz_minute)
-        if tz_sign == "-":
-            offset = -offset
-        tz = timezone(offset)
+    try:
+        return date.fromisoformat(text)
+    except:
+        pass
 
-    if category == DateTimeCategory.Date:
-        return date(year, month, day)
-    elif category == DateTimeCategory.Time:
-        return time(hour, minute, second, microsecond, tzinfo=tz)
-    elif category == DateTimeCategory.DateTime:
-        return datetime(year, month, day, hour, minute, second, microsecond)
-    elif category == DateTimeCategory.DateTimeWithTZ:
-        return datetime(year, month, day, hour, minute, second, microsecond, tzinfo=tz)
-
-    if year is not None and hour is not None:
-        return datetime(year, month, day, hour, minute, second, microsecond, tzinfo=tz)
-    elif year is not None:
-        return date(year, month, day)
-    elif hour is not None:
-        return time(hour, minute, second, microsecond, tzinfo=tz)
-    return None
+    try:
+        return isoparse(text)
+    except:
+        return None

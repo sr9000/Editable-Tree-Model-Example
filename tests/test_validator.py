@@ -78,6 +78,7 @@ from datetime_editor.validator import DateTimeValidator
         ("25:00", QValidator.State.Invalid),
         ("12:60", QValidator.State.Invalid),
         ("12:34:60", QValidator.State.Invalid),
+        ("2024-06-3T33:33:33+00:00", QValidator.State.Invalid),
     ],
 )
 def test_datetime_validator(text, state):

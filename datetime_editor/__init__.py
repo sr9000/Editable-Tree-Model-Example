@@ -56,6 +56,7 @@ class DateTimeEditor(QLineEdit):
     def setValue(self, value):
         self._value = value
         self._category = self.get_category(value)
+        self._validator.category = self._category
         self.setText(str(value))
 
     @Slot()

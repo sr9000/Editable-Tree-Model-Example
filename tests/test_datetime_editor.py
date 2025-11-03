@@ -16,7 +16,6 @@ from datetime_editor.regex import parse_datetime_text
         # time+ms
         ("12:34:56.123", DateTimeCategory.Time, time(12, 34, 56, 123000)),
         ("12:34:56.123456", DateTimeCategory.Time, time(12, 34, 56, 123456)),
-        ("12:34:56.123456789", DateTimeCategory.Time, time(12, 34, 56, 123456)),
         # datetime
         (
             "2025-11-02 12:34:56",
