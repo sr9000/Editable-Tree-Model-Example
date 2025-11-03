@@ -1,89 +1,113 @@
+from binascii import Incomplete
+
 import pytest
 from PySide6.QtGui import QValidator
 
+from datetime_editor import DateTimeCategory
 from datetime_editor.validator import DateTimeValidator
+
+ALL_CATEGORIES = {None} | set(DateTimeCategory)
+PURE_CATEGORIES = {DateTimeCategory.Date, DateTimeCategory.Time}
+INCOMPLETE_CATEGORIES = set(DateTimeCategory) - {DateTimeCategory.DateTimeWithTZ}
 
 
 @pytest.mark.parametrize(
-    "text, state",
+    "text, invalid, accepted",
     [
         # Empty
-        ("", QValidator.State.Intermediate),
+        ("", {}, {}),
         # Acceptable
-        ("2025-11-02", QValidator.State.Acceptable),
-        ("12:34:56", QValidator.State.Acceptable),
-        ("2025-11-02 12:34:56", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56.123456", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56Z", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56+01:00", QValidator.State.Acceptable),
+        ("2025-11-02", {DateTimeCategory.Time}, {DateTimeCategory.Date}),
+        ("12:34:56", {DateTimeCategory.Date}, {DateTimeCategory.Time}),
+        ("2025-11-02 12:34:56", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:56", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:56.123456", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:56Z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
+        ("2025-11-02T12:34:56+01:00", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
         # Intermediate
-        ("2025", QValidator.State.Intermediate),
-        ("2025-", QValidator.State.Intermediate),
-        ("2025-11", QValidator.State.Intermediate),
-        ("2025-11-", QValidator.State.Intermediate),
-        ("2025-11-0", QValidator.State.Intermediate),
-        ("12:", QValidator.State.Intermediate),
-        ("12:3", QValidator.State.Intermediate),
-        ("12:34", QValidator.State.Acceptable),
-        ("12:34:", QValidator.State.Intermediate),
-        ("12:34:5", QValidator.State.Intermediate),
-        ("12:34:56", QValidator.State.Acceptable),
-        ("12:34:56.", QValidator.State.Intermediate),
-        ("12:34:56.123456", QValidator.State.Acceptable),
-        ("T12:34:56.123456", QValidator.State.Intermediate),
-        ("2025-11-02", QValidator.State.Acceptable),
-        ("2025-11-02T", QValidator.State.Intermediate),
-        ("2025-11-02t1", QValidator.State.Intermediate),
-        ("2025-11-02T12", QValidator.State.Intermediate),
-        ("2025-11-02T12:", QValidator.State.Intermediate),
-        ("2025-11-02T12:3", QValidator.State.Intermediate),
-        ("2025-11-02T12:34", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:", QValidator.State.Intermediate),
-        ("2025-11-02T12:34:5", QValidator.State.Intermediate),
-        ("2025-11-02T12:34:56", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56.", QValidator.State.Intermediate),
-        ("2025-11-02T12:34:56.1", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56.12", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56.123", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56.1234", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56.12345", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56.123456", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56Z", QValidator.State.Acceptable),
-        ("2025-11-02t12:34:56z", QValidator.State.Acceptable),
-        ("2025-11-02T12:34:56+01", QValidator.State.Intermediate),
-        ("2025-11-02T12:34:56+01:", QValidator.State.Intermediate),
-        ("2025-11-02T12:34:56+01:0", QValidator.State.Intermediate),
-        ("2025-11-02T12:34:56+01:00", QValidator.State.Acceptable),
-        ("2025T12:34:56", QValidator.State.Intermediate),
-        ("2025-T12:34:56", QValidator.State.Intermediate),
-        ("2025-0T12:34:56", QValidator.State.Intermediate),
-        ("2025-02T12:34:56", QValidator.State.Intermediate),
-        ("2025-02-T12:34:56", QValidator.State.Intermediate),
-        ("2025-02-2T12:34:56", QValidator.State.Intermediate),
-        ("2025-02-27T12:34:56", QValidator.State.Acceptable),
-        ("2025-02-27T", QValidator.State.Intermediate),
-        ("2025-02-27T:", QValidator.State.Intermediate),
-        ("2025-02-27T::", QValidator.State.Intermediate),
-        ("2025-02-27T::5", QValidator.State.Intermediate),
-        ("2025-02-27T::56", QValidator.State.Intermediate),
-        ("2025-02-27T:3:56", QValidator.State.Intermediate),
-        ("2025-02-27T:34:56", QValidator.State.Intermediate),
-        ("2025-02-27T1:34:56", QValidator.State.Intermediate),
-        ("2025-02-27T12:34:56", QValidator.State.Acceptable),
+        ("2025", {DateTimeCategory.Time}, {}),
+        ("2025-", {DateTimeCategory.Time}, {}),
+        ("2025-11", {DateTimeCategory.Time}, {}),
+        ("2025-11-", {DateTimeCategory.Time}, {}),
+        ("2025-11-0", {DateTimeCategory.Time}, {}),
+        ("12:", {DateTimeCategory.Date}, {}),
+        ("12:3", {DateTimeCategory.Date}, {}),
+        ("12:34", {DateTimeCategory.Date}, {DateTimeCategory.Time}),
+        ("12:34:", {DateTimeCategory.Date}, {}),
+        ("12:34:5", {DateTimeCategory.Date}, {}),
+        ("12:34:56", {DateTimeCategory.Date}, {DateTimeCategory.Time}),
+        ("12:34:56.", {DateTimeCategory.Date}, {}),
+        ("12:34:56.123456", {DateTimeCategory.Date}, {DateTimeCategory.Time}),
+        ("T12:34:56.123456", PURE_CATEGORIES, {}),
+        ("2025-11-0", {DateTimeCategory.Time}, {}),
+        ("2025-11-02", {DateTimeCategory.Time}, {DateTimeCategory.Date}),
+        ("2025-11-02T", PURE_CATEGORIES, {}),
+        ("2025-11-02t1", PURE_CATEGORIES, {}),
+        ("2025-11-02T12", PURE_CATEGORIES, {}),
+        ("2025-11-02T12:", PURE_CATEGORIES, {}),
+        ("2025-11-02T12:3", PURE_CATEGORIES, {}),
+        ("2025-11-02T12:34", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:", PURE_CATEGORIES, {}),
+        ("2025-11-02T12:34:5", PURE_CATEGORIES, {}),
+        ("2025-11-02T12:34:56", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:56.", PURE_CATEGORIES, {}),
+        ("2025-11-02T12:34:56.1", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:56.12", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:56.123", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:56.1234", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:56.12345", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:56.123456", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-11-02T12:34:56Z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
+        ("2025-11-02t12:34:56z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
+        ("2025-11-02T12:34:56+01", INCOMPLETE_CATEGORIES, {}),
+        ("2025-11-02T12:34:56+01:", INCOMPLETE_CATEGORIES, {}),
+        ("2025-11-02T12:34:56+01:0", INCOMPLETE_CATEGORIES, {}),
+        ("2025-11-02T12:34:56+01:00", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
+        ("2025T12:34:56", PURE_CATEGORIES, {}),
+        ("2025-T12:34:56", PURE_CATEGORIES, {}),
+        ("2025-0T12:34:56", PURE_CATEGORIES, {}),
+        ("2025-02T12:34:56", PURE_CATEGORIES, {}),
+        ("2025-02-T12:34:56", PURE_CATEGORIES, {}),
+        ("2025-02-2T12:34:56", PURE_CATEGORIES, {}),
+        ("2025-02-27T12:34:56", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
+        ("2025-02-27T", PURE_CATEGORIES, {}),
+        ("2025-02-27T:", PURE_CATEGORIES, {}),
+        ("2025-02-27T::", PURE_CATEGORIES, {}),
+        ("2025-02-27T::5", PURE_CATEGORIES, {}),
+        ("2025-02-27T::56", PURE_CATEGORIES, {}),
+        ("2025-02-27T:3:56", PURE_CATEGORIES, {}),
+        ("2025-02-27T:34:56", PURE_CATEGORIES, {}),
+        ("2025-02-27T1:34:56", PURE_CATEGORIES, {}),
+        ("2025-02-27T12:34:56", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
         # Invalid
-        ("a", QValidator.State.Invalid),
-        ("2025-13", QValidator.State.Invalid),
-        ("2025-11-32", QValidator.State.Invalid),
-        ("25:00", QValidator.State.Invalid),
-        ("12:60", QValidator.State.Invalid),
-        ("12:34:60", QValidator.State.Invalid),
-        ("2024-06-3T33:33:33+00:00", QValidator.State.Invalid),
+        ("a", ALL_CATEGORIES, {}),
+        ("2025-13", ALL_CATEGORIES, {}),
+        ("2025-11-32", ALL_CATEGORIES, {}),
+        ("25:00", ALL_CATEGORIES, {}),
+        ("12:60", ALL_CATEGORIES, {}),
+        ("12:34:60", ALL_CATEGORIES, {}),
+        ("2024-06-3T33:33:33+00:00", ALL_CATEGORIES, {}),
     ],
 )
-def test_datetime_validator(text, state):
+def test_datetime_validator(text, invalid, accepted):
+    if accepted:
+        accepted.add(None)
+
     validator = DateTimeValidator(None)
-    assert validator.validate(text, 0) == state
+    for ct in ALL_CATEGORIES:
+        validator.category = ct
+        if ct in invalid:
+            assert (
+                validator.validate(text, 0) == QValidator.State.Invalid
+            ), f"Expected Invalid for category {ct} and text: {text!r}"
+        elif ct in accepted:
+            assert (
+                validator.validate(text, 0) == QValidator.State.Acceptable
+            ), f"Expected Acceptable for category {ct} and text: {text!r}"
+        else:
+            assert (
+                validator.validate(text, 0) == QValidator.State.Intermediate
+            ), f"Expected Intermediate for category {ct} and text: {text!r}"
 
 
 @pytest.mark.parametrize(

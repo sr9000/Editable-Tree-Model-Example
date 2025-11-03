@@ -17,6 +17,8 @@ DATETIME_RE = re.compile(
     re.IGNORECASE,
 )
 
+SEPARATOR_RE = re.compile(r"[T _]", re.IGNORECASE)
+
 # In the partial regex:
 # - Year (1-4 digits) only matches if followed by '-', separator, or end-of-string to avoid
 #   consuming the hour in inputs like '25:00'.
@@ -24,24 +26,43 @@ DATETIME_RE = re.compile(
 #   matching inputs like ':34' or interpreting '25:00' with an empty hour.
 PARTIAL_DATETIME_RE = re.compile(
     r"^(?:(?P<year>\d{0,4})(?=-|[T _]|$)(?:-(?P<month>\d{0,2})(?:-(?P<day>\d{0,2}))?)?)?"
-    r"(?:(?P<separator>[T _])?(?P<hour>\d{0,2})(?::(?P<minute>\d{0,2})(?::(?P<second>\d{0,2})(?:\.(?P<microsecond>\d*))?)?)?)?"
+    r"(?:(?P<separator>[T _])?(?P<hour>\d{1,2})?(?::(?P<minute>\d{0,2})(?::(?P<second>\d{0,2})(?:\.(?P<microsecond>\d*))?)?)?)?"
     r"(?:(?P<tz_sign>[+-])(?P<tz_hour>\d{0,2})(?::(?P<tz_minute>\d{0,2}))?|(?P<utc>Z))?$",
     re.IGNORECASE,
 )
 
 
-def parse_datetime_text(text, category=None):
+def parse_datetime_text(text: str, category=None):
     match = DATETIME_RE.fullmatch(text)
     if not match:
         return None
 
     try:
-        if category == DateTimeCategory.Date:
-            return date.fromisoformat(text)
-        elif category == DateTimeCategory.Time:
-            return time.fromisoformat(text)
-        elif category in (DateTimeCategory.DateTime, DateTimeCategory.DateTimeWithTZ):
-            return isoparse(text)
+        match category:
+            case DateTimeCategory.Date:
+                return date.fromisoformat(text)
+
+            case DateTimeCategory.Time:
+                return time.fromisoformat(text)
+
+            case DateTimeCategory.DateTime:
+                assert SEPARATOR_RE.search(text)
+
+                dt = isoparse(text)
+                assert dt.tzinfo is None
+
+                return dt
+
+            case DateTimeCategory.DateTimeWithTZ:
+                assert SEPARATOR_RE.search(text)
+
+                dt = isoparse(text)
+                assert dt.tzinfo is not None
+
+                return dt
+
+            case _ if category is not None:
+                return None
     except:
         return None
 

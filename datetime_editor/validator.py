@@ -2,6 +2,7 @@ from calendar import monthrange
 
 from PySide6.QtGui import QValidator
 
+from . import DateTimeCategory
 from .regex import PARTIAL_DATETIME_RE, parse_datetime_text
 
 
@@ -11,7 +12,7 @@ class DateTimeValidator(QValidator):
         self.category = None
 
     def validate(self, input_str: str, pos: int):
-        input_str = input_str.strip().upper()
+        input_str = input_str.upper()
 
         if not input_str:
             return QValidator.State.Intermediate
@@ -22,11 +23,43 @@ class DateTimeValidator(QValidator):
         except:
             pass
 
+        try:
+            if self.category == DateTimeCategory.Time and int(input_str) <= 23:
+                return QValidator.State.Intermediate
+        except:
+            pass
+
         match = PARTIAL_DATETIME_RE.fullmatch(input_str)
         if not match:
             return QValidator.State.Invalid
 
         parts = match.groupdict()
+
+        match self.category:
+            case DateTimeCategory.Date:
+                only_allowed = {"year", "month", "day"}
+            case DateTimeCategory.Time:
+                only_allowed = {"hour", "minute", "second", "microsecond"}
+            case DateTimeCategory.DateTime:
+                only_allowed = {"year", "month", "day", "separator", "hour", "minute", "second", "microsecond"}
+            case _:
+                only_allowed = {
+                    "year",
+                    "month",
+                    "day",
+                    "separator",
+                    "hour",
+                    "minute",
+                    "second",
+                    "microsecond",
+                    "tz_sign",
+                    "tz_hour",
+                    "tz_minute",
+                }
+
+        for key, value in parts.items():
+            if value is not None and key not in only_allowed:
+                return QValidator.State.Invalid
 
         # Check separator validity
         year = parts.get("year")

@@ -1,12 +1,13 @@
 import base64
 import gzip
 import zlib
-from datetime import time
+from datetime import date, datetime, time
 from enum import StrEnum
 from typing import Any
 
 import gmpy2
-from dateutil.parser import isoparse
+
+from datetime_editor import parse_datetime_text
 
 
 def parse_json_type(value: Any) -> "JsonType":
@@ -54,22 +55,16 @@ def parse_json_type(value: Any) -> "JsonType":
                 pass
 
             try:
-                tm = time.fromisoformat(s)
-                if ":" in s and tm.tzinfo is None:
-                    return JsonType.TIME
-            except:
-                pass
-
-            try:
-                dt = isoparse(s)
-
-                if len(s) < 11 and dt.hour == dt.minute == dt.second == dt.microsecond == 0 and dt.tzinfo is None:
-                    return JsonType.DATE
-
-                if dt.tzinfo is not None:
-                    return JsonType.DATETIMEZONE
-
-                return JsonType.DATETIME
+                val = parse_datetime_text(s)
+                match val:
+                    case datetime(tzinfo=None):
+                        return JsonType.DATETIME
+                    case datetime():
+                        return JsonType.DATETIMEZONE
+                    case time():
+                        return JsonType.TIME
+                    case date():
+                        return JsonType.DATE
             except:
                 pass
 
