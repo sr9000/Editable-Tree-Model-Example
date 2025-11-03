@@ -3,6 +3,7 @@
   * float/integer separation (hex/oct/bin preview context menu, float16/32/64 preview context menu)
   * multi-line/single-line separation (lines, words, runes)
   * bytes type (encoded as base64)
+  * date/time type (various formats)
   * special null type
 - change type of value (drop-down select / tab / shift+tab)
 - rename values (check name uniqueness) (double click / F2)
