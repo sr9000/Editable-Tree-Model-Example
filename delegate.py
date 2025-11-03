@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QDateTimeEdit,
-    QDialog,
     QDoubleSpinBox,
     QLineEdit,
     QPlainTextEdit,
@@ -58,9 +57,12 @@ class ValueDelegate(QStyledItemDelegate):
                 editor = DateTimeEditor(parent)
             case JsonType.MULTILINE:
                 # Use a modal dialog-based editor for multiline text
-                dlg = MultilineDialog(parent=parent, text=str(item.value or ""))
-                if dlg.exec() == QDialog.DialogCode.Accepted:
-                    index.model().setData(index, dlg.text(), Qt.ItemDataRole.EditRole)
+                MultilineDialog(
+                    parent=parent,
+                    text=str(item.value or ""),
+                    callback=lambda text: index.model().setData(index, text, Qt.ItemDataRole.EditRole) and None,
+                ).open()
+
                 # Do not return an inline editor for multiline values
                 return None
             case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:

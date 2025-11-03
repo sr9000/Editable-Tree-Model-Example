@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from black.trans import Callable
 from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QPlainTextEdit, QVBoxLayout, QWidget
@@ -27,13 +28,13 @@ class MultilineEditor(QPlainTextEdit):
         self.updateRequest.connect(self._update_line_number_area)
 
         # Better defaults for multi-line editing
-        # self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance("9"))
+        self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance("9"))
         self.setWordWrap(True)
         self.setLineNumbersVisible(True)
 
     # Public API
-    def setLineNumbersVisible(self, visible: bool) -> None:
-        self._lineNumbersWidget.setVisible(visible)
+    def setLineNumbersVisible(self, is_visible: bool) -> None:
+        self._lineNumbersWidget.setVisible(is_visible)
         self._update_line_number_area_width()
 
     def setWordWrap(self, enabled: bool) -> None:
@@ -45,7 +46,7 @@ class MultilineEditor(QPlainTextEdit):
             return 0
 
         max_count = max(1, new_block_count or self.blockCount())
-        digits = max(2, len(str(max_count)))
+        digits = 1 + max(1, len(str(max_count)))
         space = digits * self.fontMetrics().horizontalAdvance("9")
         return space
 
@@ -58,7 +59,7 @@ class MultilineEditor(QPlainTextEdit):
         else:
             self._lineNumbersWidget.update(0, rect.y(), self._lineNumbersWidget.width(), rect.height())
 
-        if rect.contains(self.viewport().rect()):
+        if self._lineNumbersWidget.width() + 1 != self.viewport().x():
             self._update_line_number_area_width()
 
     def resizeEvent(self, event):  # type: ignore[override]
@@ -72,20 +73,23 @@ class MultilineEditor(QPlainTextEdit):
 
         painter = QPainter(self._lineNumbersWidget)
         painter.fillRect(event.rect(), self.palette().alternateBase())
+        painter.setPen(self.palette().accent().color())
 
         block = self.firstVisibleBlock()
         block_number = 1 + block.blockNumber()
         top = self.blockBoundingGeometry(block).translated(self.contentOffset()).top()
         bottom = top + self.blockBoundingRect(block).height()
 
+        width = int(self._lineNumbersWidget.width() - 0.5 * self.fontMetrics().horizontalAdvance("9"))
+        height = self.fontMetrics().height()
+
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
-                painter.setPen(self.palette().color(self.foregroundRole()))
                 painter.drawText(
                     0,
                     int(top),
-                    int(self._lineNumbersWidget.width()) - 5,
-                    int(self.fontMetrics().height()),
+                    width,
+                    height,
                     Qt.AlignmentFlag.AlignRight,
                     str(block_number),
                 )
@@ -96,8 +100,12 @@ class MultilineEditor(QPlainTextEdit):
 
 
 class MultilineDialog(QDialog):
-    def __init__(self, parent: QWidget | None = None, text: str = "") -> None:
+    def __init__(
+        self, parent: QWidget | None = None, text: str = "", callback: Callable[[str], None] = lambda _: None
+    ) -> None:
         super().__init__(parent)
+        self._callback = callback
+
         self.setWindowTitle("Edit Multiline Text")
         self.setModal(True)
         self.resize(600, 440)
@@ -121,16 +129,20 @@ class MultilineDialog(QDialog):
 
         # Buttons
         self.buttonBox = QDialogButtonBox(self)
-        ok = self.buttonBox.addButton(QDialogButtonBox.StandardButton.Ok)
-        cancel = self.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-        ok.clicked.connect(self.accept)
-        cancel.clicked.connect(self.reject)
+        self.buttonBox.addButton(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.accept)
+        self.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel).clicked.connect(self.reject)
 
         # Layout
-        layout = QVBoxLayout(self)
-        layout.addLayout(controls)
-        layout.addWidget(self.editor)
-        layout.addWidget(self.buttonBox)
+        self._layout = QVBoxLayout(self)
+        self._layout.addLayout(controls)
+        self._layout.addWidget(self.editor)
+        self._layout.addWidget(self.buttonBox)
+
+        self.setLayout(self._layout)
 
     def text(self) -> str:
         return self.editor.toPlainText()
+
+    def accept(self) -> None:
+        super().accept()
+        self._callback(self.text())
