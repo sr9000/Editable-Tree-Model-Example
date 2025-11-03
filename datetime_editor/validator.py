@@ -24,7 +24,7 @@ class DateTimeValidator(QValidator):
             pass
 
         try:
-            if self.category == DateTimeCategory.Time and int(input_str) <= 23:
+            if self.category == DateTimeCategory.Time and 0 <= int(input_str) <= 23:
                 return QValidator.State.Intermediate
         except:
             pass

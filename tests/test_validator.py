@@ -25,6 +25,10 @@ INCOMPLETE_CATEGORIES = set(DateTimeCategory) - {DateTimeCategory.DateTimeWithTZ
         ("2025-11-02T12:34:56Z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
         ("2025-11-02T12:34:56+01:00", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
         # Intermediate
+        ("20", {}, {}),
+        ("-12", {DateTimeCategory.Time}, {}),
+        ("-20", ALL_CATEGORIES, {}),  # month cannot be 20
+        ("--20", {DateTimeCategory.Time}, {}),
         ("2025", {DateTimeCategory.Time}, {}),
         ("2025-", {DateTimeCategory.Time}, {}),
         ("2025-11", {DateTimeCategory.Time}, {}),
