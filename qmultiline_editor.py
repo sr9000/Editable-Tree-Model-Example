@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout,
 
 
 class LineNumberArea(QWidget):
-    def __init__(self, editor: "MultilineEditor") -> None:
+    def __init__(self, editor: "QMultilineEditor") -> None:
         super().__init__(editor)
         self._editor = editor
 
@@ -18,7 +18,7 @@ class LineNumberArea(QWidget):
         self._editor.line_number_area_paint_event(event)
 
 
-class MultilineEditor(QPlainTextEdit):
+class QMultilineEditor(QPlainTextEdit):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
@@ -99,7 +99,7 @@ class MultilineEditor(QPlainTextEdit):
             block_number += 1
 
 
-class MultilineDialog(QDialog):
+class QMultilineDialog(QDialog):
     def __init__(
         self, parent: QWidget | None = None, text: str = "", callback: Callable[[str], None] = lambda _: None
     ) -> None:
@@ -110,7 +110,7 @@ class MultilineDialog(QDialog):
         self.setModal(True)
         self.resize(600, 440)
 
-        self.editor = MultilineEditor(self)
+        self.editor = QMultilineEditor(self)
         self.editor.setPlainText(text or "")
 
         # Controls row

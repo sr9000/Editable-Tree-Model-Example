@@ -15,7 +15,7 @@ from PySide6.QtGui import (
 from typing import Optional
 
 from .chunks import Chunks
-from .commands import UndoStack, CommandType
+from .commands import ChunksUndoStack, CommandType
 from .color_manager import ColorManager, Area
 
 
@@ -87,7 +87,7 @@ class QHexEdit(QAbstractScrollArea):
         self._rowsShown = 0
 
         # Components
-        self._undoStack = UndoStack(self._chunks, self)
+        self._undoStack = ChunksUndoStack(self._chunks, self)
         self._colorManager = ColorManager()
         self._cursorTimer = QTimer(self)
 

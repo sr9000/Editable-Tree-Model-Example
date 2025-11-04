@@ -14,7 +14,7 @@ class CommandType(Enum):
     OVERWRITE = 2
 
 
-class CharCommand(QUndoCommand):
+class ChunksUndoCommand(QUndoCommand):
     """Undo command for single character operations"""
 
     def __init__(self, chunks: "Chunks", cmd: CommandType, charPos: int, newChar: int, parent=None):
@@ -52,7 +52,7 @@ class CharCommand(QUndoCommand):
 
     def mergeWith(self, command: QUndoCommand) -> bool:
         """Merge with another command"""
-        if not isinstance(command, CharCommand):
+        if not isinstance(command, ChunksUndoCommand):
             return False
 
         nextCommand = command
@@ -70,7 +70,7 @@ class CharCommand(QUndoCommand):
         return 1234
 
 
-class UndoStack(QUndoStack):
+class ChunksUndoStack(QUndoStack):
     """Undo stack for hex editor operations"""
 
     def __init__(self, chunks: "Chunks", parent=None):
@@ -86,7 +86,7 @@ class UndoStack(QUndoStack):
         if isinstance(c, int):
             # Insert single character
             if 0 <= pos <= self._chunks.size():
-                cc = CharCommand(self._chunks, CommandType.INSERT, pos, c)
+                cc = ChunksUndoCommand(self._chunks, CommandType.INSERT, pos, c)
                 self.push(cc)
         elif isinstance(c, (bytes, bytearray)):
             # Insert byte array
@@ -94,7 +94,7 @@ class UndoStack(QUndoStack):
                 txt = self.tr(f"Inserting {len(c)} bytes")
                 self.beginMacro(txt)
                 for idx, byte in enumerate(c):
-                    cc = CharCommand(self._chunks, CommandType.INSERT, pos + idx, byte)
+                    cc = ChunksUndoCommand(self._chunks, CommandType.INSERT, pos + idx, byte)
                     self.push(cc)
                 self.endMacro()
 
@@ -105,13 +105,13 @@ class UndoStack(QUndoStack):
         """
         if 0 <= pos < self._chunks.size():
             if length == 1:
-                cc = CharCommand(self._chunks, CommandType.REMOVE_AT, pos, 0)
+                cc = ChunksUndoCommand(self._chunks, CommandType.REMOVE_AT, pos, 0)
                 self.push(cc)
             else:
                 txt = self.tr(f"Delete {length} chars")
                 self.beginMacro(txt)
                 for _ in range(length):
-                    cc = CharCommand(self._chunks, CommandType.REMOVE_AT, pos, 0)
+                    cc = ChunksUndoCommand(self._chunks, CommandType.REMOVE_AT, pos, 0)
                     self.push(cc)
                 self.endMacro()
 
@@ -139,7 +139,7 @@ class UndoStack(QUndoStack):
 
             # Standard single-byte path
             if 0 <= pos < self._chunks.size():
-                cc = CharCommand(self._chunks, CommandType.OVERWRITE, pos, c)
+                cc = ChunksUndoCommand(self._chunks, CommandType.OVERWRITE, pos, c)
                 self.push(cc)
             return
 
