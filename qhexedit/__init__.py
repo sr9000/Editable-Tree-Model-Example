@@ -39,7 +39,6 @@ class QHexEdit(QAbstractScrollArea):
         self._addressOffset = 0
         self._bytesPerLine = 16
         self._hexCharsInLine = 47
-        self._highlighting = True
         self._overwriteMode = True
         self._readOnly = False
         self._hexCaps = False
@@ -344,11 +343,10 @@ class QHexEdit(QAbstractScrollArea):
 
     def highlighting(self) -> bool:
         """Get highlighting enabled"""
-        return self._highlighting
+        return self._colorManager.isHighlightingEnabled()
 
     def setHighlighting(self, mode: bool):
         """Set highlighting enabled"""
-        self._highlighting = mode
         self._colorManager.setHighlightingEnabled(mode)
         self.viewport().update()
 

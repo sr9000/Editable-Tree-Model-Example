@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit test for QHexEdit highlighting feature"""
-
 import pytest
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
@@ -57,15 +54,15 @@ def test_color_manager_highlighting_enabled(qapp):
     cm = ColorManager()
 
     # Initially enabled
-    assert cm.highlightingEnabled() is True
+    assert cm.isHighlightingEnabled() is True
 
     # Disable highlighting
     cm.setHighlightingEnabled(False)
-    assert cm.highlightingEnabled() is False
+    assert cm.isHighlightingEnabled() is False
 
     # Enable highlighting
     cm.setHighlightingEnabled(True)
-    assert cm.highlightingEnabled() is True
+    assert cm.isHighlightingEnabled() is True
 
 
 def test_highlighting_integration(qapp):
@@ -84,11 +81,11 @@ def test_highlighting_integration(qapp):
 
     # Verify the color manager is configured correctly
     cm = editor._colorManager
-    assert cm.highlightingEnabled() is True
+    assert cm.isHighlightingEnabled() is True
 
     # Disable highlighting
     editor.setHighlighting(False)
-    assert cm.highlightingEnabled() is False
+    assert cm.isHighlightingEnabled() is False
 
 
 def test_highlighting_syncs_with_color_manager(qapp):
@@ -97,22 +94,18 @@ def test_highlighting_syncs_with_color_manager(qapp):
 
     # Both should start as True
     assert editor.highlighting() is True
-    assert editor._colorManager.highlightingEnabled() is True
+    assert editor._colorManager.isHighlightingEnabled() is True
 
     # Disable via widget method
     editor.setHighlighting(False)
 
     # Both should be disabled
     assert editor.highlighting() is False
-    assert editor._colorManager.highlightingEnabled() is False
+    assert editor._colorManager.isHighlightingEnabled() is False
 
     # Enable via widget method
     editor.setHighlighting(True)
 
     # Both should be enabled
     assert editor.highlighting() is True
-    assert editor._colorManager.highlightingEnabled() is True
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    assert editor._colorManager.isHighlightingEnabled() is True

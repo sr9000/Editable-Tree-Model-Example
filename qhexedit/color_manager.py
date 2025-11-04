@@ -144,7 +144,7 @@ class ColorManager:
         """Enable or disable highlighting"""
         self._highlightingEnabled = enabled
 
-    def highlightingEnabled(self) -> bool:
+    def isHighlightingEnabled(self) -> bool:
         """Get highlighting enabled state"""
         return self._highlightingEnabled
 
