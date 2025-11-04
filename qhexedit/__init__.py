@@ -62,6 +62,11 @@ class QHexEdit(QAbstractScrollArea):
         self._pxCursorX = 0
         self._pxCursorY = 0
 
+        # Hex layout (fractional spacing)
+        self._hexAreaWidthF = 0.0
+        self._hexCellWidthF = 0.0
+        self._hexLeftPadF = 0.0
+
         # Byte positions
         self._bSelectionBegin = 0
         self._bSelectionEnd = 0
@@ -182,8 +187,8 @@ class QHexEdit(QAbstractScrollArea):
 
     def setBytesPerLine(self, count: int):
         """Set bytes per line"""
-        self._bytesPerLine = count
-        self._hexCharsInLine = count * 3 - 1
+        self._bytesPerLine = max(1, count)
+        self._hexCharsInLine = self._bytesPerLine * 3 - 1
         self._adjust()
         self.setCursorPosition(self._cursorPosition)
         self.viewport().update()
@@ -198,13 +203,24 @@ class QHexEdit(QAbstractScrollArea):
         posX = pos.x() + self.horizontalScrollBar().value()
         posY = pos.y() - 3
 
-        if posX >= self._pxPosHexX and posX < (self._pxPosHexX + (1 + self._hexCharsInLine) * self._pxCharWidth):
+        # Hex area hit-test with fractional spacing
+        hex_area_right = self._pxPosHexX + self._hexAreaWidthF
+        if posX >= self._pxPosHexX and posX < hex_area_right and self._bytesPerLine > 0:
             self._editAreaIsAscii = False
-            x = (posX - self._pxPosHexX) // self._pxCharWidth
-            x = (x // 3) * 2 + x % 3
+            x_rel = posX - self._pxPosHexX
+            # Which byte cell
+            col = int(x_rel // max(self._hexCellWidthF, 1.0))
+            if col >= self._bytesPerLine:
+                col = self._bytesPerLine - 1
+            # Within cell choose nibble by center of two hex chars
+            x_in_cell = x_rel - col * self._hexCellWidthF
+            left_pad = self._hexLeftPadF
+            nibble = 0 if x_in_cell < (left_pad + self._pxCharWidth) else 1
+            x = col * 2 + nibble
             y = (posY // self._pxCharHeight) * 2 * self._bytesPerLine
             result = self._bPosFirst * 2 + x + y
 
+        # ASCII area hit-test
         if (
             self._asciiArea
             and (posX >= self._pxPosAsciiX)
@@ -236,10 +252,16 @@ class QHexEdit(QAbstractScrollArea):
         x = position % (2 * self._bytesPerLine)
 
         if self._editAreaIsAscii:
-            self._pxCursorX = x // 2 * self._pxCharWidth + self._pxPosAsciiX
+            self._pxCursorX = int((x // 2) * self._pxCharWidth + self._pxPosAsciiX)
             self._cursorPosition = position & 0xFFFFFFFFFFFFFFFE
         else:
-            self._pxCursorX = (((x // 2) * 3) + (x % 2)) * self._pxCharWidth + self._pxPosHexX
+            # Fractional spacing for hex cursor
+            byte_col = x // 2
+            nib = x % 2
+            base_x = self._pxPosHexX + byte_col * (
+                self._hexCellWidthF if self._hexCellWidthF > 0 else 3 * self._pxCharWidth
+            )
+            self._pxCursorX = int(base_x + self._hexLeftPadF + nib * self._pxCharWidth)
             self._cursorPosition = position
 
         pxOfsX = self.horizontalScrollBar().value()
@@ -658,10 +680,30 @@ class QHexEdit(QAbstractScrollArea):
                         self.remove(self._getSelectionBegin(), length)
                     self.setCursorPosition(2 * self._getSelectionBegin())
                     self._resetSelection(self._cursorPosition)
-                elif self._overwriteMode:
-                    self.replace(self._bPosCurrent, 0)
                 else:
-                    self.remove(self._bPosCurrent, 1)
+                    if self._overwriteMode:
+                        # Feature 2: in overwrite mode, zero only a single nibble when editing HEX
+                        if not self._editAreaIsAscii and 0 <= self._bPosCurrent < self._chunks.size():
+                            # Determine which nibble the cursor is on: even -> high nibble, odd -> low nibble
+                            on_high_nibble = (self._cursorPosition % 2) == 0
+                            cur_byte = self._chunks[self._bPosCurrent]
+                            new_byte = (cur_byte & 0x0F) if on_high_nibble else (cur_byte & 0xF0)
+                            self.replace(self._bPosCurrent, new_byte)
+                            # Advance one nibble to the right to allow repeated Delete to clear the next nibble
+                            self.setCursorPosition(self._cursorPosition + 1)
+                            self._resetSelection(self._cursorPosition)
+                        else:
+                            # ASCII area: zero the whole byte (no nibble granularity visible)
+                            if 0 <= self._bPosCurrent < self._chunks.size():
+                                self.replace(self._bPosCurrent, 0)
+                                # Keep cursor at the same byte in ASCII view
+                                self.setCursorPosition(self._cursorPosition)
+                                self._resetSelection(self._cursorPosition)
+                    else:
+                        # Insert mode: remove current byte (forward delete)
+                        self.remove(self._bPosCurrent, 1)
+                        self.setCursorPosition(self._cursorPosition)
+                        self._resetSelection(self._cursorPosition)
 
             elif event.key() == Qt.Key.Key_Backspace:
                 if self._getSelectionBegin() != self._getSelectionEnd():
@@ -673,17 +715,14 @@ class QHexEdit(QAbstractScrollArea):
                     self.setCursorPosition(2 * self._getSelectionBegin())
                     self._resetSelection(self._cursorPosition)
                 else:
-                    # Move cursor left first (nibble for hex, full byte for ASCII)
-                    move_nibbles = 2 if self._editAreaIsAscii else 1
-                    targetPos = max(self._cursorPosition - move_nibbles, 0)
-                    byte_index = targetPos // 2
-                    if self._chunks.size() > 0 and byte_index <= self._chunks.size() - 1:
-                        if self._overwriteMode:
-                            self.replace(byte_index, 0)
-                        else:
-                            self.remove(byte_index, 1)
-                    self.setCursorPosition(targetPos)
-                    self._resetSelection(targetPos)
+                    # Feature 1: Backspace must always delete the LEFT byte (not nibble nor current byte)
+                    left_byte_index = (self._cursorPosition // 2) - 1
+                    if left_byte_index >= 0 and self._chunks.size() > 0:
+                        # Always remove the left byte, regardless of mode
+                        self.remove(left_byte_index, 1)
+                        # Move cursor to the start of the deleted byte position
+                        self.setCursorPosition(2 * left_byte_index)
+                        self._resetSelection(self._cursorPosition)
 
             elif event.matches(QKeySequence.StandardKey.Undo):
                 self.undo()
@@ -827,7 +866,7 @@ class QHexEdit(QAbstractScrollArea):
             for row in range(self._rowsShown + 1):
                 pxPosY = pxPosStartY + row * self._pxCharHeight
                 bPosLine = row * self._bytesPerLine
-                pxPosX = self._pxPosHexX - pxOfsX
+                pxPosXf = float(self._pxPosHexX - pxOfsX)
                 pxPosAsciiX2 = self._pxPosAsciiX - pxOfsX
 
                 # Address info
@@ -845,26 +884,21 @@ class QHexEdit(QAbstractScrollArea):
                     hexArea = self._colorManager.markedArea(posBa, Area.Hex, self._chunks)
                     painter.setPen(hexArea.fontPen())
 
-                    if colIdx == 0:
-                        rect = QRect(
-                            pxPosX,
-                            pxPosY - self._pxCharHeight + self._pxSelectionSub,
-                            2 * self._pxCharWidth,
-                            self._pxCharHeight,
-                        )
-                    else:
-                        rect = QRect(
-                            pxPosX - self._pxCharWidth,
-                            pxPosY - self._pxCharHeight + self._pxSelectionSub,
-                            3 * self._pxCharWidth,
-                            self._pxCharHeight,
-                        )
-
+                    # Fill cell background using fractional width
+                    rect_x = int(pxPosXf)
+                    rect = QRect(
+                        rect_x,
+                        pxPosY - self._pxCharHeight + self._pxSelectionSub,
+                        int(self._hexCellWidthF),
+                        self._pxCharHeight,
+                    )
                     painter.fillRect(rect, hexArea.areaStyle())
 
+                    # Draw two hex chars centered within cell
                     hex_str = self._hexDataShown[(bPosLine + colIdx) * 2 : (bPosLine + colIdx) * 2 + 2].decode("ascii")
-                    painter.drawText(pxPosX, pxPosY, hex_str.upper() if self._hexCaps else hex_str)
-                    pxPosX += 3 * self._pxCharWidth
+                    text_x = int(pxPosXf + self._hexLeftPadF)
+                    painter.drawText(text_x, pxPosY, hex_str.upper() if self._hexCaps else hex_str)
+                    pxPosXf += self._hexCellWidthF
 
                     # ASCII values
                     if self._asciiArea:
@@ -1009,12 +1043,31 @@ class QHexEdit(QAbstractScrollArea):
             self._pxPosHexX = self._pxAreaMargin
 
         self._pxPosAdrX = self._pxAreaMargin
-        self._pxPosAsciiX = self._pxPosHexX + self._hexCharsInLine * self._pxCharWidth + 2 * self._pxAreaMargin
 
-        # Set horizontal scrollbar
+        # Base widths for hex/ascii content
+        min_hex_content_w = self._hexCharsInLine * self._pxCharWidth  # 2 chars + 1 space per byte
+        ascii_content_w = self._bytesPerLine * self._pxCharWidth if self._asciiArea else 0
+
+        # Base position for ASCII (without slack)
+        base_pos_ascii_x = self._pxPosHexX + min_hex_content_w + 2 * self._pxAreaMargin
+
+        # Total base width (without slack)
+        base_total_w = base_pos_ascii_x + ascii_content_w
+
+        # Slack is extra space in viewport to distribute to hex area
+        slack = max(0, self.viewport().width() - base_total_w)
+
+        # Apply slack: expand hex area and shift ASCII start right
+        self._hexAreaWidthF = float(min_hex_content_w + slack)
+        self._hexCellWidthF = float(self._hexAreaWidthF) / max(1, self._bytesPerLine)
+        self._hexLeftPadF = max((self._hexCellWidthF - 2 * self._pxCharWidth) / 2.0, 0.0)
+
+        self._pxPosAsciiX = int(base_pos_ascii_x + slack)
+
+        # Set horizontal scrollbar (normally 0 when slack>0)
         pxWidth = self._pxPosAsciiX
         if self._asciiArea:
-            pxWidth += self._bytesPerLine * self._pxCharWidth
+            pxWidth += ascii_content_w
 
         self.horizontalScrollBar().setRange(0, max(0, pxWidth - self.viewport().width()))
         self.horizontalScrollBar().setPageStep(self.viewport().width())
