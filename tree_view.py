@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QTreeView
+from PySide6.QtWidgets import QApplication, QMenu, QTreeView
 
 from jsontream import StreamingJSONEncoderWrapper
 from model_actions import action_insert_child, action_insert_column, action_insert_row

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from black.trans import Callable
 from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QPlainTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QPlainTextEdit, QWidget
 
 
 class LineNumberArea(QWidget):
@@ -97,52 +96,3 @@ class QMultilineEditor(QPlainTextEdit):
             top = bottom
             bottom = top + self.blockBoundingRect(block).height()
             block_number += 1
-
-
-class QMultilineDialog(QDialog):
-    def __init__(
-        self, parent: QWidget | None = None, text: str = "", callback: Callable[[str], None] = lambda _: None
-    ) -> None:
-        super().__init__(parent)
-        self._callback = callback
-
-        self.setWindowTitle("Edit Multiline Text")
-        self.setModal(True)
-        self.resize(600, 440)
-
-        self.editor = QMultilineEditor(self)
-        self.editor.setPlainText(text or "")
-
-        # Controls row
-        self.wrapCheckBox = QCheckBox("Word wrap")
-        self.wrapCheckBox.setChecked(True)
-        self.wrapCheckBox.toggled.connect(self.editor.setWordWrap)
-
-        self.lineNumbersCheckBox = QCheckBox("Line numbers")
-        self.lineNumbersCheckBox.setChecked(True)
-        self.lineNumbersCheckBox.toggled.connect(self.editor.setLineNumbersVisible)
-
-        controls = QHBoxLayout()
-        controls.addWidget(self.wrapCheckBox)
-        controls.addWidget(self.lineNumbersCheckBox)
-        controls.addStretch(1)
-
-        # Buttons
-        self.buttonBox = QDialogButtonBox(self)
-        self.buttonBox.addButton(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.accept)
-        self.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel).clicked.connect(self.reject)
-
-        # Layout
-        self._layout = QVBoxLayout(self)
-        self._layout.addLayout(controls)
-        self._layout.addWidget(self.editor)
-        self._layout.addWidget(self.buttonBox)
-
-        self.setLayout(self._layout)
-
-    def text(self) -> str:
-        return self.editor.toPlainText()
-
-    def accept(self) -> None:
-        super().accept()
-        self._callback(self.text())

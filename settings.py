@@ -1,5 +1,9 @@
 from enum import StrEnum
 
+APPLICATION_ID = "org.jeditor.204b2a8a-e956-4c62-911d-cfb29a4fe257"
+MODAL_WINDOW_SIZE = (600, 440)
+WINDOW_DEFAULT_SIZE = (800, 600)
+
 
 class IntegerInfo(StrEnum):
     NONE = "none"

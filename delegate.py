@@ -18,11 +18,11 @@ from PySide6.QtWidgets import (
 )
 
 from datetime_editor import DateTimeEditor
+from dialogs.qhexedit_dlg import QHexDialog
+from dialogs.qmultiline_dlg import QMultilineDialog
 from enums import JsonType
 from qbigint_spinbox import QBigIntSpinBox
-from qhexedit.dialog import QHexDialog
 from qmpq_spinbox import QMpqSpinBox
-from qmultiline_editor import QMultilineDialog
 from tree_item import JsonTreeItem
 
 
