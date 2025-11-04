@@ -10,8 +10,8 @@ from PySide6.QtGui import (
     QMouseEvent,
     QPaintEvent,
     QResizeEvent,
+    QFontDatabase,
 )
-import sys
 from typing import Optional
 
 from .chunks import Chunks
@@ -42,7 +42,7 @@ class QHexEdit(QAbstractScrollArea):
         self._overwriteMode = True
         self._readOnly = False
         self._hexCaps = False
-        self._dynamicBytesPerLine = False
+        self._dynamicBytesPerLine = True  # enable dynamic resizing by default
 
         # Internal state
         self._editAreaIsAscii = False
@@ -86,11 +86,15 @@ class QHexEdit(QAbstractScrollArea):
         self._colorManager = ColorManager()
         self._cursorTimer = QTimer(self)
 
-        # Setup
-        if sys.platform == "win32":
-            self.setFont(QFont("Courier", 10))
-        else:
-            self.setFont(QFont("Monospace", 10))
+        # Setup: align font with app theme but force monospaced family
+        app_font = QApplication.font()
+        fixed = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        # Use app font point size if available for theme alignment
+        if app_font.pointSize() > 0:
+            fixed.setPointSize(app_font.pointSize())
+        elif app_font.pixelSize() > 0:
+            fixed.setPixelSize(app_font.pixelSize())
+        self.setFont(fixed)
 
         # Connect signals
         self._cursorTimer.timeout.connect(self._updateCursor)
@@ -302,8 +306,18 @@ class QHexEdit(QAbstractScrollArea):
     def setDynamicBytesPerLine(self, isDynamic: bool):
         """Set dynamic bytes per line and recalc layout immediately"""
         self._dynamicBytesPerLine = isDynamic
-        # Trigger recalculation like C++ (calls resizeEvent)
-        self.resizeEvent(None)
+        if isDynamic and self._pxCharWidth > 0:
+            # Compute bytes/line from current viewport like in resizeEvent
+            pxFixGaps = 0
+            if self._addressArea:
+                pxFixGaps = self.addressWidth() * self._pxCharWidth + 2 * self._pxAreaMargin
+            pxFixGaps += 2 * self._pxAreaMargin
+            if self._asciiArea:
+                pxFixGaps += 2 * self._pxAreaMargin
+            charWidth = (self.viewport().width() - pxFixGaps) // self._pxCharWidth + 1
+            self._bytesPerLine = max(charWidth // (4 if self._asciiArea else 3), 1)
+            self._hexCharsInLine = self._bytesPerLine * 3 - 1
+        self._adjust()
 
     def highlighting(self) -> bool:
         """Get highlighting enabled"""
@@ -448,7 +462,12 @@ class QHexEdit(QAbstractScrollArea):
         theFont.setStyleHint(QFont.StyleHint.Monospace)
         super().setFont(theFont)
 
-        metrics = QFontMetrics(theFont)
+        # Update metrics according to the current font
+        self._updateFontMetrics()
+
+    def _updateFontMetrics(self):
+        """Recompute metrics from current widget font and refresh"""
+        metrics = QFontMetrics(self.font())
         self._pxCharWidth = metrics.horizontalAdvance("2")
         self._pxCharHeight = metrics.height()
         self._pxAreaMargin = self._pxCharWidth // 2
@@ -479,9 +498,21 @@ class QHexEdit(QAbstractScrollArea):
 
     def event(self, event):
         """Handle generic events"""
-        if event.type() == event.Type.PaletteChange:
+        if event is not None and event.type() == event.Type.PaletteChange:
             palette = self.palette()
             self._colorManager.setPalette(palette)
+        # Align font size with app theme when the application font changes
+        if event is not None and event.type() == event.Type.ApplicationFontChange:
+            app_font = QApplication.font()
+            fixed = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+            if app_font.pointSize() > 0:
+                fixed.setPointSize(app_font.pointSize())
+            elif app_font.pixelSize() > 0:
+                fixed.setPixelSize(app_font.pixelSize())
+            self.setFont(fixed)
+        # Recompute metrics if our own font changed (avoid resetting font to prevent loops)
+        if event is not None and event.type() == event.Type.FontChange:
+            self._updateFontMetrics()
         return super().event(event)
 
     def keyPressEvent(self, event: QKeyEvent):
@@ -642,22 +673,17 @@ class QHexEdit(QAbstractScrollArea):
                     self.setCursorPosition(2 * self._getSelectionBegin())
                     self._resetSelection(self._cursorPosition)
                 else:
-                    # Match C++ behavior
-                    behindLastByte = (self._cursorPosition // 2) == self._chunks.size()
-                    if self._bPosCurrent > 0:
-                        self._bPosCurrent -= 1
+                    # Move cursor left first (nibble for hex, full byte for ASCII)
+                    move_nibbles = 2 if self._editAreaIsAscii else 1
+                    targetPos = max(self._cursorPosition - move_nibbles, 0)
+                    byte_index = targetPos // 2
+                    if self._chunks.size() > 0 and byte_index <= self._chunks.size() - 1:
                         if self._overwriteMode:
-                            self.replace(self._bPosCurrent, 0)
+                            self.replace(byte_index, 0)
                         else:
-                            self.remove(self._bPosCurrent, 1)
-                        if not behindLastByte and not self._overwriteMode:
-                            # Insert mode already moved content; in C++ they move back only if not behind last
-                            self._bPosCurrent -= 0  # no-op for clarity
-                        elif not behindLastByte and self._overwriteMode:
-                            # In overwrite mode, move one more left to stay before modified byte
-                            self._bPosCurrent -= 1 if self._bPosCurrent > 0 else 0
-                        self.setCursorPosition(2 * max(self._bPosCurrent, 0))
-                        self._resetSelection(2 * max(self._bPosCurrent, 0))
+                            self.remove(byte_index, 1)
+                    self.setCursorPosition(targetPos)
+                    self._resetSelection(targetPos)
 
             elif event.matches(QKeySequence.StandardKey.Undo):
                 self.undo()
@@ -665,13 +691,8 @@ class QHexEdit(QAbstractScrollArea):
             elif event.matches(QKeySequence.StandardKey.Redo):
                 self.redo()
 
-            elif event.modifiers() in (
-                Qt.KeyboardModifier.NoModifier,
-                Qt.KeyboardModifier.KeypadModifier,
-                Qt.KeyboardModifier.ShiftModifier,
-                Qt.KeyboardModifier.GroupSwitchModifier,
-            ) or event.modifiers() == (Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.ControlModifier):
-                # Hex and ASCII input
+            else:
+                # Hex and ASCII input (process only when event.text() yields characters)
                 key = 0
                 text = event.text()
 
@@ -744,6 +765,13 @@ class QHexEdit(QAbstractScrollArea):
         if event.key() == Qt.Key.Key_Backtab and self._editAreaIsAscii:
             self._editAreaIsAscii = False
             self.setCursorPosition(self._cursorPosition)
+
+        # Handle backspace in read-only mode: move cursor even if no edits allowed
+        if self._readOnly and event.key() == Qt.Key.Key_Backspace:
+            move_nibbles = 2 if self._editAreaIsAscii else 1
+            targetPos = max(self._cursorPosition - move_nibbles, 0)
+            self.setCursorPosition(targetPos)
+            self._resetSelection(targetPos)
 
         self._refresh()
 
@@ -988,14 +1016,14 @@ class QHexEdit(QAbstractScrollArea):
         if self._asciiArea:
             pxWidth += self._bytesPerLine * self._pxCharWidth
 
-        self.horizontalScrollBar().setRange(0, pxWidth - self.viewport().width())
+        self.horizontalScrollBar().setRange(0, max(0, pxWidth - self.viewport().width()))
         self.horizontalScrollBar().setPageStep(self.viewport().width())
 
         # Set vertical scrollbar
         self._rowsShown = (self.viewport().height() - 4) // self._pxCharHeight
         lineCount = self._chunks.size() // self._bytesPerLine + 1
-        self.verticalScrollBar().setRange(0, lineCount - self._rowsShown)
-        self.verticalScrollBar().setPageStep(self._rowsShown)
+        self.verticalScrollBar().setRange(0, max(0, lineCount - self._rowsShown))
+        self.verticalScrollBar().setPageStep(max(1, self._rowsShown))
 
         value = self.verticalScrollBar().value()
         self._bPosFirst = value * self._bytesPerLine
