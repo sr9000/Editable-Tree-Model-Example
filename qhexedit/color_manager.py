@@ -91,6 +91,7 @@ class ColorManager:
         self._hex = ColoredArea()
         self._ascii = ColoredArea()
         self._userAreas: list[ColoredArea] = []
+        self._highlightingEnabled = True  # Track if highlighting is enabled
 
         palette = QApplication.palette()
         self.setPalette(palette)
@@ -109,8 +110,8 @@ class ColorManager:
         if pos >= self._selection.posStart() and pos < self._selection.posEnd():
             return self._selection
 
-        # Priority 2: highlighting (changed data)
-        if chunks.dataChanged(pos):
+        # Priority 2: highlighting (changed data) - only if enabled
+        if self._highlightingEnabled and chunks.dataChanged(pos):
             return self._highlighting
 
         # Priority 3: user defined areas
@@ -138,6 +139,14 @@ class ColorManager:
     def highlighting(self) -> ColoredArea:
         """Get highlighting color area"""
         return self._highlighting
+
+    def setHighlightingEnabled(self, enabled: bool):
+        """Enable or disable highlighting"""
+        self._highlightingEnabled = enabled
+
+    def highlightingEnabled(self) -> bool:
+        """Get highlighting enabled state"""
+        return self._highlightingEnabled
 
     def addUserArea(self, posStart: int, posEnd: int, fontColor: QColor, areaStyle: QBrush):
         """Add user defined marking area"""

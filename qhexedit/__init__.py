@@ -349,6 +349,7 @@ class QHexEdit(QAbstractScrollArea):
     def setHighlighting(self, mode: bool):
         """Set highlighting enabled"""
         self._highlighting = mode
+        self._colorManager.setHighlightingEnabled(mode)
         self.viewport().update()
 
     def highlightingColor(self):

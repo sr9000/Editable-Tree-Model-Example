@@ -8,10 +8,10 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QMainWindow, QPushButto
 from qhexedit import QHexEdit
 
 
-class ManualQHexEditWindow(QMainWindow):
+class DemoQHexEditWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("QHexEdit Test")
+        self.setWindowTitle("QHexEdit Demo")
         self.resize(800, 600)
 
         # Create central widget
@@ -96,7 +96,7 @@ class ManualQHexEditWindow(QMainWindow):
 
 def demo():
     app = QApplication(sys.argv)
-    window = ManualQHexEditWindow()
+    window = DemoQHexEditWindow()
     window.show()
     sys.exit(app.exec())
 
