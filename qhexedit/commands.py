@@ -1,6 +1,7 @@
-from PySide6.QtGui import QUndoStack, QUndoCommand
 from enum import Enum
 from typing import TYPE_CHECKING
+
+from PySide6.QtGui import QUndoCommand, QUndoStack
 
 if TYPE_CHECKING:
     from .chunks import Chunks

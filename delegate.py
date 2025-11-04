@@ -22,9 +22,9 @@ from PySide6.QtWidgets import (
 import binary
 from datetime_editor import DateTimeEditor
 from enums import JsonType
-from qmultiline_editor import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
+from qmultiline_editor import QMultilineDialog
 from tree_item import JsonTreeItem
 
 

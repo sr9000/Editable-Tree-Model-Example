@@ -2,12 +2,13 @@
 """Simple test for QHexEdit widget"""
 
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout
-from PySide6.QtCore import QByteArray
+
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QMainWindow, QPushButton, QVBoxLayout, QWidget
+
 from qhexedit import QHexEdit
 
 
-class TestWindow(QMainWindow):
+class ManualQHexEditWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("QHexEdit Test")
@@ -95,7 +96,7 @@ class TestWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    window = TestWindow()
+    window = ManualQHexEditWindow()
     window.show()
     sys.exit(app.exec())
 

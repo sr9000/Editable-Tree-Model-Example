@@ -1,7 +1,7 @@
-from PySide6.QtGui import QPen, QBrush, QColor, QPalette
-from PySide6.QtWidgets import QApplication
 from enum import Enum
-from typing import Optional
+
+from PySide6.QtGui import QBrush, QColor, QPalette, QPen
+from PySide6.QtWidgets import QApplication
 
 
 class Area(Enum):
@@ -99,7 +99,7 @@ class ColorManager:
         """Set color palette"""
         self._selection = ColoredArea(QPen(palette.highlightedText().color()), palette.highlight())
         self._highlighting = ColoredArea(QPen(QColor.fromRgb(0, 0, 0)), QBrush(QColor(0xFF, 0xFF, 0x99)))
-        self._address = ColoredArea(QPen(palette.windowText().color()), palette.alternateBase())
+        self._address = ColoredArea(QPen(palette.accent().color()), palette.alternateBase())
         self._hex = ColoredArea(QPen(palette.windowText().color()), palette.base())
         self._ascii = ColoredArea(QPen(palette.windowText().color()), palette.alternateBase())
 

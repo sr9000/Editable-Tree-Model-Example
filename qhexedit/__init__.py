@@ -1,22 +1,23 @@
-from PySide6.QtWidgets import QAbstractScrollArea, QApplication
-from PySide6.QtCore import Qt, QRect, QPoint, QIODevice, QBuffer, QTimer, Signal
-from PySide6.QtGui import (
-    QPainter,
-    QFont,
-    QFontMetrics,
-    QKeySequence,
-    QPalette,
-    QKeyEvent,
-    QMouseEvent,
-    QPaintEvent,
-    QResizeEvent,
-    QFontDatabase,
-)
 from typing import Optional
 
+from PySide6.QtCore import QBuffer, QIODevice, QPoint, QRect, Qt, QTimer, Signal
+from PySide6.QtGui import (
+    QFont,
+    QFontDatabase,
+    QFontMetrics,
+    QKeyEvent,
+    QKeySequence,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPalette,
+    QResizeEvent,
+)
+from PySide6.QtWidgets import QAbstractScrollArea, QApplication
+
 from .chunks import Chunks
+from .color_manager import Area, ColorManager
 from .commands import ChunksUndoStack, CommandType
-from .color_manager import ColorManager, Area
 
 
 class QHexEdit(QAbstractScrollArea):
@@ -68,8 +69,8 @@ class QHexEdit(QAbstractScrollArea):
         self._hexLeftPadF = 0.0
 
         # Byte positions
-        self._bSelectionBegin = 0
-        self._bSelectionEnd = 0
+        self._bSelectionBegin = -1
+        self._bSelectionEnd = -1
         self._bPosFirst = 0
         self._bPosLast = 0
         self._bPosCurrent = 0
@@ -744,10 +745,10 @@ class QHexEdit(QAbstractScrollArea):
                 if (("0" <= chr(key) <= "9" or "a" <= chr(key) <= "f") and not self._editAreaIsAscii) or (
                     key >= ord(" ") and self._editAreaIsAscii
                 ):
+                    length = self._getSelectionEnd() - self._getSelectionBegin()
 
-                    if self._getSelectionBegin() != self._getSelectionEnd():
+                    if length > 1:
                         if self._overwriteMode:
-                            length = self._getSelectionEnd() - self._getSelectionBegin()
                             self.replace(self._getSelectionBegin(), length, bytearray(length))
                         else:
                             self.remove(self._getSelectionBegin(), self._getSelectionEnd() - self._getSelectionBegin())
@@ -985,8 +986,8 @@ class QHexEdit(QAbstractScrollArea):
     def _resetSelection(self, pos: int = None):
         """Reset selection"""
         if pos is None:
-            self._bSelectionBegin = 0
-            self._bSelectionEnd = 0
+            self._bSelectionBegin = -1
+            self._bSelectionEnd = -1
         else:
             pos = pos // 2
             if pos < 0:
@@ -997,7 +998,7 @@ class QHexEdit(QAbstractScrollArea):
             self._bSelectionBegin = pos
             self._bSelectionEnd = pos
 
-        self._colorManager.selection().setRange(self._bSelectionBegin, self._bSelectionEnd)
+        self._colorManager.selection().setRange(self._getSelectionBegin(), self._getSelectionEnd())
 
     def _setSelection(self, pos: int):
         """Set selection end"""
@@ -1007,20 +1008,16 @@ class QHexEdit(QAbstractScrollArea):
         if pos > self._chunks.size():
             pos = self._chunks.size()
 
-        if pos > self._bSelectionBegin:
-            self._bSelectionEnd = pos
-        else:
-            self._bSelectionBegin = pos
-
-        self._colorManager.selection().setRange(self._bSelectionBegin, self._bSelectionEnd)
+        self._bSelectionEnd = pos
+        self._colorManager.selection().setRange(self._getSelectionBegin(), self._getSelectionEnd())
 
     def _getSelectionBegin(self) -> int:
         """Get selection begin"""
-        return self._bSelectionBegin
+        return max(0, min(self._bSelectionBegin, self._bSelectionEnd))
 
     def _getSelectionEnd(self) -> int:
         """Get selection end"""
-        return self._bSelectionEnd
+        return max(0, 1 + max(self._bSelectionBegin, self._bSelectionEnd))
 
     # Private utility methods
 

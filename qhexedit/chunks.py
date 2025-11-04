@@ -1,5 +1,6 @@
-from PySide6.QtCore import QObject, QIODevice, QBuffer
 from typing import Optional
+
+from PySide6.QtCore import QBuffer, QIODevice, QObject
 
 NORMAL = 0
 HIGHLIGHTED = 1
