@@ -94,7 +94,7 @@ class ManualQHexEditWindow(QMainWindow):
         print("Data changed")
 
 
-def main():
+def demo():
     app = QApplication(sys.argv)
     window = ManualQHexEditWindow()
     window.show()
@@ -102,4 +102,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    demo()

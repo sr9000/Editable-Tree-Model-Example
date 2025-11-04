@@ -6,23 +6,21 @@ from datetime import time
 from dateutil.parser import isoparse
 from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
-from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QDateTimeEdit,
     QDoubleSpinBox,
     QLineEdit,
-    QPlainTextEdit,
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QWidget,
 )
 
-import binary
 from datetime_editor import DateTimeEditor
 from enums import JsonType
 from qbigint_spinbox import QBigIntSpinBox
+from qhexedit.dialog import QHexDialog
 from qmpq_spinbox import QMpqSpinBox
 from qmultiline_editor import QMultilineDialog
 from tree_item import JsonTreeItem
@@ -56,20 +54,25 @@ class ValueDelegate(QStyledItemDelegate):
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
                 editor = DateTimeEditor(parent)
             case JsonType.MULTILINE:
-                # Use a modal dialog-based editor for multiline text
-                QMultilineDialog(
+                QMultilineDialog(  # Use a modal dialog-based editor for multiline text
                     parent=parent,
                     text=str(item.value or ""),
                     callback=lambda text: index.model().setData(index, text, Qt.ItemDataRole.EditRole) and None,
                 ).open()
 
-                # Do not return an inline editor for multiline values
-                return None
+                return None  # Do not return an inline editor for multiline values
+
             case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
-                editor = QPlainTextEdit(parent)
-                f = QFont()
-                f.setCapitalization(QFont.Capitalization.AllUppercase)
-                editor.setFont(f)
+                QHexDialog(  # Use a modal dialog-based editor for binary data
+                    parent=parent,
+                    data=(decode_bytes(item.value, item.json_type)),
+                    callback=lambda x: (
+                        index.model().setData(index, encode_bytes(x, item.json_type), Qt.ItemDataRole.EditRole) and None
+                    ),
+                ).open()
+
+                return None  # Do not return an inline editor for binary values
+
             case _:
                 raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.createEditor()`: {item.json_type=}")
 
@@ -77,7 +80,7 @@ class ValueDelegate(QStyledItemDelegate):
 
     def setEditorData(
         self,
-        editor: QBigIntSpinBox | QDoubleSpinBox | QComboBox | QLineEdit | QPlainTextEdit | QDateEdit | QDateTimeEdit,
+        editor: QBigIntSpinBox | QDoubleSpinBox | QComboBox | QLineEdit | QDateEdit | QDateTimeEdit,
         index: QModelIndex,
     ):
         item: JsonTreeItem = index.internalPointer()
@@ -110,26 +113,6 @@ class ValueDelegate(QStyledItemDelegate):
                 editor: DateTimeEditor
                 dt = isoparse(item.value)
                 editor.setValue(dt)
-            case JsonType.MULTILINE:
-                editor: QPlainTextEdit
-                editor.setPlainText(item.value)
-            case JsonType.BYTES:
-                editor: QPlainTextEdit
-                raw = base64.b64decode(item.value, validate=True)
-                formatted = binary.format_hex_dump(raw)
-                editor.setPlainText(formatted)
-            case JsonType.ZLIB:
-                editor: QPlainTextEdit
-                raw = base64.b64decode(item.value, validate=True)
-                uncompressed = zlib.decompress(raw)
-                formatted = binary.format_hex_dump(uncompressed)
-                editor.setPlainText(formatted)
-            case JsonType.GZIP:
-                editor: QPlainTextEdit
-                raw = base64.b64decode(item.value, validate=True)
-                uncompressed = gzip.decompress(raw)
-                formatted = binary.format_hex_dump(uncompressed)
-                editor.setPlainText(formatted)
             case unknown:
                 raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.setEditorData()`: {item.json_type=}")
 
@@ -150,3 +133,28 @@ class JsonTypeDelegate(QStyledItemDelegate):
 
     def setModelData(self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex):
         pass
+
+
+def decode_bytes(b64string: str, json_type: JsonType) -> bytes:
+    # Prepare binary data for hex editor
+    raw = base64.b64decode(b64string, validate=True) if b64string else b""
+
+    match json_type:  # Decompress if needed
+        case JsonType.ZLIB:
+            return zlib.decompress(raw)
+        case JsonType.GZIP:
+            return gzip.decompress(raw)
+        case _:
+            return raw
+
+
+# Callback to handle edited data
+def encode_bytes(edited_data: bytes, json_type: JsonType) -> str:
+    match json_type:  # Compress if needed
+        case JsonType.ZLIB:
+            edited_data = zlib.compress(edited_data)
+        case JsonType.GZIP:
+            edited_data = gzip.compress(edited_data)
+
+    # Encode to base64 and update model
+    return base64.b64encode(edited_data).decode("ascii")
