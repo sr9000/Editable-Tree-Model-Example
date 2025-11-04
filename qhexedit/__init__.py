@@ -201,7 +201,11 @@ class QHexEdit(QAbstractScrollArea):
             y = (posY // self._pxCharHeight) * 2 * self._bytesPerLine
             result = self._bPosFirst * 2 + x + y
 
-        if self._asciiArea and (posX >= self._pxPosAsciiX):
+        if (
+            self._asciiArea
+            and (posX >= self._pxPosAsciiX)
+            and (posX < (self._pxPosAsciiX + (1 + self._bytesPerLine) * self._pxCharWidth))
+        ):
             self._editAreaIsAscii = True
             x = 2 * ((posX - self._pxPosAsciiX) // self._pxCharWidth)
             y = (posY // self._pxCharHeight) * 2 * self._bytesPerLine
@@ -296,9 +300,10 @@ class QHexEdit(QAbstractScrollArea):
         return self._dynamicBytesPerLine
 
     def setDynamicBytesPerLine(self, isDynamic: bool):
-        """Set dynamic bytes per line"""
+        """Set dynamic bytes per line and recalc layout immediately"""
         self._dynamicBytesPerLine = isDynamic
-        self._adjust()
+        # Trigger recalculation like C++ (calls resizeEvent)
+        self.resizeEvent(None)
 
     def highlighting(self) -> bool:
         """Get highlighting enabled"""
@@ -384,18 +389,29 @@ class QHexEdit(QAbstractScrollArea):
     # Utility functions
 
     def ensureVisible(self):
-        """Ensure the cursor is visible"""
+        """Ensure the cursor is visible (both vertically and horizontally)"""
+        vscroll = self.verticalScrollBar()
+        hscroll = self.horizontalScrollBar()
+
         if self._cursorPosition < (self._bPosFirst * 2):
-            self.verticalScrollBar().setValue((self._cursorPosition // 2) // self._bytesPerLine)
-        if self._cursorPosition > (self._bPosLast * 2):
-            self.verticalScrollBar().setValue((self._cursorPosition // 2) // self._bytesPerLine - self._rowsShown + 1)
+            vscroll.setValue((self._cursorPosition // 2) // self._bytesPerLine)
+        if self._cursorPosition > ((self._bPosFirst + (self._rowsShown - 1) * self._bytesPerLine) * 2):
+            vscroll.setValue((self._cursorPosition // 2) // self._bytesPerLine - self._rowsShown + 1)
+
+        if self._pxCursorX < hscroll.value():
+            hscroll.setValue(self._pxCursorX)
+        if (self._pxCursorX + self._pxCharWidth) > (hscroll.value() + self.viewport().width()):
+            hscroll.setValue(self._pxCursorX + self._pxCharWidth - self.viewport().width())
+
+        self.viewport().update()
 
     def indexOf(self, ba: bytes, from_pos: int) -> int:
         """Find first occurrence of ba in data"""
         pos = self._chunks.indexOf(ba, from_pos)
         if pos > -1:
             curPos = pos * 2
-            self.setCursorPosition(curPos - 1)
+            # Match C++: place cursor at end of the found range
+            self.setCursorPosition(curPos + len(ba) * 2)
             self._resetSelection(curPos)
             self._setSelection(curPos + len(ba) * 2)
             self.ensureVisible()
@@ -583,11 +599,12 @@ class QHexEdit(QAbstractScrollArea):
 
             elif event.matches(QKeySequence.StandardKey.Paste):
                 clipboard = QApplication.clipboard()
-                hex_string = clipboard.text().replace("\n", "").replace(" ", "")
+                # Accept all whitespace (spaces, tabs, newlines, etc.) like Qt QByteArray::fromHex
+                raw_text = clipboard.text()
+                hex_string = "".join(raw_text.split())
 
                 try:
                     ba = bytes.fromhex(hex_string)
-
                     if self._overwriteMode:
                         length = min(len(ba), self._chunks.size() - self._bPosCurrent)
                         if length > 0:
@@ -596,7 +613,8 @@ class QHexEdit(QAbstractScrollArea):
                         self.insert(self._bPosCurrent, ba)
 
                     self.setCursorPosition(self._cursorPosition + 2 * len(ba))
-                    self._resetSelection(self._cursorPosition)
+                    # Match C++: keep selection anchored where it was
+                    self._resetSelection(2 * self._getSelectionBegin())
                 except ValueError:
                     pass  # Invalid hex string
 
@@ -623,10 +641,23 @@ class QHexEdit(QAbstractScrollArea):
                         self.remove(self._getSelectionBegin(), length)
                     self.setCursorPosition(2 * self._getSelectionBegin())
                     self._resetSelection(self._cursorPosition)
-                elif not self._overwriteMode:
+                else:
+                    # Match C++ behavior
+                    behindLastByte = (self._cursorPosition // 2) == self._chunks.size()
                     if self._bPosCurrent > 0:
-                        self.remove(self._bPosCurrent - 1, 1)
-                        self.setCursorPosition(self._cursorPosition - 2)
+                        self._bPosCurrent -= 1
+                        if self._overwriteMode:
+                            self.replace(self._bPosCurrent, 0)
+                        else:
+                            self.remove(self._bPosCurrent, 1)
+                        if not behindLastByte and not self._overwriteMode:
+                            # Insert mode already moved content; in C++ they move back only if not behind last
+                            self._bPosCurrent -= 0  # no-op for clarity
+                        elif not behindLastByte and self._overwriteMode:
+                            # In overwrite mode, move one more left to stay before modified byte
+                            self._bPosCurrent -= 1 if self._bPosCurrent > 0 else 0
+                        self.setCursorPosition(2 * max(self._bPosCurrent, 0))
+                        self._resetSelection(2 * max(self._bPosCurrent, 0))
 
             elif event.matches(QKeySequence.StandardKey.Undo):
                 self.undo()
@@ -1012,7 +1043,7 @@ class QHexEdit(QAbstractScrollArea):
                         ch = ord(".")
                     ascStr += chr(ch)
 
-            result.append(f"{addrStr} {hexStr:48}  {ascStr:17}")
+            result.append(f"{addrStr} {hexStr:<48}  {ascStr:<17}")
 
         return "\n".join(result)
 
