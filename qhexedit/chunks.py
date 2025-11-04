@@ -103,7 +103,9 @@ class Chunks(QObject):
 
                 maxSize -= byteCount
                 self._ioDevice.seek(pos + ioDelta)
-                readBuffer = self._ioDevice.read(byteCount)
+                # Ensure we extend with Python bytes to match QByteArray semantics
+                _qba = self._ioDevice.read(byteCount)
+                readBuffer = _qba.data() if hasattr(_qba, "data") else bytes(_qba)
                 buffer.extend(readBuffer)
                 if highlighted is not None:
                     highlighted.extend(bytearray([NORMAL] * len(readBuffer)))
@@ -122,7 +124,8 @@ class Chunks(QObject):
             idx = pos
             while idx < count:
                 ba = self.data(idx, BUFFER_SIZE)
-                iODevice.write(ba)
+                # Convert to bytes for PySide6 QIODevice compatibility
+                iODevice.write(bytes(ba))
                 idx += BUFFER_SIZE
             iODevice.close()
         return ok
@@ -181,7 +184,8 @@ class Chunks(QObject):
             return False
 
         if pos == self._size:
-            chunkIdx = self._getChunkIndex(pos - 1)
+            # Avoid negative index when file is empty
+            chunkIdx = self._getChunkIndex(pos - 1 if self._size > 0 else 0)
         else:
             chunkIdx = self._getChunkIndex(pos)
 
@@ -260,14 +264,19 @@ class Chunks(QObject):
             # Create new chunk
             newChunk = Chunk()
             readAbsPos = absPos - ioDelta
+            if readAbsPos < 0:
+                readAbsPos = 0
             readPos = readAbsPos & READ_CHUNK_MASK
 
             self._ioDevice.open(QIODevice.OpenModeFlag.ReadOnly)
             self._ioDevice.seek(readPos)
-            newChunk.data = bytearray(self._ioDevice.read(CHUNK_SIZE))
+            _qba = self._ioDevice.read(CHUNK_SIZE)
+            newChunk.data = bytearray(_qba.data() if hasattr(_qba, "data") else bytes(_qba))
             self._ioDevice.close()
 
-            newChunk.absPos = absPos - (readAbsPos - readPos)
+            # Ensure non-negative absolute position when creating first chunk
+            baseAbs = absPos if absPos >= 0 else 0
+            newChunk.absPos = baseAbs - (readAbsPos - readPos)
             newChunk.dataChanged = bytearray([0] * len(newChunk.data))
             self._chunks.insert(insertIdx, newChunk)
             foundIdx = insertIdx
