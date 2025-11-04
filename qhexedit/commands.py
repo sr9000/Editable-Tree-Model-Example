@@ -79,7 +79,10 @@ class UndoStack(QUndoStack):
         self.setUndoLimit(1000)
 
     def insert(self, pos: int, c=None):
-        """Insert character(s) at position"""
+        """Insert character(s) at position
+        - insert(pos, int)
+        - insert(pos, bytes|bytearray)
+        """
         if isinstance(c, int):
             # Insert single character
             if 0 <= pos <= self._chunks.size():
@@ -96,7 +99,10 @@ class UndoStack(QUndoStack):
                 self.endMacro()
 
     def removeAt(self, pos: int, length: int = 1):
-        """Remove character(s) at position"""
+        """Remove character(s) at position
+        - removeAt(pos)
+        - removeAt(pos, length)
+        """
         if 0 <= pos < self._chunks.size():
             if length == 1:
                 cc = CharCommand(self._chunks, CommandType.REMOVE_AT, pos, 0)
@@ -104,23 +110,47 @@ class UndoStack(QUndoStack):
             else:
                 txt = self.tr(f"Delete {length} chars")
                 self.beginMacro(txt)
-                for cnt in range(length):
+                for _ in range(length):
                     cc = CharCommand(self._chunks, CommandType.REMOVE_AT, pos, 0)
                     self.push(cc)
                 self.endMacro()
 
-    def overwrite(self, pos: int, c=None, length: int = None):
-        """Overwrite character(s) at position"""
-        if isinstance(c, int) and length is None:
-            # Overwrite single character
+    def overwrite(self, pos: int, c=None, length: int | None = None):
+        """Overwrite character(s) at position.
+        Supported call forms:
+        - overwrite(pos, int)                        # single byte
+        - overwrite(pos, bytes|bytearray, length)    # Python order (current)
+        - overwrite(pos, length:int, bytes|bytearray)  # C++-style order
+        """
+        # Single-byte overwrite
+        if isinstance(c, int) and (length is None or isinstance(length, bytes) or isinstance(length, bytearray)):
+            # Detect C++-style order overload: overwrite(pos, length:int, ba:bytes)
+            if isinstance(length, (bytes, bytearray)):
+                # Translate to Python order
+                ba = length
+                ln = c
+                if 0 <= pos < self._chunks.size():
+                    txt = self.tr(f"Overwrite {ln} chars")
+                    self.beginMacro(txt)
+                    self.removeAt(pos, ln)
+                    self.insert(pos, ba)
+                    self.endMacro()
+                return
+
+            # Standard single-byte path
             if 0 <= pos < self._chunks.size():
                 cc = CharCommand(self._chunks, CommandType.OVERWRITE, pos, c)
                 self.push(cc)
-        elif isinstance(c, (bytes, bytearray)) and isinstance(length, int):
-            # Overwrite with byte array
+            return
+
+        # Byte-array overwrite with explicit length (Python order)
+        if isinstance(c, (bytes, bytearray)) and isinstance(length, int):
             if 0 <= pos < self._chunks.size():
                 txt = self.tr(f"Overwrite {length} chars")
                 self.beginMacro(txt)
                 self.removeAt(pos, length)
                 self.insert(pos, c)
                 self.endMacro()
+            return
+        # No-op for invalid call shapes
+        return
