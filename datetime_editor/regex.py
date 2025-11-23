@@ -26,7 +26,7 @@ SEPARATOR_RE = re.compile(r"[T _]", re.IGNORECASE)
 #   matching inputs like ':34' or interpreting '25:00' with an empty hour.
 PARTIAL_DATETIME_RE = re.compile(
     r"^(?:(?P<year>\d{0,4})(?=-|[T _]|$)(?:-(?P<month>\d{0,2})(?:-(?P<day>\d{0,2}))?)?)?"
-    r"(?:(?P<separator>[T _])?(?P<hour>\d{1,2})?(?::(?P<minute>\d{0,2})(?::(?P<second>\d{0,2})(?:\.(?P<microsecond>\d*))?)?)?)?"
+    r"(?:(?P<separator>[T _])?(?P<hour>\d{1,2})?(?::(?P<minute>\d{0,2})(?::(?P<second>\d{0,2}))?)?(?:\.(?P<microsecond>\d*))?)?"
     r"(?:(?P<tz_sign>[+-])(?P<tz_hour>\d{0,2})(?::(?P<tz_minute>\d{0,2}))?|(?P<utc>Z))?$",
     re.IGNORECASE,
 )
