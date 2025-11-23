@@ -5,6 +5,7 @@
   * bytes type (encoded as base64)
   * date/time type (various formats)
   * special null type
+- value stats in status bar
 - change type of value (drop-down select / tab / shift+tab)
 - rename values (check name uniqueness) (double click / F2)
 - add/remove new values (context menu / Ctrl+New/Add/Insert / delete)

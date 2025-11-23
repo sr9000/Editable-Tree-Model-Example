@@ -112,9 +112,7 @@ bool TreeItem::insertColumns(int position, int columns)
 }
 """
 
-from itertools import count
 from typing import Any
-from unittest import case
 
 from enums import JsonType, parse_json_type
 
@@ -154,10 +152,10 @@ class JsonTreeItem:
     def append_child(self, child: "JsonTreeItem") -> None:
         self.child_items.append(child)
 
-    def parent(self) -> "TreeItem | None":
+    def parent(self) -> "JsonTreeItem | None":
         return self.parent_item
 
-    def child(self, number: int) -> "TreeItem | None":
+    def child(self, number: int) -> "JsonTreeItem | None":
         if 0 <= number < len(self.child_items):
             return self.child_items[number]
 
@@ -173,19 +171,22 @@ class JsonTreeItem:
     def data(self, column: int) -> Any:
         match column:
             case 0:
-                return self.name or "<no name>"
+                return self.name if self.name is not None else "<no name>"
             case 1:
                 return self.json_type or "<no type>"
             case 2:
-                return self.value or "<no value>"
+                return self.value
 
         raise IndexError(f"`JsonTreeItem.data()` does not support {column=}")
 
     def set_data(self, column: int, value: Any) -> bool:
-        if 0 <= column < len(self.item_data):
-            self.item_data[column] = value
-            return True
-        return False
+        # Only value edits are allowed; name/type changes are not supported here
+        if column != 2:
+            return False
+
+        # Preserve the raw type: ints/bools/mpq/strings as provided by delegates
+        self.value = value
+        return True
 
     def insert_children(self, position: int, count: int, columns: int) -> bool:
         if 0 <= position <= len(self.child_items):
@@ -203,25 +204,9 @@ class JsonTreeItem:
         return False
 
     def insert_columns(self, position: int, columns: int) -> bool:
-        if 0 <= position <= len(self.item_data):
-            self.item_data[position:position] = [None] * columns
-            for i in count(1):
-                if len(self.item_headers) == len(self.item_data):
-                    break
-                if (name := f"x{i}") not in self.item_headers:
-                    self.item_headers.append(name)
-            if not all(child.insert_columns(position, columns) for child in self.child_items):
-                raise IndexError("Failed to insert columns in child items")
-            return True
+        # Columns API is not used for this JSON model; return False to keep interface consistent
         return False
 
     def remove_columns(self, begin: int, columns: int) -> bool:
         """declared but not implemented in c++"""
-        end = begin + columns
-        if 0 <= begin and end <= len(self.item_data):
-            del self.item_data[begin:end]
-            del self.item_headers[begin:end]
-            if not all(child.remove_columns(begin, columns) for child in self.child_items):
-                raise IndexError("Failed to remove columns in child items")
-            return True
         return False

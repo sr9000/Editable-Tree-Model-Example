@@ -1,9 +1,7 @@
 import base64
 import gzip
 import zlib
-from datetime import time
 
-from dateutil.parser import isoparse
 from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 from PySide6.QtWidgets import (
@@ -90,35 +88,73 @@ class ValueDelegate(QStyledItemDelegate):
                 editor: QBigIntSpinBox
                 editor.setValue(item.value)
             case JsonType.FLOAT:
-                editor: QDoubleSpinBox
-                editor.setValue(item.value)
+                # QMpqSpinBox preserves mpq, set directly
+                sb: QMpqSpinBox = editor  # type: ignore[assignment]
+                sb.setValue(item.value)
             case JsonType.PERCENT:
-                editor: QDoubleSpinBox
-                editor.setValue(item.value * 100)
+                # Stored as fraction 0..1, editor shows 0..100 with "%"
+                sb: QMpqSpinBox = editor  # type: ignore[assignment]
+                sb.setValue(item.value * 100)
             case JsonType.BOOLEAN:
                 editor: QComboBox
                 editor.setCurrentIndex((not item.value) * 1)
             case JsonType.STRING:
                 editor: QLineEdit
                 editor.setText(item.value)
-            case JsonType.TIME:
-                editor: DateTimeEditor
-                tm = time.fromisoformat(item.value)
-                editor.setValue(tm)
-            case JsonType.DATE:
-                editor: DateTimeEditor
-                dt = isoparse(item.value)
-                editor.setValue(dt.date())
-            case JsonType.DATETIME | JsonType.DATETIMEZONE:
-                editor: DateTimeEditor
-                dt = isoparse(item.value)
-                editor.setValue(dt)
+            case JsonType.TIME | JsonType.DATE | JsonType.DATETIME | JsonType.DATETIMEZONE:
+                # Preserve original user string; configure category for validation
+                dt_editor: DateTimeEditor = editor  # type: ignore[assignment]
+                from datetime_editor.enums import DateTimeCategory
+
+                category = None
+                match item.json_type:
+                    case JsonType.TIME:
+                        category = DateTimeCategory.Time
+                    case JsonType.DATE:
+                        category = DateTimeCategory.Date
+                    case JsonType.DATETIME:
+                        category = DateTimeCategory.DateTime
+                    case JsonType.DATETIMEZONE:
+                        category = DateTimeCategory.DateTimeWithTZ
+
+                # Set validator category and internal category without altering text formatting
+                try:
+                    dt_editor._category = category  # type: ignore[attr-defined]
+                    dt_editor._validator.category = category  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+                dt_editor.setText(item.value)
             case unknown:
                 raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.setEditorData()`: {item.json_type=}")
 
     def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
-        pass
-        # model.setData(index, editor.currentText(), Qt.ItemDataRole.EditRole)
+        item: JsonTreeItem = index.internalPointer()
+
+        match item.json_type:
+            case JsonType.INTEGER:
+                sb: QBigIntSpinBox = editor  # type: ignore[assignment]
+                model.setData(index, sb.value(), Qt.ItemDataRole.EditRole)
+            case JsonType.FLOAT:
+                sb: QMpqSpinBox = editor  # type: ignore[assignment]
+                model.setData(index, sb.value(), Qt.ItemDataRole.EditRole)
+            case JsonType.PERCENT:
+                sb: QMpqSpinBox = editor  # type: ignore[assignment]
+                model.setData(index, sb.value() / mpq("100"), Qt.ItemDataRole.EditRole)
+            case JsonType.BOOLEAN:
+                cb: QComboBox = editor  # type: ignore[assignment]
+                model.setData(index, cb.currentData(), Qt.ItemDataRole.EditRole)
+            case JsonType.STRING:
+                le: QLineEdit = editor  # type: ignore[assignment]
+                model.setData(index, le.text(), Qt.ItemDataRole.EditRole)
+            case JsonType.TIME | JsonType.DATE | JsonType.DATETIME | JsonType.DATETIMEZONE:
+                dt_editor: DateTimeEditor = editor  # type: ignore[assignment]
+                # Keep exactly what user typed; DateTimeEditor ensures validity
+                model.setData(index, dt_editor.text(), Qt.ItemDataRole.EditRole)
+            case JsonType.MULTILINE | JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
+                # Handled via modal dialogs, nothing to do here
+                return
+            case _:
+                raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.setModelData()`: {item.json_type=}")
 
 
 class JsonTypeDelegate(QStyledItemDelegate):

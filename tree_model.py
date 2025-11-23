@@ -137,8 +137,25 @@ QVariant TreeModel::data(const QModelIndex &index, int role) const
         return {};
 
     TreeItem *item = getItem(index);
+    QVariant value = item->data(index.column());
 
-    return item->data(index.column());
+    // Convert boolean values to lowercase "true"/"false" for display/edit roles
+    if (role == Qt::DisplayRole || role == Qt::EditRole) {
+        switch (value.type()) {
+        case QVariant::Bool:
+            return value.toBool() ? "true" : "false";
+        case QVariant::Double: {
+            // Special handling for doubles: if the value is an integer in disguise,
+            // convert it to an integer type to avoid displaying as a floating-point number.
+            double doubleValue = value.toDouble();
+            if (std::floor(doubleValue) == doubleValue)
+                return QVariant(static_cast<qint64>(doubleValue));
+            break;
+        }
+        }
+    }
+
+    return value;
 }
 
 bool TreeModel::insertColumns(int position, int columns, const QModelIndex &parent)
@@ -228,7 +245,6 @@ from typing import Any, Mapping, Optional
 import gmpy2
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
-import binary
 from enums import JsonType
 from mpq2py import mpq_serialization
 from tree_item import JsonTreeItem
@@ -282,7 +298,8 @@ class JsonTreeModel(QAbstractItemModel):
                         uncompressed = gzip.decompress(raw)
                         if len(uncompressed) > 10_000:
                             return default
-            return Qt.ItemFlag.ItemIsEditable | default
+            # Combine flags with ItemIsEditable
+            return default | Qt.ItemFlag.ItemIsEditable
         return Qt.ItemFlag.NoItemFlags
 
     def index(self, row: int, column: int, parent: QModelIndex = QModelIndex()) -> QModelIndex:
@@ -309,6 +326,9 @@ class JsonTreeModel(QAbstractItemModel):
         ):
             data = self.get_item(index).data(index.column())
             match data:
+                case bool():
+                    # Show JSON-style lowercase
+                    return "true" if data else "false"
                 case gmpy2.mpq():
                     data = mpq_serialization(data)
 
