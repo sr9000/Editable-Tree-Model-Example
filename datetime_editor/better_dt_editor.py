@@ -193,7 +193,7 @@ class BetterDateTimeEditor(QLineEdit):
         elif segment.name == "second":
             value += timedelta(seconds=delta)
         elif segment.name == "microsecond":
-            value += timedelta(microseconds=delta)
+            value = self._apply_microsecond_delta(value, segment, delta)
         elif segment.name in {"tz_sign", "tz_hour", "tz_minute", "utc"}:
             value = self._ensure_timezone(value)
             total_minutes = self._timezone_minutes(value)
@@ -368,7 +368,7 @@ class BetterDateTimeEditor(QLineEdit):
             case "second":
                 text = f"{value.second:02d}"
             case "microsecond":
-                text = f"{value.microsecond:06d}"
+                text = self._format_microsecond(value.microsecond, width)
             case "tz_sign":
                 minutes = self._timezone_minutes(self._ensure_timezone(value))
                 text = "+" if minutes >= 0 else "-"
@@ -390,6 +390,18 @@ class BetterDateTimeEditor(QLineEdit):
         if name not in {"tz_sign", "tz_hour", "tz_minute", "utc"} and width > 0 and len(text) < width:
             text = text.zfill(width)
         return text
+
+    def _apply_microsecond_delta(self, value: datetime, segment: _Segment, delta: int) -> datetime:
+        digits = max(1, min(segment.length, 6))
+        step = 10 ** (6 - digits)
+        return value + timedelta(microseconds=delta * step)
+
+    def _format_microsecond(self, microsecond: int, width: int) -> str:
+        digits = max(1, min(width or 6, 6))
+        full = f"{microsecond:06d}"
+        if digits < 6:
+            return full[:digits]
+        return full
 
     def _split_timezone(self, total_minutes: int) -> tuple[int, int, int]:
         sign = 1 if total_minutes >= 0 else -1
