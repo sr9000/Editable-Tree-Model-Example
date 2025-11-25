@@ -194,6 +194,11 @@ class BetterDateTimeEditor(QLineEdit):
             value += timedelta(seconds=delta)
         elif segment.name == "microsecond":
             value += timedelta(microseconds=delta)
+        elif segment.name in {"tz_sign", "tz_hour", "tz_minute", "utc"}:
+            value = self._ensure_timezone(value)
+            total_minutes = self._timezone_minutes(value)
+            total_minutes = self._adjust_timezone_minutes(segment.name, total_minutes, delta)
+            value = value.replace(tzinfo=timezone(timedelta(minutes=total_minutes)))
         else:
             return None
 
@@ -279,6 +284,64 @@ class BetterDateTimeEditor(QLineEdit):
             case _:
                 return value
 
+    def _ensure_timezone(self, value: datetime) -> datetime:
+        if value.tzinfo is not None:
+            return value
+        return value.replace(tzinfo=timezone.utc)
+
+    def _timezone_minutes(self, value: datetime) -> int:
+        offset = value.tzinfo.utcoffset(value) or timedelta()
+        return int(offset.total_seconds() // 60)
+
+    def _clamp_timezone_minutes(self, minutes: int) -> int:
+        limit = 14 * 60
+        return max(-limit, min(limit, minutes))
+
+    def _adjust_timezone_minutes(self, part: str, total_minutes: int, delta: int) -> int:
+        limit = 14 * 60
+        sign = 1 if total_minutes >= 0 else -1
+        abs_minutes = abs(total_minutes)
+        hours = abs_minutes // 60
+        minutes = abs_minutes % 60
+
+        match part:
+            case "tz_sign":
+                magnitude = abs_minutes or 60
+                total_minutes = magnitude if delta >= 0 else -magnitude
+            case "tz_hour":
+                hours = max(0, min(14, hours + delta))
+                if hours == 14:
+                    minutes = 0
+                total_minutes = sign * (hours * 60 + minutes)
+            case "tz_minute":
+                minutes += delta
+                while minutes < 0 and hours > 0:
+                    hours -= 1
+                    minutes += 60
+                while minutes >= 60 and hours < 14:
+                    hours += 1
+                    minutes -= 60
+                minutes = max(0, min(59, minutes))
+                if hours == 14:
+                    minutes = 0
+                total_minutes = sign * (hours * 60 + minutes)
+            case "utc":
+                if total_minutes == 0:
+                    total_minutes = 60 if delta >= 0 else -60
+                else:
+                    total_minutes = total_minutes + delta * 60
+            case _:
+                return total_minutes
+
+        return self._clamp_timezone_minutes(total_minutes)
+
+    def _format_timezone_string(self, minutes: int) -> str:
+        sign = "+" if minutes >= 0 else "-"
+        minutes = abs(minutes)
+        hours = minutes // 60
+        minute_part = minutes % 60
+        return f"{sign}{hours:02d}:{minute_part:02d}"
+
     def _format_segment_value(self, name: str, value: datetime, width: int) -> Optional[str]:
         match name:
             case "year":
@@ -295,9 +358,24 @@ class BetterDateTimeEditor(QLineEdit):
                 text = f"{value.second:02d}"
             case "microsecond":
                 text = f"{value.microsecond:06d}"
+            case "tz_sign":
+                minutes = self._timezone_minutes(self._ensure_timezone(value))
+                text = "+" if minutes >= 0 else "-"
+            case "tz_hour":
+                minutes = abs(self._timezone_minutes(self._ensure_timezone(value)))
+                hours = minutes // 60
+                width = width or 2
+                text = str(hours).zfill(width)
+            case "tz_minute":
+                minutes = abs(self._timezone_minutes(self._ensure_timezone(value))) % 60
+                width = width or 2
+                text = str(minutes).zfill(width)
+            case "utc":
+                total = self._timezone_minutes(self._ensure_timezone(value))
+                text = "Z" if total == 0 else self._format_timezone_string(total)
             case _:
                 return None
 
-        if width > 0 and len(text) < width:
+        if name not in {"tz_sign", "tz_hour", "tz_minute", "utc"} and width > 0 and len(text) < width:
             text = text.zfill(width)
         return text
