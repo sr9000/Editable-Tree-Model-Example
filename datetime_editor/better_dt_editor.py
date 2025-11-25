@@ -216,11 +216,11 @@ class BetterDateTimeEditor(QLineEdit):
     # ------------------------------------------------------------------
     # Event handling
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        if event.key() in (Qt.Key_Up, Qt.Key_PageUp):
+        if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_PageUp):
             self.stepUp()
             event.accept()
             return
-        if event.key() in (Qt.Key_Down, Qt.Key_PageDown):
+        if event.key() in (Qt.Key.Key_Down, Qt.Key.Key_PageDown):
             self.stepDown()
             event.accept()
             return
@@ -321,46 +321,29 @@ class BetterDateTimeEditor(QLineEdit):
         return max(-limit, min(limit, minutes))
 
     def _adjust_timezone_minutes(self, part: str, total_minutes: int, delta: int) -> int:
+        if delta == 0:
+            return total_minutes
+
         sign, hours, minutes = self._split_timezone(total_minutes)
+        step = 1 - 2 * (delta < 0)
 
         if part == "tz_sign":
-            if delta > 0:
-                sign = 1
-            elif delta < 0:
-                sign = -1
+            sign = step
         elif part == "tz_hour" and delta != 0:
-            step = 1 if delta > 0 else -1
             for _ in range(abs(delta)):
-                if step > 0:
-                    if sign < 0:
-                        if hours > 0:
-                            hours -= 1
-                        else:
-                            sign = 1
-                    else:
-                        if hours < 14:
-                            hours += 1
-                else:  # step < 0
-                    if sign > 0:
-                        if hours > 0:
-                            hours -= 1
-                        else:
-                            sign = -1
-                            hours = 0 if minutes else 1  # +00:00 becomes -01:00, +00:30 becomes -00:30
-                    else:
-                        if hours < 14:
-                            hours += 1
+                if sign * step > 0:
+                    hours += 1
+                elif hours:
+                    hours -= 1
+                else:
+                    sign *= -1
+                    hours = 1 if sign < 0 and minutes == 0 else hours
         elif part == "tz_minute" and delta != 0:
             minutes = (minutes + delta) % 60
-        elif part == "utc":
-            if hours == 0 and minutes == 0:
-                sign = 1 if delta >= 0 else -1
-                hours = 0
-                minutes = 0
-                if delta != 0:
-                    hours = min(14, 1)
-            else:
-                hours = max(0, min(14, hours + (1 if delta > 0 else -1)))
+        elif part == "utc" and delta != 0:
+            sign = step
+            hours, minutes = abs(delta), 0
+
         return self._compose_timezone(sign, hours, minutes)
 
     def _format_timezone_string(self, minutes: int) -> str:
