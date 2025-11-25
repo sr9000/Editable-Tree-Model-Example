@@ -199,6 +199,7 @@ class BetterDateTimeEditor(QLineEdit):
             total_minutes = self._timezone_minutes(value)
             total_minutes = self._adjust_timezone_minutes(segment.name, total_minutes, delta)
             value = value.replace(tzinfo=timezone(timedelta(minutes=total_minutes)))
+            return self._rebuild_timezone_segments(value, segment)
         else:
             return None
 
@@ -284,6 +285,28 @@ class BetterDateTimeEditor(QLineEdit):
             case _:
                 return value
 
+    def _rebuild_timezone_segments(self, value: datetime, anchor: _Segment) -> Optional[tuple[str, int]]:
+        tz_segments = [seg for seg in self._segments if seg.name in {"tz_sign", "tz_hour", "tz_minute", "utc"}]
+        if not tz_segments:
+            return None
+
+        text = self.text()
+        new_text = text
+        cursor = None
+        for seg in sorted(tz_segments, key=lambda s: s.start, reverse=True):
+            replacement = self._format_segment_value(seg.name, value, seg.length)
+            if replacement is None:
+                continue
+            new_text = new_text[: seg.start] + replacement + new_text[seg.end :]
+            if seg is anchor:
+                cursor = seg.start + len(replacement)
+
+        self._value = self._restore_type(value)
+        self._segments = self._extract_segments(new_text)
+        if cursor is None:
+            cursor = anchor.start
+        return new_text, cursor
+
     def _ensure_timezone(self, value: datetime) -> datetime:
         if value.tzinfo is not None:
             return value
@@ -298,38 +321,21 @@ class BetterDateTimeEditor(QLineEdit):
         return max(-limit, min(limit, minutes))
 
     def _adjust_timezone_minutes(self, part: str, total_minutes: int, delta: int) -> int:
-        limit = 14 * 60
-        sign = 1 if total_minutes >= 0 else -1
-        abs_minutes = abs(total_minutes)
-        hours = abs_minutes // 60
-        minutes = abs_minutes % 60
+        total_minutes = self._clamp_timezone_minutes(total_minutes)
 
         match part:
             case "tz_sign":
-                magnitude = abs_minutes or 60
+                magnitude = abs(total_minutes) or 60
                 total_minutes = magnitude if delta >= 0 else -magnitude
             case "tz_hour":
-                hours = max(0, min(14, hours + delta))
-                if hours == 14:
-                    minutes = 0
-                total_minutes = sign * (hours * 60 + minutes)
+                total_minutes += delta * 60
             case "tz_minute":
-                minutes += delta
-                while minutes < 0 and hours > 0:
-                    hours -= 1
-                    minutes += 60
-                while minutes >= 60 and hours < 14:
-                    hours += 1
-                    minutes -= 60
-                minutes = max(0, min(59, minutes))
-                if hours == 14:
-                    minutes = 0
-                total_minutes = sign * (hours * 60 + minutes)
+                total_minutes += delta
             case "utc":
                 if total_minutes == 0:
                     total_minutes = 60 if delta >= 0 else -60
                 else:
-                    total_minutes = total_minutes + delta * 60
+                    total_minutes += delta * 60
             case _:
                 return total_minutes
 
