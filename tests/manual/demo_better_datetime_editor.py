@@ -17,7 +17,7 @@ def main() -> None:
     layout.addWidget(QLabel("Edit the value and use arrow keys to increment segments."))
 
     editor = BetterDateTimeEditor()
-    editor.setValue(datetime.now().replace(microsecond=0))
+    editor.setValue(datetime.now().astimezone().replace(microsecond=123456))
     layout.addWidget(editor)
 
     widget.show()

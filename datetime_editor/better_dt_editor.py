@@ -220,6 +220,19 @@ class BetterDateTimeEditor(QLineEdit):
             return
         super().keyPressEvent(event)
 
+    def wheelEvent(self, event) -> None:
+        if not self.isReadOnly() and self._segments and self._value is not None:
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self.stepUp()
+                event.accept()
+                return
+            if delta < 0:
+                self.stepDown()
+                event.accept()
+                return
+        super().wheelEvent(event)
+
     def focusOutEvent(self, event: QFocusEvent) -> None:
         if self._validation_state(self.text(), 0) != QValidator.State.Acceptable:
             self.blockSignals(True)
