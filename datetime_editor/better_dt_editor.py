@@ -153,6 +153,7 @@ class BetterDateTimeEditor(QLineEdit):
         new_text, new_cursor = result
         if new_text == self.text():
             return
+
         self.setText(new_text)
         self.setCursorPosition(min(new_cursor, len(new_text)))
 
@@ -170,28 +171,32 @@ class BetterDateTimeEditor(QLineEdit):
         return None
 
     def _apply_delta_to_segment(self, segment: _Segment, delta: int) -> Optional[tuple[str, int]]:
-        if self._value is None:
+        if self._value is None or delta == 0:
             return None
+
         value = self._as_datetime(self._value)
         if segment.name == "year":
             new_year = max(1, min(9999, value.year + delta))
             max_day = monthrange(new_year, value.month)[1]
             value = value.replace(year=new_year, day=min(value.day, max_day))
         elif segment.name == "month":
-            total_months = (value.year - 1) * 12 + (value.month - 1) + delta
-            total_months = max(0, min(total_months, 9999 * 12 - 1))
-            new_year = total_months // 12 + 1
-            new_month = total_months % 12 + 1
-            max_day = monthrange(new_year, new_month)[1]
-            value = value.replace(year=new_year, month=new_month, day=min(value.day, max_day))
+            if abs(delta) > 3:
+                delta = 3 * (delta // abs(delta))
+            new_month = ((value.month - 1) + delta) % 12 + 1
+            max_day = monthrange(value.year, new_month)[1]
+            value = value.replace(month=new_month, day=min(value.day, max_day))
         elif segment.name == "day":
-            value += timedelta(days=delta)
+            day = 1 + (value.day - 1 + delta) % monthrange(value.year, value.month)[1]
+            value = value.replace(day=day)
         elif segment.name == "hour":
-            value += timedelta(hours=delta)
+            hour = (value.hour + delta) % 24
+            value = value.replace(hour=hour)
         elif segment.name == "minute":
-            value += timedelta(minutes=delta)
+            minute = (value.minute + delta) % 60
+            value = value.replace(minute=minute)
         elif segment.name == "second":
-            value += timedelta(seconds=delta)
+            second = (value.second + delta) % 60
+            value = value.replace(second=second)
         elif segment.name == "microsecond":
             value = self._apply_microsecond_delta(value, segment, delta)
         elif segment.name in {"tz_sign", "tz_hour", "tz_minute", "utc"}:
@@ -203,11 +208,18 @@ class BetterDateTimeEditor(QLineEdit):
         else:
             return None
 
+        text = self.text()
+        if segment.name in {"month", "year"}:
+            sub_segment = self._segment_by_name("day")
+            if sub_segment:
+                day_replacement = self._format_segment_value(sub_segment.name, value, segment.length)
+                if day_replacement:
+                    text = text[: sub_segment.start] + day_replacement + text[sub_segment.end :]
+
         replacement = self._format_segment_value(segment.name, value, segment.length)
         if replacement is None:
             return None
 
-        text = self.text()
         new_text = text[: segment.start] + replacement + text[segment.end :]
         self._value = self._restore_type(value)
         self._segments = self._extract_segments(new_text)
@@ -216,12 +228,20 @@ class BetterDateTimeEditor(QLineEdit):
     # ------------------------------------------------------------------
     # Event handling
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_PageUp):
+        if event.key() in (Qt.Key.Key_Up,):
             self.stepUp()
             event.accept()
             return
-        if event.key() in (Qt.Key.Key_Down, Qt.Key.Key_PageDown):
+        if event.key() in (Qt.Key.Key_Down,):
             self.stepDown()
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_PageUp:
+            self._step(10)
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_PageDown:
+            self._step(-10)
             event.accept()
             return
         super().keyPressEvent(event)
