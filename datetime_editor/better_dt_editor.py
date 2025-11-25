@@ -13,7 +13,6 @@ from .enums import DateTimeCategory
 from .regex import PARTIAL_DATETIME_RE, parse_datetime_text
 from .validator import DateTimeValidator
 
-
 ValueType = Union[date, time, datetime, None]
 
 
