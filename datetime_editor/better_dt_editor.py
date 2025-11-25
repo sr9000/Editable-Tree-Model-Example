@@ -22,6 +22,7 @@ class _Segment:
     name: str
     start: int
     end: int
+    text: str
 
     @property
     def length(self) -> int:
@@ -121,12 +122,13 @@ class BetterDateTimeEditor(QLineEdit):
             return segments
         cursor = 0
         for name, value in match.groupdict().items():
-            if value is None:
+            if not value:
                 continue
             idx = text.upper().find(value.upper(), cursor)
             if idx == -1:
                 continue
-            segments.append(_Segment(name=name, start=idx, end=idx + len(value)))
+            segment_text = text[idx : idx + len(value)]
+            segments.append(_Segment(name=name, start=idx, end=idx + len(value), text=segment_text))
             cursor = idx + len(value)
         return segments
 
@@ -145,15 +147,14 @@ class BetterDateTimeEditor(QLineEdit):
         if idx is None:
             idx = len(self._segments) - 1
         segment = self._segments[idx]
-        new_text = self._apply_delta_to_segment(segment, delta)
-        if new_text is None:
+        result = self._apply_delta_to_segment(segment, delta)
+        if result is None:
             return
-        self.blockSignals(True)
+        new_text, new_cursor = result
+        if new_text == self.text():
+            return
         self.setText(new_text)
-        self.blockSignals(False)
-        replacement = self._segment_by_name(segment.name)
-        if replacement:
-            self.setCursorPosition(replacement.end)
+        self.setCursorPosition(min(new_cursor, len(new_text)))
 
     def _segment_index_at_cursor(self) -> Optional[int]:
         cursor = self.cursorPosition()
@@ -168,7 +169,7 @@ class BetterDateTimeEditor(QLineEdit):
                 return seg
         return None
 
-    def _apply_delta_to_segment(self, segment: _Segment, delta: int) -> Optional[str]:
+    def _apply_delta_to_segment(self, segment: _Segment, delta: int) -> Optional[tuple[str, int]]:
         if self._value is None:
             return None
         value = self._as_datetime(self._value)
@@ -196,11 +197,15 @@ class BetterDateTimeEditor(QLineEdit):
         else:
             return None
 
+        replacement = self._format_segment_value(segment.name, value, segment.length)
+        if replacement is None:
+            return None
+
+        text = self.text()
+        new_text = text[: segment.start] + replacement + text[segment.end :]
         self._value = self._restore_type(value)
-        formatted = self._format_value(self._value)[0]
-        self._segments = self._extract_segments(formatted)
-        self._last_valid_text = formatted
-        return formatted
+        self._segments = self._extract_segments(new_text)
+        return new_text, segment.start + len(replacement)
 
     # ------------------------------------------------------------------
     # Event handling
@@ -260,3 +265,26 @@ class BetterDateTimeEditor(QLineEdit):
                 return value
             case _:
                 return value
+
+    def _format_segment_value(self, name: str, value: datetime, width: int) -> Optional[str]:
+        match name:
+            case "year":
+                text = f"{value.year:04d}"
+            case "month":
+                text = f"{value.month:02d}"
+            case "day":
+                text = f"{value.day:02d}"
+            case "hour":
+                text = f"{value.hour:02d}"
+            case "minute":
+                text = f"{value.minute:02d}"
+            case "second":
+                text = f"{value.second:02d}"
+            case "microsecond":
+                text = f"{value.microsecond:06d}"
+            case _:
+                return None
+
+        if width > 0 and len(text) < width:
+            text = text.zfill(width)
+        return text
