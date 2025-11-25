@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional, Union
@@ -82,7 +83,7 @@ class BetterDateTimeEditor(QLineEdit):
     # ------------------------------------------------------------------
     # Text/validation handling
     def _handle_text_changed(self, text: str) -> None:
-        state = self.validator().validate(text, self.cursorPosition())[0]
+        state = self._validation_state(text, self.cursorPosition())
         if state == QValidator.State.Acceptable:
             parsed = parse_datetime_text(text, self._category)
             if parsed is not None:
@@ -104,6 +105,15 @@ class BetterDateTimeEditor(QLineEdit):
             self._value = parsed
             self._last_valid_text = text
         self._segments = self._extract_segments(text)
+
+    def _validation_state(self, text: str, pos: int) -> QValidator.State:
+        validator = self.validator()
+        if validator is None:
+            return QValidator.State.Acceptable
+        result = validator.validate(text, pos)
+        if isinstance(result, tuple):
+            return result[0]
+        return result
 
     def _extract_segments(self, text: str) -> list[_Segment]:
         segments: list[_Segment] = []
@@ -142,7 +152,9 @@ class BetterDateTimeEditor(QLineEdit):
         self.blockSignals(True)
         self.setText(new_text)
         self.blockSignals(False)
-        self.setCursorPosition(segment.start + segment.length)
+        replacement = self._segment_by_name(segment.name)
+        if replacement:
+            self.setCursorPosition(replacement.end)
 
     def _segment_index_at_cursor(self) -> Optional[int]:
         cursor = self.cursorPosition()
@@ -151,16 +163,27 @@ class BetterDateTimeEditor(QLineEdit):
                 return i
         return None
 
+    def _segment_by_name(self, name: str) -> Optional[_Segment]:
+        for seg in self._segments:
+            if seg.name == name:
+                return seg
+        return None
+
     def _apply_delta_to_segment(self, segment: _Segment, delta: int) -> Optional[str]:
         if self._value is None:
             return None
         value = self._as_datetime(self._value)
         if segment.name == "year":
-            value = value.replace(year=max(1, min(9999, value.year + delta)))
+            new_year = max(1, min(9999, value.year + delta))
+            max_day = monthrange(new_year, value.month)[1]
+            value = value.replace(year=new_year, day=min(value.day, max_day))
         elif segment.name == "month":
-            month = (value.month - 1 + delta) % 12 + 1
-            year = value.year + (value.month - 1 + delta) // 12
-            value = value.replace(year=year, month=month)
+            total_months = (value.year - 1) * 12 + (value.month - 1) + delta
+            total_months = max(0, min(total_months, 9999 * 12 - 1))
+            new_year = total_months // 12 + 1
+            new_month = total_months % 12 + 1
+            max_day = monthrange(new_year, new_month)[1]
+            value = value.replace(year=new_year, month=new_month, day=min(value.day, max_day))
         elif segment.name == "day":
             value += timedelta(days=delta)
         elif segment.name == "hour":
@@ -194,7 +217,7 @@ class BetterDateTimeEditor(QLineEdit):
         super().keyPressEvent(event)
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
-        if self.validator() and self.validator().validate(self.text(), 0)[0] != QValidator.State.Acceptable:
+        if self._validation_state(self.text(), 0) != QValidator.State.Acceptable:
             self.blockSignals(True)
             self.setText(self._last_valid_text)
             self.blockSignals(False)
