@@ -317,29 +317,51 @@ class BetterDateTimeEditor(QLineEdit):
         return int(offset.total_seconds() // 60)
 
     def _clamp_timezone_minutes(self, minutes: int) -> int:
-        limit = 14 * 60
+        limit = 14 * 60 + 59
         return max(-limit, min(limit, minutes))
 
     def _adjust_timezone_minutes(self, part: str, total_minutes: int, delta: int) -> int:
-        total_minutes = self._clamp_timezone_minutes(total_minutes)
+        sign, hours, minutes = self._split_timezone(total_minutes)
 
-        match part:
-            case "tz_sign":
-                magnitude = abs(total_minutes) or 60
-                total_minutes = magnitude if delta >= 0 else -magnitude
-            case "tz_hour":
-                total_minutes += delta * 60
-            case "tz_minute":
-                total_minutes += delta
-            case "utc":
-                if total_minutes == 0:
-                    total_minutes = 60 if delta >= 0 else -60
-                else:
-                    total_minutes += delta * 60
-            case _:
-                return total_minutes
-
-        return self._clamp_timezone_minutes(total_minutes)
+        if part == "tz_sign":
+            if delta > 0:
+                sign = 1
+            elif delta < 0:
+                sign = -1
+        elif part == "tz_hour" and delta != 0:
+            step = 1 if delta > 0 else -1
+            for _ in range(abs(delta)):
+                if step > 0:
+                    if sign < 0:
+                        if hours > 0:
+                            hours -= 1
+                        else:
+                            sign = 1
+                    else:
+                        if hours < 14:
+                            hours += 1
+                else:  # step < 0
+                    if sign > 0:
+                        if hours > 0:
+                            hours -= 1
+                        else:
+                            sign = -1
+                            hours = 0 if minutes else 1  # +00:00 becomes -01:00, +00:30 becomes -00:30
+                    else:
+                        if hours < 14:
+                            hours += 1
+        elif part == "tz_minute" and delta != 0:
+            minutes = (minutes + delta) % 60
+        elif part == "utc":
+            if hours == 0 and minutes == 0:
+                sign = 1 if delta >= 0 else -1
+                hours = 0
+                minutes = 0
+                if delta != 0:
+                    hours = min(14, 1)
+            else:
+                hours = max(0, min(14, hours + (1 if delta > 0 else -1)))
+        return self._compose_timezone(sign, hours, minutes)
 
     def _format_timezone_string(self, minutes: int) -> str:
         sign = "+" if minutes >= 0 else "-"
@@ -385,3 +407,18 @@ class BetterDateTimeEditor(QLineEdit):
         if name not in {"tz_sign", "tz_hour", "tz_minute", "utc"} and width > 0 and len(text) < width:
             text = text.zfill(width)
         return text
+
+    def _split_timezone(self, total_minutes: int) -> tuple[int, int, int]:
+        sign = 1 if total_minutes >= 0 else -1
+        abs_minutes = abs(total_minutes)
+        hours = abs_minutes // 60
+        minutes = abs_minutes % 60
+        return sign, hours, minutes
+
+    def _compose_timezone(self, sign: int, hours: int, minutes: int) -> int:
+        sign = 1 if sign >= 0 else -1
+        hours = max(0, min(14, hours))
+        minutes = max(0, min(59, minutes))
+        if hours == 0 and minutes == 0:
+            sign = 1
+        return self._clamp_timezone_minutes(sign * (hours * 60 + minutes))
