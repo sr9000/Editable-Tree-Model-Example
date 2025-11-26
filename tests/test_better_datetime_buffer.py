@@ -70,6 +70,8 @@ def test_step_with_set_value(buffer: BetterDateTimeBuffer, val_str: str, inc: in
         (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00+02:5*9", 1, "2025-01-01T00:00:00+02:00", 120),
         (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00-*01:00", 1, "2025-01-01T00:00:00+01:00", 60),
         (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00Z*", 1, "2025-01-01T00:00:00+01:00", 60),
+        (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00+0*0:30", -1, "2025-01-01T00:00:00-00:30", -30),
+        (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00-02:1*5", 1, "2025-01-01T00:00:00-02:16", -136),
     ],
 )
 def test_step_with_accept_text(
