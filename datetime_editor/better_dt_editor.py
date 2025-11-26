@@ -288,8 +288,6 @@ class BetterDateTimeBuffer:
         sign = 1 if sign >= 0 else -1
         hours = max(0, min(14, hours))
         minutes = max(0, min(59, minutes))
-        if hours == 14:
-            minutes = 0
         if hours == 0 and minutes == 0:
             sign = 1
         return BetterDateTimeBuffer._clamp_timezone_minutes(sign * (hours * 60 + minutes))
