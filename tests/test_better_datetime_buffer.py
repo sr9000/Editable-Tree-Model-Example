@@ -11,10 +11,6 @@ def buffer() -> BetterDateTimeBuffer:
     return BetterDateTimeBuffer()
 
 
-def cursor_position(text: str, marker: str = "^") -> int:
-    return 1 + text.index(marker)
-
-
 def test_set_value_round_trip(buffer: BetterDateTimeBuffer) -> None:
     date_text = "2025-01-02"
     date_exp = date.fromisoformat(date_text)
@@ -45,127 +41,53 @@ def test_revert_text_restores_last_valid(buffer: BetterDateTimeBuffer) -> None:
     assert buffer.value == date_exp
 
 
-def test_step_year_clamps_day(buffer: BetterDateTimeBuffer) -> None:
-    val = "2024-02-29 00:00:00"
-    pos = "^024-02-29 00:00:00"
-    exp = "2025-02-28 00:00:00"
-    date_exp = datetime.fromisoformat(exp)
-    text, _ = buffer.set_value(datetime.fromisoformat(val))
-    assert text == val
-    new_text, _ = buffer.step(+1, cursor_position(pos))
-    assert new_text == exp
-    assert buffer.value == date_exp
+@pytest.mark.parametrize(
+    "val_str, inc, exp_str",
+    [
+        ("2*024-02-29 00:00:00", 1, "2025-02-28 00:00:00"),
+        ("2025-1*2-15 00:00:00", 1, "2025-01-15 00:00:00"),
+        ("2025-01-3*1 08:00:00", 1, "2025-01-01 08:00:00"),
+        ("2025-01-01 1*0:00:00", 1, "2025-01-01 11:00:00"),
+        ("2025-01-01 10:5*9:00", 1, "2025-01-01 10:00:00"),
+    ],
+)
+def test_step_with_set_value(buffer: BetterDateTimeBuffer, val_str: str, inc: int, exp_str: str) -> None:
+    clr = val_str.replace("*", "")
+    val = datetime.fromisoformat(clr)
+    exp_val = datetime.fromisoformat(exp_str)
+    text, _ = buffer.set_value(val)
+    assert text == clr
+    new_text, _ = buffer.step(inc, val_str.index("*"))
+    assert new_text == exp_str
+    assert buffer.value == exp_val
 
 
-def test_step_month_wraps_without_year_carry(buffer: BetterDateTimeBuffer) -> None:
-    val = "2025-12-15 00:00:00"
-    pos = "2025-^2-15 00:00:00"
-    exp = "2025-01-15 00:00:00"
-    date_exp = datetime.fromisoformat(exp)
-    text, _ = buffer.set_value(datetime.fromisoformat(val))
-    assert text == val
-    new_text, _ = buffer.step(+1, cursor_position(pos))
-    assert new_text == exp
-    assert buffer.value == date_exp
-
-
-def test_step_day_wraps_within_same_month(buffer: BetterDateTimeBuffer) -> None:
-    val = "2025-01-31 08:00:00"
-    pos = "2025-01-^1 08:00:00"
-    exp = "2025-01-01 08:00:00"
-    date_exp = datetime.fromisoformat(exp)
-    text, _ = buffer.set_value(datetime.fromisoformat(val))
-    assert text == val
-    new_text, _ = buffer.step(+1, cursor_position(pos))
-    assert new_text == exp
-    assert buffer.value == date_exp
-
-
-def test_step_hour_changes_value(buffer: BetterDateTimeBuffer) -> None:
-    val = "2025-01-01 10:00:00"
-    pos = "2025-01-01 ^0:00:00"
-    exp = "2025-01-01 11:00:00"
-    date_exp = datetime.fromisoformat(exp)
-    text, _ = buffer.set_value(datetime.fromisoformat(val))
-    assert text == val
-    new_text, _ = buffer.step(+1, cursor_position(pos))
-    assert new_text == exp
-    assert buffer.value == date_exp
-
-
-def test_step_minute_rolls_over(buffer: BetterDateTimeBuffer) -> None:
-    val = "2025-01-01 10:59:00"
-    pos = "2025-01-01 10:^9:00"
-    exp = "2025-01-01 10:00:00"
-    date_exp = datetime.fromisoformat(exp)
-    text, _ = buffer.set_value(datetime.fromisoformat(val))
-    assert text == val
-    new_text, _ = buffer.step(+1, cursor_position(pos))
-    assert new_text == exp
-    assert buffer.value == date_exp
-
-
-def test_microsecond_precision_respected(buffer: BetterDateTimeBuffer) -> None:
-    val = "2025-01-01T00:00:00.123"
-    pos = "2025-01-01T00:00:00.^23"
-    exp = "2025-01-01T00:00:00.124"
-    date_exp = datetime.fromisoformat(exp)
-    buffer.set_category(DateTimeCategory.DateTime, "")
-    buffer.accept_text(val)
-    new_text, _ = buffer.step(+1, cursor_position(pos))
-    assert new_text == exp
-    assert buffer.value == date_exp
-
-
-def test_timezone_hour_cross_zero_preserves_minutes(buffer: BetterDateTimeBuffer) -> None:
-    val = "2025-01-01T00:00:00-00:45"
-    pos = "2025-01-01T00:00:00-^0:45"
-    exp = "2025-01-01T00:00:00+00:45"
-    date_exp = datetime.fromisoformat(exp)
-    buffer.set_category(DateTimeCategory.DateTimeWithTZ, "")
-    buffer.accept_text(val)
-    new_text, _ = buffer.step(+1, cursor_position(pos))
-    assert new_text == exp
-    assert buffer.value.tzinfo.utcoffset(buffer.value) == timedelta(minutes=45)
-    assert buffer.value == date_exp
-
-
-def test_timezone_minute_spin_does_not_touch_hours(buffer: BetterDateTimeBuffer) -> None:
-    val = "2025-01-01T00:00:00+02:59"
-    pos = "2025-01-01T00:00:00+02:^9"
-    exp = "2025-01-01T00:00:00+02:00"
-    date_exp = datetime.fromisoformat(exp)
-    buffer.set_category(DateTimeCategory.DateTimeWithTZ, "")
-    buffer.accept_text(val)
-    new_text, _ = buffer.step(+1, cursor_position(pos))
-    assert new_text == exp
-    assert buffer.value == date_exp
-    assert buffer.value.tzinfo.utcoffset(buffer.value) == timedelta(hours=2)
-
-
-def test_timezone_sign_spin(buffer: BetterDateTimeBuffer) -> None:
-    val = "2025-01-01T00:00:00-01:00"
-    pos = "2025-01-01T00:00:00^01:00"
-    exp = "2025-01-01T00:00:00-01:00"
-    date_exp = datetime.fromisoformat(exp)
-    buffer.set_category(DateTimeCategory.DateTimeWithTZ, "")
-    buffer.accept_text(val)
-    new_text, _ = buffer.step(+1, cursor_position(pos))
-    assert new_text == exp
-    assert buffer.value == date_exp
-    assert buffer.value.tzinfo.utcoffset(buffer.value) == timedelta(hours=-1)
-
-
-def test_timezone_utc_segment(buffer: BetterDateTimeBuffer) -> None:
-    val = "2025-01-01T00:00:00Z"
-    pos = "2025-01-01T00:00:00^"
-    exp = "2025-01-01T00:00:01Z"
-    date_exp = datetime.fromisoformat(exp)
-    buffer.set_category(DateTimeCategory.DateTimeWithTZ, "")
-    buffer.accept_text(val)
-    new_text, _ = buffer.step(+1, cursor_position(pos))
-    assert new_text == exp
-    assert buffer.value == date_exp
+@pytest.mark.parametrize(
+    "ctg, val_str, inc, exp_str, exp_offset_minutes",
+    [
+        (DateTimeCategory.DateTime, "2025-01-01T00:00:00.1*23", 1, "2025-01-01T00:00:00.124", None),
+        (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00-0*0:45", 1, "2025-01-01T00:00:00+00:45", 45),
+        (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00+02:5*9", 1, "2025-01-01T00:00:00+02:00", 120),
+        (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00-*01:00", 1, "2025-01-01T00:00:00+01:00", 60),
+        (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00Z*", 1, "2025-01-01T00:00:00+01:00", 60),
+    ],
+)
+def test_step_with_accept_text(
+    buffer: BetterDateTimeBuffer,
+    ctg: DateTimeCategory,
+    val_str: str,
+    inc: int,
+    exp_str: str,
+    exp_offset_minutes: int | None,
+) -> None:
+    exp_val = datetime.fromisoformat(exp_str)
+    buffer.set_category(ctg, "")
+    buffer.accept_text(val_str.replace("*", ""))
+    new_text, _ = buffer.step(inc, val_str.index("*"))
+    assert buffer.value == exp_val
+    assert new_text == exp_str
+    if exp_offset_minutes is not None:
+        assert buffer.value.tzinfo.utcoffset(buffer.value) == timedelta(minutes=exp_offset_minutes)
 
 
 def test_step_returns_none_without_value(buffer: BetterDateTimeBuffer) -> None:
