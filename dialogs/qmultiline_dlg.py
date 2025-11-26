@@ -36,9 +36,15 @@ class QMultilineDialog(QDialog):
         self.lineNumbersCheckBox.toggled.connect(self.editor.setLineNumbersVisible)
         self.lineNumbersCheckBox.toggled.connect(self._saveSettings)
 
+        self.monospacedCheckBox = QCheckBox("Monospaced")
+        self.monospacedCheckBox.setChecked(self.editor.isMonospaced())
+        self.monospacedCheckBox.toggled.connect(self.editor.setMonospaced)
+        self.monospacedCheckBox.toggled.connect(self._saveSettings)
+
         controls = QHBoxLayout()
         controls.addWidget(self.wrapCheckBox)
         controls.addWidget(self.lineNumbersCheckBox)
+        controls.addWidget(self.monospacedCheckBox)
         controls.addStretch(1)
 
         # Buttons
@@ -70,6 +76,7 @@ class QMultilineDialog(QDialog):
         settings.setValue("geometry", self.saveGeometry())
         settings.setValue("wordWrap", self.wrapCheckBox.isChecked())
         settings.setValue("lineNumbers", self.lineNumbersCheckBox.isChecked())
+        settings.setValue("monospaced", self.monospacedCheckBox.isChecked())
 
     def _restoreSettings(self) -> None:
         """Restore dialog preferences from QSettings"""
@@ -83,9 +90,11 @@ class QMultilineDialog(QDialog):
         # Restore checkbox states
         word_wrap = bool(settings.value("wordWrap", True, type=bool))
         line_numbers = bool(settings.value("lineNumbers", True, type=bool))
+        monospaced = bool(settings.value("monospaced", False, type=bool))
 
         self.wrapCheckBox.setChecked(word_wrap)
         self.lineNumbersCheckBox.setChecked(line_numbers)
+        self.monospacedCheckBox.setChecked(monospaced)
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         """Save geometry when dialog is resized"""

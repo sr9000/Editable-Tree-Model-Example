@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QRect, QSize, Qt
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QFont, QFontDatabase, QPainter
 from PySide6.QtWidgets import QPlainTextEdit, QWidget
 
 
@@ -22,6 +22,9 @@ class QMultilineEditor(QPlainTextEdit):
         super().__init__(parent)
 
         self._lineNumbersWidget = LineNumberArea(self)
+        self._defaultFont = QFont(self.font())
+        self._monospacedFont = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        self._isMonospaced = False
 
         self.blockCountChanged.connect(self._update_line_number_area_width)
         self.updateRequest.connect(self._update_line_number_area)
@@ -44,6 +47,14 @@ class QMultilineEditor(QPlainTextEdit):
 
     def wordWrap(self) -> bool:
         return self.lineWrapMode() == QPlainTextEdit.LineWrapMode.WidgetWidth
+
+    def setMonospaced(self, enabled: bool) -> None:
+        self._isMonospaced = enabled
+        self.setFont(self._monospacedFont if enabled else self._defaultFont)
+        self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance("9"))
+
+    def isMonospaced(self) -> bool:
+        return self._isMonospaced
 
     # Line number area plumbing
     def line_number_area_width(self, new_block_count: int = 0) -> int:
