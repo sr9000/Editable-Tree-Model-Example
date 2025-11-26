@@ -27,12 +27,12 @@ class QMultilineDialog(QDialog):
 
         # Controls row
         self.wrapCheckBox = QCheckBox("Word wrap")
-        self.wrapCheckBox.setChecked(True)
+        self.wrapCheckBox.setChecked(self.editor.wordWrap())
         self.wrapCheckBox.toggled.connect(self.editor.setWordWrap)
         self.wrapCheckBox.toggled.connect(self._saveSettings)
 
         self.lineNumbersCheckBox = QCheckBox("Line numbers")
-        self.lineNumbersCheckBox.setChecked(True)
+        self.lineNumbersCheckBox.setChecked(self.editor.lineNumbersVisible())
         self.lineNumbersCheckBox.toggled.connect(self.editor.setLineNumbersVisible)
         self.lineNumbersCheckBox.toggled.connect(self._saveSettings)
 

@@ -33,11 +33,17 @@ class QMultilineEditor(QPlainTextEdit):
 
     # Public API
     def setLineNumbersVisible(self, is_visible: bool) -> None:
-        self._lineNumbersWidget.setVisible(is_visible)
+        self._lineNumbersWidget.setHidden(not is_visible)
         self._update_line_number_area_width()
+
+    def lineNumbersVisible(self) -> bool:
+        return not self._lineNumbersWidget.isHidden()
 
     def setWordWrap(self, enabled: bool) -> None:
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth if enabled else QPlainTextEdit.LineWrapMode.NoWrap)
+
+    def wordWrap(self) -> bool:
+        return self.lineWrapMode() == QPlainTextEdit.LineWrapMode.WidgetWidth
 
     # Line number area plumbing
     def line_number_area_width(self, new_block_count: int = 0) -> int:
