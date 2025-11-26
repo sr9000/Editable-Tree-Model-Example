@@ -330,7 +330,9 @@ class JsonTreeModel(QAbstractItemModel):
                     # Show JSON-style lowercase
                     return "true" if data else "false"
                 case gmpy2.mpq():
-                    data = mpq_serialization(data)
+                    data = mpq_serialization(data)[0]
+                case None:
+                    return "null"
 
             return str(data)
 

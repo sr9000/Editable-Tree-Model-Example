@@ -117,11 +117,15 @@ class QMpqSpinBox(QAbstractSpinBox):
         /,
         minimum: mpq = None,
         maximum: mpq = None,
-        single_step: mpq = mpq(1),
+        single_step: mpq = None,
         prefix: str = "",
         suffix: str = "",
     ):
         super().__init__(parent)
+
+        if single_step is None:
+            single_step = mpq_serialization(_to_mpq(value))[1] / 10
+
         self._minimum: mpq | None = minimum
         self._maximum: mpq | None = maximum
         self._value: mpq = _to_mpq(value)
@@ -143,7 +147,7 @@ class QMpqSpinBox(QAbstractSpinBox):
 
     def setValue(self, expectedNewValue: mpq) -> None:
         new_value = self._clamp(_to_mpq(expectedNewValue))
-        new_value_string = str(mpq_serialization(new_value))
+        new_value_string = str(mpq_serialization(new_value)[0])
 
         # Always update text (matches C++ approach)
         self.lineEdit().setText(self._prefix + new_value_string + self._suffix)
@@ -151,7 +155,7 @@ class QMpqSpinBox(QAbstractSpinBox):
             self._value = new_value
 
     def cleanText(self) -> str:
-        return str(mpq_serialization(self._value))
+        return str(mpq_serialization(self._value)[0])
 
     # Prefix/Suffix
     def prefix(self) -> str:
@@ -235,7 +239,7 @@ class QMpqSpinBox(QAbstractSpinBox):
         if self.isReadOnly():
             return
 
-        if (self._prefix + str(mpq_serialization(self._value)) + self._suffix) != self.lineEdit().text():
+        if (self._prefix + str(mpq_serialization(self._value)[0]) + self._suffix) != self.lineEdit().text():
             self.lineEditEditingFinalize()
 
         newValue = self._value + mpq(steps) * self._single_step

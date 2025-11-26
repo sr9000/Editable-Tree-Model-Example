@@ -35,7 +35,7 @@ class ValueDelegate(QStyledItemDelegate):
             case JsonType.INTEGER:
                 editor = QBigIntSpinBox(parent)
             case JsonType.FLOAT:
-                editor = QMpqSpinBox(parent)
+                editor = QMpqSpinBox(parent, item.value)
             case JsonType.PERCENT:
                 editor = QMpqSpinBox(
                     parent,
