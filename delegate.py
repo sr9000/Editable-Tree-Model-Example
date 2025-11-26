@@ -15,7 +15,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from datetime_editor import DateTimeEditor
+from datetime_editor.better_dt_editor import BetterDateTimeEditor
+from datetime_editor.enums import DateTimeCategory
 from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
 from enums import JsonType
@@ -50,7 +51,7 @@ class ValueDelegate(QStyledItemDelegate):
             case JsonType.STRING:
                 editor = QLineEdit(parent)
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
-                editor = DateTimeEditor(parent)
+                editor = BetterDateTimeEditor(parent)
             case JsonType.MULTILINE:
                 QMultilineDialog(  # Use a modal dialog-based editor for multiline text
                     parent=parent,
@@ -102,28 +103,9 @@ class ValueDelegate(QStyledItemDelegate):
                 editor: QLineEdit
                 editor.setText(item.value)
             case JsonType.TIME | JsonType.DATE | JsonType.DATETIME | JsonType.DATETIMEZONE:
-                # Preserve original user string; configure category for validation
-                dt_editor: DateTimeEditor = editor  # type: ignore[assignment]
-                from datetime_editor.enums import DateTimeCategory
-
-                category = None
-                match item.json_type:
-                    case JsonType.TIME:
-                        category = DateTimeCategory.Time
-                    case JsonType.DATE:
-                        category = DateTimeCategory.Date
-                    case JsonType.DATETIME:
-                        category = DateTimeCategory.DateTime
-                    case JsonType.DATETIMEZONE:
-                        category = DateTimeCategory.DateTimeWithTZ
-
-                # Set validator category and internal category without altering text formatting
-                try:
-                    dt_editor._category = category  # type: ignore[attr-defined]
-                    dt_editor._validator.category = category  # type: ignore[attr-defined]
-                except Exception:
-                    pass
-                dt_editor.setText(item.value)
+                dt_editor: BetterDateTimeEditor = editor  # type: ignore[assignment]
+                dt_editor.setCategory(self._category_for_json_type(item.json_type))
+                dt_editor.setText(str(item.value or ""))
             case unknown:
                 raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.setEditorData()`: {item.json_type=}")
 
@@ -147,7 +129,7 @@ class ValueDelegate(QStyledItemDelegate):
                 le: QLineEdit = editor  # type: ignore[assignment]
                 model.setData(index, le.text(), Qt.ItemDataRole.EditRole)
             case JsonType.TIME | JsonType.DATE | JsonType.DATETIME | JsonType.DATETIMEZONE:
-                dt_editor: DateTimeEditor = editor  # type: ignore[assignment]
+                dt_editor: BetterDateTimeEditor = editor  # type: ignore[assignment]
                 # Keep exactly what user typed; DateTimeEditor ensures validity
                 model.setData(index, dt_editor.text(), Qt.ItemDataRole.EditRole)
             case JsonType.MULTILINE | JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
@@ -155,6 +137,20 @@ class ValueDelegate(QStyledItemDelegate):
                 return
             case _:
                 raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.setModelData()`: {item.json_type=}")
+
+    @staticmethod
+    def _category_for_json_type(json_type: JsonType) -> DateTimeCategory | None:
+        match json_type:
+            case JsonType.TIME:
+                return DateTimeCategory.Time
+            case JsonType.DATE:
+                return DateTimeCategory.Date
+            case JsonType.DATETIME:
+                return DateTimeCategory.DateTime
+            case JsonType.DATETIMEZONE:
+                return DateTimeCategory.DateTimeWithTZ
+            case _:
+                return None
 
 
 class JsonTypeDelegate(QStyledItemDelegate):
