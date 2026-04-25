@@ -105,3 +105,30 @@ def test_undo_redo_move_object_member_down(qtbot):
 
     tab.undo_stack.undo()
     assert _keys_in_order(tab) == keys_before
+
+
+def test_undo_command_text_includes_path_and_timestamp(qtbot):
+    import re
+
+    from tree_view import duplicate_selection
+
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+
+    # Edit value of "answer" -> label should mention `$.answer` and `edit value`.
+    answer_value = tab.model.index(1, 2, QModelIndex())
+    assert tab.commit_set_data(answer_value, 999, Qt.ItemDataRole.EditRole)
+    text = tab.undo_stack.command(tab.undo_stack.count() - 1).text()
+    assert re.match(r"^\[\d{2}:\d{2}:\d{2}\] edit value @ \$\.answer$", text), text
+
+    # Duplicate "integer" -> label should mention `$.integer` and `duplicate`.
+    _select_row0(tab, 2)
+    assert duplicate_selection(tab.view)
+    text2 = tab.undo_stack.command(tab.undo_stack.count() - 1).text()
+    assert re.match(r"^\[\d{2}:\d{2}:\d{2}\] duplicate @ \$\.integer$", text2), text2
+
+    # Rename a row -> label should say `rename`.
+    name_idx = tab.model.index(0, 0, QModelIndex())
+    assert tab.commit_set_data(name_idx, "renamed-question", Qt.ItemDataRole.EditRole)
+    text3 = tab.undo_stack.command(tab.undo_stack.count() - 1).text()
+    assert re.match(r"^\[\d{2}:\d{2}:\d{2}\] rename @ \$\.question$", text3), text3

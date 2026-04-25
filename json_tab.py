@@ -2,6 +2,7 @@ import base64
 import functools
 import gzip
 import zlib
+from datetime import datetime
 from typing import Any, Callable
 
 import gmpy2
@@ -10,6 +11,7 @@ from PySide6.QtGui import QKeySequence, QShortcut, QUndoCommand, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, ValueDelegate
+from enums import JsonType
 from tree_item import JsonTreeItem
 from tree_model import JsonTreeModel
 from tree_view import (
@@ -188,6 +190,34 @@ class JsonTab(QWidget):
             idx = nxt
         return idx
 
+    def _qualified_name(self, index: QModelIndex) -> str:
+        """Return a JSON-style qualified path of *index* (e.g. ``$.foo.bar[2].baz``).
+
+        Uses ``$`` as the document root. Returns ``$`` when the index is invalid.
+        """
+        if not index.isValid():
+            return "$"
+
+        # Walk up from the leaf collecting (parent_type, child_item) pairs.
+        chain: list[tuple[JsonType | None, Any]] = []
+        cursor = self.model.index(index.row(), 0, index.parent())
+        while cursor.isValid():
+            item = self.model.get_item(cursor)
+            parent_item = item.parent() if item is not None else None
+            parent_type = parent_item.json_type if parent_item is not None else None
+            chain.append((parent_type, item))
+            cursor = cursor.parent()
+
+        chain.reverse()
+        parts: list[str] = ["$"]
+        for parent_type, item in chain:
+            if parent_type is JsonType.ARRAY:
+                parts.append(f"[{item.row()}]")
+            else:
+                name = item.name if isinstance(item.name, str) and item.name else "<no name>"
+                parts.append(f".{name}")
+        return "".join(parts)
+
     def _collect_expanded_paths(self) -> list[tuple[int, ...]]:
         paths: list[tuple[int, ...]] = []
 
@@ -233,8 +263,19 @@ class JsonTab(QWidget):
         # Backward-compatible helper: restore data only (used by older callers / tests).
         self._restore_state({"data": data, "expansion": [], "current": None})
 
-    def commit_mutation(self, text: str, mutator: Callable[[], bool]) -> bool:
+    def commit_mutation(
+        self,
+        text: str,
+        mutator: Callable[[], bool],
+        *,
+        target_index: QModelIndex | None = None,
+    ) -> bool:
         before = self._capture_state()
+        # Capture the target path BEFORE the mutator runs: for delete/move/edit
+        # this is the affected node; for insert/duplicate the path of the
+        # parent / sibling that triggered the action is still informative.
+        target = target_index if (target_index is not None and target_index.isValid()) else self.view.currentIndex()
+        target_qname = self._qualified_name(target)
         changed = bool(mutator())
         if not changed:
             return False
@@ -245,14 +286,25 @@ class JsonTab(QWidget):
             return False
 
         self._restore_state(before)
-        self.undo_stack.push(_SnapshotCommand(self, text, before, after))
+        timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
+        label = f"[{timestamp}] {text} @ {target_qname}"
+        self.undo_stack.push(_SnapshotCommand(self, label, before, after))
         return True
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
         def _apply() -> bool:
             return bool(self.model.setData(index, value, role))
 
-        return self.commit_mutation("edit cell", _apply)
+        match index.column():
+            case 0:
+                text = "rename"
+            case 1:
+                text = "change type"
+            case 2:
+                text = "edit value"
+            case _:
+                text = "edit cell"
+        return self.commit_mutation(text, _apply, target_index=index)
 
     def _run_tree_action(
         self,
