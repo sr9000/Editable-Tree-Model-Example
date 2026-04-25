@@ -5,22 +5,13 @@ import zlib
 from typing import Callable
 
 import gmpy2
-from PySide6.QtCore import QPersistentModelIndex, Qt, QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, ValueDelegate
-from enums import JsonType
 from tree_model import JsonTreeModel
 from tree_view import show_context_menu
 
-# JSON types whose "editor" is actually a modal dialog opened from
-# ValueDelegate.createEditor as a side effect (it returns None). Calling
-# view.edit() for these would only trigger a redundant Qt warning.
-_MODAL_EDITOR_TYPES = frozenset({JsonType.MULTILINE, JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP})
-
-
-def _uses_modal_editor(json_type: JsonType) -> bool:
-    return json_type in _MODAL_EDITOR_TYPES
 
 
 class JsonTab(QWidget):
@@ -90,38 +81,23 @@ class JsonTab(QWidget):
         self.file_path = None
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
+        # ``change_type`` already emits ``dataChanged`` for the row, which
+        # triggers the view to refresh and to close any inline editor that
+        # might have been open on the value cell. We deliberately do NOT
+        # call ``view.edit(value_index)`` here:
+        #
+        # * In programmatic / offscreen contexts (tests, scripted edits)
+        #   ``view.edit()`` logs a spurious "edit: editing failed" warning
+        #   because the view has no focus / no real editor host.
+        # * In interactive contexts the user just dismissed the type combo;
+        #   they can click or press F2 on the value cell when ready.
+        #
+        # The "reopen value editor" UX nicety is deferred to a later phase
+        # where it can be wired through a single source of editor state
+        # (e.g. an undo-stack-backed action).
         value_index = self.model.index(item_index.row(), 2, item_index.parent())
         self.view.closePersistentEditor(value_index)
 
-        # Only re-open the editor for value cells that are actually editable.
-        # NULL / ARRAY / OBJECT have no editable value, and dialog-based types
-        # (MULTILINE / BYTES / ZLIB / GZIP) drive their own modal editors;
-        # calling `view.edit()` for any of these makes Qt log
-        # "edit: editing failed" and is otherwise a no-op.
-        flags = self.model.flags(value_index)
-        new_type = self.model.get_item(item_index).json_type
-        if not (flags & Qt.ItemFlag.ItemIsEditable) or _uses_modal_editor(new_type):
-            if lossy and self._status_message_callback is not None:
-                self._status_message_callback("Type change dropped existing child nodes", 3000)
-            return
-
-        # Defer the edit() call to the next event-loop iteration so that the
-        # synchronous chain that committed the type-combo finishes first.
-        # If a previous value editor for this index is still alive, Qt will
-        # reuse it — that is OK because ``ValueDelegate.setEditorData`` /
-        # ``setModelData`` dispatch on the editor's *widget class*, so a
-        # stale editor still operates correctly without triggering Qt
-        # warnings.
-        persistent = QPersistentModelIndex(value_index)
-
-        def _start_value_edit():
-            if not persistent.isValid():
-                return
-            idx = self.model.index(persistent.row(), persistent.column(), persistent.parent())
-            if self.model.flags(idx) & Qt.ItemFlag.ItemIsEditable:
-                self.view.edit(idx)
-
-        QTimer.singleShot(0, _start_value_edit)
 
         if lossy and self._status_message_callback is not None:
             self._status_message_callback("Type change dropped existing child nodes", 3000)
