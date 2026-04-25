@@ -268,7 +268,6 @@ class JsonTreeItem:
                     return True, value
                 return (False, None) if strict else (True, {})
 
-
     def _compute_editable(self) -> bool:
         if self.json_type in (JsonType.NULL, JsonType.ARRAY, JsonType.OBJECT):
             return False

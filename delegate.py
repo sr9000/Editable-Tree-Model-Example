@@ -53,6 +53,7 @@ class ValueDelegate(QStyledItemDelegate):
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
                 editor = BetterDateTimeEditor(parent)
             case JsonType.MULTILINE:
+
                 def _save_multiline(text: str) -> None:
                     index.model().setData(index, text, Qt.ItemDataRole.EditRole)
 
@@ -65,6 +66,7 @@ class ValueDelegate(QStyledItemDelegate):
                 return None  # Do not return an inline editor for multiline values
 
             case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
+
                 def _save_binary(data: bytes) -> None:
                     encoded = encode_bytes(data, item.json_type)
                     index.model().setData(index, encoded, Qt.ItemDataRole.EditRole)
