@@ -6,6 +6,7 @@ from typing import Any, Mapping, Optional
 import gmpy2
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
+from enums import JsonType
 from mpq2py import mpq_serialization
 from tree_item import JsonTreeItem
 
@@ -38,10 +39,17 @@ class JsonTreeModel(QAbstractItemModel):
             return Qt.ItemFlag.NoItemFlags
 
         default = QAbstractItemModel.flags(self, index)
-        if index.column() != 2:
+        item = self.get_item(index)
+
+        if index.column() == 0:
+            parent_item = item.parent()
+            if parent_item is not None and parent_item.json_type is JsonType.OBJECT:
+                return default | Qt.ItemFlag.ItemIsEditable
+            return default
+
+        if index.column() == 1:
             return default | Qt.ItemFlag.ItemIsEditable
 
-        item = self.get_item(index)
         return default | Qt.ItemFlag.ItemIsEditable if item.editable else default
 
     def index(self, row: int, column: int, parent: QModelIndex = QModelIndex()) -> QModelIndex:
@@ -116,9 +124,42 @@ class JsonTreeModel(QAbstractItemModel):
         return False
 
     def setData(self, index: QModelIndex, value: Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
-        if role == Qt.ItemDataRole.EditRole:
-            if self.get_item(index).set_data(index.column(), value):
-                roles = [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]
-                self.dataChanged.emit(index, index, roles)
-                return True
+        if role != Qt.ItemDataRole.EditRole or not index.isValid():
+            return False
+
+        if index.column() == 1:
+            return self.change_type(index, value)
+
+        if self.get_item(index).set_data(index.column(), value):
+            roles = [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]
+            top = self.index(index.row(), 0, index.parent())
+            bot = self.index(index.row(), 2, index.parent())
+            self.dataChanged.emit(top, bot, roles)
+            return True
         return False
+
+    def change_type(self, index: QModelIndex, new_type: JsonType | str) -> bool:
+        if not index.isValid():
+            return False
+
+        try:
+            target_type = new_type if isinstance(new_type, JsonType) else JsonType(str(new_type))
+        except ValueError:
+            return False
+
+        item = self.get_item(index)
+        had_children = item.json_type in (JsonType.ARRAY, JsonType.OBJECT)
+
+        if had_children and item.child_count() > 0:
+            self.beginRemoveRows(index, 0, item.child_count() - 1)
+            item.child_items.clear()
+            self.endRemoveRows()
+
+        if not item.set_data(1, target_type):
+            return False
+
+        roles = [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]
+        top = self.index(index.row(), 0, index.parent())
+        bot = self.index(index.row(), 2, index.parent())
+        self.dataChanged.emit(top, bot, roles)
+        return True

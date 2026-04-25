@@ -6,6 +6,8 @@ import gzip
 import zlib
 from typing import Any
 
+from gmpy2 import mpq
+
 from enums import JsonType, parse_json_type
 
 
@@ -14,25 +16,19 @@ class JsonTreeItem:
 
     def __init__(
         self,
-        parent_item: "JsonTreeItem" = None,
+        parent_item: "JsonTreeItem | None" = None,
         value: Any = None,
         name: str | int = None,
     ) -> None:
-        self.parent_item: "JsonTreeItem" = parent_item
+        self.parent_item: "JsonTreeItem | None" = parent_item
 
         self.name = name
         self.child_items: list["JsonTreeItem"] = []
+        self.explicit_type = False
 
         self.json_type = parse_json_type(value)
-        self.value = self._normalize_value_for_type(value)
-
-        match self.json_type:
-            case JsonType.ARRAY:
-                self.child_items = [JsonTreeItem(self, x) for x in value]
-                self.value = []
-            case JsonType.OBJECT:
-                self.child_items = [JsonTreeItem(self, v, k) for k, v in value.items()]
-                self.value = {}
+        self.value = None
+        self._apply_typed_value(self.json_type, value)
 
         self.editable = self._compute_editable()
 
@@ -70,6 +66,8 @@ class JsonTreeItem:
     def data(self, column: int) -> Any:
         match column:
             case 0:
+                if self.parent_item is not None and self.parent_item.json_type is JsonType.ARRAY:
+                    return str(self.row())
                 return self.name if self.name is not None else "<no name>"
             case 1:
                 return self.json_type or "<no type>"
@@ -79,23 +77,37 @@ class JsonTreeItem:
         raise IndexError(f"`JsonTreeItem.data()` does not support {column=}")
 
     def set_data(self, column: int, value: Any) -> bool:
-        if column != 2:
-            return False
+        if column == 0:
+            return self._set_name(value)
 
-        self.child_items = []
-        self.json_type = parse_json_type(value)
-        self.value = self._normalize_value_for_type(value)
+        if column == 1:
+            try:
+                new_type = value if isinstance(value, JsonType) else JsonType(str(value))
+            except ValueError:
+                return False
 
-        match self.json_type:
-            case JsonType.ARRAY:
-                self.child_items = [JsonTreeItem(self, x) for x in value]
-                self.value = []
-            case JsonType.OBJECT:
-                self.child_items = [JsonTreeItem(self, v, k) for k, v in value.items()]
-                self.value = {}
+            old_value = self.to_json() if self.json_type in (JsonType.ARRAY, JsonType.OBJECT) else self.value
+            ok, coerced = self._coerce_value_for_type(new_type, old_value, strict=False)
+            if not ok:
+                return False
 
-        self.editable = self._compute_editable()
-        return True
+            self.explicit_type = True
+            self._apply_typed_value(new_type, coerced)
+            return True
+
+        if column == 2:
+            if self.explicit_type:
+                ok, coerced = self._coerce_value_for_type(self.json_type, value, strict=True)
+                if not ok:
+                    return False
+                self._apply_typed_value(self.json_type, coerced)
+                return True
+
+            inferred_type = parse_json_type(value)
+            self._apply_typed_value(inferred_type, value)
+            return True
+
+        return False
 
     def insert_children(self, position: int, count: int, _columns: int) -> bool:
         if 0 <= position <= len(self.child_items):
@@ -145,6 +157,117 @@ class JsonTreeItem:
         if self.json_type is JsonType.STRING and not isinstance(value, str):
             return repr(value)
         return value
+
+    def _apply_typed_value(self, json_type: JsonType, value: Any) -> None:
+        self.json_type = json_type
+        self.child_items = []
+
+        match json_type:
+            case JsonType.ARRAY:
+                arr = value if isinstance(value, list) else []
+                self.child_items = [JsonTreeItem(self, x) for x in arr]
+                self.value = []
+            case JsonType.OBJECT:
+                obj = value if isinstance(value, dict) else {}
+                self.child_items = [JsonTreeItem(self, v, k) for k, v in obj.items()]
+                self.value = {}
+            case _:
+                self.value = self._normalize_value_for_type(value)
+
+        self.editable = self._compute_editable()
+
+    def _set_name(self, value: Any) -> bool:
+        if self.parent_item is None:
+            return False
+        if self.parent_item.json_type is JsonType.ARRAY:
+            return False
+        if not isinstance(value, str):
+            return False
+
+        candidate = value.strip()
+        if not candidate:
+            return False
+
+        if self.parent_item.json_type is JsonType.OBJECT:
+            siblings = {
+                child.name
+                for child in self.parent_item.child_items
+                if child is not self and isinstance(child.name, str)
+            }
+            if candidate in siblings:
+                return False
+
+        self.name = candidate
+        return True
+
+    def _coerce_value_for_type(self, json_type: JsonType, value: Any, strict: bool) -> tuple[bool, Any]:
+        match json_type:
+            case JsonType.NULL:
+                return True, None
+            case JsonType.BOOLEAN:
+                if isinstance(value, str):
+                    normalized = value.strip().lower()
+                    if normalized in ("true", "1", "yes", "y"):
+                        return True, True
+                    if normalized in ("false", "0", "no", "n"):
+                        return True, False
+                    return (False, None) if strict else (True, False)
+                return True, bool(value)
+            case JsonType.INTEGER:
+                try:
+                    return True, int(value)
+                except Exception:
+                    return (False, None) if strict else (True, 0)
+            case JsonType.FLOAT:
+                try:
+                    return True, mpq(str(value))
+                except Exception:
+                    return (False, None) if strict else (True, mpq(0))
+            case JsonType.PERCENT:
+                try:
+                    v = mpq(str(value))
+                except Exception:
+                    return (False, None) if strict else (True, mpq(0))
+                if 0 <= v <= 1:
+                    return True, v
+                return (False, None) if strict else (True, mpq(0))
+            case JsonType.STRING:
+                return True, "" if value is None else str(value)
+            case JsonType.MULTILINE:
+                return True, "" if value is None else str(value)
+            case JsonType.DATE:
+                return True, "1970-01-01" if value is None else str(value)
+            case JsonType.TIME:
+                return True, "00:00" if value is None else str(value)
+            case JsonType.DATETIME:
+                return True, "1970-01-01T00:00" if value is None else str(value)
+            case JsonType.DATETIMEZONE:
+                return True, "1970-01-01T00:00:00+00:00" if value is None else str(value)
+            case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
+                if value is None:
+                    return True, ""
+                if not isinstance(value, str):
+                    return (False, None) if strict else (True, "")
+                if not value:
+                    return True, ""
+                try:
+                    raw = base64.b64decode(value, validate=True)
+                    if json_type is JsonType.ZLIB:
+                        zlib.decompress(raw)
+                    elif json_type is JsonType.GZIP:
+                        gzip.decompress(raw)
+                    return True, value
+                except Exception:
+                    return (False, None) if strict else (True, "")
+            case JsonType.ARRAY:
+                if isinstance(value, list):
+                    return True, value
+                return (False, None) if strict else (True, [])
+            case JsonType.OBJECT:
+                if isinstance(value, dict):
+                    return True, value
+                return (False, None) if strict else (True, {})
+
 
     def _compute_editable(self) -> bool:
         if self.json_type in (JsonType.NULL, JsonType.ARRAY, JsonType.OBJECT):

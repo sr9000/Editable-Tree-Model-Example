@@ -53,21 +53,26 @@ class ValueDelegate(QStyledItemDelegate):
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
                 editor = BetterDateTimeEditor(parent)
             case JsonType.MULTILINE:
+                def _save_multiline(text: str) -> None:
+                    index.model().setData(index, text, Qt.ItemDataRole.EditRole)
+
                 QMultilineDialog(  # Use a modal dialog-based editor for multiline text
                     parent=parent,
                     text=str(item.value or ""),
-                    callback=lambda text: index.model().setData(index, text, Qt.ItemDataRole.EditRole) and None,
+                    callback=_save_multiline,
                 ).open()
 
                 return None  # Do not return an inline editor for multiline values
 
             case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
+                def _save_binary(data: bytes) -> None:
+                    encoded = encode_bytes(data, item.json_type)
+                    index.model().setData(index, encoded, Qt.ItemDataRole.EditRole)
+
                 QHexDialog(  # Use a modal dialog-based editor for binary data
                     parent=parent,
                     data=(decode_bytes(item.value, item.json_type)),
-                    callback=lambda x: (
-                        index.model().setData(index, encode_bytes(x, item.json_type), Qt.ItemDataRole.EditRole) and None
-                    ),
+                    callback=_save_binary,
                 ).open()
 
                 return None  # Do not return an inline editor for binary values
@@ -155,16 +160,19 @@ class ValueDelegate(QStyledItemDelegate):
 
 class JsonTypeDelegate(QStyledItemDelegate):
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
-        return QComboBox(parent)
+        editor = QComboBox(parent)
+        for tp in JsonType:
+            editor.addItem(tp.value, tp)
+        return editor
 
     def setEditorData(self, editor: QComboBox, index: QModelIndex):
-        for tp in JsonType:
-            editor.addItem(tp)
-
-        editor.setCurrentText(next(iter(JsonType)))
+        item: JsonTreeItem = index.internalPointer()
+        idx = editor.findData(item.json_type)
+        editor.setCurrentIndex(idx if idx >= 0 else 0)
 
     def setModelData(self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex):
-        pass
+        selected_type = editor.currentData()
+        model.setData(index, selected_type, Qt.ItemDataRole.EditRole)
 
 
 def decode_bytes(b64string: str, json_type: JsonType) -> bytes:
