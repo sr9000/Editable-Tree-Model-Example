@@ -54,7 +54,8 @@ def mpq_serialization(q: mpq) -> tuple[float | Decimal, mpq]:
 
 def mpq_json_default(obj):
     if isinstance(obj, mpq):
-        return mpq_serialization(obj)
+        # Emit only the scalar value; the helper's denominator metadata is not JSON-serializable.
+        return mpq_serialization(obj)[0]
     raise TypeError(f"Type {type(obj)} not serializable")
 
 

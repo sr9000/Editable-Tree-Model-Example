@@ -41,17 +41,17 @@ def parse_json_type(value: Any) -> "JsonType":
                 try:
                     unzlibbed = zlib.decompress(raw)
                     return JsonType.ZLIB
-                except:
+                except Exception:
                     pass
 
                 try:
                     ungzipped = gzip.decompress(raw)
                     return JsonType.GZIP
-                except:
+                except Exception:
                     pass
 
                 return JsonType.BYTES
-            except:
+            except Exception:
                 pass
 
             try:
@@ -65,7 +65,7 @@ def parse_json_type(value: Any) -> "JsonType":
                         return JsonType.TIME
                     case date():
                         return JsonType.DATE
-            except:
+            except Exception:
                 pass
 
             return JsonType.STRING
