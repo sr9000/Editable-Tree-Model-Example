@@ -15,6 +15,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self._history_dialog: QDialog | None = None
         self._history_view: QUndoView | None = None
+        self._bound_undo_tab: JsonTab | None = None
         self._setup_history_menu()
         self.setup_model(yaml_filename)
         self.setup_connections()
@@ -53,28 +54,45 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.undoAction.setShortcut(QKeySequence.StandardKey.Undo)
         self.undoAction.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         self.undoAction.triggered.connect(self._do_undo)
+        self.undoAction.setEnabled(False)
 
         self.redoAction = QAction("&Redo", self)
         self.redoAction.setShortcuts([QKeySequence.StandardKey.Redo, QKeySequence("Ctrl+Y")])
         self.redoAction.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         self.redoAction.triggered.connect(self._do_redo)
+        self.redoAction.setEnabled(False)
 
         self.showHistoryAction = QAction("Show History...", self)
         self.showHistoryAction.triggered.connect(self._show_history_dialog)
+        self.showHistoryAction.setEnabled(False)
 
         self.historyMenu.addAction(self.undoAction)
         self.historyMenu.addAction(self.redoAction)
         self.historyMenu.addSeparator()
         self.historyMenu.addAction(self.showHistoryAction)
 
-        self.historyMenu.aboutToShow.connect(self._update_history_menu_state)
+    def _bind_undo_signals(self, tab: JsonTab | None) -> None:
+        # Disconnect previously-bound stack so stale signals don't toggle our actions.
+        previous = self._bound_undo_tab
+        if previous is not None:
+            try:
+                previous.undo_stack.canUndoChanged.disconnect(self.undoAction.setEnabled)
+                previous.undo_stack.canRedoChanged.disconnect(self.redoAction.setEnabled)
+            except (TypeError, RuntimeError):
+                pass
 
-    def _update_history_menu_state(self) -> None:
-        tab = self._current_tab()
-        has_stack = tab is not None
-        self.undoAction.setEnabled(has_stack and tab.undo_stack.canUndo())
-        self.redoAction.setEnabled(has_stack and tab.undo_stack.canRedo())
-        self.showHistoryAction.setEnabled(has_stack)
+        self._bound_undo_tab = tab
+
+        if tab is not None:
+            tab.undo_stack.canUndoChanged.connect(self.undoAction.setEnabled)
+            tab.undo_stack.canRedoChanged.connect(self.redoAction.setEnabled)
+            self.undoAction.setEnabled(tab.undo_stack.canUndo())
+            self.redoAction.setEnabled(tab.undo_stack.canRedo())
+            self.showHistoryAction.setEnabled(True)
+        else:
+            self.undoAction.setEnabled(False)
+            self.redoAction.setEnabled(False)
+            self.showHistoryAction.setEnabled(False)
 
     def _do_undo(self) -> None:
         tab = self._current_tab()
@@ -106,8 +124,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._history_dialog.activateWindow()
 
     def _on_tab_changed(self, _index: int) -> None:
+        tab = self._current_tab()
+        self._bind_undo_signals(tab)
         if self._history_dialog is not None and self._history_dialog.isVisible():
-            tab = self._current_tab()
             if tab is not None and self._history_view is not None:
                 self._history_view.setStack(tab.undo_stack)
 
@@ -127,12 +146,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         for column in range(wg.model.columnCount() - 1):
             wg.view.resizeColumnToContents(column)
 
+        self._bind_undo_signals(wg)
+
     def close_tab(self, index: int) -> None:
         widget = self.tabWidget.widget(index)
+        if widget is self._bound_undo_tab:
+            self._bind_undo_signals(None)
         self.tabWidget.removeTab(index)
         if widget is not None:
             widget.deleteLater()
         self.update_actions()
+        # Re-bind to whatever tab is now current (if any).
+        self._bind_undo_signals(self._current_tab())
 
     def insert_child(self):
         tab = self._current_tab()
