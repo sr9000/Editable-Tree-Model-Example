@@ -160,6 +160,17 @@ class JsonTab(QWidget):
     def _snapshot(self) -> Any:
         return self.model.root_item.to_json()
 
+    @staticmethod
+    def _ordered_repr(value: Any) -> Any:
+        # Build a comparison key that preserves dict key order (Python dict
+        # equality ignores order, which would mask object-member reorderings
+        # like move-up / move-down on object children).
+        if isinstance(value, dict):
+            return ("__obj__", [(k, JsonTab._ordered_repr(v)) for k, v in value.items()])
+        if isinstance(value, list):
+            return ("__arr__", [JsonTab._ordered_repr(v) for v in value])
+        return value
+
     def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
         path: list[int] = []
         cursor = index
@@ -229,7 +240,7 @@ class JsonTab(QWidget):
             return False
 
         after = self._capture_state()
-        if before["data"] == after["data"]:
+        if self._ordered_repr(before["data"]) == self._ordered_repr(after["data"]):
             # Mutation reported success but produced no visible change; skip undo entry.
             return False
 
