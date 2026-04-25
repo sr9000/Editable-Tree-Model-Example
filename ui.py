@@ -43,7 +43,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def create_new_file(self):
         try:
-            tab = JsonTab(self.update_actions, self.statusBar().showMessage, self)
+            tab = JsonTab(self.update_actions, self.statusBar.showMessage, self)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to create new file:\n{e}")
             return
@@ -125,4 +125,4 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def copy_action(self):
         if self._current_view() is not None:
-            self.statusBar().showMessage("Copy action is not yet implemented", 2000)
+            self.statusBar.showMessage("Copy action is not yet implemented", 2000)
