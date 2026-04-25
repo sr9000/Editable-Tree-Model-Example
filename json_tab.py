@@ -6,11 +6,12 @@ from typing import Callable
 
 import gmpy2
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, ValueDelegate
 from tree_model import JsonTreeModel
-from tree_view import show_context_menu
+from tree_view import copy_selection, cut_selection, delete_selection, paste_from_clipboard, show_context_menu
 
 
 class JsonTab(QWidget):
@@ -77,6 +78,19 @@ class JsonTab(QWidget):
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.view.customContextMenuRequested.connect(functools.partial(show_context_menu, self.view))
 
+        # Keep keyboard shortcuts at the tab level so they work regardless of focused column.
+        self._copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, self.view)
+        self._copy_shortcut.activated.connect(lambda: self._run_tree_action("Copied selection", copy_only=True))
+
+        self._cut_shortcut = QShortcut(QKeySequence.StandardKey.Cut, self.view)
+        self._cut_shortcut.activated.connect(lambda: self._run_tree_action("Cut selection", cut=True))
+
+        self._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, self.view)
+        self._paste_shortcut.activated.connect(lambda: self._run_tree_action("Pasted JSON", paste=True))
+
+        self._delete_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self.view)
+        self._delete_shortcut.activated.connect(lambda: self._run_tree_action("Deleted selection", delete=True))
+
         self.file_path = None
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
@@ -99,3 +113,25 @@ class JsonTab(QWidget):
 
         if lossy and self._status_message_callback is not None:
             self._status_message_callback("Type change dropped existing child nodes", 3000)
+
+    def _run_tree_action(
+        self,
+        success_message: str,
+        *,
+        copy_only: bool = False,
+        cut: bool = False,
+        paste: bool = False,
+        delete: bool = False,
+    ) -> None:
+        changed = False
+        if copy_only:
+            changed = copy_selection(self.view)
+        elif cut:
+            changed = cut_selection(self.view)
+        elif paste:
+            changed = paste_from_clipboard(self.view)
+        elif delete:
+            changed = delete_selection(self.view)
+
+        if changed and self._status_message_callback is not None:
+            self._status_message_callback(success_message, 1500)

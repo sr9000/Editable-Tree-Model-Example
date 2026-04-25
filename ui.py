@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QMainWindow, QMessageBox, QTreeView
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow
 from model_actions import action_insert_child, action_insert_row
+from tree_view import copy_selection
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -124,5 +125,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         pass
 
     def copy_action(self):
-        if self._current_view() is not None:
-            self.statusBar.showMessage("Copy action is not yet implemented", 2000)
+        view = self._current_view()
+        if view is None:
+            return
+
+        if copy_selection(view):
+            self.statusBar.showMessage("Copied selection", 1500)
+        else:
+            self.statusBar.showMessage("Nothing to copy", 1500)
