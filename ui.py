@@ -1,7 +1,8 @@
 # Ported from: https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/editabletreemodel
 
-from PySide6.QtCore import QCoreApplication
-from PySide6.QtWidgets import QMainWindow, QMessageBox, QTreeView
+from PySide6.QtCore import QCoreApplication, Qt
+from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QTreeView, QUndoView, QVBoxLayout
 
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow
@@ -12,6 +13,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, yaml_filename: str, parent=None):
         super().__init__(parent)
         self.setupUi(self)
+        self._history_dialog: QDialog | None = None
+        self._history_view: QUndoView | None = None
+        self._setup_history_menu()
         self.setup_model(yaml_filename)
         self.setup_connections()
 
@@ -40,6 +44,72 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.update_actions()
 
         self.tabWidget.tabCloseRequested.connect(self.close_tab)
+        self.tabWidget.currentChanged.connect(self._on_tab_changed)
+
+    def _setup_history_menu(self) -> None:
+        self.historyMenu = self.menuBar.addMenu("&History")
+
+        self.undoAction = QAction("&Undo", self)
+        self.undoAction.setShortcut(QKeySequence.StandardKey.Undo)
+        self.undoAction.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.undoAction.triggered.connect(self._do_undo)
+
+        self.redoAction = QAction("&Redo", self)
+        self.redoAction.setShortcuts([QKeySequence.StandardKey.Redo, QKeySequence("Ctrl+Y")])
+        self.redoAction.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.redoAction.triggered.connect(self._do_redo)
+
+        self.showHistoryAction = QAction("Show History...", self)
+        self.showHistoryAction.triggered.connect(self._show_history_dialog)
+
+        self.historyMenu.addAction(self.undoAction)
+        self.historyMenu.addAction(self.redoAction)
+        self.historyMenu.addSeparator()
+        self.historyMenu.addAction(self.showHistoryAction)
+
+        self.historyMenu.aboutToShow.connect(self._update_history_menu_state)
+
+    def _update_history_menu_state(self) -> None:
+        tab = self._current_tab()
+        has_stack = tab is not None
+        self.undoAction.setEnabled(has_stack and tab.undo_stack.canUndo())
+        self.redoAction.setEnabled(has_stack and tab.undo_stack.canRedo())
+        self.showHistoryAction.setEnabled(has_stack)
+
+    def _do_undo(self) -> None:
+        tab = self._current_tab()
+        if tab is not None:
+            tab.undo_stack.undo()
+
+    def _do_redo(self) -> None:
+        tab = self._current_tab()
+        if tab is not None:
+            tab.undo_stack.redo()
+
+    def _show_history_dialog(self) -> None:
+        tab = self._current_tab()
+        if tab is None:
+            return
+
+        if self._history_dialog is None:
+            self._history_dialog = QDialog(self)
+            self._history_dialog.setWindowTitle("Undo / Redo History")
+            self._history_dialog.resize(320, 400)
+            layout = QVBoxLayout(self._history_dialog)
+            self._history_view = QUndoView(self._history_dialog)
+            self._history_view.setEmptyLabel("<initial state>")
+            layout.addWidget(self._history_view)
+
+        self._history_view.setStack(tab.undo_stack)
+        self._history_dialog.show()
+        self._history_dialog.raise_()
+        self._history_dialog.activateWindow()
+
+    def _on_tab_changed(self, _index: int) -> None:
+        if self._history_dialog is not None and self._history_dialog.isVisible():
+            tab = self._current_tab()
+            if tab is not None and self._history_view is not None:
+                self._history_view.setStack(tab.undo_stack)
 
     def create_new_file(self):
         try:

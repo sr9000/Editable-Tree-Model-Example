@@ -29,17 +29,17 @@ from tree_view import (
 
 
 class _SnapshotCommand(QUndoCommand):
-    def __init__(self, tab: "JsonTab", text: str, before: Any, after: Any):
+    def __init__(self, tab: "JsonTab", text: str, before: dict, after: dict):
         super().__init__(text)
         self._tab = tab
         self._before = before
         self._after = after
 
     def undo(self):
-        self._tab._restore_snapshot(self._before)
+        self._tab._restore_state(self._before)
 
     def redo(self):
-        self._tab._restore_snapshot(self._after)
+        self._tab._restore_state(self._after)
 
 
 class JsonTab(QWidget):
@@ -134,16 +134,6 @@ class JsonTab(QWidget):
         self._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), self.view)
         self._sort_shortcut.activated.connect(lambda: self._run_tree_action("Sorted keys", sort_keys=True))
 
-        self._undo_shortcut = QShortcut(QKeySequence.StandardKey.Undo, self.view)
-        self._undo_shortcut.activated.connect(self.undo_stack.undo)
-
-        self._redo_shortcut = QShortcut(QKeySequence.StandardKey.Redo, self.view)
-        self._redo_shortcut.activated.connect(self.undo_stack.redo)
-
-        # Support both Ctrl+Y and Ctrl+Shift+Z preferences.
-        self._redo_alt_shortcut = QShortcut(QKeySequence("Ctrl+Y"), self.view)
-        self._redo_alt_shortcut.activated.connect(self.undo_stack.redo)
-
         self.file_path = None
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
@@ -170,19 +160,80 @@ class JsonTab(QWidget):
     def _snapshot(self) -> Any:
         return self.model.root_item.to_json()
 
-    def _restore_snapshot(self, data: Any) -> None:
+    def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
+        path: list[int] = []
+        cursor = index
+        while cursor.isValid():
+            path.append(cursor.row())
+            cursor = cursor.parent()
+        return tuple(reversed(path))
+
+    def _index_from_path(self, path: tuple[int, ...]) -> QModelIndex:
+        idx = QModelIndex()
+        for row in path:
+            nxt = self.model.index(row, 0, idx)
+            if not nxt.isValid():
+                return QModelIndex()
+            idx = nxt
+        return idx
+
+    def _collect_expanded_paths(self) -> list[tuple[int, ...]]:
+        paths: list[tuple[int, ...]] = []
+
+        def visit(parent_index: QModelIndex) -> None:
+            for r in range(self.model.rowCount(parent_index)):
+                child = self.model.index(r, 0, parent_index)
+                if not child.isValid():
+                    continue
+                if self.view.isExpanded(child):
+                    paths.append(self._index_path(child))
+                    visit(child)
+
+        visit(QModelIndex())
+        return paths
+
+    def _capture_state(self) -> dict:
+        current = self.view.currentIndex()
+        return {
+            "data": self._snapshot(),
+            "expansion": self._collect_expanded_paths(),
+            "current": self._index_path(current) if current.isValid() else None,
+        }
+
+    def _restore_state(self, state: dict) -> None:
         self.model.beginResetModel()
-        self.model.root_item = JsonTreeItem(None, data)
+        self.model.root_item = JsonTreeItem(None, state["data"])
         self.model.endResetModel()
 
+        for path in state.get("expansion", ()):
+            idx = self._index_from_path(path)
+            if idx.isValid():
+                self.view.setExpanded(idx, True)
+
+        current_path = state.get("current")
+        if isinstance(current_path, tuple):
+            idx = self._index_from_path(current_path)
+            if idx.isValid():
+                sel_model = self.view.selectionModel()
+                if sel_model is not None:
+                    self.view.setCurrentIndex(idx)
+
+    def _restore_snapshot(self, data: Any) -> None:
+        # Backward-compatible helper: restore data only (used by older callers / tests).
+        self._restore_state({"data": data, "expansion": [], "current": None})
+
     def commit_mutation(self, text: str, mutator: Callable[[], bool]) -> bool:
-        before = self._snapshot()
+        before = self._capture_state()
         changed = bool(mutator())
         if not changed:
             return False
 
-        after = self._snapshot()
-        self._restore_snapshot(before)
+        after = self._capture_state()
+        if before["data"] == after["data"]:
+            # Mutation reported success but produced no visible change; skip undo entry.
+            return False
+
+        self._restore_state(before)
         self.undo_stack.push(_SnapshotCommand(self, text, before, after))
         return True
 
