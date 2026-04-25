@@ -64,6 +64,131 @@ scaffolding must be removed. No new features.
       `JsonTreeModel({"a": 1})` and walks rows/columns. (Full GUI smoke
       test lands in Phase 6.)
 
+## Tips & Deep Dives
+
+### Diagnosing `test_mpq_with_json`
+
+The actual root cause is **not** `simplejson` shadowing stdlib `json` — the
+test itself does `import simplejson as json` deliberately, and the YAML
+twin test passes. The defect is in `mpq_json_default`:
+
+```python
+def mpq_json_default(obj):
+    if isinstance(obj, mpq):
+        return mpq_serialization(obj)   # returns a tuple (Decimal, mpq)
+    raise TypeError(...)
+```
+
+`mpq_serialization(q)` returns `(value, denominator)` where the second
+slot is itself an `mpq`. `simplejson` receives the tuple, serializes the
+`Decimal` fine, then encounters the `mpq` again and recurses — leading
+to infinite recursion or a `TypeError`.
+
+**Fix candidates** (decide in this phase, document in `mpq2py`):
+
+1. Return only the value: `return mpq_serialization(obj)[0]`.
+2. Or return `float(obj)` / `str(obj)` — but that defeats the point of
+   exact serialization.
+
+Verify with:
+
+```bash
+python -c "import simplejson as j; from gmpy2 import mpq; \
+  from mpq2py import mpq_json_default; \
+  print(j.dumps({'q': mpq('1/3')}, default=mpq_json_default, indent=2))"
+```
+
+Then confirm `pytest -q tests/test_mpq2py.py` is green.
+
+### `MainWindow._current_view()` helper pattern
+
+```python
+def _current_tab(self) -> "JsonTab | None":
+    return self.tabWidget.currentWidget()  # may be None
+
+def _current_view(self):
+    tab = self._current_tab()
+    return tab.view if tab is not None else None
+```
+
+Then guard every action:
+
+```python
+def insert_row(self):
+    view = self._current_view()
+    if view is None:
+        return
+    ...
+```
+
+This avoids the `AttributeError: 'MainWindow' object has no attribute 'view'`
+crash without changing semantics.
+
+### Closing tabs safely
+
+The `tabCloseRequested` signal sends an `int` index. Update the slot
+signature accordingly:
+
+```python
+def close_tab(self, index: int) -> None:
+    widget = self.tabWidget.widget(index)
+    self.tabWidget.removeTab(index)
+    if widget is not None:
+        widget.deleteLater()
+```
+
+`deleteLater()` matters: without it, the `JsonTab` keeps the model and
+`QTreeView` alive until the `MainWindow` is destroyed, which leaks during
+long sessions.
+
+### Stripping the C++ docstrings
+
+The C++ blocks are top-of-file `"""..."""` strings — Python treats them
+as expression statements, so deleting them changes no semantics. Land
+them as **one mechanical commit** with a message like
+`chore: drop ported C++ reference blocks`, so subsequent bug-fix commits
+have small, reviewable diffs. Replace with a one-liner:
+
+```python
+# Ported from: https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/editabletreemodel
+```
+
+### Bare `except:` cleanup
+
+```python
+# before
+try:
+    raw = base64.b64decode(s, validate=True)
+    ...
+except:
+    pass
+
+# after
+except Exception:
+    pass
+```
+
+`KeyboardInterrupt` and `SystemExit` are both `BaseException` — not
+`Exception` — so they propagate correctly with the narrower clause.
+
+### Smoke test scaffold
+
+Place in `tests/test_smoke_model.py`:
+
+```python
+from tree_model import JsonTreeModel
+
+def test_construct_simple_model():
+    m = JsonTreeModel({"a": 1, "b": [2, 3]})
+    assert m.columnCount() == 3
+    assert m.rowCount() == 2  # "a" and "b"
+    b = m.index(1, 0)
+    assert m.rowCount(b) == 2  # 2 array elements
+```
+
+No `QApplication` needed — `QAbstractItemModel` works without an event
+loop as long as it has no parent widget.
+
 ## Risks / notes
 
 - Touching `mpq2py` may surface latent issues in dependent tests

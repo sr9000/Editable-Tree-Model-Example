@@ -79,6 +79,158 @@ through the UI, with sensible value coercion.
 - [ ] [ux] When a coercion drops information (e.g. OBJECT → STRING),
       show a confirmation dialog or status-bar warning.
 
+## Tips & Deep Dives
+
+### Funnel all mutations through the model
+
+Phase 2 introduces structural changes (type swap → drop children,
+rename → re-key). Do **not** mutate `JsonTreeItem` directly from the
+delegate. Add a model-level helper that owns Qt's begin/end
+bookkeeping:
+
+```python
+class JsonTreeModel(QAbstractItemModel):
+    def change_type(self, index: QModelIndex, new_type: JsonType) -> bool:
+        item = self.get_item(index)
+        old_type = item.json_type
+        if old_type is new_type:
+            return False
+
+        had_children = old_type in (JsonType.ARRAY, JsonType.OBJECT)
+        will_have_children = new_type in (JsonType.ARRAY, JsonType.OBJECT)
+
+        if had_children and item.child_count() > 0:
+            self.beginRemoveRows(index, 0, item.child_count() - 1)
+            item.child_items.clear()
+            self.endRemoveRows()
+
+        item.json_type = new_type
+        item.value = _default_value_for(new_type, old_value=item.value)
+        item.explicit_type = True
+        item._editable = item._compute_editable()
+
+        # Notify all three columns: name, type, value
+        top = self.index(index.row(), 0, index.parent())
+        bot = self.index(index.row(), 2, index.parent())
+        self.dataChanged.emit(top, bot, [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole])
+
+        if will_have_children:
+            # nothing to insert yet; user adds children explicitly
+            pass
+        return True
+```
+
+Then `JsonTypeDelegate.setModelData` becomes a one-liner:
+
+```python
+def setModelData(self, editor, model, index):
+    new_type = JsonType(editor.currentText())
+    model.change_type(index, new_type)
+```
+
+### Coercion table
+
+Define once, in `enums.py` next to `JsonType`:
+
+```python
+def _default_value_for(t: JsonType, old_value=None):
+    # Prefer convertible existing value when possible.
+    match t:
+        case JsonType.NULL:        return None
+        case JsonType.BOOLEAN:     return bool(old_value)
+        case JsonType.INTEGER:
+            try:    return int(old_value) if old_value is not None else 0
+            except: return 0
+        case JsonType.FLOAT:
+            try:    return mpq(str(old_value))
+            except: return mpq(0)
+        case JsonType.PERCENT:
+            try:
+                v = mpq(str(old_value))
+                return v if 0 <= v <= 1 else mpq(0)
+            except: return mpq(0)
+        case JsonType.STRING | JsonType.MULTILINE:
+            return "" if old_value is None else str(old_value)
+        case JsonType.DATE:        return "1970-01-01"
+        case JsonType.TIME:        return "00:00"
+        case JsonType.DATETIME:    return "1970-01-01T00:00"
+        case JsonType.DATETIMEZONE:return "1970-01-01T00:00:00+00:00"
+        case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
+            return ""  # empty base64
+        case JsonType.ARRAY:       return []
+        case JsonType.OBJECT:      return {}
+    raise ValueError(f"Unknown {t}")
+```
+
+Document **lossy** transitions (OBJECT/ARRAY → primitive throws away
+children; non-numeric STRING → INTEGER → 0). Surface a confirm dialog
+for these in `JsonTab`/`MainWindow`, not in the model.
+
+### Combo population and preselection
+
+The current `JsonTypeDelegate` populates the combo from `setEditorData`
+on every edit, which is both wasteful and wrong. Fix:
+
+```python
+class JsonTypeDelegate(QStyledItemDelegate):
+    def createEditor(self, parent, option, index):
+        editor = QComboBox(parent)
+        for t in JsonType:
+            editor.addItem(t.value, t)         # display = value, data = enum
+        return editor
+
+    def setEditorData(self, editor: QComboBox, index):
+        item = index.internalPointer()
+        idx = editor.findData(item.json_type)
+        editor.setCurrentIndex(idx if idx >= 0 else 0)
+
+    def setModelData(self, editor, model, index):
+        model.change_type(index, editor.currentData())
+```
+
+### Renaming under OBJECT
+
+```python
+def set_data(self, column: int, value):
+    if column == 0:  # name
+        if not isinstance(value, str) or not value:
+            return False
+        if self.parent_item and self.parent_item.json_type is JsonType.OBJECT:
+            siblings = {c.name for c in self.parent_item.child_items if c is not self}
+            if value in siblings:
+                return False
+        self.name = value
+        return True
+    ...
+```
+
+For ARRAY children, column 0 is read-only: `JsonTreeModel.flags()` must
+strip `ItemIsEditable` when `parent.json_type is ARRAY`.
+
+### Type pinning rules
+
+- `explicit_type=True` after `set_data(1, ...)` (column 1 edit).
+- `explicit_type=False` when the item is constructed from raw input
+  (loading a file).
+- In `set_data(2, value)`:
+  - If `explicit_type` is `True` → keep `json_type`, just store the
+    coerced value. Reject incompatible values (return `False`).
+  - If `explicit_type` is `False` → recompute `json_type` from the new
+    value (Phase 1 behaviour).
+
+### Re-opening the value editor after a type change
+
+After `change_type()`, the active value editor (if any) is now of the
+wrong widget class. Force the view to close and reopen:
+
+```python
+view.closePersistentEditor(value_index)
+view.edit(value_index)  # Qt schedules a fresh createEditor()
+```
+
+Wire this from `JsonTab` after listening to a model signal — keep the
+delegate stateless.
+
 ## Risks / notes
 
 - The coercion table is the largest design decision in this phase.

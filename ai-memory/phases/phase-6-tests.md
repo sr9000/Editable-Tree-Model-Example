@@ -77,6 +77,164 @@ jsontream) is well covered; the JSON tree editor itself is not.
 - [ ] [tooling] Add `coverage`/`pytest-cov` and produce a short
       summary committed to `ai-memory/coverage.md`.
 
+## Tips & Deep Dives
+
+### Headless Qt setup
+
+`pytest-qt` provides a session-scoped `qapp` fixture. To make it cooperate
+with this repo:
+
+`tests/conftest.py`:
+
+```python
+import os, sys
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# pytest-qt creates QApplication itself; do NOT import main.py top-level.
+
+import pytest
+from PySide6.QtCore import QSettings
+
+@pytest.fixture(autouse=True)
+def _isolated_qsettings(tmp_path, monkeypatch):
+    # Keep persisted state out of the user's real registry / config files
+    QSettings.setDefaultFormat(QSettings.IniFormat)
+    QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, str(tmp_path))
+    yield
+```
+
+This pins both QPA and QSettings to ephemeral storage — required for
+deterministic tests of recent-files / view-state.
+
+### Asserting model invariants
+
+Reusable helpers in `tests/_model_helpers.py`:
+
+```python
+def walk(model, parent=QModelIndex()):
+    for r in range(model.rowCount(parent)):
+        idx = model.index(r, 0, parent)
+        yield idx
+        yield from walk(model, idx)
+
+def all_paths(model):
+    return [
+        " > ".join(_name_chain(idx)) for idx in walk(model)
+    ]
+
+def _name_chain(idx):
+    parts = []
+    while idx.isValid():
+        item = idx.internalPointer()
+        parts.append(item.name if item.name is not None else f"[{item.row()}]")
+        idx = idx.parent()
+    return list(reversed(parts))
+```
+
+These let assertions read like `assert "a > b > 0" in all_paths(model)`,
+which makes failure messages legible.
+
+### Round-trip property test
+
+```python
+@pytest.mark.parametrize("payload", [
+    {"a": 1, "b": [True, None, "hi"]},
+    {"q": Decimal("0.25"), "ts": "2024-06-01T12:34:56+00:00"},
+    [],
+    {},
+])
+def test_to_json_roundtrip(payload):
+    item = JsonTreeItem(value=payload)
+    assert item.to_json() == payload
+```
+
+Add `hypothesis` later for deeper coverage; the parametrized list is
+enough for Phase 6 baseline.
+
+### `qtbot` patterns
+
+```python
+def test_value_delegate_int(qtbot, qapp):
+    model = JsonTreeModel({"x": 42})
+    view = QTreeView(); view.setModel(model)
+    view.setItemDelegateForColumn(2, ValueDelegate())
+    qtbot.addWidget(view)
+
+    idx = model.index(0, 2)
+    view.edit(idx)
+    editor = view.indexWidget(idx) or view.findChild(QBigIntSpinBox)
+    qtbot.keyClicks(editor, "100")
+    qtbot.keyClick(editor, Qt.Key_Return)
+
+    assert model.data(idx, Qt.EditRole) == 100
+```
+
+For dialog-based delegates, monkey-patch `QHexDialog.open` /
+`QMultilineDialog.open` to invoke the callback synchronously.
+
+### Coverage harness
+
+```bash
+pip install coverage pytest-cov
+QT_QPA_PLATFORM=offscreen pytest --cov=. --cov-report=term-missing -q
+```
+
+Add to `Makefile`:
+
+```make
+test:
+	QT_QPA_PLATFORM=offscreen pytest -q
+
+cov:
+	QT_QPA_PLATFORM=offscreen pytest --cov=. --cov-report=term --cov-report=html -q
+```
+
+Drop `htmlcov/` into `.gitignore`. Commit a short text snapshot to
+`ai-memory/coverage.md` so trends are visible across PRs.
+
+### Skip decorators
+
+Some boxes do not have `gmpy2` wheels for every Python version on CI;
+add a skip marker to keep the suite portable:
+
+```python
+gmpy2 = pytest.importorskip("gmpy2")
+```
+
+### Avoiding clipboard flakiness
+
+`QApplication.clipboard()` is a no-op on `offscreen` for some Qt
+versions. For copy/paste tests, monkey-patch:
+
+```python
+@pytest.fixture
+def fake_clipboard(monkeypatch):
+    store = {"mime": None, "text": ""}
+    monkeypatch.setattr("PySide6.QtWidgets.QApplication.clipboard",
+                        lambda: _FakeClipboard(store))
+    return store
+```
+
+…where `_FakeClipboard` mimics `setMimeData` / `mimeData` / `setText`.
+Tests then assert against `store["mime"]` directly.
+
+### CI smoke discipline
+
+Keep the GUI smoke test minimal — *show, don't drive*:
+
+```python
+def test_smoke_open_close(qtbot, tmp_path):
+    f = tmp_path / "x.json"; f.write_text('{"a": 1}')
+    win = MainWindow(str(f))
+    qtbot.addWidget(win)
+    win.show()
+    qtbot.waitExposed(win)
+    assert win.tabWidget.count() == 1
+```
+
+Anything more elaborate (clicks on menu items, keyboard shortcuts) tends
+to be flaky cross-platform; cover that behaviour with model/delegate-level
+tests instead.
+
 ## Risks / notes
 
 - `pytest-qt` brings in a `qtbot` fixture that conflicts with bare

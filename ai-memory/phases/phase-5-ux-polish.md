@@ -67,6 +67,182 @@ display, persistent layout, status-bar feedback, and a search/filter bar.
 - [ ] [ux] Provide "Collapse All" / "Expand All" entries in context
       menu and View menu.
 
+## Tips & Deep Dives
+
+### `displayText` vs model `data()`
+
+Two layers can format a cell:
+
+1. `JsonTreeModel.data(index, DisplayRole)` — what the view fetches.
+2. `ValueDelegate.displayText(value, locale)` — what the view *renders*
+   when there is a delegate.
+
+Prefer the **delegate** layer for value-only formatting (PERCENT, mpq,
+ellipsis) so editors continue to receive raw `mpq`/`int`/`str` from
+`data(EditRole)`. Keep `data(DisplayRole)` returning the *raw value*
+or `str(raw)` and put presentation in:
+
+```python
+class ValueDelegate(QStyledItemDelegate):
+    def displayText(self, value, locale):
+        # value is what data(DisplayRole) returned
+        return _format_for_display(value)  # purely presentational
+```
+
+If `displayText` becomes type-aware, fetch the item via the model
+during `paint()` instead — `displayText` itself does not have the index.
+
+### Eliding & tooltips
+
+Let Qt do the eliding (it's GPU-accelerated). Just provide the full
+text via `Qt.ToolTipRole` and rely on the default
+`Qt.TextElideMode.ElideRight`:
+
+```python
+def data(self, index, role=Qt.DisplayRole):
+    if role == Qt.ToolTipRole and index.column() == 2:
+        item = index.internalPointer()
+        if item.json_type in (JsonType.STRING, JsonType.MULTILINE):
+            text = str(item.value)
+            return text[:4096] + ("…" if len(text) > 4096 else "")
+    ...
+```
+
+### Breadcrumb status bar
+
+```python
+def _path_for(self, index: QModelIndex) -> str:
+    parts = []
+    while index.isValid():
+        item = index.internalPointer()
+        parts.append(item.name if item.name is not None else f"[{item.row()}]")
+        index = index.parent()
+    return " › ".join(reversed(parts)) or "/"
+```
+
+Hook to `selectionChanged`:
+
+```python
+def _on_selection_changed(self):
+    idx = self.view.selectionModel().currentIndex()
+    item = idx.internalPointer() if idx.isValid() else None
+    if item is None:
+        self.window().statusBar().clearMessage()
+        return
+    self.window().statusBar().showMessage(
+        f"{self._path_for(idx)}  ({item.json_type})"
+    )
+```
+
+### Persisted view state — keys and migration
+
+Use file-path-keyed `QSettings` groups, but **always** with a hash
+fallback so very long paths don't blow past Windows registry limits:
+
+```python
+def _state_key(self, path: str) -> str:
+    h = hashlib.sha1(str(Path(path).resolve()).encode()).hexdigest()[:16]
+    return f"view_state/{h}"
+
+def save_view_state(self, tab: JsonTab):
+    if not tab.file_path:
+        return
+    s = QSettings("EditableTreeModel", "view_state")
+    s.beginGroup(self._state_key(tab.file_path))
+    s.setValue("col_widths", [tab.view.columnWidth(c) for c in range(3)])
+    s.setValue("expanded", list(self._collect_expanded_paths(tab)))
+    s.endGroup()
+```
+
+On `Save As` (path change), call `save_view_state` for the new path and
+delete the old group.
+
+### Recursive filter proxy
+
+```python
+class TreeFilterProxy(QSortFilterProxyModel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setRecursiveFilteringEnabled(True)  # Qt 5.10+
+
+    def filterAcceptsRow(self, src_row, src_parent):
+        idx = self.sourceModel().index(src_row, 0, src_parent)
+        if not idx.isValid():
+            return False
+        item = idx.internalPointer()
+        needle = self.filterRegularExpression()
+        if needle.pattern() == "":
+            return True
+        text_name = "" if item.name is None else str(item.name)
+        text_value = "" if item.value is None else str(item.value)
+        return bool(needle.match(text_name).hasMatch()
+                    or needle.match(text_value).hasMatch())
+```
+
+`setRecursiveFilteringEnabled(True)` does the "keep ancestors visible"
+work for free — no manual ancestor walk needed.
+
+**Delegate impact**: with a proxy in front, `index.internalPointer()`
+returns `None` because Qt strips the pointer through the proxy. Audit
+delegates to map first:
+
+```python
+def _item(self, index: QModelIndex) -> JsonTreeItem:
+    if isinstance(index.model(), QSortFilterProxyModel):
+        index = index.model().mapToSource(index)
+    return index.internalPointer()
+```
+
+### Debounce the search box
+
+```python
+self._filter_timer = QTimer(self)
+self._filter_timer.setSingleShot(True)
+self._filter_timer.setInterval(150)
+self._filter_timer.timeout.connect(self._apply_filter)
+self.search_edit.textChanged.connect(lambda _: self._filter_timer.start())
+```
+
+Prevents one filter recomputation per keystroke on large documents.
+
+### Zoom
+
+`QAbstractItemView` doesn't have a native font zoom; track a scale
+yourself:
+
+```python
+self._font_pt = self.view.font().pointSize()
+
+def zoom_in(self):  self._set_font_pt(self._font_pt + 1)
+def zoom_out(self): self._set_font_pt(max(6, self._font_pt - 1))
+
+def _set_font_pt(self, pt):
+    self._font_pt = pt
+    f = self.view.font(); f.setPointSize(pt); self.view.setFont(f)
+```
+
+Persist `_font_pt` per tab in the same `QSettings` group.
+
+### Type icons (optional)
+
+Once `JsonTypeDelegate` shows the type, paint a small icon in column 1
+via `data(DecorationRole)`:
+
+```python
+_ICONS = {
+    JsonType.OBJECT:  QIcon(":/icons/object.svg"),
+    JsonType.ARRAY:   QIcon(":/icons/array.svg"),
+    ...
+}
+
+def data(self, index, role):
+    if role == Qt.DecorationRole and index.column() == 1:
+        return _ICONS.get(index.internalPointer().json_type)
+    ...
+```
+
+Defer to a follow-up if SVG resource plumbing isn't in place yet.
+
 ## Risks / notes
 
 - A custom proxy model interacts with the `internalPointer()`
