@@ -9,8 +9,18 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, ValueDelegate
+from enums import JsonType
 from tree_model import JsonTreeModel
 from tree_view import show_context_menu
+
+# JSON types whose "editor" is actually a modal dialog opened from
+# ValueDelegate.createEditor as a side effect (it returns None). Calling
+# view.edit() for these would only trigger a redundant Qt warning.
+_MODAL_EDITOR_TYPES = frozenset({JsonType.MULTILINE, JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP})
+
+
+def _uses_modal_editor(json_type: JsonType) -> bool:
+    return json_type in _MODAL_EDITOR_TYPES
 
 
 class JsonTab(QWidget):
@@ -82,7 +92,15 @@ class JsonTab(QWidget):
     def _on_type_changed(self, item_index, lossy: bool) -> None:
         value_index = self.model.index(item_index.row(), 2, item_index.parent())
         self.view.closePersistentEditor(value_index)
-        self.view.edit(value_index)
+
+        # Only re-open the editor for value cells that are actually editable.
+        # NULL / ARRAY / OBJECT have no editable value, and dialog-based types
+        # (MULTILINE / BYTES / ZLIB / GZIP) drive their own modal editors;
+        # calling `view.edit()` for any of these makes Qt log
+        # "edit: editing failed" and is otherwise a no-op.
+        flags = self.model.flags(value_index)
+        if flags & Qt.ItemFlag.ItemIsEditable and not _uses_modal_editor(self.model.get_item(item_index).json_type):
+            self.view.edit(value_index)
 
         if lossy and self._status_message_callback is not None:
             self._status_message_callback("Type change dropped existing child nodes", 3000)
