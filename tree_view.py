@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import simplejson
 from PySide6.QtCore import QMimeData, QPoint, Qt
 from PySide6.QtWidgets import QApplication, QMenu, QTreeView
 
@@ -100,8 +101,8 @@ def copy_selection(tree_view: QTreeView) -> bool:
     items = [model.get_item(idx).to_json() for idx in rows]
     payload: Any = items[0] if len(items) == 1 else items
 
-    text = json.dumps(payload, default=mpq_json_default, indent=2)
-    metadata = json.dumps({"items": items}, default=mpq_json_default)
+    text = simplejson.dumps(payload, default=mpq_json_default, indent=2)
+    metadata = simplejson.dumps({"items": items}, default=mpq_json_default)
 
     mime = QMimeData()
     mime.setData(MIME_JSON_TREE, metadata.encode("utf-8"))

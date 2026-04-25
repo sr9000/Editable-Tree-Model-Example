@@ -1,5 +1,6 @@
 import json
 
+import gmpy2
 from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QApplication, QTreeView
 
@@ -86,3 +87,26 @@ def test_paste_into_primitive_inserts_sibling_after(qtbot):
     assert paste_from_clipboard(view)
 
     assert model.root_item.to_json() == {"a": 1, "new_key": 3, "b": 2}
+
+
+def test_copy_selection_with_mpq_float_values(qtbot):
+    # Regression: copying float (mpq) values from inside an array used to crash with
+    # "Type <class 'decimal.Decimal'> not serializable" because mpq_json_default
+    # returned a Decimal that the stdlib json encoder could not handle.
+    model = JsonTreeModel({"nums": [gmpy2.mpq("3.14"), gmpy2.mpq("1/2")]})
+    view = QTreeView()
+    qtbot.addWidget(view)
+    view.setModel(model)
+
+    nums = model.index(0, 0, QModelIndex())
+    first = model.index(0, 0, nums)
+    second = model.index(1, 0, nums)
+
+    _select_rows(view, first, second)
+    assert copy_selection(view)
+
+    md = QApplication.clipboard().mimeData()
+    assert md is not None
+    assert md.hasFormat(MIME_JSON_TREE)
+    parsed = json.loads(md.text())
+    assert parsed == [3.14, 0.5]

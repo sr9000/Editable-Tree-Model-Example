@@ -56,6 +56,12 @@ def mpq_json_default(obj):
     if isinstance(obj, mpq):
         # Emit only the scalar value; the helper's denominator metadata is not JSON-serializable.
         return mpq_serialization(obj)[0]
+    if isinstance(obj, Decimal):
+        # ``mpq_serialization`` returns ``Decimal`` for terminating fractions. The stdlib
+        # ``json`` module re-invokes this default on the Decimal because it is not natively
+        # JSON-serializable; fall back to ``float`` so clipboard / file paths that use
+        # stdlib json (rather than simplejson, which handles Decimal natively) succeed.
+        return float(obj)
     raise TypeError(f"Type {type(obj)} not serializable")
 
 
