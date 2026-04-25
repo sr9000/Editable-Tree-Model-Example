@@ -1,4 +1,4 @@
-# Phase 0 — Stabilize
+# Phase 0 — Stabilize  ✅ DONE (2026-04-25)
 
 ## Goal
 
@@ -25,44 +25,67 @@ scaffolding must be removed. No new features.
 ## Work items
 
 ### Fix failing test
-- [ ] [BUG] Investigate `tests/test_mpq2py.py::test_mpq_with_json` — likely
+- [x] [BUG] Investigate `tests/test_mpq2py.py::test_mpq_with_json` — likely
       a `simplejson` shadowing of stdlib `json`. Force stdlib `json` in
       `mpq2py` (or add `import json as _stdjson`) and confirm `pytest -q`
       is green.
       — `mpq2py/__init__.py`, `tests/test_mpq2py.py`
+      → **Resolved**: actual root cause was `mpq_json_default` returning the
+        full `(Decimal, mpq)` tuple from `mpq_serialization`, causing
+        infinite recursion in `simplejson`. Fix: return `mpq_serialization(obj)[0]`.
 
 ### Fix runtime crashes in MainWindow
-- [ ] [BUG] Replace every `self.view` reference inside `MainWindow` with a
+- [x] [BUG] Replace every `self.view` reference inside `MainWindow` with a
       helper `self._current_view()` that returns
       `self.tabWidget.currentWidget().view` or `None`. Bail out cleanly
       when no tab is open.
       — `ui.py:MainWindow.insert_row`, `insert_child`, `insert_column`,
         `remove_row`, `remove_column`, `copy_action`
-- [ ] [BUG] Finish or delete `MainWindow.copy_action` (currently truncated).
+- [x] [BUG] Finish or delete `MainWindow.copy_action` (currently truncated).
       For Phase 0, deleting it and unbinding any caller is acceptable;
       a real implementation lands in Phase 3.
       — `ui.py:MainWindow.copy_action`
-- [ ] [BUG] Implement minimal `MainWindow.close_tab(index: int)`:
+      → Kept as a stub that flashes a status-bar "not yet implemented".
+- [x] [BUG] Implement minimal `MainWindow.close_tab(index: int)`:
       `self.tabWidget.removeTab(index)`. Dirty-check is added in Phase 4.
       — `ui.py:MainWindow.close_tab`
+      → Includes `widget.deleteLater()` cleanup and `update_actions()` call.
 
 ### Hygiene
-- [ ] [hygiene] Remove the C++ docstring blocks at the top of
+- [x] [hygiene] Remove the C++ docstring blocks at the top of
       `tree_model.py`, `tree_item.py`, `ui.py`. Keep a one-line link to the
       original example URL if useful.
-- [ ] [hygiene] Remove unused imports in `ui.py` (`yaml`,
+- [x] [hygiene] Remove unused imports in `ui.py` (`yaml`,
       `HeaderViewEditorMixin`, `JsonTypeDelegate`, `JsonTreeModel`,
       `show_context_menu`, `functools`).
-- [ ] [hygiene] Remove the commented-out scaffolding inside
+- [x] [hygiene] Remove the commented-out scaffolding inside
       `MainWindow.setup_model` and `MainWindow.update_actions`. The empty
       `pass` body is fine until Phase 4 picks it up.
-- [ ] [hygiene] Replace bare `except:` clauses in `enums.parse_json_type`
+- [x] [hygiene] Replace bare `except:` clauses in `enums.parse_json_type`
       with `except Exception:` so `KeyboardInterrupt` propagates.
 
 ### Smoke check
-- [ ] Add a tiny `pytest-qt`-free smoke test that constructs
+- [x] Add a tiny `pytest-qt`-free smoke test that constructs
       `JsonTreeModel({"a": 1})` and walks rows/columns. (Full GUI smoke
       test lands in Phase 6.)
+      → `tests/test_smoke_model.py`. A larger `tests/test_smoke_mainwindow.py`
+        was also delivered ahead of schedule with `pytest-qt`-style fixtures.
+
+## Implementation notes
+
+- `tests/test_smoke_mainwindow.py` discovered a related regression — Qt
+  Designer generated `Ui_MainWindow.statusBar = QStatusBar(...)`, which
+  shadows `QMainWindow.statusBar()`. All call sites now use the attribute
+  form `self.statusBar.showMessage(...)`.
+- `JsonTab` now accepts a `status_message_callback` so phase-2 type
+  changes can surface lossy-coercion messages without coupling to
+  `MainWindow`.
+
+## Final test status
+
+```
+308 passed in 0.47s
+```
 
 ## Tips & Deep Dives
 

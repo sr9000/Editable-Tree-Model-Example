@@ -9,6 +9,20 @@ YAML, track dirty state per tab, prompt on close, remember recent files.
 
 - Phase 3 complete: model mutations are reliable and undoable.
 
+## Already available from Phases 0–2
+
+- `MainWindow._current_tab()` / `MainWindow._current_view()` helpers.
+- `MainWindow.close_tab(index)` removes the tab and `deleteLater()`s it
+  (no dirty check yet — Phase 4 adds it).
+- `JsonTab.file_path: str | None` attribute is declared (always `None`).
+- `JsonTab` accepts a `status_message_callback`, used here to surface
+  load/save errors.
+- `JsonTreeModel.typeChanged` / `dataChanged` / `rowsInserted` /
+  `rowsRemoved` are reliable dirty-state triggers.
+- `mainwindow.ui` already declares `fileOpenAction`, `fileSaveAction`,
+  `fileSaveAsAction`, `fileCreateNewAction`, `appExitAction` — Phase 4
+  only wires their `triggered` signals.
+
 ## Exit criteria
 
 - `python main.py path/to/file.{json,yaml}` opens the file directly into
@@ -25,16 +39,21 @@ YAML, track dirty state per tab, prompt on close, remember recent files.
 ### Loading
 - [ ] [io] Implement `MainWindow.setup_model(filename)` to detect format
       by extension and load:
-      - `.json` → `json.load` (or `simplejson`/streaming reader)
-      - `.yaml` / `.yml` → `yaml.safe_load` with the `mpq2py` YAML
-        loader subclass.
+      - `.json` → `simplejson.load(parse_float=mpq, use_decimal=True)`
+      - `.yaml` / `.yml` → `yaml.load(Loader=MpqSafeLoader)`
       Pass parsed data into `JsonTab(data=..., file_path=...)`.
       — `ui.py:MainWindow.setup_model`
+      Empty `filename` (the test fixture passes `""`) must remain a no-op.
 - [ ] [io] Update `JsonTab.__init__` to accept `data` and `file_path`
-      parameters. Drop hardcoded demo dict.
+      keyword parameters. Drop the hardcoded demo dict in favour of the
+      passed-in `data`. When `data is None`, default to `{}` (empty
+      object). Keep the existing `update_actions_callback` and
+      `status_message_callback` parameters.
       — `json_tab.py:JsonTab.__init__`
-- [ ] [io] Add `MainWindow.open_file_dialog()` triggered by a new
-      `fileOpenAction` in `mainwindow.ui`. Filters: `*.json *.yaml *.yml`.
+- [ ] [io] Add `MainWindow.open_file_dialog()` triggered by
+      `fileOpenAction`. Filters: `*.json *.yaml *.yml`.
+      The action already exists in `mainwindow.ui` — only the
+      `triggered.connect(...)` wiring and the slot are new.
 
 ### Saving
 - [ ] [io] Implement `JsonTab.save()`: dispatch on file extension,
@@ -50,11 +69,12 @@ YAML, track dirty state per tab, prompt on close, remember recent files.
 ### Dirty / close flow
 - [ ] [tab] Add `JsonTab.is_dirty` boolean. Connect to
       `model.dataChanged`, `rowsInserted`, `rowsRemoved`, plus the undo
-      stack's `cleanChanged`.
+      stack's `cleanChanged` (introduced in Phase 3).
 - [ ] [tab] Emit a `JsonTab.dirtyChanged(bool)` signal; `MainWindow`
       updates the tab title (`name`, `name *`).
-- [ ] [shell] `MainWindow.close_tab(index)`: if the tab is dirty, show
-      `QMessageBox.question` with Save / Discard / Cancel.
+- [ ] [shell] Extend the existing `MainWindow.close_tab(index)` (currently
+      always closes) with a dirty-check + `QMessageBox.question` (Save /
+      Discard / Cancel) before removal.
       — `ui.py:MainWindow.close_tab`
 - [ ] [shell] Override `closeEvent` on `MainWindow` to walk all tabs
       and confirm.

@@ -1,4 +1,4 @@
-# Phase 2 — Type & Name Editing
+# Phase 2 — Type & Name Editing  ✅ DONE (2026-04-25)
 
 ## Goal
 
@@ -25,59 +25,115 @@ through the UI, with sensible value coercion.
 ## Work items
 
 ### Name column
-- [ ] [type] Extend `JsonTreeItem.set_data(0, value)` to update `self.name`.
+- [x] [type] Extend `JsonTreeItem.set_data(0, value)` to update `self.name`.
       Reject empty names and duplicates under an `OBJECT` parent (return
       `False`).
-      — `tree_item.py:JsonTreeItem.set_data`
-- [ ] [type] In `JsonTreeModel.flags()`, mark column 0 as editable only
+      — `tree_item.py:JsonTreeItem.set_data` → `_set_name`
+- [x] [type] In `JsonTreeModel.flags()`, mark column 0 as editable only
       when the parent is an `OBJECT`. ARRAY children expose their index
       as read-only.
       — `tree_model.py:JsonTreeModel.flags`
-- [ ] [type] In `JsonTreeItem.data(0)`, return the row index for ARRAY
+- [x] [type] In `JsonTreeItem.data(0)`, return the row index for ARRAY
       children instead of `<no name>`.
       — `tree_item.py:JsonTreeItem.data`
-- [ ] [tests] Unit tests: rename success, rename to duplicate fails,
+- [x] [tests] Unit tests: rename success, rename to duplicate fails,
       ARRAY child rename refused.
+      → `tests/test_type_editing.py::test_name_editing_object_and_duplicate_rejection`,
+        `test_array_name_column_shows_index_and_is_read_only`.
 
 ### Type column
-- [ ] [BUG] Implement `JsonTypeDelegate.setModelData` to push the
+- [x] [BUG] Implement `JsonTypeDelegate.setModelData` to push the
       selected `JsonType` through `model.setData(index, type, EditRole)`.
       — `delegate.py:JsonTypeDelegate.setModelData`
-- [ ] [BUG] Move combo population from `setEditorData` into `createEditor`,
+- [x] [BUG] Move combo population from `setEditorData` into `createEditor`,
       and have `setEditorData` set the current text from
       `index.internalPointer().json_type`.
       — `delegate.py:JsonTypeDelegate`
-- [ ] [type] Extend `JsonTreeItem.set_data(1, json_type)` to mutate
+      → Items added with `editor.addItem(tp.value, tp)` so
+        `editor.currentData()` returns the enum, not its string form.
+- [x] [type] Extend `JsonTreeItem.set_data(1, json_type)` to mutate
       `self.json_type` and coerce `self.value`. Define a coercion table:
       | from\to | NULL | BOOLEAN | INTEGER | FLOAT/PERCENT | STRING/MULTILINE | DATE/TIME/DT/DTZ | BYTES/ZLIB/GZIP | ARRAY | OBJECT |
       |---------|------|---------|---------|---------------|------------------|------------------|-----------------|-------|--------|
       Cells are filled with reasonable defaults (e.g. INTEGER → 0, ARRAY
       → []). Where the existing value is convertible, prefer it
       (`"42"` → `42`).
-      — `tree_item.py:JsonTreeItem.set_data`
-- [ ] [type] When switching to/from `OBJECT` or `ARRAY`, clear
+      — `tree_item.py:JsonTreeItem.set_data` / `_coerce_value_for_type`
+      → `strict=True` mode used for column-2 edits on pinned items
+        (rejects bad input). `strict=False` mode used for column-1 edits
+        (always succeeds with default fallback).
+- [x] [type] When switching to/from `OBJECT` or `ARRAY`, clear
       `child_items` and emit the proper
       `beginRemoveRows`/`endRemoveRows` (or `beginInsertRows`) sequence
       via the model. Likely needs a model-level helper
       `JsonTreeModel.change_type(index, new_type)` that owns the
       bookkeeping.
+      → Implemented as `JsonTreeModel.change_type`. Emits
+        `beginRemoveRows`/`endRemoveRows` for old container rows, then
+        `dataChanged` for the row, then `typeChanged(index, lossy)` so
+        `JsonTab` can react.
 
 ### Type pinning (override auto-classification)
-- [ ] [type] Persist an `explicit_type: bool` flag on `JsonTreeItem`. When
+- [x] [type] Persist an `explicit_type: bool` flag on `JsonTreeItem`. When
       `True`, `set_data(2, value)` does **not** re-run `parse_json_type`
       — it only validates against the existing `json_type`.
       — `tree_item.py:JsonTreeItem`
-- [ ] [type] Setting `json_type` via column 1 sets `explicit_type=True`.
+- [x] [type] Setting `json_type` via column 1 sets `explicit_type=True`.
       Rebuilding from raw input (load) clears it.
-- [ ] [tests] Unit tests for pinning: assign STRING to a value that looks
+- [x] [tests] Unit tests for pinning: assign STRING to a value that looks
       like base64, confirm it stays STRING after `set_data`.
+      → `tests/test_type_editing.py::test_type_pinning_keeps_string_for_base64_like_value`.
 
 ### Editor wiring
-- [ ] [type] After a successful type change, the view must reopen the
+- [x] [type] After a successful type change, the view must reopen the
       `Value` editor with the right delegate. The model can emit
       `dataChanged` for the (col-2) sibling index to nudge the view.
-- [ ] [ux] When a coercion drops information (e.g. OBJECT → STRING),
+      → **Resolution**: only the `dataChanged` nudge is kept. The explicit
+        `view.edit(value_index)` call was removed because it logged
+        `edit: editing failed` warnings in offscreen / programmatic
+        contexts (regression caught by
+        `test_cycling_inline_types_does_not_log_edit_failed`). The user
+        clicks/F2's the value cell to re-edit. A polished auto-reopen is
+        deferred to **Phase 3** where it can sit on top of the undo stack.
+- [x] [ux] When a coercion drops information (e.g. OBJECT → STRING),
       show a confirmation dialog or status-bar warning.
+      → `JsonTab._on_type_changed` calls a `status_message_callback` with
+        "Type change dropped existing child nodes". `MainWindow` provides
+        the callback wired to `statusBar.showMessage`.
+
+### Delegate hardening (bonus)
+- [x] [BUG] `ValueDelegate.setEditorData` / `setModelData` now dispatch on
+      the **editor's widget class**, not on `item.json_type`. This makes
+      a stale editor (created for the previous type) commit cleanly when
+      Qt reuses it after a type swap. Regression covered by
+      `test_cycling_inline_types_does_not_log_edit_failed`.
+
+## Implementation notes
+
+- The combination of `JsonTreeModel.typeChanged` + `JsonTab._on_type_changed`
+  is the canonical post-type-change hook. Future phases should add their
+  reactions there (e.g. UndoStack.push, dirty-state mark).
+- `_coerce_value_for_type` returns `(ok, value)` so callers can decide
+  between rejection (column-2 strict) and best-effort defaulting
+  (column-1 swap).
+- `JsonTab` accepts an optional `status_message_callback(text, timeout_ms)`
+  injected from `MainWindow.statusBar.showMessage`. This avoids a hard
+  dependency on `MainWindow` from `JsonTab`.
+
+## Final test status
+
+```
+308 passed in 0.47s
+```
+
+Specifically Phase 2 regression tests:
+- `test_name_editing_object_and_duplicate_rejection`
+- `test_array_name_column_shows_index_and_is_read_only`
+- `test_type_change_sets_explicit_type_and_coerces_value`
+- `test_type_pinning_keeps_string_for_base64_like_value`
+- `test_json_type_delegate_preselects_and_commits`
+- `test_type_change_does_not_log_edit_failed[NULL/ARRAY/OBJECT/MULTILINE/BYTES]`
+- `test_cycling_inline_types_does_not_log_edit_failed`
 
 ## Tips & Deep Dives
 

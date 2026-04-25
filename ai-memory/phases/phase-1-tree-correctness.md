@@ -1,4 +1,4 @@
-# Phase 1 — Tree / Model Correctness
+# Phase 1 — Tree / Model Correctness  ✅ DONE (2026-04-25)
 
 ## Goal
 
@@ -29,31 +29,36 @@ it, and they must not have to re-fix model bugs.
 ## Work items
 
 ### Insertion semantics
-- [ ] [BUG] Fix `JsonTreeItem.insert_children` to seed new rows as a
+- [x] [BUG] Fix `JsonTreeItem.insert_children` to seed new rows as a
       single blank node (`value=None`, `name=None`, `json_type=NULL`),
       not `value=[None]*columns`.
       — `tree_item.py:JsonTreeItem.insert_children`
-- [ ] [tree] When inserting under an `OBJECT` parent, auto-generate a
+- [x] [tree] When inserting under an `OBJECT` parent, auto-generate a
       unique name (e.g. `new_key`, `new_key_2`, ...). Expose it via a
       helper `JsonTreeItem._unique_child_name(base="new_key")`.
-- [ ] [tree] When inserting under an `ARRAY` parent, leave `name=None`
+      → Implementation supports a `used_names` reservation set so a single
+        `insert_children` call generating multiple rows yields distinct names.
+- [x] [tree] When inserting under an `ARRAY` parent, leave `name=None`
       but ensure indices are derived from `row()` at serialization time.
-- [ ] [tree] Make `model_actions.action_insert_row` / `action_insert_child`
+      → `JsonTreeItem.data(0)` returns `str(row())` for ARRAY children.
+- [x] [tree] Make `model_actions.action_insert_row` / `action_insert_child`
       stop calling `setData(child, "[No data]", ...)` — that string is a
       hold-over from the original Qt example and conflicts with typed
       JSON values.
       — `model_actions.py`
 
 ### Cache `json_type` on mutation
-- [ ] [tree] When `JsonTreeItem.set_data(2, value)` runs, recompute
+- [x] [tree] When `JsonTreeItem.set_data(2, value)` runs, recompute
       `self.json_type = parse_json_type(value)` so the type cell stays
       consistent with the value.
       — `tree_item.py:JsonTreeItem.set_data`
-- [ ] [tree] Add a unit test confirming that setting an INTEGER cell to
+      → Skipped only when `explicit_type=True` (Phase 2 pinning rule).
+- [x] [tree] Add a unit test confirming that setting an INTEGER cell to
       `"hello"` flips `json_type` to STRING.
+      → `tests/test_tree_correctness.py::test_set_data_recomputes_json_type`.
 
 ### `flags()` hot-path
-- [ ] [BUG] Move the b64/zlib/gzip decode out of
+- [x] [BUG] Move the b64/zlib/gzip decode out of
       `JsonTreeModel.flags()` and into `JsonTreeItem` as a cached
       `editable: bool` field, recomputed only on `set_data()`.
       Catch `binascii.Error` / `zlib.error` / `OSError` and treat
@@ -61,39 +66,70 @@ it, and they must not have to re-fix model bugs.
       row.
       — `tree_model.py:JsonTreeModel.flags`,
         `tree_item.py:JsonTreeItem`
+      → Public attribute `JsonTreeItem.editable`; recomputed inside
+        `_apply_typed_value` so the contract is maintained centrally.
+      → Regression test:
+        `tests/test_tree_correctness.py::test_flags_are_safe_for_malformed_binary_payloads`.
 
 ### Type detection robustness
-- [ ] [BUG] Make `parse_json_type` total: never raise. For unsupported
+- [x] [BUG] Make `parse_json_type` total: never raise. For unsupported
       Python types fall back to `JsonType.STRING` (storing `repr(value)`)
       and log a warning.
       — `enums.py:parse_json_type`
-- [ ] [tree] Skip the `BYTES` branch unless the candidate string passes a
+      → `_normalize_value_for_type` in `JsonTreeItem` performs the
+        `repr(value)` storage step.
+- [x] [tree] Skip the `BYTES` branch unless the candidate string passes a
       stricter heuristic (e.g. length ≥ 16, only base64 alphabet, padding
       multiple of 4, not a known datetime). Otherwise treat as `STRING`.
-- [ ] [tree] Skip the `MULTILINE` branch when the string is short
+      → `enums._looks_like_base64` enforces length ≥ 16, regex-only
+        alphabet, and a `<0.85` printable-byte ratio. Datetime parsing is
+        attempted **before** the base64 branch.
+- [x] [tree] Skip the `MULTILINE` branch when the string is short
       (< 80 chars and ≤ 1 newline) — keep `STRING` for simple multi-word
       cases.
-- [ ] [tree] Narrow the `PERCENT` heuristic: only when the original
+- [x] [tree] Narrow the `PERCENT` heuristic: only when the original
       source explicitly tagged it (or an `mpq` denominator is `100`,
       `1000`, ...). Avoid auto-promoting `0.5` from a probability-style
       JSON document.
+      → Stronger choice taken: `parse_json_type` **never** auto-detects
+        `PERCENT`. PERCENT is now only reachable through Phase 2 type
+        pinning. The auto-classification heuristic in earlier drafts was
+        considered too magical.
 
 ### Dead column API
-- [ ] [BUG] Remove `JsonTreeModel.insertColumns` /
+- [x] [BUG] Remove `JsonTreeModel.insertColumns` /
       `removeColumns` / `setHeaderData` (and the matching `JsonTreeItem`
       methods) — they always fail and emit misleading Qt signals. Or, if
       kept, make them return `False` *without* calling
       `beginInsertColumns`/`endInsertColumns`.
       — `tree_model.py`, `tree_item.py`
-- [ ] [tree] Remove `model_actions.action_insert_column` and the
+      → Model-level overrides removed entirely. `JsonTreeItem.insert_columns`
+        / `remove_columns` retained as `return False` stubs to keep the
+        in-memory interface symmetric with future C++ ports.
+- [x] [tree] Remove `model_actions.action_insert_column` and the
       "Insert Column" entries from the context menu and toolbar.
       — `model_actions.py`, `tree_view.py`, `mainwindow.ui`
 
 ### Serialization correctness
-- [ ] [BUG] In `JsonTreeItem.to_json()`, raise a clear `ValueError` (not
+- [x] [BUG] In `JsonTreeItem.to_json()`, raise a clear `ValueError` (not
       a silent `{None: value}`) if a child of an `OBJECT` has `name=None`.
       Phase 2 will guarantee this never happens through the UI; for now
       we just want loud failure.
+      → Test: `test_to_json_raises_for_unnamed_object_child`.
+
+## Implementation notes
+
+- The `JsonTreeItem.__init__` was refactored to delegate construction to
+  `_apply_typed_value(json_type, value)`, which is now the single
+  invariant-preserving setter (used by both `set_data` and `change_type`).
+- A `JsonTreeModel.typeChanged(QModelIndex, lossy: bool)` signal was added
+  to communicate type changes to `JsonTab` (used in Phase 2).
+
+## Final test status
+
+```
+308 passed in 0.47s
+```
 
 ## Tips & Deep Dives
 

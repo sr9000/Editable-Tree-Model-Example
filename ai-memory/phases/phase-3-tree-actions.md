@@ -10,6 +10,17 @@ phase, editing a JSON document feels like editing in a real outliner.
 
 - Phase 2 complete: name/type editing works, model mutations go through
   a unified `JsonTreeModel` API.
+- ✅ `JsonTreeModel.change_type` and `JsonTreeModel.typeChanged` signal
+  are available — Phase 3 commands hook into them.
+
+## Phase 1 / 2 carry-over (already done)
+
+These items appeared in earlier drafts of this phase but were already
+shipped in Phases 1–2; they are listed here only for traceability.
+
+- [x] [hygiene] Drop the "Insert Column" context menu entry and its
+      toolbar action — already removed in Phase 1.
+- [x] [hygiene] Drop `model_actions.action_insert_column` — already gone.
 
 ## Exit criteria
 
@@ -20,7 +31,8 @@ phase, editing a JSON document feels like editing in a real outliner.
   reapply them.
 - Pasting clipboard JSON into a node either replaces (when types
   match) or inserts as child / sibling depending on the target.
-- The dead "Insert Column" entry is gone.
+- After a successful type change the value editor reopens cleanly
+  (deferred from Phase 2 — see "Auto-reopen value editor" below).
 
 ## Work items
 
@@ -37,6 +49,9 @@ phase, editing a JSON document feels like editing in a real outliner.
       Reject if clipboard is not valid JSON.
 - [ ] [tree] `Delete`: remove selected rows. Connect the orphan
       `delete_action`. Bind `Qt.Key_Delete`.
+- [ ] [shell] Replace the `MainWindow.copy_action` placeholder
+      ("Copy action is not yet implemented") with the real implementation.
+      — `ui.py:MainWindow.copy_action`
 
 ### Sibling / child insertion polish
 - [ ] [tree] Add **Insert Sibling Before** action (the existing
@@ -51,33 +66,47 @@ phase, editing a JSON document feels like editing in a real outliner.
 - [ ] [tree] Add **Sort Keys** (recursive option): only meaningful for
       `OBJECT` parents; sort `child_items` by `name`.
 
+### Auto-reopen value editor (deferred from Phase 2)
+- [ ] [ux] After `JsonTreeModel.typeChanged`, reopen the value editor
+      with the new delegate **only when the change came from the user**,
+      not from programmatic `setData`. Approaches to investigate:
+      - Track an "interactive" flag on the type combo's commit path and
+        forward it through the `typeChanged` signal.
+      - Or: hook `view.commitData` from `JsonTypeDelegate` and call
+        `view.edit(value_index)` only from there — the programmatic
+        `model.setData` path bypasses delegates and so will not re-edit.
+      - Either approach must keep
+        `tests/test_smoke_mainwindow.py::test_cycling_inline_types_does_not_log_edit_failed`
+        green.
+      — `json_tab.py:JsonTab._on_type_changed`,
+        `delegate.py:JsonTypeDelegate.setModelData`
+
 ### Remove dead entries
-- [ ] [hygiene] Drop the "Insert Column" context menu entry and its
-      toolbar action; matches the model-side removal in Phase 1.
-      — `tree_view.py:show_context_menu`, `mainwindow.ui`
-- [ ] [hygiene] Drop `model_actions.action_insert_column` (or convert to
-      a no-op + `DeprecationWarning`).
-      — `model_actions.py`
+- [x] [hygiene] Drop the "Insert Column" context menu entry and its
+      toolbar action — already done in Phase 1.
+- [x] [hygiene] Drop `model_actions.action_insert_column` — already done.
 
 ### Undo / redo
 - [ ] [tree] Introduce a `QUndoStack` per `JsonTab`. Wrap each mutation
       (set value, rename, change type, insert, remove, move, sort) in a
       `QUndoCommand`.
 - [ ] [tree] Bind `MainWindow` Edit menu actions: Undo (Ctrl+Z),
-      Redo (Ctrl+Shift+Z).
+      Redo (Ctrl+Shift+Z). The `Edit` menu does not yet exist in
+      `mainwindow.ui` — add it.
 - [ ] [tree] Decide merge policy: consecutive value edits to the same
       cell should collapse into one undo step (`mergeWith`).
 - [ ] [tests] Round-trip test: random sequence of mutations →
       `undo()` until empty → tree equals the original.
 
 ### Cross-cutting fixes
-- [ ] [BUG] Audit dialog-based delegates (`MULTILINE`, `BYTES`, `ZLIB`,
-      `GZIP`) so their commit goes through the new undo stack rather
-      than directly calling `model.setData`. Stale-index risk shrinks
-      because the `QPersistentModelIndex` form is preferred.
+- [ ] [BUG] `delegate.py:ValueDelegate.createEditor` for `MULTILINE` /
+      `BYTES` / `ZLIB` / `GZIP` still captures the raw `QModelIndex` in
+      its dialog callbacks (`_save_multiline`, `_save_binary`). Convert
+      to `QPersistentModelIndex` so the callbacks survive intervening
+      row insertions/removals.
       — `delegate.py:ValueDelegate.createEditor`
-- [ ] [BUG] In dialog callbacks, capture `QPersistentModelIndex(index)`
-      instead of the raw `QModelIndex`.
+- [ ] [BUG] Route the dialog callback commits through the new undo
+      stack rather than directly calling `model.setData`.
 
 ## Tips & Deep Dives
 

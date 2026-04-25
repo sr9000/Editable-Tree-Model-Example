@@ -6,6 +6,26 @@ Bring test coverage of the **GUI / model layer** up to the level of the
 existing widget packages. The widget stack (datetime, hex, mpq,
 jsontream) is well covered; the JSON tree editor itself is not.
 
+## Already shipped (Phases 0–2)
+
+A substantial slice of Phase 6 was delivered alongside Phases 0–2:
+
+- ✅ `tests/test_smoke_model.py` — model construction smoke test.
+- ✅ `tests/test_smoke_mainwindow.py` — full `MainWindow` lifecycle:
+  construct, status-bar usability, `create_new_file`, multi-tab open
+  + close, type-change regressions for both modal-editor types
+  (NULL/ARRAY/OBJECT/MULTILINE/BYTES) and inline-editor types
+  (INTEGER/FLOAT/STRING/BOOLEAN/PERCENT/DATE).
+- ✅ `tests/test_tree_correctness.py` — insertion semantics, naming,
+  `to_json` round-trip strictness, narrowed `parse_json_type` heuristics,
+  malformed binary `flags()` safety, dead column API, `action_insert_child`.
+- ✅ `tests/test_type_editing.py` — name editing under OBJECT/ARRAY,
+  type-change coercion, type pinning vs. base64-like values, delegate
+  preselection and commit.
+- ✅ Baseline: **308 tests pass** as of 2026-04-25.
+
+The remaining Phase 6 scope below covers what's still missing.
+
 ## Entry criteria
 
 - Phases 0–5 complete. Behaviour is stable enough to write
@@ -23,34 +43,40 @@ jsontream) is well covered; the JSON tree editor itself is not.
 ## Work items
 
 ### Model / item unit tests
-- [ ] [tests] `tests/test_tree_item.py`
-      - construction from dict / list / scalar
-      - `to_json` round-trip including `mpq`, datetimes, bytes
-      - `set_data(0/1/2, ...)` for rename, type change, value change
-      - `insert_children` produces a single NULL row
-      - duplicate-name rejection under OBJECT
-- [ ] [tests] `tests/test_tree_model.py`
-      - `flags()` is O(1) and never raises on malformed bytes payloads
-      - `rowCount` / `columnCount` / `parent` / `index` invariants
-      - `setData` emits `dataChanged`
+- [x] `tests/test_tree_correctness.py` (delivered)
+      - `test_insert_row_under_object_creates_unique_named_null_children`
+      - `test_insert_row_under_array_keeps_name_none`
+      - `test_set_data_recomputes_json_type`
+      - `test_to_json_raises_for_unnamed_object_child`
+      - `test_parse_json_type_is_total_and_has_narrower_heuristics`
+      - `test_flags_are_safe_for_malformed_binary_payloads`
+      - `test_column_api_returns_false_without_changing_model`
+      - `test_action_insert_child_main_path`
+- [x] `tests/test_type_editing.py` (delivered)
+      - `test_name_editing_object_and_duplicate_rejection`
+      - `test_array_name_column_shows_index_and_is_read_only`
+      - `test_type_change_sets_explicit_type_and_coerces_value`
+      - `test_type_pinning_keeps_string_for_base64_like_value`
+      - `test_json_type_delegate_preselects_and_commits`
+- [ ] [tests] **still missing** model invariants:
+      - `setData` emits `dataChanged` for the full row (cols 0..2)
       - `removeRows` updates persistent indices correctly
-      - `setData` on a malformed BYTES cell doesn't crash flags
-- [ ] [tests] `tests/test_enums_parse.py`
-      - boundary cases for `parse_json_type`: short strings, ambiguous
-        base64, datetimes with/without TZ, nested types, unknown types
-        (do not raise)
-      - explicit-type pinning honoured
+      - `parent()` / `index()` round-trip on a 3-level tree
+      - `change_type` lossy=True only when there were children
+      - `_unique_child_name` collision avoidance with reserved-name set
 
 ### Delegate tests
+- [x] `tests/test_type_editing.py::test_json_type_delegate_preselects_and_commits`
 - [ ] [tests] `tests/test_value_delegate.py` (uses `pytest-qt`)
-      - editor type matches `JsonType`
+      - editor type matches `JsonType` for all inline-editor types
       - `setEditorData` / `setModelData` round-trip integers, mpq,
         booleans, datetimes
+      - dispatch by **editor widget class** survives stale editors
+        (the code-level fix shipped in Phase 2 should be locked in by a
+        focused regression test, complementing the existing
+        `test_cycling_inline_types_does_not_log_edit_failed`)
       - dialog-based delegates (multiline / hex) commit through
-        `QPersistentModelIndex`
-- [ ] [tests] `tests/test_type_delegate.py`
-      - combo preselects current type
-      - `setModelData` triggers a model-level type change
+        `QPersistentModelIndex` (new — depends on Phase 3 fix)
 
 ### File I/O tests
 - [ ] [tests] `tests/test_io_roundtrip.py`
@@ -62,13 +88,17 @@ jsontream) is well covered; the JSON tree editor itself is not.
       - dirty flips on edit, clears on save, clears on undo-to-clean
 
 ### GUI smoke (`pytest-qt`)
-- [ ] [tests] `tests/test_smoke_app.py`
-      - launch `MainWindow(filename)` with offscreen QPA
-      - open a sample file, expand all, resize columns, no exception
-      - trigger every menu/toolbar action that does not require user
-        input; assert no exception and dirty/undo states remain
-        consistent
-      - close the app — confirm dialog suppressed in test mode
+- [x] `tests/test_smoke_mainwindow.py` (delivered)
+      - launches `MainWindow(yaml_filename="")`
+      - `test_mainwindow_constructs`
+      - `test_mainwindow_status_bar_is_usable` (regression for the
+        Designer-generated `statusBar` shadowing `statusBar()`)
+      - `test_create_new_file_action_opens_tab`
+      - `test_create_multiple_new_file_tabs` (also exercises `close_tab`)
+      - parametrized `test_type_change_does_not_log_edit_failed`
+      - `test_cycling_inline_types_does_not_log_edit_failed`
+- [ ] [tests] Extend smoke to cover Phase 3+ actions once they land
+      (cut/copy/paste/delete, undo/redo, file open/save).
 
 ### Tooling
 - [ ] [tooling] Add `pytest-qt` to `requirements.txt`.
