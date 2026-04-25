@@ -142,3 +142,88 @@ def test_duplicate_then_undo_redo_on_big_array(qtbot):
 
     tab.undo_stack.redo()
     assert tab._snapshot() == after
+
+
+def test_expansion_preserved_across_undo_redo(qtbot):
+    """The smart-restore diff must keep view expansion intact.
+
+    Pre-Phase-2 ``_restore_state`` did a full ``beginResetModel`` which
+    collapsed every expanded sibling node — a UX regression. The diff
+    path emits only minimal model signals, so any sibling that was
+    expanded before the mutation must remain expanded after undo / redo.
+    """
+    tab = _make_big_tab(qtbot, fanout=200)
+
+    # Expand the seeded "object" node and the big "array" node.
+    obj_idx = None
+    arr_idx = None
+    for r in range(tab.model.rowCount(QModelIndex())):
+        name = tab.model.data(tab.model.index(r, 0, QModelIndex()))
+        if name == "object":
+            obj_idx = tab.model.index(r, 0, QModelIndex())
+        elif name == "array":
+            arr_idx = tab.model.index(r, 0, QModelIndex())
+    assert obj_idx is not None and arr_idx is not None
+    tab.view.setExpanded(obj_idx, True)
+    tab.view.setExpanded(arr_idx, True)
+    assert tab.view.isExpanded(obj_idx)
+    assert tab.view.isExpanded(arr_idx)
+
+    # Edit a leaf inside the array — sibling expansion must survive
+    # the resulting commit + the subsequent undo + redo.
+    inner_v = tab.model.index(10, 2, arr_idx)
+    assert tab.commit_set_data(inner_v, {"k": 99, "v": "edited"}, Qt.ItemDataRole.EditRole)
+
+    # Re-fetch indexes (model identity may shift after restore-then-redo).
+    obj_idx = None
+    arr_idx = None
+    for r in range(tab.model.rowCount(QModelIndex())):
+        name = tab.model.data(tab.model.index(r, 0, QModelIndex()))
+        if name == "object":
+            obj_idx = tab.model.index(r, 0, QModelIndex())
+        elif name == "array":
+            arr_idx = tab.model.index(r, 0, QModelIndex())
+    assert tab.view.isExpanded(obj_idx)
+    assert tab.view.isExpanded(arr_idx)
+
+    tab.undo_stack.undo()
+    assert tab.view.isExpanded(obj_idx)
+    assert tab.view.isExpanded(arr_idx)
+
+    tab.undo_stack.redo()
+    assert tab.view.isExpanded(obj_idx)
+    assert tab.view.isExpanded(arr_idx)
+
+
+def test_undo_walking_is_responsive(qtbot):
+    """Undo / redo on a 3000-row array should stay responsive."""
+    import time
+
+    tab = _make_big_tab(qtbot, fanout=3000)
+    arr_idx = None
+    for r in range(tab.model.rowCount(QModelIndex())):
+        if tab.model.data(tab.model.index(r, 0, QModelIndex())) == "array":
+            arr_idx = tab.model.index(r, 0, QModelIndex())
+            break
+    inner = tab.model.index(1500, 0, arr_idx)
+    tab.view.setCurrentIndex(inner)
+    tab.view.selectionModel().select(inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+
+    # 10 mutations.
+    for _ in range(10):
+        assert move_selection_up(tab.view)
+
+    start = time.perf_counter()
+    for _ in range(10):
+        tab.undo_stack.undo()
+    undo_elapsed = time.perf_counter() - start
+
+    start = time.perf_counter()
+    for _ in range(10):
+        tab.undo_stack.redo()
+    redo_elapsed = time.perf_counter() - start
+
+    # Generous bound for slow CI machines; on developer hardware these
+    # complete in ~150-200ms total.
+    assert undo_elapsed < 5.0, f"10x undo too slow: {undo_elapsed:.2f}s"
+    assert redo_elapsed < 5.0, f"10x redo too slow: {redo_elapsed:.2f}s"

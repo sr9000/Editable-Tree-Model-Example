@@ -11,7 +11,7 @@ from PySide6.QtGui import QKeySequence, QShortcut, QUndoCommand, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, ValueDelegate
-from enums import JsonType
+from enums import JsonType, parse_json_type
 from tree_item import JsonTreeItem
 from tree_model import JsonTreeModel
 from tree_view import (
@@ -287,10 +287,33 @@ class JsonTab(QWidget):
         }
 
     def _restore_state(self, state: dict) -> None:
-        self.model.beginResetModel()
-        self.model.root_item = JsonTreeItem(None, state["data"])
-        self.model.endResetModel()
+        """Converge the live model onto *state* with minimal model signals.
 
+        First tries a surgical diff (``_diff_apply_root``) which emits only
+        the necessary ``insertRows`` / ``removeRows`` / ``move_row`` /
+        ``dataChanged`` signals: undo / redo cost is then O(diff size),
+        not O(tree size), and the view's selection / expansion / current
+        index are preserved by Qt automatically.
+
+        Falls back to a full ``beginResetModel`` rebuild only when the
+        diff cannot succeed in place (root type changed, or a sub-step
+        rejected — both rare).
+        """
+        target_data = state["data"]
+        success = False
+        try:
+            success = self._diff_apply_root(target_data)
+        except Exception:
+            success = False
+
+        if not success:
+            self.model.beginResetModel()
+            self.model.root_item = JsonTreeItem(None, target_data)
+            self.model.endResetModel()
+
+        # Re-apply expansion + current-index by path. After a successful
+        # surgical diff most of this is a no-op (state was preserved); on
+        # the reset fallback path it is essential.
         for path in state.get("expansion", ()):
             idx = self._index_from_path(path)
             if idx.isValid():
@@ -303,6 +326,181 @@ class JsonTab(QWidget):
                 sel_model = self.view.selectionModel()
                 if sel_model is not None:
                     self.view.setCurrentIndex(idx)
+
+    # ------------------------------------------------------------------
+    # Smart-restore diff helpers
+    # ------------------------------------------------------------------
+
+    def _diff_apply_root(self, target_data: Any) -> bool:
+        """Top-level entry to ``_diff_apply``; bails out on root-type change."""
+        root = self.model.root_item
+        if isinstance(target_data, dict):
+            if root.json_type is not JsonType.OBJECT:
+                return False
+        elif isinstance(target_data, list):
+            if root.json_type is not JsonType.ARRAY:
+                return False
+        else:
+            if root.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+                return False
+        return self._diff_apply(root, target_data, QModelIndex())
+
+    def _diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool:
+        """Mutate *item*'s subtree in place to match *target*.
+
+        Returns True on success; False signals a type mismatch — the caller
+        must replace this row entirely (``removeRow`` + ``_insert_typed_item``).
+
+        This is the hot path for undo / redo. We avoid ``parse_json_type``
+        whenever possible: cheap ``isinstance`` discriminates container vs
+        leaf in O(1), and identical-Python-typed leaves bypass re-parsing
+        altogether (critical for huge string-heavy trees, where the
+        ``parse_json_type`` regex/base64/datetime probes dominate).
+        """
+        if isinstance(target, dict):
+            if item.json_type is not JsonType.OBJECT:
+                return False
+            return self._diff_object(item, target, item_index)
+        if isinstance(target, list):
+            if item.json_type is not JsonType.ARRAY:
+                return False
+            return self._diff_array(item, target, item_index)
+
+        # Target is a leaf.
+        if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+            return False
+
+        if item.value == target:
+            return True  # unchanged → no signal needed
+
+        # Value differs. For non-string primitives whose Python type matches
+        # the current value's type, the JsonType classification cannot have
+        # changed (parse_json_type is identity-on-int/bool/None and only
+        # narrows floats by range), so we can update value in place. For
+        # strings the heuristics may pick a different leaf JsonType
+        # (DATE / BYTES / etc.), so re-classify those.
+        if type(item.value) is type(target) and not isinstance(target, str):
+            item.value = item._normalize_value_for_type(target)
+            item.editable = item._compute_editable()
+        else:
+            new_type = parse_json_type(target)
+            if new_type in (JsonType.OBJECT, JsonType.ARRAY):
+                # Defensive: parse_json_type promoted a primitive into a
+                # container type — treat as type mismatch.
+                return False
+            item._apply_typed_value(new_type, target)
+
+        if item_index.isValid():
+            row = item_index.row()
+            parent = item_index.parent()
+            top = self.model.index(row, 0, parent)
+            bot = self.model.index(row, 2, parent)
+            self.model.dataChanged.emit(
+                top,
+                bot,
+                [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole],
+            )
+        return True
+
+    def _insert_typed_item(
+        self,
+        parent_item: JsonTreeItem,
+        parent_index: QModelIndex,
+        position: int,
+        value: Any,
+        name: str | int | None = None,
+    ) -> bool:
+        """Insert a fully-built ``JsonTreeItem`` at *position*.
+
+        Bypasses ``model.setData`` for column 2 (which only emits
+        ``dataChanged``) so that complex values arrive in the model with
+        their full child subtree already populated and the view sees a
+        single ``beginInsertRows`` / ``endInsertRows`` cycle.
+        """
+        new_item = JsonTreeItem(parent_item, value, name)
+        self.model.beginInsertRows(parent_index, position, position)
+        parent_item.child_items.insert(position, new_item)
+        parent_item.mark_children_dirty()
+        self.model.endInsertRows()
+        return True
+
+    def _diff_object(self, item: JsonTreeItem, target_dict: dict, item_index: QModelIndex) -> bool:
+        target_names = list(target_dict.keys())
+        target_name_set = set(target_names)
+
+        # Phase 1: drop children whose names are not in target. Walk
+        # backwards so positional indices stay valid as we remove.
+        for i in range(len(item.child_items) - 1, -1, -1):
+            if item.child_items[i].name not in target_name_set:
+                if not self.model.removeRow(i, item_index):
+                    return False
+
+        # Phase 2: walk the target order, recursing in lockstep when
+        # children are already aligned and falling back to a linear search
+        # only on disorder.
+        for target_pos, target_name in enumerate(target_names):
+            target_value = target_dict[target_name]
+
+            # Lockstep fast path: child at target_pos already has the right name.
+            cur_pos: int | None = None
+            children = item.child_items
+            if target_pos < len(children) and children[target_pos].name == target_name:
+                cur_pos = target_pos
+            else:
+                # Search from target_pos forward (anything earlier already settled).
+                for i in range(target_pos, len(children)):
+                    if children[i].name == target_name:
+                        cur_pos = i
+                        break
+
+            if cur_pos is None:
+                # Insert fresh at target_pos.
+                if not self._insert_typed_item(item, item_index, target_pos, target_value, name=target_name):
+                    return False
+                continue
+
+            if cur_pos != target_pos:
+                if not self.model.move_row(item_index, cur_pos, target_pos):
+                    return False
+
+            child = item.child_items[target_pos]
+            child_index = self.model.index(target_pos, 0, item_index)
+            if not self._diff_apply(child, target_value, child_index):
+                # Type mismatch: replace this row entirely.
+                if not self.model.removeRow(target_pos, item_index):
+                    return False
+                if not self._insert_typed_item(item, item_index, target_pos, target_value, name=target_name):
+                    return False
+
+        return True
+
+    def _diff_array(self, item: JsonTreeItem, target_list: list, item_index: QModelIndex) -> bool:
+        target_len = len(target_list)
+
+        # Trim trailing rows.
+        while len(item.child_items) > target_len:
+            last = len(item.child_items) - 1
+            if not self.model.removeRow(last, item_index):
+                return False
+
+        # Recurse positionally; replace on type-mismatch; extend by appending.
+        for pos in range(target_len):
+            target_value = target_list[pos]
+
+            if pos >= len(item.child_items):
+                if not self._insert_typed_item(item, item_index, pos, target_value, name=None):
+                    return False
+                continue
+
+            child = item.child_items[pos]
+            child_index = self.model.index(pos, 0, item_index)
+            if not self._diff_apply(child, target_value, child_index):
+                if not self.model.removeRow(pos, item_index):
+                    return False
+                if not self._insert_typed_item(item, item_index, pos, target_value, name=None):
+                    return False
+
+        return True
 
     def _restore_snapshot(self, data: Any) -> None:
         # Backward-compatible helper: restore data only (used by older callers / tests).
