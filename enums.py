@@ -16,18 +16,22 @@ _B64_RE = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
 
 
 def _looks_like_base64(s: str) -> bool:
-    if len(s) < 16 or len(s) % 4 != 0:
+    """Return True iff *s* is a syntactically valid, non-empty base64 string.
+
+    No content heuristics are applied: any string that decodes cleanly under
+    strict base64 rules is treated as ``BYTES``. Callers that need to
+    discriminate against short / human-readable strings (e.g. ``"abcd"``)
+    must pin the type explicitly via the type editor.
+    """
+    if not s or len(s) % 4 != 0:
         return False
     if _B64_RE.fullmatch(s) is None:
         return False
     try:
-        raw = base64.b64decode(s, validate=True)
+        base64.b64decode(s, validate=True)
     except Exception:
         return False
-    if not raw:
-        return False
-    text_ratio = sum(32 <= b < 127 for b in raw) / len(raw)
-    return text_ratio < 0.85
+    return True
 
 
 def parse_json_type(value: Any) -> "JsonType":
@@ -42,9 +46,13 @@ def parse_json_type(value: Any) -> "JsonType":
             return JsonType.INTEGER
 
         case float(x):
+            if 0.0 <= x <= 1.0:
+                return JsonType.PERCENT
             return JsonType.FLOAT
 
-        case gmpy2.mpq():
+        case gmpy2.mpq() as q:
+            if 0 <= q <= 1:
+                return JsonType.PERCENT
             return JsonType.FLOAT
 
         case str(s):

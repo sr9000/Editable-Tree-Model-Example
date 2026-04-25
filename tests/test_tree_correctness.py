@@ -56,11 +56,23 @@ def test_to_json_raises_for_unnamed_object_child():
 
 
 def test_parse_json_type_is_total_and_has_narrower_heuristics():
-    assert parse_json_type(0.5) is JsonType.FLOAT
-    assert parse_json_type(gmpy2.mpq("50/100")) is JsonType.FLOAT
-    assert parse_json_type(gmpy2.mpq("1/2")) is JsonType.FLOAT
-    assert parse_json_type("abcd") is JsonType.STRING
+    # Floats / mpq in [0, 1] are PERCENT; integers 0/1 stay INTEGER.
+    assert parse_json_type(0) is JsonType.INTEGER
+    assert parse_json_type(1) is JsonType.INTEGER
+    assert parse_json_type(0.5) is JsonType.PERCENT
+    assert parse_json_type(0.0) is JsonType.PERCENT
+    assert parse_json_type(1.0) is JsonType.PERCENT
+    assert parse_json_type(1.5) is JsonType.FLOAT
+    assert parse_json_type(-0.1) is JsonType.FLOAT
+    assert parse_json_type(gmpy2.mpq("50/100")) is JsonType.PERCENT
+    assert parse_json_type(gmpy2.mpq("1/2")) is JsonType.PERCENT
+    assert parse_json_type(gmpy2.mpq("3/2")) is JsonType.FLOAT
+
+    # A pure base64 string (regex + padding + clean decode) is BYTES.
+    assert parse_json_type("abcd") is JsonType.BYTES
+    # Strings that aren't valid base64 stay STRING.
     assert parse_json_type("hi\n") is JsonType.STRING
+    assert parse_json_type("hello") is JsonType.STRING
     assert parse_json_type((1, 2)) is JsonType.STRING
 
     unknown = JsonTreeItem(None, (1, 2), "tuple_value")
