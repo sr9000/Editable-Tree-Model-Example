@@ -111,3 +111,42 @@ def test_type_change_does_not_log_edit_failed(main_window, qt_messages, json_typ
 
     failed = [m for m in qt_messages if "edit: editing failed" in m]
     assert not failed, f"Unexpected Qt warnings: {failed}"
+
+
+def test_cycling_inline_types_does_not_log_edit_failed(main_window, qt_messages, qapp):
+    """Regression: cycling a value's type through inline-editor types
+    (INTEGER / FLOAT / STRING / BOOLEAN / PERCENT / DATE) must not log
+    ``edit: editing failed`` nor raise ``AttributeError`` from
+    ``ValueDelegate.setEditorData``.
+
+    Previously ``setEditorData`` / ``setModelData`` dispatched on
+    ``item.json_type``; if Qt reused a value editor created for a previous
+    type, the dispatch called methods that didn't exist on the old widget
+    (``setText`` on a ``QMpqSpinBox`` etc.), producing
+    ``edit: editing failed`` warnings and ``AttributeError``s.
+    """
+    main_window.show()
+    qapp.processEvents()
+    main_window.create_new_file()
+    tab = main_window.tabWidget.currentWidget()
+    type_index = tab.model.index(0, 1)
+
+    cycle = [
+        JsonType.INTEGER,
+        JsonType.FLOAT,
+        JsonType.STRING,
+        JsonType.BOOLEAN,
+        JsonType.INTEGER,
+        JsonType.PERCENT,
+        JsonType.DATE,
+        JsonType.STRING,
+    ]
+
+    qt_messages.clear()
+    for tp in cycle:
+        assert tab.model.setData(type_index, tp, Qt.ItemDataRole.EditRole)
+        # Let any QTimer.singleShot(0) callbacks run.
+        qapp.processEvents()
+
+    failed = [m for m in qt_messages if "edit: editing failed" in m]
+    assert not failed, f"Unexpected 'edit: editing failed' warnings: {failed}"

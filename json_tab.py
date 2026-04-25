@@ -5,7 +5,7 @@ import zlib
 from typing import Callable
 
 import gmpy2
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPersistentModelIndex, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, ValueDelegate
@@ -99,8 +99,29 @@ class JsonTab(QWidget):
         # calling `view.edit()` for any of these makes Qt log
         # "edit: editing failed" and is otherwise a no-op.
         flags = self.model.flags(value_index)
-        if flags & Qt.ItemFlag.ItemIsEditable and not _uses_modal_editor(self.model.get_item(item_index).json_type):
-            self.view.edit(value_index)
+        new_type = self.model.get_item(item_index).json_type
+        if not (flags & Qt.ItemFlag.ItemIsEditable) or _uses_modal_editor(new_type):
+            if lossy and self._status_message_callback is not None:
+                self._status_message_callback("Type change dropped existing child nodes", 3000)
+            return
+
+        # Defer the edit() call to the next event-loop iteration so that the
+        # synchronous chain that committed the type-combo finishes first.
+        # If a previous value editor for this index is still alive, Qt will
+        # reuse it — that is OK because ``ValueDelegate.setEditorData`` /
+        # ``setModelData`` dispatch on the editor's *widget class*, so a
+        # stale editor still operates correctly without triggering Qt
+        # warnings.
+        persistent = QPersistentModelIndex(value_index)
+
+        def _start_value_edit():
+            if not persistent.isValid():
+                return
+            idx = self.model.index(persistent.row(), persistent.column(), persistent.parent())
+            if self.model.flags(idx) & Qt.ItemFlag.ItemIsEditable:
+                self.view.edit(idx)
+
+        QTimer.singleShot(0, _start_value_edit)
 
         if lossy and self._status_message_callback is not None:
             self._status_message_callback("Type change dropped existing child nodes", 3000)

@@ -84,64 +84,87 @@ class ValueDelegate(QStyledItemDelegate):
 
     def setEditorData(
         self,
-        editor: QBigIntSpinBox | QDoubleSpinBox | QComboBox | QLineEdit | QDateEdit | QDateTimeEdit,
+        editor: QWidget,
         index: QModelIndex,
     ):
+        # IMPORTANT: dispatch on the editor's *widget class*, not on
+        # ``item.json_type``. The editor was created for a specific JSON
+        # type by ``createEditor``; if the type was changed afterwards
+        # (e.g. via the type combo) Qt may still call us with that old
+        # widget. Keying off ``item.json_type`` would then call methods
+        # that don't exist on the old widget (``setText`` on
+        # ``QMpqSpinBox`` etc.).
         item: JsonTreeItem = index.internalPointer()
+        value = item.value
 
-        match item.json_type:
-            case JsonType.INTEGER:
-                editor: QBigIntSpinBox
-                editor.setValue(item.value)
-            case JsonType.FLOAT:
-                # QMpqSpinBox preserves mpq, set directly
-                sb: QMpqSpinBox = editor  # type: ignore[assignment]
-                sb.setValue(item.value)
-            case JsonType.PERCENT:
-                # Stored as fraction 0..1, editor shows 0..100 with "%"
-                sb: QMpqSpinBox = editor  # type: ignore[assignment]
-                sb.setValue(item.value * 100)
-            case JsonType.BOOLEAN:
-                editor: QComboBox
-                editor.setCurrentIndex((not item.value) * 1)
-            case JsonType.STRING:
-                editor: QLineEdit
-                editor.setText(item.value)
-            case JsonType.TIME | JsonType.DATE | JsonType.DATETIME | JsonType.DATETIMEZONE:
-                dt_editor: BetterDateTimeEditor = editor  # type: ignore[assignment]
-                dt_editor.setCategory(self._category_for_json_type(item.json_type))
-                dt_editor.setText(str(item.value or ""))
-            case unknown:
-                raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.setEditorData()`: {item.json_type=}")
+        if isinstance(editor, QBigIntSpinBox):
+            try:
+                editor.setValue(int(value))
+            except (TypeError, ValueError):
+                editor.setValue(0)
+            return
+
+        if isinstance(editor, QMpqSpinBox):
+            # PERCENT stores 0..1 fractions but the editor shows 0..100.
+            try:
+                v = mpq(str(value)) if not isinstance(value, mpq) else value
+            except (TypeError, ValueError):
+                v = mpq(0)
+            if item.json_type is JsonType.PERCENT:
+                v = v * 100
+            editor.setValue(v)
+            return
+
+        if isinstance(editor, QComboBox):
+            # Used for BOOLEAN values.
+            editor.setCurrentIndex(0 if bool(value) else 1)
+            return
+
+        if isinstance(editor, BetterDateTimeEditor):
+            category = self._category_for_json_type(item.json_type)
+            if category is not None:
+                editor.setCategory(category)
+            editor.setText(str(value or ""))
+            return
+
+        if isinstance(editor, QLineEdit):
+            editor.setText("" if value is None else str(value))
+            return
+
+        # Unknown editor class — fall back to the default implementation.
+        super().setEditorData(editor, index)
 
     def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
-        item: JsonTreeItem = index.internalPointer()
+        # Same rationale as in setEditorData: dispatch by editor widget
+        # class so a stale editor (created for a previous JSON type) still
+        # commits a sensible value. The model's ``setData`` handles type
+        # coercion or rejection.
+        if isinstance(editor, QBigIntSpinBox):
+            model.setData(index, editor.value(), Qt.ItemDataRole.EditRole)
+            return
 
-        match item.json_type:
-            case JsonType.INTEGER:
-                sb: QBigIntSpinBox = editor  # type: ignore[assignment]
-                model.setData(index, sb.value(), Qt.ItemDataRole.EditRole)
-            case JsonType.FLOAT:
-                sb: QMpqSpinBox = editor  # type: ignore[assignment]
-                model.setData(index, sb.value(), Qt.ItemDataRole.EditRole)
-            case JsonType.PERCENT:
-                sb: QMpqSpinBox = editor  # type: ignore[assignment]
-                model.setData(index, sb.value() / mpq("100"), Qt.ItemDataRole.EditRole)
-            case JsonType.BOOLEAN:
-                cb: QComboBox = editor  # type: ignore[assignment]
-                model.setData(index, cb.currentData(), Qt.ItemDataRole.EditRole)
-            case JsonType.STRING:
-                le: QLineEdit = editor  # type: ignore[assignment]
-                model.setData(index, le.text(), Qt.ItemDataRole.EditRole)
-            case JsonType.TIME | JsonType.DATE | JsonType.DATETIME | JsonType.DATETIMEZONE:
-                dt_editor: BetterDateTimeEditor = editor  # type: ignore[assignment]
-                # Keep exactly what user typed; DateTimeEditor ensures validity
-                model.setData(index, dt_editor.text(), Qt.ItemDataRole.EditRole)
-            case JsonType.MULTILINE | JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
-                # Handled via modal dialogs, nothing to do here
-                return
-            case _:
-                raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.setModelData()`: {item.json_type=}")
+        if isinstance(editor, QMpqSpinBox):
+            item: JsonTreeItem = index.internalPointer()
+            value = editor.value()
+            if item is not None and item.json_type is JsonType.PERCENT:
+                value = value / mpq("100")
+            model.setData(index, value, Qt.ItemDataRole.EditRole)
+            return
+
+        if isinstance(editor, QComboBox):
+            model.setData(index, editor.currentData(), Qt.ItemDataRole.EditRole)
+            return
+
+        if isinstance(editor, BetterDateTimeEditor):
+            model.setData(index, editor.text(), Qt.ItemDataRole.EditRole)
+            return
+
+        if isinstance(editor, QLineEdit):
+            model.setData(index, editor.text(), Qt.ItemDataRole.EditRole)
+            return
+
+        # Modal-dialog types have no inline editor; nothing to commit.
+        super().setModelData(editor, model, index)
 
     @staticmethod
     def _category_for_json_type(json_type: JsonType) -> DateTimeCategory | None:
