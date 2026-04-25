@@ -1,8 +1,10 @@
 import gmpy2
 import pytest
 from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtWidgets import QTreeView
 
 from enums import JsonType, parse_json_type
+from model_actions import action_insert_child
 from tree_item import JsonTreeItem
 from tree_model import JsonTreeModel
 
@@ -87,3 +89,20 @@ def test_column_api_returns_false_without_changing_model():
     assert model.removeColumn(1) is False
 
     assert model.columnCount() == 3
+
+
+def test_action_insert_child_main_path(qtbot):
+    model = JsonTreeModel({"obj": {"existing": 1}})
+    view = QTreeView()
+    qtbot.addWidget(view)
+    view.setModel(model)
+
+    obj_index = model.index(0, 0, QModelIndex())
+    assert obj_index.isValid()
+
+    assert action_insert_child(view, obj_index, model)
+
+    inserted = model.get_item(model.index(0, 0, obj_index))
+    assert inserted.name == "new_key"
+    assert inserted.json_type is JsonType.NULL
+    assert model.get_item(obj_index).to_json() == {"new_key": None, "existing": 1}
