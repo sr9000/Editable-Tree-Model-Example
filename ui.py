@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QMainWindow, QMessageBox, QTreeView
 
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow
-from model_actions import action_insert_child, action_insert_row
+from model_actions import action_insert_child, action_insert_row_after, action_insert_row_before
 from tree_view import copy_selection
 
 
@@ -34,8 +34,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileCreateNewAction.triggered.connect(self.create_new_file)
 
         self.actionsMenu.aboutToShow.connect(self.update_actions)
-        self.rowInsertAction.triggered.connect(self.insert_row)
-        self.rowInsertAfterAction.triggered.connect(self.insert_row)
+        self.rowInsertAction.triggered.connect(self.insert_row_before)
+        self.rowInsertAfterAction.triggered.connect(self.insert_row_after)
         self.rowRemoveAction.triggered.connect(self.remove_row)
 
         self.update_actions()
@@ -81,7 +81,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def insert_column(self):
         return False
 
-    def insert_row(self):
+    def insert_row_before(self):
         view = self._current_view()
         if view is None:
             return
@@ -89,10 +89,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         index = view.selectionModel().currentIndex()
         model = view.model()
 
-        if not action_insert_row(index, model):
+        if not action_insert_row_before(index, model):
             return
 
         self.update_actions()
+
+    def insert_row_after(self):
+        view = self._current_view()
+        if view is None:
+            return
+
+        index = view.selectionModel().currentIndex()
+        model = view.model()
+
+        if not action_insert_row_after(index, model):
+            return
+
+        self.update_actions()
+
+    def insert_row(self):
+        # Backward-compatible helper used by old call sites.
+        self.insert_row_after()
 
     def remove_column(self):
         view = self._current_view()

@@ -11,7 +11,17 @@ from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, ValueDelegate
 from tree_model import JsonTreeModel
-from tree_view import copy_selection, cut_selection, delete_selection, paste_from_clipboard, show_context_menu
+from tree_view import (
+    copy_selection,
+    cut_selection,
+    delete_selection,
+    duplicate_selection,
+    move_selection_down,
+    move_selection_up,
+    paste_from_clipboard,
+    show_context_menu,
+    sort_selection_keys,
+)
 
 
 class JsonTab(QWidget):
@@ -91,6 +101,18 @@ class JsonTab(QWidget):
         self._delete_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self.view)
         self._delete_shortcut.activated.connect(lambda: self._run_tree_action("Deleted selection", delete=True))
 
+        self._duplicate_shortcut = QShortcut(QKeySequence("Ctrl+D"), self.view)
+        self._duplicate_shortcut.activated.connect(lambda: self._run_tree_action("Duplicated selection", duplicate=True))
+
+        self._move_up_shortcut = QShortcut(QKeySequence("Alt+Up"), self.view)
+        self._move_up_shortcut.activated.connect(lambda: self._run_tree_action("Moved up", move_up=True))
+
+        self._move_down_shortcut = QShortcut(QKeySequence("Alt+Down"), self.view)
+        self._move_down_shortcut.activated.connect(lambda: self._run_tree_action("Moved down", move_down=True))
+
+        self._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), self.view)
+        self._sort_shortcut.activated.connect(lambda: self._run_tree_action("Sorted keys", sort_keys=True))
+
         self.file_path = None
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
@@ -122,6 +144,10 @@ class JsonTab(QWidget):
         cut: bool = False,
         paste: bool = False,
         delete: bool = False,
+        duplicate: bool = False,
+        move_up: bool = False,
+        move_down: bool = False,
+        sort_keys: bool = False,
     ) -> None:
         changed = False
         if copy_only:
@@ -132,6 +158,14 @@ class JsonTab(QWidget):
             changed = paste_from_clipboard(self.view)
         elif delete:
             changed = delete_selection(self.view)
+        elif duplicate:
+            changed = duplicate_selection(self.view)
+        elif move_up:
+            changed = move_selection_up(self.view)
+        elif move_down:
+            changed = move_selection_down(self.view)
+        elif sort_keys:
+            changed = sort_selection_keys(self.view, recursive=False)
 
         if changed and self._status_message_callback is not None:
             self._status_message_callback(success_message, 1500)

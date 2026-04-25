@@ -169,3 +169,52 @@ class JsonTreeModel(QAbstractItemModel):
         self.dataChanged.emit(top, bot, roles)
         self.typeChanged.emit(top, lossy)
         return True
+
+    def move_row(self, parent: QModelIndex, src_row: int, dst_row: int) -> bool:
+        if src_row == dst_row:
+            return False
+
+        parent_item = self.get_item(parent)
+        count = parent_item.child_count()
+        if not (0 <= src_row < count and 0 <= dst_row < count):
+            return False
+
+        # Qt destination index is evaluated after source removal.
+        qt_dst = dst_row if dst_row < src_row else dst_row + 1
+        if not self.beginMoveRows(parent, src_row, src_row, parent, qt_dst):
+            return False
+
+        moved = parent_item.child_items.pop(src_row)
+        parent_item.child_items.insert(dst_row, moved)
+        self.endMoveRows()
+        return True
+
+    def sort_keys(self, index: QModelIndex, recursive: bool = False) -> bool:
+        if not index.isValid():
+            return False
+
+        item = self.get_item(index)
+        if item.json_type is not JsonType.OBJECT:
+            return False
+
+        self.layoutAboutToBeChanged.emit()
+        try:
+            self._sort_object_item(item, recursive=recursive)
+        finally:
+            self.layoutChanged.emit()
+        return True
+
+    def _sort_object_item(self, item: JsonTreeItem, recursive: bool = False) -> None:
+        if item.json_type is JsonType.OBJECT:
+            item.child_items.sort(key=lambda c: c.name or "")
+
+        if not recursive:
+            return
+
+        for child in item.child_items:
+            if child.json_type is JsonType.OBJECT:
+                self._sort_object_item(child, recursive=True)
+            elif child.json_type is JsonType.ARRAY:
+                for nested in child.child_items:
+                    if nested.json_type is JsonType.OBJECT:
+                        self._sort_object_item(nested, recursive=True)

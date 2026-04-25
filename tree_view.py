@@ -9,7 +9,13 @@ from PySide6.QtWidgets import QApplication, QMenu, QTreeView
 
 from enums import JsonType
 from jsontream import StreamingJSONEncoderWrapper
-from model_actions import action_insert_child, action_insert_row
+from model_actions import (
+    action_duplicate,
+    action_insert_child,
+    action_insert_row_after,
+    action_insert_row_before,
+    action_sort_keys,
+)
 from mpq2py import mpq_json_default
 from tree_model import JsonTreeModel
 
@@ -22,7 +28,18 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     index = tree_view.indexAt(position)
     model = tree_view.model()
 
+    can_insert_child = False
+    can_sort_keys = False
+    can_move_up = False
+    can_move_down = False
     if isinstance(model, JsonTreeModel) and index.isValid():
+        row0 = index.siblingAtColumn(0)
+        item = model.get_item(row0)
+        can_insert_child = item.json_type in (JsonType.OBJECT, JsonType.ARRAY)
+        can_sort_keys = item.json_type is JsonType.OBJECT
+        can_move_up = row0.row() > 0
+        can_move_down = row0.row() < model.rowCount(row0.parent()) - 1
+
         data = model.data(index, Qt.ItemDataRole.DisplayRole)
         item_menu = context_menu.addMenu(str(data) if data is not None else "Item")
 
@@ -38,13 +55,30 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
         delete_action = item_menu.addAction("Delete")
         delete_action.triggered.connect(lambda: delete_selection(tree_view))
 
-    new_row = context_menu.addAction("Insert Row")
-    new_row.triggered.connect(lambda: action_insert_row(index, model))
+        duplicate_action = item_menu.addAction("Duplicate")
+        duplicate_action.triggered.connect(lambda: duplicate_selection(tree_view))
 
-    can_insert_child = False
-    if isinstance(model, JsonTreeModel) and index.isValid():
-        item = model.get_item(index)
-        can_insert_child = item.json_type in (JsonType.OBJECT, JsonType.ARRAY)
+        move_up_action = item_menu.addAction("Move Up")
+        move_up_action.setEnabled(can_move_up)
+        move_up_action.triggered.connect(lambda: move_selection_up(tree_view))
+
+        move_down_action = item_menu.addAction("Move Down")
+        move_down_action.setEnabled(can_move_down)
+        move_down_action.triggered.connect(lambda: move_selection_down(tree_view))
+
+        sort_action = item_menu.addAction("Sort Keys")
+        sort_action.setEnabled(can_sort_keys)
+        sort_action.triggered.connect(lambda: sort_selection_keys(tree_view, recursive=False))
+
+        sort_recursive_action = item_menu.addAction("Sort Keys (Recursive)")
+        sort_recursive_action.setEnabled(can_sort_keys)
+        sort_recursive_action.triggered.connect(lambda: sort_selection_keys(tree_view, recursive=True))
+
+    before_action = context_menu.addAction("Insert Sibling Before")
+    before_action.triggered.connect(lambda: action_insert_row_before(index, model))
+
+    after_action = context_menu.addAction("Insert Sibling After")
+    after_action.triggered.connect(lambda: action_insert_row_after(index, model))
 
     new_child = context_menu.addAction("Insert Child")
     new_child.setEnabled(can_insert_child)
@@ -268,3 +302,58 @@ def to_json(item):
     encoder = StreamingJSONEncoderWrapper(separators=(",", ":"), indent=2)
     source = item.to_json() if hasattr(item, "to_json") else item
     return "".join(encoder.iterencode(source))
+
+
+def duplicate_selection(tree_view: QTreeView) -> bool:
+    model = tree_view.model()
+    if not isinstance(model, JsonTreeModel):
+        return False
+
+    rows = _top_level_selected_rows(tree_view)
+    if not rows:
+        return False
+
+    changed = False
+    for idx in sorted(rows, key=_index_path, reverse=True):
+        changed = action_duplicate(tree_view, idx, model) or changed
+    return changed
+
+
+def move_selection_up(tree_view: QTreeView) -> bool:
+    model = tree_view.model()
+    if not isinstance(model, JsonTreeModel):
+        return False
+
+    current = tree_view.currentIndex()
+    if not current.isValid():
+        return False
+
+    from model_actions import action_move_up
+
+    return action_move_up(tree_view, current, model)
+
+
+def move_selection_down(tree_view: QTreeView) -> bool:
+    model = tree_view.model()
+    if not isinstance(model, JsonTreeModel):
+        return False
+
+    current = tree_view.currentIndex()
+    if not current.isValid():
+        return False
+
+    from model_actions import action_move_down
+
+    return action_move_down(tree_view, current, model)
+
+
+def sort_selection_keys(tree_view: QTreeView, recursive: bool = False) -> bool:
+    model = tree_view.model()
+    if not isinstance(model, JsonTreeModel):
+        return False
+
+    current = tree_view.currentIndex()
+    if not current.isValid():
+        return False
+
+    return action_sort_keys(current, model, recursive=recursive)
