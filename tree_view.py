@@ -29,7 +29,6 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     new_child = context_menu.addAction("Insert Child")
     new_child.triggered.connect(lambda: action_insert_child(tree_view, index, model))
 
-
     # Add actions to the context menu here
     context_menu.exec(tree_view.mapToGlobal(position))
 

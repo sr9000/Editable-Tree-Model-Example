@@ -80,7 +80,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def insert_column(self):
         return False
 
-
     def insert_row(self):
         view = self._current_view()
         if view is None:
