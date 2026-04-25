@@ -13,7 +13,6 @@ from tree_model import JsonTreeModel
 from tree_view import show_context_menu
 
 
-
 class JsonTab(QWidget):
     def __init__(
         self,
@@ -97,7 +96,6 @@ class JsonTab(QWidget):
         # (e.g. an undo-stack-backed action).
         value_index = self.model.index(item_index.row(), 2, item_index.parent())
         self.view.closePersistentEditor(value_index)
-
 
         if lossy and self._status_message_callback is not None:
             self._status_message_callback("Type change dropped existing child nodes", 3000)
