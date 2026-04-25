@@ -2,7 +2,7 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QApplication, QMenu, QTreeView
 
 from jsontream import StreamingJSONEncoderWrapper
-from model_actions import action_insert_child, action_insert_column, action_insert_row
+from model_actions import action_insert_child, action_insert_row
 from tree_model import JsonTreeModel
 
 
@@ -29,8 +29,6 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     new_child = context_menu.addAction("Insert Child")
     new_child.triggered.connect(lambda: action_insert_child(tree_view, index, model))
 
-    new_column = context_menu.addAction("Insert Column")
-    new_column.triggered.connect(lambda: action_insert_column(index, model))
 
     # Add actions to the context menu here
     context_menu.exec(tree_view.mapToGlobal(position))

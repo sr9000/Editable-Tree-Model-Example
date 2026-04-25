@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QMainWindow, QMessageBox, QTreeView
 
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow
-from model_actions import action_insert_child, action_insert_column, action_insert_row
+from model_actions import action_insert_child, action_insert_row
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -78,18 +78,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.update_actions()
 
     def insert_column(self):
-        view = self._current_view()
-        if view is None:
-            return False
+        return False
 
-        model = view.model()
-        index = view.selectionModel().currentIndex()
-
-        changed = action_insert_column(index, model)
-
-        self.update_actions()
-
-        return changed
 
     def insert_row(self):
         view = self._current_view()
