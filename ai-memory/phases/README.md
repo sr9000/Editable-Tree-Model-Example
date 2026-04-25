@@ -1,0 +1,39 @@
+# Roadmap — Phased Plan
+
+_Last updated: 2026-04-25_
+
+The work captured in `todo-n-fixme.md` has been split into **7 sequential
+phases**. Each phase is a self-contained milestone: it can be merged,
+released, and tested before the next one starts.
+
+Phases are ordered so that:
+- earlier phases unblock later ones (e.g. fixing tree-mutation bugs before
+  building paste/undo on top),
+- the app becomes incrementally usable as a real editor rather than a demo,
+- pure code-hygiene work happens early so future diffs are smaller.
+
+## Phase index
+
+| # | File | Theme | Status |
+|---|------|-------|--------|
+| 0 | [`phase-0-stabilize.md`](phase-0-stabilize.md) | Stabilize: fix critical runtime bugs, dead imports, failing test, embedded C++ blocks | not started |
+| 1 | [`phase-1-tree-correctness.md`](phase-1-tree-correctness.md) | Tree/model correctness: insertion semantics, naming, type-detection robustness, `flags()` hot-path | not started |
+| 2 | [`phase-2-type-editing.md`](phase-2-type-editing.md) | Type & name editing: wire `JsonTypeDelegate`, rename, value coercion, type pinning | not started |
+| 3 | [`phase-3-tree-actions.md`](phase-3-tree-actions.md) | Tree mutation actions: cut / copy / paste / delete / duplicate / move / sort, plus undo-redo | not started |
+| 4 | [`phase-4-file-io.md`](phase-4-file-io.md) | File I/O: open / save / save-as JSON & YAML, dirty state, close-tab, recent files | not started |
+| 5 | [`phase-5-ux-polish.md`](phase-5-ux-polish.md) | UX polish: `displayText`, status bar, persisted column widths & expansion, search/filter | not started |
+| 6 | [`phase-6-tests.md`](phase-6-tests.md) | Test coverage: model unit tests, round-trip tests, GUI smoke tests | not started |
+
+## How to use these files
+
+Each phase file follows the same shape:
+
+1. **Goal** — one-paragraph mission statement.
+2. **Entry criteria** — what must be true before starting.
+3. **Exit criteria** — observable result that proves the phase is done.
+4. **Work items** — checklist of TODO/FIXME entries pulled from
+   `todo-n-fixme.md`, with file:symbol references.
+5. **Risks / notes** — gotchas and design decisions to make.
+
+When closing an item, tick it in the phase file **and** in
+`todo-n-fixme.md` so both stay in sync.
