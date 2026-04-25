@@ -2,26 +2,44 @@ import base64
 import functools
 import gzip
 import zlib
-from typing import Callable
+from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtGui import QKeySequence, QShortcut, QUndoCommand, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, ValueDelegate
+from tree_item import JsonTreeItem
 from tree_model import JsonTreeModel
 from tree_view import (
     copy_selection,
     cut_selection,
     delete_selection,
     duplicate_selection,
+    insert_child_current,
+    insert_sibling_after,
+    insert_sibling_before,
     move_selection_down,
     move_selection_up,
     paste_from_clipboard,
     show_context_menu,
     sort_selection_keys,
 )
+
+
+class _SnapshotCommand(QUndoCommand):
+    def __init__(self, tab: "JsonTab", text: str, before: Any, after: Any):
+        super().__init__(text)
+        self._tab = tab
+        self._before = before
+        self._after = after
+
+    def undo(self):
+        self._tab._restore_snapshot(self._before)
+
+    def redo(self):
+        self._tab._restore_snapshot(self._after)
 
 
 class JsonTab(QWidget):
@@ -74,11 +92,12 @@ class JsonTab(QWidget):
             },
             self.view,
         )
+        self.undo_stack = QUndoStack(self)
 
         self.view.setModel(self.model)
 
-        self.type_delegate = JsonTypeDelegate()
-        self.value_delegate = ValueDelegate()
+        self.type_delegate = JsonTypeDelegate(self)
+        self.value_delegate = ValueDelegate(self)
 
         self.view.setItemDelegateForColumn(1, self.type_delegate)
         self.view.setItemDelegateForColumn(2, self.value_delegate)
@@ -102,7 +121,9 @@ class JsonTab(QWidget):
         self._delete_shortcut.activated.connect(lambda: self._run_tree_action("Deleted selection", delete=True))
 
         self._duplicate_shortcut = QShortcut(QKeySequence("Ctrl+D"), self.view)
-        self._duplicate_shortcut.activated.connect(lambda: self._run_tree_action("Duplicated selection", duplicate=True))
+        self._duplicate_shortcut.activated.connect(
+            lambda: self._run_tree_action("Duplicated selection", duplicate=True)
+        )
 
         self._move_up_shortcut = QShortcut(QKeySequence("Alt+Up"), self.view)
         self._move_up_shortcut.activated.connect(lambda: self._run_tree_action("Moved up", move_up=True))
@@ -112,6 +133,16 @@ class JsonTab(QWidget):
 
         self._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), self.view)
         self._sort_shortcut.activated.connect(lambda: self._run_tree_action("Sorted keys", sort_keys=True))
+
+        self._undo_shortcut = QShortcut(QKeySequence.StandardKey.Undo, self.view)
+        self._undo_shortcut.activated.connect(self.undo_stack.undo)
+
+        self._redo_shortcut = QShortcut(QKeySequence.StandardKey.Redo, self.view)
+        self._redo_shortcut.activated.connect(self.undo_stack.redo)
+
+        # Support both Ctrl+Y and Ctrl+Shift+Z preferences.
+        self._redo_alt_shortcut = QShortcut(QKeySequence("Ctrl+Y"), self.view)
+        self._redo_alt_shortcut.activated.connect(self.undo_stack.redo)
 
         self.file_path = None
 
@@ -135,6 +166,31 @@ class JsonTab(QWidget):
 
         if lossy and self._status_message_callback is not None:
             self._status_message_callback("Type change dropped existing child nodes", 3000)
+
+    def _snapshot(self) -> Any:
+        return self.model.root_item.to_json()
+
+    def _restore_snapshot(self, data: Any) -> None:
+        self.model.beginResetModel()
+        self.model.root_item = JsonTreeItem(None, data)
+        self.model.endResetModel()
+
+    def commit_mutation(self, text: str, mutator: Callable[[], bool]) -> bool:
+        before = self._snapshot()
+        changed = bool(mutator())
+        if not changed:
+            return False
+
+        after = self._snapshot()
+        self._restore_snapshot(before)
+        self.undo_stack.push(_SnapshotCommand(self, text, before, after))
+        return True
+
+    def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
+        def _apply() -> bool:
+            return bool(self.model.setData(index, value, role))
+
+        return self.commit_mutation("edit cell", _apply)
 
     def _run_tree_action(
         self,
@@ -169,3 +225,12 @@ class JsonTab(QWidget):
 
         if changed and self._status_message_callback is not None:
             self._status_message_callback(success_message, 1500)
+
+    def insert_sibling_before(self) -> bool:
+        return insert_sibling_before(self.view)
+
+    def insert_sibling_after(self) -> bool:
+        return insert_sibling_after(self.view)
+
+    def insert_child(self) -> bool:
+        return insert_child_current(self.view)

@@ -14,6 +14,8 @@ from model_actions import (
     action_insert_child,
     action_insert_row_after,
     action_insert_row_before,
+    action_move_down,
+    action_move_up,
     action_sort_keys,
 )
 from mpq2py import mpq_json_default
@@ -27,6 +29,8 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
 
     index = tree_view.indexAt(position)
     model = tree_view.model()
+    if index.isValid():
+        tree_view.setCurrentIndex(index)
 
     can_insert_child = False
     can_sort_keys = False
@@ -75,14 +79,14 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
         sort_recursive_action.triggered.connect(lambda: sort_selection_keys(tree_view, recursive=True))
 
     before_action = context_menu.addAction("Insert Sibling Before")
-    before_action.triggered.connect(lambda: action_insert_row_before(index, model))
+    before_action.triggered.connect(lambda: insert_sibling_before(tree_view))
 
     after_action = context_menu.addAction("Insert Sibling After")
-    after_action.triggered.connect(lambda: action_insert_row_after(index, model))
+    after_action.triggered.connect(lambda: insert_sibling_after(tree_view))
 
     new_child = context_menu.addAction("Insert Child")
     new_child.setEnabled(can_insert_child)
-    new_child.triggered.connect(lambda: action_insert_child(tree_view, index, model))
+    new_child.triggered.connect(lambda: insert_child_current(tree_view))
 
     context_menu.exec(tree_view.mapToGlobal(position))
 
@@ -178,6 +182,52 @@ def copy_selection(tree_view: QTreeView) -> bool:
     return True
 
 
+def _commit_on_tab(tree_view: QTreeView, text: str, mutator) -> bool:
+    tab = tree_view.parent()
+    if tab is not None and hasattr(tab, "commit_mutation"):
+        return bool(tab.commit_mutation(text, mutator))
+    return bool(mutator())
+
+
+def insert_sibling_before(tree_view: QTreeView) -> bool:
+    model = tree_view.model()
+    if not isinstance(model, JsonTreeModel):
+        return False
+
+    current = tree_view.currentIndex()
+
+    def _apply() -> bool:
+        return action_insert_row_before(current, model)
+
+    return _commit_on_tab(tree_view, "insert sibling before", _apply)
+
+
+def insert_sibling_after(tree_view: QTreeView) -> bool:
+    model = tree_view.model()
+    if not isinstance(model, JsonTreeModel):
+        return False
+
+    current = tree_view.currentIndex()
+
+    def _apply() -> bool:
+        return action_insert_row_after(current, model)
+
+    return _commit_on_tab(tree_view, "insert sibling after", _apply)
+
+
+def insert_child_current(tree_view: QTreeView) -> bool:
+    model = tree_view.model()
+    if not isinstance(model, JsonTreeModel):
+        return False
+
+    current = tree_view.currentIndex()
+
+    def _apply() -> bool:
+        return action_insert_child(tree_view, current, model)
+
+    return _commit_on_tab(tree_view, "insert child", _apply)
+
+
 def delete_selection(tree_view: QTreeView) -> bool:
     model = tree_view.model()
     if not isinstance(model, JsonTreeModel):
@@ -190,10 +240,13 @@ def delete_selection(tree_view: QTreeView) -> bool:
     # Delete deepest/surviving rows first so row offsets stay valid.
     rows = sorted(rows, key=lambda idx: (_index_path(idx.parent()), idx.row()), reverse=True)
 
-    changed = False
-    for idx in rows:
-        changed = model.removeRow(idx.row(), idx.parent()) or changed
-    return changed
+    def _apply() -> bool:
+        changed = False
+        for idx in rows:
+            changed = model.removeRow(idx.row(), idx.parent()) or changed
+        return changed
+
+    return _commit_on_tab(tree_view, "delete selection", _apply)
 
 
 def cut_selection(tree_view: QTreeView) -> bool:
@@ -254,6 +307,7 @@ def paste_from_clipboard(tree_view: QTreeView) -> bool:
     entries = _clipboard_entries()
     if not entries:
         return False
+    entries_list = entries
 
     current = tree_view.currentIndex()
     if current.isValid():
@@ -273,29 +327,32 @@ def paste_from_clipboard(tree_view: QTreeView) -> bool:
     parent_item = model.get_item(parent_index)
     parent_is_object = parent_item.json_type is JsonType.OBJECT
 
-    inserted = 0
-    for entry in entries:
-        row = insert_pos + inserted
-        if not model.insertRow(row, parent_index):
+    def _apply() -> bool:
+        inserted = 0
+        for entry in entries_list:
+            row = insert_pos + inserted
+            if not model.insertRow(row, parent_index):
+                break
+
+            if parent_is_object and isinstance(entry.get("name"), str):
+                name_index = model.index(row, 0, parent_index)
+                model.setData(name_index, entry["name"], Qt.ItemDataRole.EditRole)
+
+            value_index = model.index(row, 2, parent_index)
+            if model.setData(value_index, entry["value"], Qt.ItemDataRole.EditRole):
+                inserted += 1
+                continue
+
+            model.removeRow(row, parent_index)
             break
 
-        if parent_is_object and isinstance(entry.get("name"), str):
-            name_index = model.index(row, 0, parent_index)
-            model.setData(name_index, entry["name"], Qt.ItemDataRole.EditRole)
+        if inserted <= 0:
+            return False
 
-        value_index = model.index(row, 2, parent_index)
-        if model.setData(value_index, entry["value"], Qt.ItemDataRole.EditRole):
-            inserted += 1
-            continue
+        tree_view.setCurrentIndex(model.index(insert_pos, 0, parent_index))
+        return True
 
-        model.removeRow(row, parent_index)
-        break
-
-    if inserted <= 0:
-        return False
-
-    tree_view.setCurrentIndex(model.index(insert_pos, 0, parent_index))
-    return True
+    return _commit_on_tab(tree_view, "paste", _apply)
 
 
 def to_json(item):
@@ -313,10 +370,15 @@ def duplicate_selection(tree_view: QTreeView) -> bool:
     if not rows:
         return False
 
-    changed = False
-    for idx in sorted(rows, key=_index_path, reverse=True):
-        changed = action_duplicate(tree_view, idx, model) or changed
-    return changed
+    ordered = sorted(rows, key=_index_path, reverse=True)
+
+    def _apply() -> bool:
+        changed = False
+        for idx in ordered:
+            changed = action_duplicate(tree_view, idx, model) or changed
+        return changed
+
+    return _commit_on_tab(tree_view, "duplicate", _apply)
 
 
 def move_selection_up(tree_view: QTreeView) -> bool:
@@ -328,9 +390,10 @@ def move_selection_up(tree_view: QTreeView) -> bool:
     if not current.isValid():
         return False
 
-    from model_actions import action_move_up
+    def _apply() -> bool:
+        return action_move_up(tree_view, current, model)
 
-    return action_move_up(tree_view, current, model)
+    return _commit_on_tab(tree_view, "move up", _apply)
 
 
 def move_selection_down(tree_view: QTreeView) -> bool:
@@ -342,9 +405,10 @@ def move_selection_down(tree_view: QTreeView) -> bool:
     if not current.isValid():
         return False
 
-    from model_actions import action_move_down
+    def _apply() -> bool:
+        return action_move_down(tree_view, current, model)
 
-    return action_move_down(tree_view, current, model)
+    return _commit_on_tab(tree_view, "move down", _apply)
 
 
 def sort_selection_keys(tree_view: QTreeView, recursive: bool = False) -> bool:
@@ -356,4 +420,8 @@ def sort_selection_keys(tree_view: QTreeView, recursive: bool = False) -> bool:
     if not current.isValid():
         return False
 
-    return action_sort_keys(current, model, recursive=recursive)
+    def _apply() -> bool:
+        return action_sort_keys(current, model, recursive=recursive)
+
+    label = "sort keys recursive" if recursive else "sort keys"
+    return _commit_on_tab(tree_view, label, _apply)

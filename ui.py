@@ -5,8 +5,7 @@ from PySide6.QtWidgets import QMainWindow, QMessageBox, QTreeView
 
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow
-from model_actions import action_insert_child, action_insert_row_after, action_insert_row_before
-from tree_view import copy_selection
+from tree_view import copy_selection, delete_selection
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -66,14 +65,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.update_actions()
 
     def insert_child(self):
-        view = self._current_view()
-        if view is None:
+        tab = self._current_tab()
+        if tab is None:
             return
 
-        index = view.selectionModel().currentIndex()
-        model = view.model()
-
-        if not action_insert_child(view, index, model):
+        if not tab.insert_child():
             return
 
         self.update_actions()
@@ -82,27 +78,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return False
 
     def insert_row_before(self):
-        view = self._current_view()
-        if view is None:
+        tab = self._current_tab()
+        if tab is None:
             return
 
-        index = view.selectionModel().currentIndex()
-        model = view.model()
-
-        if not action_insert_row_before(index, model):
+        if not tab.insert_sibling_before():
             return
 
         self.update_actions()
 
     def insert_row_after(self):
-        view = self._current_view()
-        if view is None:
+        tab = self._current_tab()
+        if tab is None:
             return
 
-        index = view.selectionModel().currentIndex()
-        model = view.model()
-
-        if not action_insert_row_after(index, model):
+        if not tab.insert_sibling_after():
             return
 
         self.update_actions()
@@ -130,12 +120,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if view is None:
             return
 
-        index = view.selectionModel().currentIndex()
-        if not index.isValid():
-            return
-        model = view.model()
-
-        if model.removeRow(index.row(), index.parent()):
+        if delete_selection(view):
             self.update_actions()
 
     def update_actions(self):

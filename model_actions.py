@@ -72,11 +72,7 @@ def action_duplicate(view: QTreeView, index: QModelIndex, model) -> bool:
     # Copy key name only under OBJECT parents and resolve collisions.
     parent_item = model.get_item(parent_index)
     if parent_item.json_type is JsonType.OBJECT and isinstance(item.name, str):
-        used = {
-            c.name
-            for i, c in enumerate(parent_item.child_items)
-            if i != insert_row and isinstance(c.name, str)
-        }
+        used = {c.name for i, c in enumerate(parent_item.child_items) if i != insert_row and isinstance(c.name, str)}
         new_name = item.name if item.name not in used else _copy_name(item.name, used)
         model.setData(model.index(insert_row, 0, parent_index), new_name)
 

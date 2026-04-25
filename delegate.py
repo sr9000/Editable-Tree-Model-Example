@@ -3,17 +3,8 @@ import gzip
 import zlib
 
 from gmpy2 import mpq
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
-from PySide6.QtWidgets import (
-    QComboBox,
-    QDateEdit,
-    QDateTimeEdit,
-    QDoubleSpinBox,
-    QLineEdit,
-    QStyledItemDelegate,
-    QStyleOptionViewItem,
-    QWidget,
-)
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt
+from PySide6.QtWidgets import QComboBox, QLineEdit, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
@@ -26,6 +17,36 @@ from tree_item import JsonTreeItem
 
 
 class ValueDelegate(QStyledItemDelegate):
+    @staticmethod
+    def _to_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
+        return QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+
+    @staticmethod
+    def _find_tab(host) -> object | None:
+        cursor = host
+        while cursor is not None:
+            if hasattr(cursor, "commit_set_data"):
+                return cursor
+            cursor = cursor.parent() if hasattr(cursor, "parent") else None
+        return None
+
+    @staticmethod
+    def _commit(
+        index: QModelIndex | QPersistentModelIndex,
+        value,
+        role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole,
+        host=None,
+    ) -> bool:
+        idx = ValueDelegate._to_index(index)
+        model = idx.model()
+        if model is None:
+            return False
+
+        tab = ValueDelegate._find_tab(host)
+        if tab is not None:
+            return bool(tab.commit_set_data(idx, value, role))
+        return bool(model.setData(idx, value, role))
+
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget | None:
 
         item: JsonTreeItem = index.internalPointer()
@@ -53,9 +74,11 @@ class ValueDelegate(QStyledItemDelegate):
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
                 editor = BetterDateTimeEditor(parent)
             case JsonType.MULTILINE:
+                pidx = QPersistentModelIndex(index)
 
                 def _save_multiline(text: str) -> None:
-                    index.model().setData(index, text, Qt.ItemDataRole.EditRole)
+                    if pidx.isValid():
+                        self._commit(pidx, text, Qt.ItemDataRole.EditRole, host=parent)
 
                 QMultilineDialog(  # Use a modal dialog-based editor for multiline text
                     parent=parent,
@@ -66,10 +89,13 @@ class ValueDelegate(QStyledItemDelegate):
                 return None  # Do not return an inline editor for multiline values
 
             case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
+                pidx = QPersistentModelIndex(index)
 
                 def _save_binary(data: bytes) -> None:
+                    if not pidx.isValid():
+                        return
                     encoded = encode_bytes(data, item.json_type)
-                    index.model().setData(index, encoded, Qt.ItemDataRole.EditRole)
+                    self._commit(pidx, encoded, Qt.ItemDataRole.EditRole, host=parent)
 
                 QHexDialog(  # Use a modal dialog-based editor for binary data
                     parent=parent,
@@ -142,7 +168,7 @@ class ValueDelegate(QStyledItemDelegate):
         # commits a sensible value. The model's ``setData`` handles type
         # coercion or rejection.
         if isinstance(editor, QBigIntSpinBox):
-            model.setData(index, editor.value(), Qt.ItemDataRole.EditRole)
+            self._commit(index, editor.value(), Qt.ItemDataRole.EditRole, host=editor)
             return
 
         if isinstance(editor, QMpqSpinBox):
@@ -150,19 +176,19 @@ class ValueDelegate(QStyledItemDelegate):
             value = editor.value()
             if item is not None and item.json_type is JsonType.PERCENT:
                 value = value / mpq("100")
-            model.setData(index, value, Qt.ItemDataRole.EditRole)
+            self._commit(index, value, Qt.ItemDataRole.EditRole, host=editor)
             return
 
         if isinstance(editor, QComboBox):
-            model.setData(index, editor.currentData(), Qt.ItemDataRole.EditRole)
+            self._commit(index, editor.currentData(), Qt.ItemDataRole.EditRole, host=editor)
             return
 
         if isinstance(editor, BetterDateTimeEditor):
-            model.setData(index, editor.text(), Qt.ItemDataRole.EditRole)
+            self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
             return
 
         if isinstance(editor, QLineEdit):
-            model.setData(index, editor.text(), Qt.ItemDataRole.EditRole)
+            self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
             return
 
         # Modal-dialog types have no inline editor; nothing to commit.
@@ -184,6 +210,15 @@ class ValueDelegate(QStyledItemDelegate):
 
 
 class JsonTypeDelegate(QStyledItemDelegate):
+    @staticmethod
+    def _find_tab(host) -> object | None:
+        cursor = host
+        while cursor is not None:
+            if hasattr(cursor, "commit_set_data"):
+                return cursor
+            cursor = cursor.parent() if hasattr(cursor, "parent") else None
+        return None
+
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         editor = QComboBox(parent)
         for tp in JsonType:
@@ -197,6 +232,12 @@ class JsonTypeDelegate(QStyledItemDelegate):
 
     def setModelData(self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex):
         selected_type = editor.currentData()
+
+        tab = self._find_tab(editor)
+        if tab is not None:
+            tab.commit_set_data(index, selected_type, Qt.ItemDataRole.EditRole)
+            return
+
         model.setData(index, selected_type, Qt.ItemDataRole.EditRole)
 
 
