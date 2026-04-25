@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from typing import Any, Mapping, Optional
 
 import gmpy2
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
 
 from enums import JsonType
 from mpq2py import mpq_serialization
@@ -12,6 +12,8 @@ from tree_item import JsonTreeItem
 
 
 class JsonTreeModel(QAbstractItemModel):
+    typeChanged = Signal(QModelIndex, bool)
+
     def __init__(
         self,
         data: Mapping[str, Any],
@@ -21,7 +23,7 @@ class JsonTreeModel(QAbstractItemModel):
         super().__init__(parent)
         self.root_item = JsonTreeItem(None, data)
 
-    def get_item(self, index: QModelIndex) -> JsonTreeItem:
+    def get_item(self, index) -> JsonTreeItem:
         if index.isValid() and (item := index.internalPointer()):
             return item
         return self.root_item
@@ -59,7 +61,7 @@ class JsonTreeModel(QAbstractItemModel):
             return self.createIndex(row, column, childItem)
         return QModelIndex()
 
-    def parent(self, index: QModelIndex) -> QModelIndex:
+    def parent(self, index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
         if not index.isValid():
             return QModelIndex()
 
@@ -149,9 +151,12 @@ class JsonTreeModel(QAbstractItemModel):
 
         item = self.get_item(index)
         had_children = item.json_type in (JsonType.ARRAY, JsonType.OBJECT)
+        old_child_count = item.child_count()
+        value_parent_index = self.index(index.row(), 0, index.parent())
+        lossy = had_children and old_child_count > 0
 
-        if had_children and item.child_count() > 0:
-            self.beginRemoveRows(index, 0, item.child_count() - 1)
+        if had_children and old_child_count > 0:
+            self.beginRemoveRows(value_parent_index, 0, old_child_count - 1)
             item.child_items.clear()
             self.endRemoveRows()
 
@@ -162,4 +167,5 @@ class JsonTreeModel(QAbstractItemModel):
         top = self.index(index.row(), 0, index.parent())
         bot = self.index(index.row(), 2, index.parent())
         self.dataChanged.emit(top, bot, roles)
+        self.typeChanged.emit(top, lossy)
         return True

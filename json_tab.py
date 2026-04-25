@@ -2,6 +2,7 @@ import base64
 import functools
 import gzip
 import zlib
+from typing import Callable
 
 import gmpy2
 from PySide6.QtCore import Qt
@@ -13,8 +14,15 @@ from tree_view import show_context_menu
 
 
 class JsonTab(QWidget):
-    def __init__(self, update_actions_callback, parent=None):
+    def __init__(
+        self,
+        update_actions_callback,
+        status_message_callback: Callable[[str, int], None] | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
+
+        self._status_message_callback = status_message_callback
 
         self.layout = QVBoxLayout(self)
 
@@ -65,7 +73,16 @@ class JsonTab(QWidget):
         self.view.setItemDelegateForColumn(2, self.value_delegate)
 
         self.view.selectionModel().selectionChanged.connect(update_actions_callback)
+        self.model.typeChanged.connect(self._on_type_changed)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.view.customContextMenuRequested.connect(functools.partial(show_context_menu, self.view))
 
         self.file_path = None
+
+    def _on_type_changed(self, item_index, lossy: bool) -> None:
+        value_index = self.model.index(item_index.row(), 2, item_index.parent())
+        self.view.closePersistentEditor(value_index)
+        self.view.edit(value_index)
+
+        if lossy and self._status_message_callback is not None:
+            self._status_message_callback("Type change dropped existing child nodes", 3000)

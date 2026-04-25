@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QComboBox, QStyleOptionViewItem, QWidget
 
 from delegate import JsonTypeDelegate
 from enums import JsonType
+from json_tab import JsonTab
 from tree_model import JsonTreeModel
 
 
