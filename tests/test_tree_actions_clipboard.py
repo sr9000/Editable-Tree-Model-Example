@@ -65,7 +65,7 @@ def test_paste_into_object_inserts_children(qtbot):
     obj = model.index(0, 0, QModelIndex())
     _select_rows(view, obj)
 
-    QApplication.clipboard().setText("{\"k\": 1}")
+    QApplication.clipboard().setText('{"k": 1}')
     assert paste_from_clipboard(view)
 
     pasted = model.get_item(model.index(0, 0, obj))
