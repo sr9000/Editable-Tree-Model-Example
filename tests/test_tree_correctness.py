@@ -106,3 +106,16 @@ def test_action_insert_child_main_path(qtbot):
     assert inserted.name == "new_key"
     assert inserted.json_type is JsonType.NULL
     assert model.get_item(obj_index).to_json() == {"new_key": None, "existing": 1}
+
+
+def test_action_insert_child_rejects_non_container_parent(qtbot):
+    model = JsonTreeModel({"leaf": 1})
+    view = QTreeView()
+    qtbot.addWidget(view)
+    view.setModel(model)
+
+    leaf_index = model.index(0, 0, QModelIndex())
+    assert leaf_index.isValid()
+
+    assert not action_insert_child(view, leaf_index, model)
+    assert model.root_item.to_json() == {"leaf": 1}

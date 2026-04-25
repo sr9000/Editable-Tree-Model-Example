@@ -40,7 +40,13 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     new_row = context_menu.addAction("Insert Row")
     new_row.triggered.connect(lambda: action_insert_row(index, model))
 
+    can_insert_child = False
+    if isinstance(model, JsonTreeModel) and index.isValid():
+        item = model.get_item(index)
+        can_insert_child = item.json_type in (JsonType.OBJECT, JsonType.ARRAY)
+
     new_child = context_menu.addAction("Insert Child")
+    new_child.setEnabled(can_insert_child)
     new_child.triggered.connect(lambda: action_insert_child(tree_view, index, model))
 
     context_menu.exec(tree_view.mapToGlobal(position))
