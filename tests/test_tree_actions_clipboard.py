@@ -32,11 +32,11 @@ def test_copy_selection_single_and_multi(qtbot):
     md = QApplication.clipboard().mimeData()
     assert md is not None
     assert md.hasFormat(MIME_JSON_TREE)
-    assert json.loads(md.text()) == 1
+    assert json.loads(md.text()) == {"a": 1}
 
     _select_rows(view, a, b)
     assert copy_selection(view)
-    assert json.loads(QApplication.clipboard().text()) == [1, 2]
+    assert json.loads(QApplication.clipboard().text()) == {"a": 1, "b": 2}
 
 
 def test_cut_and_delete_selection_remove_rows(qtbot):
@@ -69,9 +69,7 @@ def test_paste_into_object_inserts_children(qtbot):
     QApplication.clipboard().setText('{"k": 1}')
     assert paste_from_clipboard(view)
 
-    pasted = model.get_item(model.index(0, 0, obj))
-    assert pasted.json_type.value == "object"
-    assert pasted.to_json() == {"k": 1}
+    assert model.get_item(obj).to_json() == {"k": 1}
 
 
 def test_paste_into_primitive_inserts_sibling_after(qtbot):
@@ -110,3 +108,22 @@ def test_copy_selection_with_mpq_float_values(qtbot):
     assert md.hasFormat(MIME_JSON_TREE)
     parsed = json.loads(md.text())
     assert parsed == [3.14, 0.5]
+
+
+def test_copy_paste_preserves_object_key_name_when_possible(qtbot):
+    model = JsonTreeModel({"src": {"keep": 7}, "dst": {}})
+    view = QTreeView()
+    qtbot.addWidget(view)
+    view.setModel(model)
+
+    src = model.index(0, 0, QModelIndex())
+    dst = model.index(1, 0, QModelIndex())
+    keep = model.index(0, 0, src)
+
+    _select_rows(view, keep)
+    assert copy_selection(view)
+
+    _select_rows(view, dst)
+    assert paste_from_clipboard(view)
+
+    assert model.get_item(dst).to_json() == {"keep": 7}

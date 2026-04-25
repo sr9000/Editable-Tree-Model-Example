@@ -89,6 +89,39 @@ def _top_level_selected_rows(tree_view: QTreeView) -> list:
     return [idx for idx in rows if not any(_is_ancestor(other, idx) for other in rows if other != idx)]
 
 
+def _build_copy_entries(model: JsonTreeModel, rows) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for idx in rows:
+        item = model.get_item(idx)
+        entries.append(
+            {
+                "name": item.name if isinstance(item.name, str) else None,
+                "value": item.to_json(),
+            }
+        )
+    return entries
+
+
+def _entries_text_payload(model: JsonTreeModel, rows, entries: list[dict[str, Any]]) -> Any:
+    if not entries:
+        return None
+
+    first_parent = rows[0].parent()
+    same_parent = all(idx.parent() == first_parent for idx in rows)
+    all_named = all(isinstance(entry.get("name"), str) and entry["name"] for entry in entries)
+
+    if same_parent and all_named:
+        parent_item = model.get_item(first_parent)
+        if parent_item.json_type is JsonType.OBJECT:
+            names = [entry["name"] for entry in entries]
+            if len(set(names)) == len(names):
+                return {entry["name"]: entry["value"] for entry in entries}
+
+    if len(entries) == 1:
+        return entries[0]["value"]
+    return [entry["value"] for entry in entries]
+
+
 def copy_selection(tree_view: QTreeView) -> bool:
     model = tree_view.model()
     if not isinstance(model, JsonTreeModel):
@@ -98,11 +131,11 @@ def copy_selection(tree_view: QTreeView) -> bool:
     if not rows:
         return False
 
-    items = [model.get_item(idx).to_json() for idx in rows]
-    payload: Any = items[0] if len(items) == 1 else items
+    entries = _build_copy_entries(model, rows)
+    text_payload = _entries_text_payload(model, rows, entries)
 
-    text = simplejson.dumps(payload, default=mpq_json_default, indent=2)
-    metadata = simplejson.dumps({"items": items}, default=mpq_json_default)
+    text = simplejson.dumps(text_payload, default=mpq_json_default, indent=2)
+    metadata = simplejson.dumps({"entries": entries}, default=mpq_json_default)
 
     mime = QMimeData()
     mime.setData(MIME_JSON_TREE, metadata.encode("utf-8"))
@@ -135,18 +168,31 @@ def cut_selection(tree_view: QTreeView) -> bool:
     return delete_selection(tree_view)
 
 
-def _clipboard_items() -> list[Any] | None:
+def _clipboard_entries() -> list[dict[str, Any]] | None:
     md = QApplication.clipboard().mimeData()
     if md is None:
         return None
 
     if md.hasFormat(MIME_JSON_TREE):
         try:
-            raw = bytes(md.data(MIME_JSON_TREE)).decode("utf-8")
+            raw = md.data(MIME_JSON_TREE).data().decode("utf-8")
             parsed = json.loads(raw)
-            items = parsed.get("items") if isinstance(parsed, dict) else None
-            if isinstance(items, list):
-                return items
+            if isinstance(parsed, dict):
+                entries = parsed.get("entries")
+                if isinstance(entries, list):
+                    normalized: list[dict[str, Any]] = []
+                    for entry in entries:
+                        if not isinstance(entry, dict) or "value" not in entry:
+                            continue
+                        name = entry.get("name")
+                        normalized.append({"name": name if isinstance(name, str) else None, "value": entry["value"]})
+                    if normalized:
+                        return normalized
+
+                # Backward compatibility with old clipboard payload format.
+                items = parsed.get("items")
+                if isinstance(items, list):
+                    return [{"name": None, "value": value} for value in items]
         except Exception:
             pass
 
@@ -155,9 +201,15 @@ def _clipboard_items() -> list[Any] | None:
         return None
 
     try:
-        return [json.loads(text)]
+        parsed = json.loads(text)
     except Exception:
         return None
+
+    if isinstance(parsed, dict):
+        return [{"name": str(name), "value": value} for name, value in parsed.items()]
+    if isinstance(parsed, list):
+        return [{"name": None, "value": value} for value in parsed]
+    return [{"name": None, "value": parsed}]
 
 
 def paste_from_clipboard(tree_view: QTreeView) -> bool:
@@ -165,8 +217,8 @@ def paste_from_clipboard(tree_view: QTreeView) -> bool:
     if not isinstance(model, JsonTreeModel):
         return False
 
-    values = _clipboard_items()
-    if not values:
+    entries = _clipboard_entries()
+    if not entries:
         return False
 
     current = tree_view.currentIndex()
@@ -184,13 +236,21 @@ def paste_from_clipboard(tree_view: QTreeView) -> bool:
         parent_index = current
         insert_pos = model.rowCount(parent_index)
 
+    parent_item = model.get_item(parent_index)
+    parent_is_object = parent_item.json_type is JsonType.OBJECT
+
     inserted = 0
-    for value in values:
+    for entry in entries:
         row = insert_pos + inserted
         if not model.insertRow(row, parent_index):
             break
+
+        if parent_is_object and isinstance(entry.get("name"), str):
+            name_index = model.index(row, 0, parent_index)
+            model.setData(name_index, entry["name"], Qt.ItemDataRole.EditRole)
+
         value_index = model.index(row, 2, parent_index)
-        if model.setData(value_index, value, Qt.ItemDataRole.EditRole):
+        if model.setData(value_index, entry["value"], Qt.ItemDataRole.EditRole):
             inserted += 1
             continue
 
