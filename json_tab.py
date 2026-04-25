@@ -31,16 +31,33 @@ from tree_view import (
 
 
 class _SnapshotCommand(QUndoCommand):
-    def __init__(self, tab: "JsonTab", text: str, before: dict, after: dict):
+    def __init__(
+        self,
+        tab: "JsonTab",
+        text: str,
+        before: dict,
+        after: dict,
+        *,
+        skip_first_redo: bool = False,
+    ):
         super().__init__(text)
         self._tab = tab
         self._before = before
         self._after = after
+        # ``QUndoStack.push()`` automatically invokes ``redo()``. The model
+        # is already in the after-state right after the mutator ran, so
+        # the implicit redo would only mean rebuilding the same state from
+        # a snapshot. Skipping that first redo avoids one O(N) restore per
+        # commit on large trees.
+        self._skip_next_redo = skip_first_redo
 
     def undo(self):
         self._tab._restore_state(self._before)
 
     def redo(self):
+        if self._skip_next_redo:
+            self._skip_next_redo = False
+            return
         self._tab._restore_state(self._after)
 
 
@@ -173,6 +190,34 @@ class JsonTab(QWidget):
             return ("__arr__", [JsonTab._ordered_repr(v) for v in value])
         return value
 
+    @classmethod
+    def _tree_equals_data(cls, item: JsonTreeItem, data: Any) -> bool:
+        """Return True iff *item*'s subtree matches the python *data* snapshot.
+
+        Single-pass, allocation-free, early-exit. Order-sensitive on dicts
+        so reorderings of OBJECT members are detected as a real change.
+
+        This replaces the deep ``_ordered_repr`` build+compare on the no-op
+        detection path: we walk the live tree against the ``before`` data
+        directly without materialising the after-state into Python data.
+        """
+        jt = item.json_type
+        if jt is JsonType.OBJECT:
+            if not isinstance(data, dict) or len(item.child_items) != len(data):
+                return False
+            for child, (k, v) in zip(item.child_items, data.items()):
+                if child.name != k or not cls._tree_equals_data(child, v):
+                    return False
+            return True
+        if jt is JsonType.ARRAY:
+            if not isinstance(data, list) or len(item.child_items) != len(data):
+                return False
+            for child, v in zip(item.child_items, data):
+                if not cls._tree_equals_data(child, v):
+                    return False
+            return True
+        return item.value == data
+
     def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
         path: list[int] = []
         cursor = index
@@ -276,19 +321,23 @@ class JsonTab(QWidget):
         # parent / sibling that triggered the action is still informative.
         target = target_index if (target_index is not None and target_index.isValid()) else self.view.currentIndex()
         target_qname = self._qualified_name(target)
-        changed = bool(mutator())
-        if not changed:
+        if not bool(mutator()):
             return False
 
-        after = self._capture_state()
-        if self._ordered_repr(before["data"]) == self._ordered_repr(after["data"]):
+        # Single-pass walk against the ``before`` snapshot — early-exit, no
+        # extra ``to_json`` build for the after-state.
+        if self._tree_equals_data(self.model.root_item, before["data"]):
             # Mutation reported success but produced no visible change; skip undo entry.
             return False
 
-        self._restore_state(before)
+        # Build ``after`` only when we know we will push.
+        after = self._capture_state()
+
         timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
         label = f"[{timestamp}] {text} @ {target_qname}"
-        self.undo_stack.push(_SnapshotCommand(self, label, before, after))
+        # The model is already in the after-state, so tell the command to
+        # skip the implicit redo Qt fires from ``push()``.
+        self.undo_stack.push(_SnapshotCommand(self, label, before, after, skip_first_redo=True))
         return True
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:

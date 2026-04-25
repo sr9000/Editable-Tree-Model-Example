@@ -26,6 +26,13 @@ class JsonTreeItem:
         self.child_items: list["JsonTreeItem"] = []
         self.explicit_type = False
 
+        # Cached row-in-parent index for O(1) ``row()`` lookups. The parent
+        # owns the dirty flag below; when it flips True any of its children
+        # may have stale ``_row_in_parent``, and the next ``row()`` call on
+        # any child re-numbers the whole sibling list in one O(K) pass.
+        self._row_in_parent: int = -1
+        self._children_dirty: bool = True
+
         self.json_type = parse_json_type(value)
         self.value = None
         self._apply_typed_value(self.json_type, value)
@@ -46,6 +53,7 @@ class JsonTreeItem:
 
     def append_child(self, child: "JsonTreeItem") -> None:
         self.child_items.append(child)
+        self._children_dirty = True
 
     def parent(self) -> "JsonTreeItem | None":
         return self.parent_item
@@ -58,7 +66,26 @@ class JsonTreeItem:
         return len(self.child_items)
 
     def row(self) -> int:
-        return 0 if self.parent_item is None else self.parent_item.child_items.index(self)
+        parent = self.parent_item
+        if parent is None:
+            return 0
+        if parent._children_dirty:
+            # Re-number all siblings in one pass; subsequent row() calls on
+            # any sibling are O(1) until the parent's child_items mutates.
+            for i, c in enumerate(parent.child_items):
+                c._row_in_parent = i
+            parent._children_dirty = False
+        return self._row_in_parent
+
+    def mark_children_dirty(self) -> None:
+        """Flag that ``self.child_items`` was mutated externally.
+
+        Call this whenever a non-``JsonTreeItem`` API touches ``child_items``
+        directly (e.g. ``tree_model.move_row`` doing ``pop`` + ``insert``,
+        ``sort_keys`` doing an in-place sort, ``change_type`` clearing the
+        list). Lazy re-numbering keeps ``row()`` O(1) on subsequent reads.
+        """
+        self._children_dirty = True
 
     def column_count(self) -> int:
         return 3
@@ -122,6 +149,7 @@ class JsonTreeItem:
                 new_items.append(JsonTreeItem(parent_item=self, value=None, name=child_name))
 
             self.child_items[position:position] = new_items
+            self._children_dirty = True
             return True
         return False
 
@@ -129,6 +157,7 @@ class JsonTreeItem:
         end = begin + count
         if 0 <= begin and end <= len(self.child_items):
             del self.child_items[begin:end]
+            self._children_dirty = True
             return True
         return False
 
@@ -161,6 +190,7 @@ class JsonTreeItem:
     def _apply_typed_value(self, json_type: JsonType, value: Any) -> None:
         self.json_type = json_type
         self.child_items = []
+        self._children_dirty = True
 
         match json_type:
             case JsonType.ARRAY:

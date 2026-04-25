@@ -158,6 +158,7 @@ class JsonTreeModel(QAbstractItemModel):
         if had_children and old_child_count > 0:
             self.beginRemoveRows(value_parent_index, 0, old_child_count - 1)
             item.child_items.clear()
+            item.mark_children_dirty()
             self.endRemoveRows()
 
         if not item.set_data(1, target_type):
@@ -186,6 +187,7 @@ class JsonTreeModel(QAbstractItemModel):
 
         moved = parent_item.child_items.pop(src_row)
         parent_item.child_items.insert(dst_row, moved)
+        parent_item.mark_children_dirty()
         self.endMoveRows()
         return True
 
@@ -207,6 +209,7 @@ class JsonTreeModel(QAbstractItemModel):
     def _sort_object_item(self, item: JsonTreeItem, recursive: bool = False) -> None:
         if item.json_type is JsonType.OBJECT:
             item.child_items.sort(key=lambda c: c.name or "")
+            item.mark_children_dirty()
 
         if not recursive:
             return
