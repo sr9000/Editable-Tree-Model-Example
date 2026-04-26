@@ -1551,7 +1551,7 @@ Update this table as phases land.
 | 03 | Extract file loading | PASS | 401 passed in 3.18s |  |
 | 04 | Extract file dumping/write | PASS | 401 passed in 3.18s |  |
 | 05 | Extract QSettings coercion | PASS | 401 passed in 3.25s |  |
-| 06 | Move persisted view-state module | TODO | Not run |  |
+| 06 | Move persisted view-state module | PASS | 401 passed in 3.20s |  |
 | 07 | Move JSON type definitions | TODO | Not run |  |
 | 08 | Extract tree-item name helpers | TODO | Not run |  |
 | 09 | Extract tree-item coercion helpers | TODO | Not run |  |

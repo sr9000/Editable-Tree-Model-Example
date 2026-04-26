@@ -293,3 +293,44 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 06 — move persisted view-state module
+
+- Date: 2026-04-26
+- Commit subject: Move persisted view-state module
+- Status: PASS
+- Files changed:
+  - `state/view_state.py`
+  - `view_state.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_phase_5_4_persisted_view_state.py
+  python - <<'PY'
+  from view_state import save, restore, discard, state_key
+  from state.view_state import save as save2, restore as restore2
+  assert save is save2
+  assert restore is restore2
+  assert discard is not None
+  assert state_key is not None
+  print('view_state compatibility imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests/test_phase_5_4_persisted_view_state.py: 3 passed in 0.16s
+  view_state compatibility imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.20s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
