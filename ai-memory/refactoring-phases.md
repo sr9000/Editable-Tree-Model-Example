@@ -1564,7 +1564,7 @@ Update this table as phases land.
 | 16 | Move name/type delegates | PASS | 401 passed in 3.20s |  |
 | 17 | Move ValueDelegate | PASS | 401 passed in 3.24s |  |
 | 18 | Extract tree-action selection helpers | PASS | 401 passed in 3.17s | Focused command segfaults post-run |
-| 19 | Extract tree-action clipboard helpers | TODO | Not run |  |
+| 19 | Extract tree-action clipboard helpers | PASS | 401 passed in 3.19s | Focused command segfaults post-run |
 | 20 | Extract paste action | TODO | Not run |  |
 | 21 | Extract structural tree actions | TODO | Not run |  |
 | 22 | Extract context menu / finish tree_view | TODO | Not run |  |

@@ -757,3 +757,35 @@ Copy this template for each phase:
   - Focused command reports a teardown-time segfault after tests pass; full suite remained green and was used as gate.
 - Decision:
   - proceed
+
+## Phase 19 — extract tree-action clipboard helpers
+
+- Date: 2026-04-26
+- Commit subject: Extract tree-action clipboard helpers
+- Status: PASS
+- Files changed:
+  - `tree_actions/clipboard.py`
+  - `tree_view.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_tree_actions_clipboard.py
+  ```
+- Focused result:
+  ```text
+  6 passed in 0.08s
+  process exited with post-test segmentation fault during interpreter shutdown
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.19s
+  ```
+- Known failures / skipped checks:
+  - Focused command reports a teardown-time segfault after tests pass; full suite remained green and was used as gate.
+- Decision:
+  - proceed
