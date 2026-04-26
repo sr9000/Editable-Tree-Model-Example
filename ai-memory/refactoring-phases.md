@@ -1575,7 +1575,7 @@ Update this table as phases land.
 | 27 | Extract JsonTab save/save-as helpers | PASS | 401 passed in 3.12s |  |
 | 28 | Extract JsonTab setup helpers | PASS | 401 passed in 3.21s |  |
 | 29 | Move JsonTab | PASS | 401 passed in 3.14s | Restored private shim exports for tests |
-| 30 | Extract recent-files helper | TODO | Not run |  |
+| 30 | Extract recent-files helper | PASS | 401 passed in 3.17s |  |
 | 31 | Extract close-confirm helper | TODO | Not run |  |
 | 32 | Extract history helper | TODO | Not run |  |
 | 33 | Extract main-window action wiring/state | TODO | Not run |  |

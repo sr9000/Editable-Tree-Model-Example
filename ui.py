@@ -6,6 +6,7 @@ from PySide6.QtCore import QModelIndex, QSettings, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView, QVBoxLayout
 
+from app.recent_files import push_recent, recent_files, refresh_recent_menu
 import view_state
 from file_io import load_file_with_format
 from json_tab import JsonTab
@@ -25,7 +26,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
-        self._refresh_recent_menu()
+        refresh_recent_menu(self)
         self._setup_history_menu()
         self.setup_model(yaml_filename)
         self.setup_connections()
@@ -203,7 +204,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if tab is None:
             return False
         tab.save_format = source_format
-        self._push_recent(resolved)
+        push_recent(self, resolved)
         self.statusBar.showMessage(f"Opened: {resolved}", 2000)
         return True
 
@@ -216,7 +217,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             view_state.discard(old_path)
         view_state.save(tab)
         if tab.file_path:
-            self._push_recent(tab.file_path)
+            push_recent(self, tab.file_path)
         self._on_tab_dirty(tab)
         return True
 
@@ -237,22 +238,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return True
 
     def _recent_files(self) -> list[str]:
-        return self._settings.value("recent_files", [], type=list)
+        return recent_files(self)
 
     def _push_recent(self, path: str) -> None:
-        resolved = str(Path(path).resolve())
-        recent = [resolved] + [p for p in self._recent_files() if p != resolved]
-        self._settings.setValue("recent_files", recent[:8])
-        self._refresh_recent_menu()
+        push_recent(self, path)
 
     def _refresh_recent_menu(self) -> None:
-        self._recent_menu.clear()
-        for path in self._recent_files():
-            if not Path(path).exists():
-                continue
-            action = self._recent_menu.addAction(path)
-            action.triggered.connect(lambda _checked=False, p=path: self._open_path(p))
-        self._recent_menu.setEnabled(bool(self._recent_menu.actions()))
+        refresh_recent_menu(self)
 
     def open_file_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
