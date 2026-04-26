@@ -474,3 +474,34 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 11 — extract model role/display helpers
+
+- Date: 2026-04-26
+- Commit subject: Extract model role/display helpers
+- Status: PASS
+- Files changed:
+  - `tree/model_roles.py`
+  - `tree_model.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_smoke_model.py tests/test_phase_5_2_display_formatting.py
+  ```
+- Focused result:
+  ```text
+  7 passed in 0.07s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.19s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed

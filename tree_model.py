@@ -3,15 +3,11 @@
 from contextlib import contextmanager
 from typing import Any, Optional
 
-import gmpy2
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
-from PySide6.QtGui import QFont
 
 from enums import JsonType
-from mpq2py import mpq_serialization
+from tree.model_roles import JSON_TYPE_ROLE, display_role_value, edit_role_value, font_role_for_name, tooltip_role_for_value
 from tree_item import JsonTreeItem
-
-JSON_TYPE_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
 class JsonTreeModel(QAbstractItemModel):
@@ -100,41 +96,19 @@ class JsonTreeModel(QAbstractItemModel):
         item = self.get_item(index)
 
         if role == Qt.ItemDataRole.FontRole and index.column() == 0:
-            if item is not self.root_item and isinstance(item.name, str) and any(ord(ch) > 127 for ch in item.name):
-                font = QFont()
-                font.setItalic(True)
-                return font
-            return None
+            return font_role_for_name(item, is_root_item=(item is self.root_item))
 
         if role == JSON_TYPE_ROLE and index.column() == 2:
             return item.json_type
 
         if role == Qt.ItemDataRole.ToolTipRole and index.column() == 2:
-            raw = item.data(2)
-            text = "" if raw is None else str(raw)
-            if len(text) <= 80:
-                return None
-            return text[:4096] + ("…" if len(text) > 4096 else "")
+            return tooltip_role_for_value(item)
 
         if role == Qt.ItemDataRole.EditRole:
-            if item is self.root_item and index.column() == 0:
-                return "<root>"
-            return item.data(index.column())
+            return edit_role_value(item, index.column(), is_root_item=(item is self.root_item))
 
         if role == Qt.ItemDataRole.DisplayRole:
-            if item is self.root_item and index.column() == 0:
-                return "<root>"
-            data = item.data(index.column())
-            match data:
-                case bool():
-                    # Show JSON-style lowercase
-                    return "true" if data else "false"
-                case gmpy2.mpq():
-                    data = mpq_serialization(data)[0]
-                case None:
-                    return "null"
-
-            return str(data)
+            return display_role_value(item, index.column(), is_root_item=(item is self.root_item))
 
         return None
 
