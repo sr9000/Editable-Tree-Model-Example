@@ -334,3 +334,42 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 07 — move JSON type definitions
+
+- Date: 2026-04-26
+- Commit subject: Move JSON type definitions
+- Status: PASS
+- Files changed:
+  - `tree/types.py`
+  - `enums.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_type_editing.py tests/test_smoke_model.py tests/test_phase_5_2_display_formatting.py
+  python - <<'PY'
+  from enums import JsonType, parse_json_type
+  from tree.types import JsonType as JsonType2, parse_json_type as parse2
+  assert JsonType is JsonType2
+  assert parse_json_type is parse2
+  print('type compatibility imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests: 34 passed in 0.13s
+  type compatibility imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.20s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
