@@ -28,7 +28,7 @@ Phases are ordered so that:
 | 5.3 | [`phase-5.3-status-bar-breadcrumb.md`](phase-5.3-status-bar-breadcrumb.md) | Permanent breadcrumb on selection + transient action messages | not started |
 | 5.4 | [`phase-5.4-persisted-view-state.md`](phase-5.4-persisted-view-state.md) | `QSettings`-backed per-file column widths / expansion / selection / font zoom | not started |
 | 5.5 | [`phase-5.5-search-filter.md`](phase-5.5-search-filter.md) | `TreeFilterProxy` + Ctrl+F search bar + delegate/tree-view audit for `mapToSource` | not started |
-| 5.6 | [`phase-5.6-misc-polish.md`](phase-5.6-misc-polish.md) | Resize on tab switch / model reset, View menu, Expand/Collapse All, optional icons | not started |
+| 5.6 | [`phase-5.6-misc-polish.md`](phase-5.6-misc-polish.md) | Resize on tab switch / model reset, View menu, Expand/Collapse All, optional icons | ✅ done (stretch deferred) |
 | 6 | [`phase-6-tests.md`](phase-6-tests.md) | Test coverage: model unit tests, round-trip tests, GUI smoke tests | partially done (Phases 0–3 already shipped 343-test baseline) |
 
 ## How to use these files

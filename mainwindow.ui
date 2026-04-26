@@ -69,8 +69,20 @@
     <addaction name="separator"/>
     <addaction name="rowRemoveAction"/>
    </widget>
+   <widget class="QMenu" name="viewMenu">
+    <property name="title">
+     <string>&amp;View</string>
+    </property>
+    <addaction name="viewExpandAllAction"/>
+    <addaction name="viewCollapseAllAction"/>
+    <addaction name="separator"/>
+    <addaction name="viewZoomInAction"/>
+    <addaction name="viewZoomOutAction"/>
+    <addaction name="viewResetZoomAction"/>
+   </widget>
    <addaction name="fileMenu"/>
    <addaction name="actionsMenu"/>
+   <addaction name="viewMenu"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <action name="appExitAction">
@@ -135,6 +147,40 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+I</string>
+   </property>
+  </action>
+  <action name="viewExpandAllAction">
+   <property name="text">
+    <string>Expand All</string>
+   </property>
+  </action>
+  <action name="viewCollapseAllAction">
+   <property name="text">
+    <string>Collapse All</string>
+   </property>
+  </action>
+  <action name="viewZoomInAction">
+   <property name="text">
+    <string>Zoom In</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl++</string>
+   </property>
+  </action>
+  <action name="viewZoomOutAction">
+   <property name="text">
+    <string>Zoom Out</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+-</string>
+   </property>
+  </action>
+  <action name="viewResetZoomAction">
+   <property name="text">
+    <string>Reset Zoom</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+0</string>
    </property>
   </action>
  </widget>

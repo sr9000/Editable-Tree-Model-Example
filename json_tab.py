@@ -360,6 +360,7 @@ class JsonTab(QWidget):
         self.proxy.setSourceModel(self.model)
 
         self.view.setModel(self.proxy)
+        self.model.modelReset.connect(self._on_model_reset)
 
         self.name_delegate = NameDelegate(self)
         self.type_delegate = JsonTypeDelegate(self)
@@ -440,6 +441,14 @@ class JsonTab(QWidget):
     def _apply_filter(self) -> None:
         self.proxy.set_filter_text(self.search_edit.text())
 
+    def _on_model_reset(self) -> None:
+        self.resize_key_columns()
+
+    def resize_key_columns(self) -> None:
+        # Keep key/type columns snug while leaving value column flexible.
+        self.view.resizeColumnToContents(0)
+        self.view.resizeColumnToContents(1)
+
     def _set_font_pt(self, pt: int) -> None:
         clamped = max(6, min(48, int(pt)))
         self._font_pt = clamped
@@ -449,12 +458,15 @@ class JsonTab(QWidget):
 
     def zoom_in(self) -> None:
         self._set_font_pt(self._font_pt + 1)
+        self.resize_key_columns()
 
     def zoom_out(self) -> None:
         self._set_font_pt(self._font_pt - 1)
+        self.resize_key_columns()
 
     def zoom_reset(self) -> None:
         self._set_font_pt(self._default_font_pt)
+        self.resize_key_columns()
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
         # ``change_type`` already emitted ``dataChanged`` for the row, which

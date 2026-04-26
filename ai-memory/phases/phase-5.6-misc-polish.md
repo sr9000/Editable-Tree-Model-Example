@@ -22,24 +22,24 @@ expand/collapse-all, and confirm zoom integrates with persisted state.
 ## Work items
 
 ### Resize on tab switch / model reset
-- [ ] [shell] In `MainWindow._on_tab_changed`, after `_bind_undo_signals`
+- [x] [shell] In `MainWindow._on_tab_changed`, after `_bind_undo_signals`
       call `tab.view.resizeColumnToContents(0)` and `(1)` (skip 2 to
       keep the value column flexible).
       — `ui.py:MainWindow._on_tab_changed`
-- [ ] [tab] Connect `model.modelReset` (or proxy's) to a method that
+- [x] [tab] Connect `model.modelReset` (or proxy's) to a method that
       runs the same two `resizeColumnToContents` calls.
       — `json_tab.py:JsonTab.__init__`
 
 ### Expand / Collapse all
-- [ ] [view] Add `expand_all(view)` and `collapse_all(view)` thin
+- [x] [view] Add `expand_all(view)` and `collapse_all(view)` thin
       wrappers in `tree_view.py` (already exposed by `QTreeView` —
       wrappers exist for context-menu wiring uniformity).
       — `tree_view.py`
-- [ ] [view] Add `Expand All` and `Collapse All` actions to the
+- [x] [view] Add `Expand All` and `Collapse All` actions to the
       context menu in `show_context_menu`. Place under a separator
       after the structural actions.
       — `tree_view.py:show_context_menu`
-- [ ] [shell] Add a `View` menu in `mainwindow.ui` (regen
+- [x] [shell] Add a `View` menu in `mainwindow.ui` (regen
       `mainwindow.py`) with:
       - `Expand All`  (no shortcut)
       - `Collapse All`  (no shortcut)
@@ -48,7 +48,7 @@ expand/collapse-all, and confirm zoom integrates with persisted state.
       - `Zoom Out` (`Ctrl+-`)
       - `Reset Zoom` (`Ctrl+0`)
       — `mainwindow.ui`, `ui.py:MainWindow.setup_connections`
-- [ ] [tests] Smoke test that triggering the View menu actions on a
+- [x] [tests] Smoke test that triggering the View menu actions on a
       populated tab toggles `view.isExpanded(top_index)` correctly.
 
 ### Match-highlight delegate (stretch)

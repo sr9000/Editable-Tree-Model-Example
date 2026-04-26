@@ -11,7 +11,7 @@ from file_io import load_file_with_format
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID
-from tree_view import copy_selection, delete_selection
+from tree_view import collapse_all, copy_selection, delete_selection, expand_all
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -55,6 +55,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.rowInsertAction.triggered.connect(self.insert_row_before)
         self.rowInsertAfterAction.triggered.connect(self.insert_row_after)
         self.rowRemoveAction.triggered.connect(self.remove_row)
+
+        self.viewExpandAllAction.triggered.connect(self.expand_all)
+        self.viewCollapseAllAction.triggered.connect(self.collapse_all)
+        self.viewZoomInAction.triggered.connect(self.zoom_in)
+        self.viewZoomOutAction.triggered.connect(self.zoom_out)
+        self.viewResetZoomAction.triggered.connect(self.reset_zoom)
 
         self.update_actions()
 
@@ -140,6 +146,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _on_tab_changed(self, _index: int) -> None:
         tab = self._current_tab()
         self._bind_undo_signals(tab)
+        if tab is not None:
+            tab.resize_key_columns()
         if self._history_dialog is not None and self._history_dialog.isVisible():
             if tab is not None and self._history_view is not None:
                 self._history_view.setStack(tab.undo_stack)
@@ -165,8 +173,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab.dirtyChanged.connect(lambda _dirty, t=tab: self._on_tab_dirty(t))
 
         tab.view.expandAll()
-        for column in range(tab.model.columnCount() - 1):
-            tab.view.resizeColumnToContents(column)
+        tab.resize_key_columns()
         if tab.model.show_root:
             source_index = tab.model.index(0, 0, QModelIndex())
             tab.view.setCurrentIndex(tab._source_to_view(source_index))
@@ -347,6 +354,36 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if delete_selection(view):
             self.update_actions()
 
+    def expand_all(self) -> None:
+        view = self._current_view()
+        if view is None:
+            return
+        expand_all(view)
+
+    def collapse_all(self) -> None:
+        view = self._current_view()
+        if view is None:
+            return
+        collapse_all(view)
+
+    def zoom_in(self) -> None:
+        tab = self._current_tab()
+        if tab is None:
+            return
+        tab.zoom_in()
+
+    def zoom_out(self) -> None:
+        tab = self._current_tab()
+        if tab is None:
+            return
+        tab.zoom_out()
+
+    def reset_zoom(self) -> None:
+        tab = self._current_tab()
+        if tab is None:
+            return
+        tab.zoom_reset()
+
     def update_actions(self):
         tab = self._current_tab()
         has_tab = tab is not None
@@ -357,6 +394,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.rowInsertAction.setEnabled(has_valid_index)
         self.rowInsertAfterAction.setEnabled(has_valid_index)
         self.rowRemoveAction.setEnabled(has_valid_index)
+        self.viewExpandAllAction.setEnabled(has_tab)
+        self.viewCollapseAllAction.setEnabled(has_tab)
+        self.viewZoomInAction.setEnabled(has_tab)
+        self.viewZoomOutAction.setEnabled(has_tab)
+        self.viewResetZoomAction.setEnabled(has_tab)
 
     def copy_action(self):
         view = self._current_view()

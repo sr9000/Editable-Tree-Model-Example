@@ -113,6 +113,14 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     new_child.setEnabled(can_insert_child)
     new_child.triggered.connect(lambda: insert_child_current(tree_view))
 
+    context_menu.addSeparator()
+
+    expand_all_action = context_menu.addAction("Expand All")
+    expand_all_action.triggered.connect(lambda: expand_all(tree_view))
+
+    collapse_all_action = context_menu.addAction("Collapse All")
+    collapse_all_action.triggered.connect(lambda: collapse_all(tree_view))
+
     context_menu.exec(tree_view.mapToGlobal(position))
 
 
@@ -610,3 +618,13 @@ def sort_selection_keys(tree_view: QTreeView, recursive: bool = False) -> bool:
         return tab.push_sort_keys(row0, recursive=recursive)
 
     return action_sort_keys(current, model, recursive=recursive)
+
+
+def expand_all(tree_view: QTreeView) -> bool:
+    tree_view.expandAll()
+    return True
+
+
+def collapse_all(tree_view: QTreeView) -> bool:
+    tree_view.collapseAll()
+    return True

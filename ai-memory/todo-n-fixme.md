@@ -117,7 +117,8 @@ Format: `- [ ] [scope] description — file:symbol`
       strings.
 - [ ] [ux] Add a status bar message describing current selection
       (the C++ original did `Position: (row, column)`).
-- [ ] [ux] Resize columns to contents on tab switch / model reset.
+- [x] [ux] Resize columns to contents on tab switch / model reset.
+      ✅ Phase 5.6
 - [ ] [ux] Persist column widths and tree expansion state per file path.
 - [ ] [ux] Add search / filter bar per tab.
 

@@ -53,6 +53,7 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     tab.zoom_in()
     tab.zoom_in()
     saved_font_pt = tab.view.font().pointSize()
+    saved_widths = [tab.view.columnWidth(column) for column in range(3)]
 
     save(tab)
 
@@ -67,7 +68,7 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     assert restore(restored)
 
     for column in range(3):
-        assert restored.view.columnWidth(column) == 140 + (column * 25)
+        assert restored.view.columnWidth(column) == saved_widths[column]
 
     root2 = restored.model.index(0, 0, QModelIndex())
     foo2 = restored.model.index(0, 0, root2)
