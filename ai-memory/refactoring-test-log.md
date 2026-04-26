@@ -584,3 +584,34 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 14 — extract delegate formatting helpers
+
+- Date: 2026-04-26
+- Commit subject: Extract delegate formatting helpers
+- Status: PASS
+- Files changed:
+  - `delegates/value_formatting.py`
+  - `delegate.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_phase_5_2_display_formatting.py
+  ```
+- Focused result:
+  ```text
+  6 passed in 0.07s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.17s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed

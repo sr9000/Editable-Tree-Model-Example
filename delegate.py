@@ -11,6 +11,7 @@ from datetime_editor.enums import DateTimeCategory
 from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
 from delegates.bytes_codec import decode_bytes, encode_bytes
+from delegates.value_formatting import format_default, format_with_type
 from enums import JsonType
 from mpq2py import mpq_serialization
 from qbigint_spinbox import QBigIntSpinBox
@@ -86,35 +87,11 @@ class ValueDelegate(_TextEditorDelegateBase):
 
     @staticmethod
     def _format_default(value) -> str:
-        if value is None:
-            return "null"
-        if isinstance(value, bool):
-            return "true" if value else "false"
-        if isinstance(value, mpq):
-            return str(mpq_serialization(value)[0])
-        if isinstance(value, bytes):
-            return f"<{format_bytes(len(value))}>"
-        if isinstance(value, str) and len(value) > 80:
-            return value[:80] + "…"
-        return str(value)
+        return format_default(value)
 
     @staticmethod
     def _format_with_type(value, json_type: JsonType | None) -> str:
-        if json_type is JsonType.PERCENT:
-            try:
-                q = value if isinstance(value, mpq) else mpq(str(value))
-                return f"{float(q * 100):g}%"
-            except (TypeError, ValueError):
-                return ValueDelegate._format_default(value)
-
-        if json_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
-            try:
-                raw = decode_bytes(value, json_type) if isinstance(value, str) else bytes(value)
-                return f"<{format_bytes(len(raw))}>"
-            except Exception:
-                return ValueDelegate._format_default(value)
-
-        return ValueDelegate._format_default(value)
+        return format_with_type(value, json_type)
 
     def displayText(self, value, locale):  # type: ignore[override]
         return self._format_default(value)
