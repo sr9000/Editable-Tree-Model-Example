@@ -1553,7 +1553,7 @@ Update this table as phases land.
 | 05 | Extract QSettings coercion | PASS | 401 passed in 3.25s |  |
 | 06 | Move persisted view-state module | PASS | 401 passed in 3.20s |  |
 | 07 | Move JSON type definitions | PASS | 401 passed in 3.20s |  |
-| 08 | Extract tree-item name helpers | TODO | Not run |  |
+| 08 | Extract tree-item name helpers | PASS | 401 passed in 3.15s | Focused command segfaults post-run |
 | 09 | Extract tree-item coercion helpers | TODO | Not run |  |
 | 10 | Move JsonTreeItem | TODO | Not run |  |
 | 11 | Extract model role/display helpers | TODO | Not run |  |

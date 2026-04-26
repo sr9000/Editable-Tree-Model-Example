@@ -9,6 +9,7 @@ from typing import Any
 from gmpy2 import mpq
 
 from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
+from tree.item_names import unique_child_name, validated_child_name
 
 
 class JsonTreeItem:
@@ -184,17 +185,7 @@ class JsonTreeItem:
         return False
 
     def _unique_child_name(self, base: str = "new_key", used_names: set[str] | None = None) -> str:
-        used = {child.name for child in self.child_items if isinstance(child.name, str)}
-        if used_names is not None:
-            used |= used_names
-
-        if base not in used:
-            return base
-
-        i = 2
-        while f"{base}_{i}" in used:
-            i += 1
-        return f"{base}_{i}"
+        return unique_child_name(self.child_items, base=base, used_names=used_names)
 
     def _normalize_value_for_type(self, value: Any) -> Any:
         if self.json_type in (JsonType.STRING, JsonType.UNICODE) and not isinstance(value, str):
@@ -221,25 +212,9 @@ class JsonTreeItem:
         self.editable = self._compute_editable()
 
     def _set_name(self, value: Any) -> bool:
-        if self.parent_item is None:
+        candidate = validated_child_name(self.parent_item, self, value)
+        if candidate is None:
             return False
-        if self.parent_item.json_type is JsonType.ARRAY:
-            return False
-        if not isinstance(value, str):
-            return False
-
-        candidate = value.strip()
-        if not candidate:
-            return False
-
-        if self.parent_item.json_type is JsonType.OBJECT:
-            siblings = {
-                child.name
-                for child in self.parent_item.child_items
-                if child is not self and isinstance(child.name, str)
-            }
-            if candidate in siblings:
-                return False
 
         self.name = candidate
         return True

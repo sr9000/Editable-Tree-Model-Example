@@ -373,3 +373,35 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 08 — extract tree-item name helpers
+
+- Date: 2026-04-26
+- Commit subject: Extract tree-item name helpers
+- Status: PASS
+- Files changed:
+  - `tree/item_names.py`
+  - `tree_item.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_smoke_model.py tests/test_tree_actions_clipboard.py tests/test_tree_actions_structure.py
+  ```
+- Focused result:
+  ```text
+  11 passed in 0.09s
+  process exited with post-test segmentation fault during interpreter shutdown
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.15s
+  ```
+- Known failures / skipped checks:
+  - Focused command reports a teardown-time segfault after all tests pass; full suite remained green and was used as gate.
+- Decision:
+  - proceed
