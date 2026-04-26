@@ -1,8 +1,8 @@
 from gmpy2 import mpq
 
 from delegates.bytes_codec import decode_bytes
-from tree.types import JsonType
 from mpq2py import mpq_serialization
+from tree.types import JsonType
 from units import format_bytes
 
 

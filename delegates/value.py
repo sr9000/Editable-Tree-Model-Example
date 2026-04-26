@@ -12,11 +12,11 @@ from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.value_formatting import format_default, format_with_type
 from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
-from tree.types import JsonType
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
 from tree.item import JsonTreeItem
 from tree.model_roles import JSON_TYPE_ROLE
+from tree.types import JsonType
 
 
 class ValueDelegate(_TextEditorDelegateBase):

@@ -5,7 +5,6 @@ from typing import Any, Optional
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
 
-from tree.types import JsonType
 from tree.item import JsonTreeItem
 from tree.model_roles import (
     JSON_TYPE_ROLE,
@@ -14,6 +13,7 @@ from tree.model_roles import (
     font_role_for_name,
     tooltip_role_for_value,
 )
+from tree.types import JsonType
 
 
 class JsonTreeModel(QAbstractItemModel):

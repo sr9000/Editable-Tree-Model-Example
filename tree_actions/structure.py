@@ -1,7 +1,6 @@
 from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QTreeView
 
-from tree.types import JsonType
 from model_actions import (
     _copy_name,
     action_duplicate,
@@ -12,6 +11,7 @@ from model_actions import (
     action_move_up,
     action_sort_keys,
 )
+from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
 from tree_actions.selection import (
     _index_path,

@@ -2,9 +2,9 @@
 
 from typing import Any
 
-from tree.types import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
 from tree.item_coercion import coerce_value_for_type, compute_editable, normalize_value_for_type
 from tree.item_names import unique_child_name, validated_child_name
+from tree.types import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
 
 
 class JsonTreeItem:

@@ -1,8 +1,8 @@
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtWidgets import QComboBox, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
-from tree.types import JsonType
 from tree.item import JsonTreeItem
+from tree.types import JsonType
 
 
 class JsonTypeDelegate(QStyledItemDelegate):

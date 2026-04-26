@@ -3,10 +3,10 @@ import pytest
 from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QTreeView
 
-from tree.types import JsonType, parse_json_type
 from model_actions import action_insert_child
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
+from tree.types import JsonType, parse_json_type
 
 
 def test_insert_row_under_object_creates_unique_named_null_children():
