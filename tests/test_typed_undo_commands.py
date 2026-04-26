@@ -7,7 +7,7 @@ See ai-memory/phases/phase-3-compensating-undo-plan.md for context.
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
 from PySide6.QtWidgets import QApplication
 
-from json_tab import (
+from documents.tab import (
     JsonTab,
     _ChangeTypeCmd,
     _EditValueCmd,
@@ -17,7 +17,8 @@ from json_tab import (
     _RenameCmd,
     _SortKeysCmd,
 )
-from tree_view import (
+from tree_actions.paste import paste_from_clipboard
+from tree_actions.structure import (
     delete_selection,
     duplicate_selection,
     insert_child_current,
@@ -25,7 +26,6 @@ from tree_view import (
     insert_sibling_before,
     move_selection_down,
     move_selection_up,
-    paste_from_clipboard,
     sort_selection_keys,
 )
 
@@ -139,12 +139,12 @@ def test_large_leaf_edit_does_not_store_full_document(qtbot):
     qtbot.addWidget(tab)
 
     # Replace the model with a huge array containing one tiny leaf to edit.
-    from tree_model import JsonTreeModel
+    from tree.model import JsonTreeModel
 
     big = list(range(3000))
     big[7] = "before"
     tab.model.beginResetModel()
-    from tree_item import JsonTreeItem
+    from tree.item import JsonTreeItem
 
     tab.model.root_item = JsonTreeItem(None, big)
     tab.model.endResetModel()

@@ -4,8 +4,10 @@ import gmpy2
 from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QApplication, QTreeView
 
-from tree_model import JsonTreeModel
-from tree_view import MIME_JSON_TREE, copy_selection, cut_selection, delete_selection, paste_from_clipboard
+from tree.model import JsonTreeModel
+from tree_actions.clipboard import MIME_JSON_TREE, copy_selection
+from tree_actions.paste import paste_from_clipboard
+from tree_actions.structure import cut_selection, delete_selection
 
 
 def _select_rows(view: QTreeView, *indexes) -> None:

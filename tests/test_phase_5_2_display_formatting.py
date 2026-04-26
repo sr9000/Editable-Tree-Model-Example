@@ -2,9 +2,10 @@ from gmpy2 import mpq
 from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QStyleOptionViewItem
 
-from delegate import ValueDelegate
-from enums import JsonType
-from tree_model import JSON_TYPE_ROLE, JsonTreeModel
+from delegates.value import ValueDelegate
+from tree.model import JsonTreeModel
+from tree.model_roles import JSON_TYPE_ROLE
+from tree.types import JsonType
 
 
 def test_edit_role_returns_raw_values_for_mpq_none_and_bool():

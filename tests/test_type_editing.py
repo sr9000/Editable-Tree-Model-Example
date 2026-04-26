@@ -3,10 +3,10 @@ from PySide6.QtCore import QEvent, QModelIndex, Qt
 from PySide6.QtGui import QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
-from delegate import JsonTypeDelegate
-from enums import JsonType
-from json_tab import JsonTab
-from tree_model import JsonTreeModel
+from delegates.type_delegate import JsonTypeDelegate
+from documents.tab import JsonTab
+from tree.model import JsonTreeModel
+from tree.types import JsonType
 
 
 def test_name_editing_object_and_duplicate_rejection():

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import QModelIndex, QSortFilterProxyModel, Qt
 
-from enums import JsonType
-from tree_model import JsonTreeModel
+from tree.model import JsonTreeModel
+from tree.types import JsonType
 
 
 class TreeFilterProxy(QSortFilterProxyModel):

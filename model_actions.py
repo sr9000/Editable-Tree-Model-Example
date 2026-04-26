@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QTreeView
 
-from enums import JsonType
+from tree.types import JsonType
 
 
 def _row0_index(index: QModelIndex, model) -> QModelIndex:

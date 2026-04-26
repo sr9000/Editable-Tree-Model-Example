@@ -10,8 +10,8 @@ import time
 
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
 
-from json_tab import JsonTab
-from tree_view import duplicate_selection, move_selection_up
+from documents.tab import JsonTab
+from tree_actions.structure import duplicate_selection, move_selection_up
 
 
 def _make_big_tab(qtbot, *, fanout: int = 200) -> JsonTab:

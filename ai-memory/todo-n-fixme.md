@@ -4,15 +4,18 @@ _Last updated: 2026-04-26._
 
 Tracks **missing/incomplete features** (TODO) and **bugs/issues** (FIXME)
 discovered while auditing the JSON editor codebase. Cross-reference with
-`pros-n-cons.md` and `phases/` for context.
+`pros-n-cons.md` and `repo-map.md` for context.
 
 Format: `- [ ] [scope] description — file:symbol`
 
 > **Status (2026-04-26)** — Phases 0–5 are fully shipped (all sub-phases
-> of Phase 5 included). Phase 6 testing is the only milestone still
-> open. **401 tests pass** under
-> `QT_QPA_PLATFORM=offscreen pytest -q` in ~3 s; the post-test segfault
-> previously tracked is no longer reproducible.
+> of Phase 5 included). The package refactor (Phases 01–37) is complete:
+> all old top-level "god modules" (`json_tab.py`, `ui.py`, `tree_view.py`,
+> `tree_model.py`, `tree_item.py`, `delegate.py`, `enums.py`, `file_io.py`,
+> `view_state.py`) have been split into the canonical packages and removed.
+> Phase 6 testing is the only milestone still open. **401 tests pass**
+> under `QT_QPA_PLATFORM=offscreen pytest -q` in ~3 s; the post-test
+> segfault previously tracked is no longer reproducible.
 
 ---
 
@@ -42,8 +45,8 @@ Format: `- [ ] [scope] description — file:symbol`
 - [ ] [tooling] Add `pytest-qt` to `requirements.txt`.
 - [ ] [tooling] Add a `make test` target running
       `QT_QPA_PLATFORM=offscreen pytest -q`.
-- [ ] [tooling] Pin `simplejson` (currently imported by `file_io.py`
-      and `tree_view.py` without an entry in `requirements.txt`).
+- [ ] [tooling] Pin `simplejson` (currently imported by `io_formats/`
+      without an entry in `requirements.txt`).
 - [ ] [tooling] Add `coverage`/`pytest-cov` and commit a short
       summary to `ai-memory/coverage.md`.
 - [ ] [tests] Smoke-cover Phase 4+ actions in `test_smoke_mainwindow.py`
@@ -53,24 +56,22 @@ Format: `- [ ] [scope] description — file:symbol`
 ### Stretch UX items (optional, deferred from Phase 5)
 - [ ] [ux] Match-highlight delegate (`ValueDelegate.paint` override
       drawing a yellow background span over substring matches when
-      a filter is active). — `delegate.py:ValueDelegate.paint`
+      a filter is active). — `delegates/value.py:ValueDelegate.paint`
 - [ ] [ux] Type icons in column 1: register `:/icons/<type>.svg` and
       return them from `JsonTreeModel.data(..., DecorationRole)`.
-      — `tree_model.py`, `delegate.py`
+      — `tree/model.py`, `tree/model_roles.py`, `delegates/value.py`
 
 ### Code hygiene (low priority)
 - [ ] [hygiene] Drop the legacy `_demo_data()` seed and its
-      `base64` / `gzip` / `zlib` / `gmpy2` imports from `json_tab.py`
-      once the remaining bare-`JsonTab(...)` tests migrate to explicit
-      `data=` constructors.
-- [ ] [hygiene] Delete `tree_view._commit_on_tab` — dead code; the
-      `commit_mutation` API it looks for no longer exists on `JsonTab`
-      (superseded by typed `push_*` helpers).
+      `base64` / `gzip` / `zlib` / `gmpy2` imports from
+      `documents/tab.py` once the remaining bare-`JsonTab(...)` tests
+      migrate to explicit `data=` constructors.
 - [ ] [hygiene] Decide whether to keep `header_view_editor.py`. The
       mixin is currently unused (commented out at the call site).
 - [ ] [hygiene] Either tighten `MainWindow.update_actions` to enable
       `Save` only when `tab.is_dirty`, or document that the current
-      "always-on" behaviour is intentional.
+      "always-on" behaviour is intentional. —
+      `app/main_window_actions.py`
 
 ### Smells / footguns (very low priority, no functional impact)
 - [ ] [smell] `JsonTreeItem.row()` returns `0` for the root (no parent)
@@ -200,3 +201,17 @@ here so future audits don't reopen them.
 - `JsonTab.resize_key_columns` on tab switch / `model.modelReset`.
 - Expand / Collapse all in tree context menu and View menu.
 - Zoom actions in View menu.
+
+### Package refactor (Phases 01–37, 2026-04-26)
+- Top-level "god modules" split into cohesive packages and removed:
+  `json_tab.py` → `documents/`, `ui.py` → `app/`,
+  `tree_view.py` → `tree_actions/`, `tree_model.py` + `tree_item.py`
+  + `enums.py` → `tree/`, `delegate.py` → `delegates/`,
+  `file_io.py` → `io_formats/`, `view_state.py` → `state/`.
+- Undo command classes and diff replay extracted to `undo/commands.py`
+  + `undo/diff.py` (`DiffApplier`).
+- `tree_view._commit_on_tab` dead code removed during Phase 22.
+- All internal imports migrated to canonical package paths in Phase 35;
+  compatibility shims removed in Phase 37. No source file (other than
+  generated `mainwindow.py`) exceeds ~510 lines.
+- Full suite stayed green at 401 passed throughout every phase.
