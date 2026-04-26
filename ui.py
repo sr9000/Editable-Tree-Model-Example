@@ -7,6 +7,7 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView, QVBoxLayout
 
 from app.close_confirm import confirm_close
+from app.history import bind_undo_signals, do_redo, do_undo, setup_history_menu, show_history_dialog
 from app.recent_files import push_recent, recent_files, refresh_recent_menu
 import view_state
 from file_io import load_file_with_format
@@ -28,7 +29,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
         refresh_recent_menu(self)
-        self._setup_history_menu()
+        setup_history_menu(self)
         self.setup_model(yaml_filename)
         self.setup_connections()
 
@@ -70,80 +71,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.tabWidget.currentChanged.connect(self._on_tab_changed)
 
     def _setup_history_menu(self) -> None:
-        self.historyMenu = self.menuBar.addMenu("&History")
-
-        self.undoAction = QAction("&Undo", self)
-        self.undoAction.setShortcut(QKeySequence.StandardKey.Undo)
-        self.undoAction.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
-        self.undoAction.triggered.connect(self._do_undo)
-        self.undoAction.setEnabled(False)
-
-        self.redoAction = QAction("&Redo", self)
-        self.redoAction.setShortcuts([QKeySequence.StandardKey.Redo, QKeySequence("Ctrl+Y")])
-        self.redoAction.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
-        self.redoAction.triggered.connect(self._do_redo)
-        self.redoAction.setEnabled(False)
-
-        self.showHistoryAction = QAction("Show History...", self)
-        self.showHistoryAction.triggered.connect(self._show_history_dialog)
-        self.showHistoryAction.setEnabled(False)
-
-        self.historyMenu.addAction(self.undoAction)
-        self.historyMenu.addAction(self.redoAction)
-        self.historyMenu.addSeparator()
-        self.historyMenu.addAction(self.showHistoryAction)
+        setup_history_menu(self)
 
     def _bind_undo_signals(self, tab: JsonTab | None) -> None:
-        # Disconnect previously-bound stack so stale signals don't toggle our actions.
-        previous = self._bound_undo_tab
-        if previous is not None:
-            try:
-                previous.undo_stack.canUndoChanged.disconnect(self.undoAction.setEnabled)
-                previous.undo_stack.canRedoChanged.disconnect(self.redoAction.setEnabled)
-            except (TypeError, RuntimeError):
-                pass
-
-        self._bound_undo_tab = tab
-
-        if tab is not None:
-            tab.undo_stack.canUndoChanged.connect(self.undoAction.setEnabled)
-            tab.undo_stack.canRedoChanged.connect(self.redoAction.setEnabled)
-            self.undoAction.setEnabled(tab.undo_stack.canUndo())
-            self.redoAction.setEnabled(tab.undo_stack.canRedo())
-            self.showHistoryAction.setEnabled(True)
-        else:
-            self.undoAction.setEnabled(False)
-            self.redoAction.setEnabled(False)
-            self.showHistoryAction.setEnabled(False)
+        bind_undo_signals(self, tab)
 
     def _do_undo(self) -> None:
-        tab = self._current_tab()
-        if tab is not None:
-            tab.undo_stack.undo()
+        do_undo(self)
 
     def _do_redo(self) -> None:
-        tab = self._current_tab()
-        if tab is not None:
-            tab.undo_stack.redo()
+        do_redo(self)
 
     def _show_history_dialog(self) -> None:
-        tab = self._current_tab()
-        if tab is None:
-            return
-
-        if self._history_dialog is None:
-            self._history_dialog = QDialog(self)
-            self._history_dialog.setWindowTitle("Undo / Redo History")
-            self._history_dialog.resize(320, 400)
-            layout = QVBoxLayout(self._history_dialog)
-            self._history_view = QUndoView(self._history_dialog)
-            self._history_view.setEmptyLabel("<initial state>")
-            layout.addWidget(self._history_view)
-
-        self._history_view.setStack(tab.undo_stack)
-        self._history_dialog.show()
-        self._history_dialog.raise_()
-        self._history_dialog.activateWindow()
+        show_history_dialog(self)
 
     def _on_tab_changed(self, _index: int) -> None:
         tab = self._current_tab()

@@ -1181,3 +1181,34 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 32 — extract history helper
+
+- Date: 2026-04-26
+- Commit subject: Extract history helper
+- Status: PASS
+- Files changed:
+  - `app/history.py`
+  - `ui.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_smoke_mainwindow.py tests/test_undo_redo.py tests/test_typed_undo_commands.py
+  ```
+- Focused result:
+  ```text
+  22 passed in 0.30s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.22s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
