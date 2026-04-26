@@ -262,3 +262,34 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 05 — extract QSettings coercion
+
+- Date: 2026-04-26
+- Commit subject: Extract QSettings coercion helpers
+- Status: PASS
+- Files changed:
+  - `state/qsettings_coercion.py`
+  - `view_state.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_phase_5_4_persisted_view_state.py
+  ```
+- Focused result:
+  ```text
+  tests/test_phase_5_4_persisted_view_state.py: 3 passed in 0.13s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.25s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
