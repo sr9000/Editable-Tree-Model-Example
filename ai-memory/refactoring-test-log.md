@@ -94,9 +94,9 @@ Copy this template for each phase:
   ```
 - Full-suite result:
   ```text
-  not run for docs-only planning update
+  401 passed in 3.36s
   ```
 - Known failures / skipped checks:
-  - Full runtime suite intentionally not run because this phase only adds planning documents.
+  - none
 - Decision:
-  - docs-only
+  - proceed
