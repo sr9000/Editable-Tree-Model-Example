@@ -1,6 +1,4 @@
-import base64
 import binascii
-import gzip
 import zlib
 
 from gmpy2 import mpq
@@ -12,6 +10,7 @@ from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
 from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
+from delegates.bytes_codec import decode_bytes, encode_bytes
 from enums import JsonType
 from mpq2py import mpq_serialization
 from qbigint_spinbox import QBigIntSpinBox
@@ -406,28 +405,3 @@ class NameDelegate(_TextEditorDelegateBase):
 
     def setModelData(self, editor: QLineEdit, model: QAbstractItemModel, index: QModelIndex):
         ValueDelegate._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
-
-
-def decode_bytes(b64string: str, json_type: JsonType) -> bytes:
-    # Prepare binary data for hex editor
-    raw = base64.b64decode(b64string, validate=True) if b64string else b""
-
-    match json_type:  # Decompress if needed
-        case JsonType.ZLIB:
-            return zlib.decompress(raw)
-        case JsonType.GZIP:
-            return gzip.decompress(raw)
-        case _:
-            return raw
-
-
-# Callback to handle edited data
-def encode_bytes(edited_data: bytes, json_type: JsonType) -> str:
-    match json_type:  # Compress if needed
-        case JsonType.ZLIB:
-            edited_data = zlib.compress(edited_data)
-        case JsonType.GZIP:
-            edited_data = gzip.compress(edited_data)
-
-    # Encode to base64 and update model
-    return base64.b64encode(edited_data).decode("ascii")

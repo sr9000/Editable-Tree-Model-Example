@@ -1558,7 +1558,7 @@ Update this table as phases land.
 | 10 | Move JsonTreeItem | PASS | 401 passed in 3.21s |  |
 | 11 | Extract model role/display helpers | PASS | 401 passed in 3.19s |  |
 | 12 | Move JsonTreeModel | PASS | 401 passed in 3.22s |  |
-| 13 | Extract delegate bytes codec | TODO | Not run |  |
+| 13 | Extract delegate bytes codec | PASS | 401 passed in 3.23s |  |
 | 14 | Extract delegate formatting helpers | TODO | Not run |  |
 | 15 | Extract delegate base classes | TODO | Not run |  |
 | 16 | Move name/type delegates | TODO | Not run |  |

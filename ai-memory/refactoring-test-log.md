@@ -545,3 +545,42 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 13 — extract delegate bytes codec
+
+- Date: 2026-04-26
+- Commit subject: Extract delegate bytes codec
+- Status: PASS
+- Files changed:
+  - `delegates/bytes_codec.py`
+  - `delegate.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_phase_5_1_carryover.py tests/test_qhexedit_highlighting.py
+  python - <<'PY'
+  from delegate import decode_bytes, encode_bytes
+  from delegates.bytes_codec import decode_bytes as decode2, encode_bytes as encode2
+  assert decode_bytes is decode2
+  assert encode_bytes is encode2
+  print('delegate bytes codec imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests: 11 passed in 0.12s
+  delegate bytes codec imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.23s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
