@@ -43,10 +43,37 @@ def _looks_like_multiline_text(s: str) -> bool:
 
 
 def infer_text_json_type(s: str) -> "JsonType":
-    """Classify *s* within the text-only pseudo-type family."""
+    """Classify *s* within the text-only pseudo-type family.
+
+    Used by ``parse_json_type`` for fresh inference (file load /
+    container conversion). Picks both axes:
+    - multiline-ness: ``MULTILINE`` / ``TEXT`` vs ``STRING`` / ``UNICODE``
+    - ascii axis: ``UNICODE`` / ``TEXT`` vs ``STRING`` / ``MULTILINE``
+    """
     if _looks_like_multiline_text(s):
         return JsonType.TEXT if _contains_non_ascii(s) else JsonType.MULTILINE
     return JsonType.UNICODE if _contains_non_ascii(s) else JsonType.STRING
+
+
+def text_pseudotype_for(current_type: "JsonType", s: str) -> "JsonType":
+    """Pick a text-family type when the *current* field type is text-family.
+
+    This switches **only along the ascii axis**, preserving multiline-ness.
+    Allowed transitions:
+
+    - ``STRING`` <-> ``UNICODE``
+    - ``MULTILINE`` <-> ``TEXT``
+
+    Any cross-family switch (e.g. ``STRING`` -> ``MULTILINE`` or
+    ``UNICODE`` -> ``TEXT``) is intentionally **not** performed here:
+    once the user has chosen a single-line vs multiline shape, edits
+    keep that shape until the type is changed explicitly.
+    """
+    non_ascii = _contains_non_ascii(s)
+    if current_type in (JsonType.MULTILINE, JsonType.TEXT):
+        return JsonType.TEXT if non_ascii else JsonType.MULTILINE
+    # STRING / UNICODE (and any other caller-text-family) stay single-line.
+    return JsonType.UNICODE if non_ascii else JsonType.STRING
 
 
 def parse_json_type(value: Any) -> "JsonType":
@@ -145,3 +172,6 @@ class JsonType(StrEnum):
     BYTES = "bytes"  # base64
     ZLIB = "zlib"  # base64+zlib
     GZIP = "gzip"  # base64+gzip
+
+
+TEXT_FAMILY: frozenset[JsonType] = frozenset({JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT})

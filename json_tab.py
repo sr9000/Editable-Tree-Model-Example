@@ -11,7 +11,7 @@ from PySide6.QtGui import QKeySequence, QShortcut, QUndoCommand, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate
-from enums import JsonType, infer_text_json_type, parse_json_type
+from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
 from file_io import (
     SAVE_FORMAT_JSON,
     SAVE_FORMAT_JSONL,
@@ -546,13 +546,8 @@ class JsonTab(QWidget):
             item.value = item._normalize_value_for_type(target)
             item.editable = item._compute_editable()
         else:
-            if isinstance(target, str) and item.json_type in (
-                JsonType.STRING,
-                JsonType.UNICODE,
-                JsonType.MULTILINE,
-                JsonType.TEXT,
-            ):
-                new_type = infer_text_json_type(target)
+            if isinstance(target, str) and item.json_type in TEXT_FAMILY:
+                new_type = text_pseudotype_for(item.json_type, target)
             else:
                 new_type = parse_json_type(target)
             if new_type in (JsonType.OBJECT, JsonType.ARRAY):

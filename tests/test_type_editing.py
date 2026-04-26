@@ -1,5 +1,7 @@
-from PySide6.QtCore import QModelIndex, Qt
-from PySide6.QtWidgets import QAbstractItemView, QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
+import pytest
+from PySide6.QtCore import QEvent, QModelIndex, Qt
+from PySide6.QtGui import QFocusEvent, QKeyEvent
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
 from delegate import JsonTypeDelegate
 from enums import JsonType
@@ -58,17 +60,30 @@ def test_type_pinning_keeps_string_for_base64_like_value():
     assert item.json_type is JsonType.STRING
 
 
-def test_value_edit_auto_switches_to_unicode_pseudo_types():
+def test_value_edit_only_switches_along_ascii_axis():
+    """STRING <-> UNICODE switches automatically on the ascii axis.
+
+    The cross-axis switch (single-line <-> multiline) is intentionally
+    disabled: a UNICODE field stays single-line even if the user pastes
+    multiline-unicode text — only the ascii axis flips automatically.
+    """
     model = JsonTreeModel({"value": "hello"})
     value_index = model.index(0, 2, QModelIndex())
 
+    # ASCII -> non-ASCII switches single-line STRING to UNICODE.
     assert model.setData(value_index, "caf\u00e9")
     item = model.get_item(model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.UNICODE
 
+    # Multiline-unicode pasted into a single-line field stays UNICODE.
     assert model.setData(value_index, "line1\nline2\n\u03a9")
     item = model.get_item(model.index(0, 0, QModelIndex()))
-    assert item.json_type is JsonType.TEXT
+    assert item.json_type is JsonType.UNICODE
+
+    # Going back to ASCII switches UNICODE -> STRING.
+    assert model.setData(value_index, "back-to-ascii")
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.STRING
 
 
 def test_value_edit_does_not_autopromote_string_to_bytes_like_type():
@@ -93,9 +108,64 @@ def test_caps_lock_does_not_close_name_editor(qtbot):
     qtbot.waitUntil(lambda: tab.view.findChild(QLineEdit) is not None)
     editor = tab.view.findChild(QLineEdit)
     assert editor is not None
-    qtbot.keyPress(editor, Qt.Key.Key_CapsLock)
 
+    # 1. A real CapsLock keypress must not close the editor.
+    press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_CapsLock, Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(editor, press)
+    release = QKeyEvent(QEvent.Type.KeyRelease, Qt.Key.Key_CapsLock, Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(editor, release)
     assert tab.view.state() == QAbstractItemView.State.EditingState
+
+    # 2. A layout-switch-style FocusOut (xkb-bound CapsLock) must also be ignored.
+    focus_out = QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.ActiveWindowFocusReason)
+    QApplication.sendEvent(editor, focus_out)
+    assert tab.view.state() == QAbstractItemView.State.EditingState
+
+    other_focus_out = QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.OtherFocusReason)
+    QApplication.sendEvent(editor, other_focus_out)
+    assert tab.view.state() == QAbstractItemView.State.EditingState
+
+
+# All 16 text-family transitions: only STRING<->UNICODE and MULTILINE<->TEXT
+# are allowed; cross-axis transitions must preserve the field's kind.
+_FAM = (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT)
+_NON_ASCII = "caf\u00e9"
+_ASCII_LINE = "hello"
+_NON_ASCII_MULTI = "a\nb\n\u03a9"
+_ASCII_MULTI = "a\nb\nc"
+
+
+def _expected_after_edit(current: JsonType, value: str) -> JsonType:
+    non_ascii = any(ord(ch) > 127 for ch in value)
+    if current in (JsonType.MULTILINE, JsonType.TEXT):
+        return JsonType.TEXT if non_ascii else JsonType.MULTILINE
+    return JsonType.UNICODE if non_ascii else JsonType.STRING
+
+
+@pytest.mark.parametrize("current", _FAM)
+@pytest.mark.parametrize(
+    "value",
+    [_ASCII_LINE, _NON_ASCII, _ASCII_MULTI, _NON_ASCII_MULTI],
+)
+def test_text_family_only_switches_along_ascii_axis(current: JsonType, value: str):
+    """Editing a value while the field is text-family stays in the same
+    line/multiline shape; only the ascii axis can switch.
+    """
+    model = JsonTreeModel({"k": "seed"})
+    name_idx = model.index(0, 0, QModelIndex())
+    type_idx = model.index(0, 1, QModelIndex())
+    value_idx = model.index(0, 2, QModelIndex())
+
+    # Pin field to the desired text-family type, then unpin so the edit
+    # path exercises the auto-typing branch (not the strict-coercion one).
+    assert model.setData(type_idx, current)
+    item = model.get_item(name_idx)
+    item.explicit_type = False
+
+    assert model.setData(value_idx, value)
+
+    item = model.get_item(name_idx)
+    assert item.json_type is _expected_after_edit(current, value)
 
 
 def test_unicode_name_uses_italic_font_role():
