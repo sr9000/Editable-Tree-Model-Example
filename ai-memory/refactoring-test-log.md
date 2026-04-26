@@ -821,3 +821,34 @@ Copy this template for each phase:
   - Focused command reports a teardown-time segfault after tests pass; full suite remained green and was used as gate.
 - Decision:
   - proceed
+
+## Phase 21 — extract structural tree actions
+
+- Date: 2026-04-26
+- Commit subject: Extract structural tree actions
+- Status: PASS
+- Files changed:
+  - `tree_actions/structure.py`
+  - `tree_view.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_tree_actions_structure.py tests/test_tree_actions_clipboard.py tests/test_undo_redo.py tests/test_typed_undo_commands.py
+  ```
+- Focused result:
+  ```text
+  22 passed in 0.25s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.16s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
