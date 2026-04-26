@@ -180,3 +180,43 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 03 — extract file loading
+
+- Date: 2026-04-26
+- Commit subject: Extract file loading
+- Status: PASS
+- Files changed:
+  - `io_formats/load.py`
+  - `file_io.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_file_io_phase4.py
+  python - <<'PY'
+  from file_io import load_file, load_file_with_format
+  from io_formats.load import load_file as load_file2
+  assert load_file is not None
+  assert load_file_with_format is not None
+  assert load_file2 is not None
+  print('file loading imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests/test_file_io_phase4.py: 12 passed in 0.15s
+  file loading imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.18s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed

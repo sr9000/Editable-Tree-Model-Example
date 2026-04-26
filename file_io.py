@@ -3,7 +3,6 @@ from typing import Any
 
 import simplejson
 import yaml
-from gmpy2 import mpq
 
 from io_formats.detect import (
     SAVE_FORMAT_JSON,
@@ -12,33 +11,8 @@ from io_formats.detect import (
     SAVE_FORMAT_YAML_MULTI,
     detect_format,
 )
-from mpq2py import MpqSafeDumper, MpqSafeLoader, mpq_json_default
-
-
-
-def load_file(path: str) -> Any:
-    data, _fmt = load_file_with_format(path)
-    return data
-
-
-def load_file_with_format(path: str) -> tuple[Any, str]:
-    fmt = detect_format(path)
-    with open(path, "r", encoding="utf-8") as fh:
-        if fmt == SAVE_FORMAT_JSON:
-            return simplejson.load(fh, parse_float=mpq), SAVE_FORMAT_JSON
-        if fmt == SAVE_FORMAT_JSONL:
-            rows = []
-            for line in fh:
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                rows.append(simplejson.loads(stripped, parse_float=mpq))
-            return rows, SAVE_FORMAT_JSONL
-
-        docs = list(yaml.load_all(fh, Loader=MpqSafeLoader))
-        if len(docs) <= 1:
-            return (docs[0] if docs else {}), SAVE_FORMAT_YAML
-        return docs, SAVE_FORMAT_YAML_MULTI
+from io_formats.load import load_file, load_file_with_format
+from mpq2py import MpqSafeDumper, mpq_json_default
 
 
 def dump_text(path: str, data: Any, save_format: str | None = None) -> str:
