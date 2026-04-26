@@ -61,6 +61,197 @@ class _SnapshotCommand(QUndoCommand):
         self._tab._restore_state(self._after)
 
 
+def _make_label(text: str, target_qname: str) -> str:
+    timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
+    return f"[{timestamp}] {text} @ {target_qname}"
+
+
+class _MoveRowCmd(QUndoCommand):
+    """Move a single row inside its parent. O(1) state: 3 ints."""
+
+    def __init__(self, tab: "JsonTab", text: str, parent_path: tuple, src: int, dst: int):
+        super().__init__(text)
+        self._tab = tab
+        self._parent_path = parent_path
+        self._src = src
+        self._dst = dst
+
+    def redo(self):
+        p = self._tab._index_from_path(self._parent_path)
+        if self._tab.model.move_row(p, self._src, self._dst):
+            self._tab.view.setCurrentIndex(self._tab.model.index(self._dst, 0, p))
+
+    def undo(self):
+        p = self._tab._index_from_path(self._parent_path)
+        if self._tab.model.move_row(p, self._dst, self._src):
+            self._tab.view.setCurrentIndex(self._tab.model.index(self._src, 0, p))
+
+
+class _RenameCmd(QUndoCommand):
+    """Rename a row's name (column 0). O(1) state: 2 strings."""
+
+    def __init__(self, tab: "JsonTab", text: str, path: tuple, old_name: Any, new_name: Any):
+        super().__init__(text)
+        self._tab = tab
+        self._path = path
+        self._old = old_name
+        self._new = new_name
+
+    def redo(self):
+        self._apply(self._new)
+
+    def undo(self):
+        self._apply(self._old)
+
+    def _apply(self, name: Any) -> None:
+        idx = self._tab._index_from_path(self._path)
+        if not idx.isValid():
+            return
+        item = self._tab.model.get_item(idx)
+        item.name = name
+        if item.parent_item is not None:
+            item.parent_item.mark_children_dirty()
+        self._tab._emit_row_changed(idx)
+
+
+class _EditValueCmd(QUndoCommand):
+    """Edit a value cell. Stores the affected SUBTREE on each side
+    (subset, never the whole document)."""
+
+    def __init__(self, tab: "JsonTab", text: str, path: tuple, old_subtree: Any, new_value: Any):
+        super().__init__(text)
+        self._tab = tab
+        self._path = path
+        self._old_subtree = old_subtree
+        self._new_value = new_value
+
+    def redo(self):
+        idx = self._tab._index_from_path(self._path)
+        if idx.isValid():
+            self._tab._diff_apply(self._tab.model.get_item(idx), self._new_value, idx)
+
+    def undo(self):
+        idx = self._tab._index_from_path(self._path)
+        if idx.isValid():
+            self._tab._diff_apply(self._tab.model.get_item(idx), self._old_subtree, idx)
+
+
+class _ChangeTypeCmd(QUndoCommand):
+    """Change a row's type (column 1). Stores old subtree subset for undo."""
+
+    def __init__(
+        self,
+        tab: "JsonTab",
+        text: str,
+        path: tuple,
+        old_subtree: Any,
+        old_explicit: bool,
+        new_type: JsonType,
+    ):
+        super().__init__(text)
+        self._tab = tab
+        self._path = path
+        self._old_subtree = old_subtree
+        self._old_explicit = old_explicit
+        self._new_type = new_type
+
+    def redo(self):
+        idx = self._tab._index_from_path(self._path)
+        if not idx.isValid():
+            return
+        type_idx = self._tab.model.index(idx.row(), 1, idx.parent())
+        self._tab.model.setData(type_idx, self._new_type, Qt.ItemDataRole.EditRole)
+
+    def undo(self):
+        idx = self._tab._index_from_path(self._path)
+        if not idx.isValid():
+            return
+        item = self._tab.model.get_item(idx)
+        self._tab._diff_apply(item, self._old_subtree, idx)
+        item.explicit_type = self._old_explicit
+
+
+class _InsertRowsCmd(QUndoCommand):
+    """Insert N rows. Stores per-row ``{parent_path, row, value, name}``.
+
+    Used for: insert-sibling (1 entry), insert-child (1 entry), duplicate
+    (N entries with copied subtrees), paste (N entries from clipboard).
+    The stored ``value`` is the inserted subtree only — never the whole
+    document.
+    """
+
+    def __init__(self, tab: "JsonTab", text: str, inserts: list, *, set_current_to_first: bool = True):
+        super().__init__(text)
+        self._tab = tab
+        self._inserts = inserts
+        self._set_current = set_current_to_first
+
+    def redo(self):
+        first_idx = None
+        for rec in self._inserts:
+            p = self._tab._index_from_path(rec["parent_path"])
+            parent_item = self._tab.model.get_item(p)
+            self._tab._insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec.get("name"))
+            if first_idx is None:
+                first_idx = self._tab.model.index(rec["row"], 0, p)
+        if self._set_current and first_idx is not None and first_idx.isValid():
+            self._tab.view.setCurrentIndex(first_idx)
+
+    def undo(self):
+        for rec in reversed(self._inserts):
+            p = self._tab._index_from_path(rec["parent_path"])
+            self._tab.model.removeRow(rec["row"], p)
+
+
+class _RemoveRowsCmd(QUndoCommand):
+    """Remove N rows. Stores per-row ``{parent_path, row, name, value}``
+    where ``value`` is the removed subtree (subset JSON dump)."""
+
+    def __init__(self, tab: "JsonTab", text: str, removals: list):
+        super().__init__(text)
+        self._tab = tab
+        # ``removals`` is sorted deepest-first / last-row-first for safe positional removal.
+        self._removals = removals
+
+    def redo(self):
+        for rec in self._removals:
+            p = self._tab._index_from_path(rec["parent_path"])
+            self._tab.model.removeRow(rec["row"], p)
+
+    def undo(self):
+        for rec in reversed(self._removals):
+            p = self._tab._index_from_path(rec["parent_path"])
+            parent_item = self._tab.model.get_item(p)
+            self._tab._insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec["name"])
+
+
+class _SortKeysCmd(QUndoCommand):
+    """Sort children of an OBJECT. Stores prior subtree subset for undo.
+
+    For non-recursive sort the prior subtree is shallow (children of the
+    target only). For recursive sort it captures the full target subtree
+    — but still a SUBSET of the document (only the sorted node), per the
+    requirement.
+    """
+
+    def __init__(self, tab: "JsonTab", text: str, path: tuple, old_subtree: Any, recursive: bool):
+        super().__init__(text)
+        self._tab = tab
+        self._path = path
+        self._old_subtree = old_subtree
+        self._recursive = recursive
+
+    def redo(self):
+        idx = self._tab._index_from_path(self._path)
+        if idx.isValid():
+            self._tab.model.sort_keys(idx, recursive=self._recursive)
+
+    def undo(self):
+        idx = self._tab._index_from_path(self._path)
+        if idx.isValid():
+            self._tab._diff_apply(self._tab.model.get_item(idx), self._old_subtree, idx)
+
+
 class JsonTab(QWidget):
     def __init__(
         self,
@@ -332,64 +523,57 @@ class JsonTab(QWidget):
     # ------------------------------------------------------------------
 
     def _diff_apply_root(self, target_data: Any) -> bool:
-        """Top-level entry to ``_diff_apply``; bails out on root-type change."""
-        root = self.model.root_item
-        if isinstance(target_data, dict):
-            if root.json_type is not JsonType.OBJECT:
-                return False
-        elif isinstance(target_data, list):
-            if root.json_type is not JsonType.ARRAY:
-                return False
-        else:
-            if root.json_type in (JsonType.OBJECT, JsonType.ARRAY):
-                return False
-        return self._diff_apply(root, target_data, QModelIndex())
+        """Top-level entry. Always succeeds (type changes handled in place)."""
+        self._diff_apply(self.model.root_item, target_data, QModelIndex())
+        return True
 
     def _diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool:
         """Mutate *item*'s subtree in place to match *target*.
 
-        Returns True on success; False signals a type mismatch — the caller
-        must replace this row entirely (``removeRow`` + ``_insert_typed_item``).
+        Always returns True. Container <-> leaf type changes are handled
+        in place via ``_convert_container`` / ``_convert_to_leaf``, emitting
+        the necessary ``beginRemoveRows`` / ``beginInsertRows`` /
+        ``dataChanged`` signals so the view stays consistent without a
+        full ``beginResetModel``.
 
-        This is the hot path for undo / redo. We avoid ``parse_json_type``
-        whenever possible: cheap ``isinstance`` discriminates container vs
-        leaf in O(1), and identical-Python-typed leaves bypass re-parsing
-        altogether (critical for huge string-heavy trees, where the
-        ``parse_json_type`` regex/base64/datetime probes dominate).
+        This is the hot path for undo / redo replay. Cheap ``isinstance``
+        discriminates container vs leaf in O(1); identical-Python-typed
+        leaves bypass ``parse_json_type`` re-parsing altogether.
         """
         if isinstance(target, dict):
-            if item.json_type is not JsonType.OBJECT:
-                return False
-            return self._diff_object(item, target, item_index)
+            if item.json_type is JsonType.OBJECT:
+                return self._diff_object(item, target, item_index)
+            self._convert_container(item, item_index, JsonType.OBJECT, target)
+            return True
         if isinstance(target, list):
-            if item.json_type is not JsonType.ARRAY:
-                return False
-            return self._diff_array(item, target, item_index)
+            if item.json_type is JsonType.ARRAY:
+                return self._diff_array(item, target, item_index)
+            self._convert_container(item, item_index, JsonType.ARRAY, target)
+            return True
 
         # Target is a leaf.
         if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
-            return False
+            self._convert_to_leaf(item, item_index, target)
+            return True
 
+        # Leaf -> leaf fast path.
         if item.value == target:
-            return True  # unchanged → no signal needed
-
-        # Value differs. For non-string primitives whose Python type matches
-        # the current value's type, the JsonType classification cannot have
-        # changed (parse_json_type is identity-on-int/bool/None and only
-        # narrows floats by range), so we can update value in place. For
-        # strings the heuristics may pick a different leaf JsonType
-        # (DATE / BYTES / etc.), so re-classify those.
+            return True
         if type(item.value) is type(target) and not isinstance(target, str):
             item.value = item._normalize_value_for_type(target)
             item.editable = item._compute_editable()
         else:
             new_type = parse_json_type(target)
             if new_type in (JsonType.OBJECT, JsonType.ARRAY):
-                # Defensive: parse_json_type promoted a primitive into a
-                # container type — treat as type mismatch.
-                return False
+                self._convert_container(item, item_index, new_type, target)
+                return True
             item._apply_typed_value(new_type, target)
+        self._emit_row_changed(item_index)
+        return True
 
+    # -- low-level mutators used by diff and typed commands --------------
+
+    def _emit_row_changed(self, item_index: QModelIndex) -> None:
         if item_index.isValid():
             row = item_index.row()
             parent = item_index.parent()
@@ -400,7 +584,44 @@ class JsonTab(QWidget):
                 bot,
                 [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole],
             )
-        return True
+
+    def _clear_children(self, item: JsonTreeItem, item_index: QModelIndex) -> None:
+        n = len(item.child_items)
+        if n > 0:
+            self.model.beginRemoveRows(item_index, 0, n - 1)
+            item.child_items.clear()
+            item.mark_children_dirty()
+            self.model.endRemoveRows()
+
+    def _convert_container(
+        self,
+        item: JsonTreeItem,
+        item_index: QModelIndex,
+        new_type: JsonType,
+        value: Any,
+    ) -> None:
+        """Switch *item* to OBJECT or ARRAY and populate from *value*."""
+        self._clear_children(item, item_index)
+        item.json_type = new_type
+        item.value = {} if new_type is JsonType.OBJECT else []
+        item.editable = item._compute_editable()
+        if new_type is JsonType.OBJECT:
+            pairs = list(value.items())
+        else:
+            pairs = [(None, v) for v in value]
+        if pairs:
+            self.model.beginInsertRows(item_index, 0, len(pairs) - 1)
+            for name, v in pairs:
+                item.child_items.append(JsonTreeItem(item, v, name))
+            item.mark_children_dirty()
+            self.model.endInsertRows()
+        self._emit_row_changed(item_index)
+
+    def _convert_to_leaf(self, item: JsonTreeItem, item_index: QModelIndex, target: Any) -> None:
+        self._clear_children(item, item_index)
+        new_type = parse_json_type(target)
+        item._apply_typed_value(new_type, target)
+        self._emit_row_changed(item_index)
 
     def _insert_typed_item(
         self,
@@ -410,13 +631,7 @@ class JsonTab(QWidget):
         value: Any,
         name: str | int | None = None,
     ) -> bool:
-        """Insert a fully-built ``JsonTreeItem`` at *position*.
-
-        Bypasses ``model.setData`` for column 2 (which only emits
-        ``dataChanged``) so that complex values arrive in the model with
-        their full child subtree already populated and the view sees a
-        single ``beginInsertRows`` / ``endInsertRows`` cycle.
-        """
+        """Insert a fully-built ``JsonTreeItem`` at *position*."""
         new_item = JsonTreeItem(parent_item, value, name)
         self.model.beginInsertRows(parent_index, position, position)
         parent_item.child_items.insert(position, new_item)
@@ -432,46 +647,30 @@ class JsonTab(QWidget):
         # backwards so positional indices stay valid as we remove.
         for i in range(len(item.child_items) - 1, -1, -1):
             if item.child_items[i].name not in target_name_set:
-                if not self.model.removeRow(i, item_index):
-                    return False
+                self.model.removeRow(i, item_index)
 
         # Phase 2: walk the target order, recursing in lockstep when
         # children are already aligned and falling back to a linear search
         # only on disorder.
         for target_pos, target_name in enumerate(target_names):
             target_value = target_dict[target_name]
-
-            # Lockstep fast path: child at target_pos already has the right name.
             cur_pos: int | None = None
             children = item.child_items
             if target_pos < len(children) and children[target_pos].name == target_name:
                 cur_pos = target_pos
             else:
-                # Search from target_pos forward (anything earlier already settled).
                 for i in range(target_pos, len(children)):
                     if children[i].name == target_name:
                         cur_pos = i
                         break
-
             if cur_pos is None:
-                # Insert fresh at target_pos.
-                if not self._insert_typed_item(item, item_index, target_pos, target_value, name=target_name):
-                    return False
+                self._insert_typed_item(item, item_index, target_pos, target_value, name=target_name)
                 continue
-
             if cur_pos != target_pos:
-                if not self.model.move_row(item_index, cur_pos, target_pos):
-                    return False
-
+                self.model.move_row(item_index, cur_pos, target_pos)
             child = item.child_items[target_pos]
             child_index = self.model.index(target_pos, 0, item_index)
-            if not self._diff_apply(child, target_value, child_index):
-                # Type mismatch: replace this row entirely.
-                if not self.model.removeRow(target_pos, item_index):
-                    return False
-                if not self._insert_typed_item(item, item_index, target_pos, target_value, name=target_name):
-                    return False
-
+            self._diff_apply(child, target_value, child_index)
         return True
 
     def _diff_array(self, item: JsonTreeItem, target_list: list, item_index: QModelIndex) -> bool:
@@ -480,26 +679,17 @@ class JsonTab(QWidget):
         # Trim trailing rows.
         while len(item.child_items) > target_len:
             last = len(item.child_items) - 1
-            if not self.model.removeRow(last, item_index):
-                return False
+            self.model.removeRow(last, item_index)
 
-        # Recurse positionally; replace on type-mismatch; extend by appending.
+        # Recurse positionally; extend by appending.
         for pos in range(target_len):
             target_value = target_list[pos]
-
             if pos >= len(item.child_items):
-                if not self._insert_typed_item(item, item_index, pos, target_value, name=None):
-                    return False
+                self._insert_typed_item(item, item_index, pos, target_value, name=None)
                 continue
-
             child = item.child_items[pos]
             child_index = self.model.index(pos, 0, item_index)
-            if not self._diff_apply(child, target_value, child_index):
-                if not self.model.removeRow(pos, item_index):
-                    return False
-                if not self._insert_typed_item(item, item_index, pos, target_value, name=None):
-                    return False
-
+            self._diff_apply(child, target_value, child_index)
         return True
 
     def _restore_snapshot(self, data: Any) -> None:
@@ -539,19 +729,148 @@ class JsonTab(QWidget):
         return True
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
-        def _apply() -> bool:
-            return bool(self.model.setData(index, value, role))
+        if role != Qt.ItemDataRole.EditRole or not index.isValid():
+            return False
+        col = index.column()
+        if col == 0:
+            return self.push_rename(index, value)
+        if col == 1:
+            return self.push_change_type(index, value)
+        if col == 2:
+            return self.push_edit_value(index, value)
+        return False
 
-        match index.column():
-            case 0:
-                text = "rename"
-            case 1:
-                text = "change type"
-            case 2:
-                text = "edit value"
-            case _:
-                text = "edit cell"
-        return self.commit_mutation(text, _apply, target_index=index)
+    # ------------------------------------------------------------------
+    # Typed-command public API (action/compensation, no full-tree snapshot)
+    # ------------------------------------------------------------------
+
+    def push_move_row(self, parent_index: QModelIndex, src: int, dst: int, *, label: str = "move row") -> bool:
+        if src == dst:
+            return False
+        parent_item = self.model.get_item(parent_index)
+        n = parent_item.child_count()
+        if not (0 <= src < n and 0 <= dst < n):
+            return False
+        target_qname = self._qualified_name(self.model.index(src, 0, parent_index))
+        cmd = _MoveRowCmd(self, _make_label(label, target_qname), self._index_path(parent_index), src, dst)
+        self.undo_stack.push(cmd)
+        return True
+
+    def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
+        if not name_index.isValid() or name_index.column() != 0:
+            return False
+        item = self.model.get_item(name_index)
+        if not isinstance(new_name, str):
+            return False
+        candidate = new_name.strip()
+        if not candidate or candidate == item.name:
+            return False
+        if item.parent_item is None or item.parent_item.json_type is JsonType.ARRAY:
+            return False
+        if item.parent_item.json_type is JsonType.OBJECT:
+            siblings = {c.name for c in item.parent_item.child_items if c is not item and isinstance(c.name, str)}
+            if candidate in siblings:
+                return False
+        target_qname = self._qualified_name(name_index)
+        cmd = _RenameCmd(self, _make_label(label, target_qname), self._index_path(name_index), item.name, candidate)
+        self.undo_stack.push(cmd)
+        return True
+
+    def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
+        if not value_index.isValid() or value_index.column() != 2:
+            return False
+        name_idx = self.model.index(value_index.row(), 0, value_index.parent())
+        item = self.model.get_item(name_idx)
+        old_subtree = item.to_json()
+        # Honour explicit_type strict coercion when the type was pinned.
+        if item.explicit_type and item.json_type not in (JsonType.OBJECT, JsonType.ARRAY):
+            ok, coerced = item._coerce_value_for_type(item.json_type, new_value, strict=True)
+            if not ok:
+                return False
+            applied = coerced
+        else:
+            applied = new_value
+        # No-op detection on the affected subtree (subset comparison).
+        if old_subtree == applied and isinstance(applied, type(old_subtree)):
+            return False
+        target_qname = self._qualified_name(name_idx)
+        cmd = _EditValueCmd(self, _make_label(label, target_qname), self._index_path(name_idx), old_subtree, applied)
+        self.undo_stack.push(cmd)
+        return True
+
+    def push_change_type(self, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
+        if not type_index.isValid() or type_index.column() != 1:
+            return False
+        try:
+            target_type = new_type if isinstance(new_type, JsonType) else JsonType(str(new_type))
+        except ValueError:
+            return False
+        name_idx = self.model.index(type_index.row(), 0, type_index.parent())
+        item = self.model.get_item(name_idx)
+        if item.json_type is target_type:
+            return False
+        old_subtree = item.to_json()
+        old_explicit = item.explicit_type
+        target_qname = self._qualified_name(name_idx)
+        cmd = _ChangeTypeCmd(
+            self,
+            _make_label(label, target_qname),
+            self._index_path(name_idx),
+            old_subtree,
+            old_explicit,
+            target_type,
+        )
+        self.undo_stack.push(cmd)
+        return True
+
+    def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
+        """``inserts`` is a list of ``{parent_path, row, value, name}``."""
+        if not inserts:
+            return False
+        qname = (
+            target_qname
+            if target_qname is not None
+            else self._qualified_name(self._index_from_path(inserts[0]["parent_path"]))
+        )
+        cmd = _InsertRowsCmd(self, _make_label(label, qname), inserts)
+        self.undo_stack.push(cmd)
+        return True
+
+    def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
+        if not indexes:
+            return False
+        ordered = sorted(indexes, key=lambda i: (self._index_path(i.parent()), i.row()), reverse=True)
+        removals = []
+        for idx in ordered:
+            row0 = self.model.index(idx.row(), 0, idx.parent())
+            item = self.model.get_item(row0)
+            removals.append(
+                {
+                    "parent_path": self._index_path(idx.parent()),
+                    "row": idx.row(),
+                    "name": item.name,
+                    "value": item.to_json(),
+                }
+            )
+        target_qname = self._qualified_name(ordered[0])
+        cmd = _RemoveRowsCmd(self, _make_label(label, target_qname), removals)
+        self.undo_stack.push(cmd)
+        return True
+
+    def push_sort_keys(self, index: QModelIndex, *, recursive: bool = False, label: str | None = None) -> bool:
+        if not index.isValid():
+            return False
+        item = self.model.get_item(index)
+        if item.json_type is not JsonType.OBJECT:
+            return False
+        old_subtree = item.to_json()
+        if not recursive and list(old_subtree.keys()) == sorted(old_subtree.keys()):
+            return False
+        target_qname = self._qualified_name(index)
+        text = label if label is not None else ("sort keys recursive" if recursive else "sort keys")
+        cmd = _SortKeysCmd(self, _make_label(text, target_qname), self._index_path(index), old_subtree, recursive)
+        self.undo_stack.push(cmd)
+        return True
 
     def _run_tree_action(
         self,

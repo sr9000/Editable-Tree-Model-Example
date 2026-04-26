@@ -1,0 +1,236 @@
+"""Tests proving the undo stack uses typed action/compensation commands
+instead of full-document snapshots for routine tree mutations.
+
+See ai-memory/phases/phase-3-compensating-undo-plan.md for context.
+"""
+
+from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
+from PySide6.QtWidgets import QApplication
+
+from json_tab import (
+    JsonTab,
+    _ChangeTypeCmd,
+    _EditValueCmd,
+    _InsertRowsCmd,
+    _MoveRowCmd,
+    _RemoveRowsCmd,
+    _RenameCmd,
+    _SnapshotCommand,
+    _SortKeysCmd,
+)
+from tree_view import (
+    delete_selection,
+    duplicate_selection,
+    insert_child_current,
+    insert_sibling_after,
+    insert_sibling_before,
+    move_selection_down,
+    move_selection_up,
+    paste_from_clipboard,
+    sort_selection_keys,
+)
+
+
+def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:
+    idx = tab.model.index(row, 0, parent)
+    tab.view.setCurrentIndex(idx)
+    tab.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+
+
+def _last_command(tab: JsonTab):
+    return tab.undo_stack.command(tab.undo_stack.count() - 1)
+
+
+def test_commit_set_data_uses_typed_commands(qtbot):
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+
+    # Edit value (column 2).
+    assert tab.commit_set_data(tab.model.index(1, 2, QModelIndex()), 999, Qt.ItemDataRole.EditRole)
+    assert isinstance(_last_command(tab), _EditValueCmd)
+    assert not isinstance(_last_command(tab), _SnapshotCommand)
+
+    # Rename (column 0).
+    assert tab.commit_set_data(tab.model.index(0, 0, QModelIndex()), "renamed", Qt.ItemDataRole.EditRole)
+    assert isinstance(_last_command(tab), _RenameCmd)
+
+    # Change type (column 1).
+    assert tab.commit_set_data(tab.model.index(1, 1, QModelIndex()), "string", Qt.ItemDataRole.EditRole)
+    assert isinstance(_last_command(tab), _ChangeTypeCmd)
+
+
+def test_tree_actions_use_typed_commands(qtbot):
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+    view = tab.view
+    model = tab.model
+
+    _select_row0(tab, 0)
+    assert insert_sibling_before(view)
+    assert isinstance(_last_command(tab), _InsertRowsCmd)
+
+    _select_row0(tab, 0)
+    assert insert_sibling_after(view)
+    assert isinstance(_last_command(tab), _InsertRowsCmd)
+
+    # Insert child into the "object" entry.
+    obj_row: int | None = None
+    for r in range(model.rowCount(QModelIndex())):
+        idx = model.index(r, 0, QModelIndex())
+        if model.get_item(idx).name == "object":
+            obj_row = r
+            break
+    assert obj_row is not None
+    _select_row0(tab, obj_row)
+    assert insert_child_current(view)
+    assert isinstance(_last_command(tab), _InsertRowsCmd)
+
+    # Move up / move down.
+    _select_row0(tab, 1)
+    assert move_selection_up(view)
+    assert isinstance(_last_command(tab), _MoveRowCmd)
+
+    _select_row0(tab, 0)
+    assert move_selection_down(view)
+    assert isinstance(_last_command(tab), _MoveRowCmd)
+
+    # Duplicate.
+    _select_row0(tab, 0)
+    assert duplicate_selection(view)
+    assert isinstance(_last_command(tab), _InsertRowsCmd)
+
+    # Delete.
+    _select_row0(tab, 0)
+    assert delete_selection(view)
+    assert isinstance(_last_command(tab), _RemoveRowsCmd)
+
+    # Paste.
+    QApplication.clipboard().setText('{"pasted": 1}')
+    _select_row0(tab, 0)
+    assert paste_from_clipboard(view)
+    assert isinstance(_last_command(tab), _InsertRowsCmd)
+
+    # Sort keys on an object child.
+    obj_row = None
+    for r in range(model.rowCount(QModelIndex())):
+        idx = model.index(r, 0, QModelIndex())
+        if model.get_item(idx).name == "object":
+            obj_row = r
+            break
+    assert obj_row is not None
+    obj_idx = model.index(obj_row, 0, QModelIndex())
+    # Insert a child first so a non-trivial sort actually happens.
+    _select_row0(tab, obj_row)
+    assert insert_child_current(view)
+    # Rename it so the sort reorders.
+    new_child = model.index(0, 0, obj_idx)
+    assert tab.commit_set_data(new_child, "zzz", Qt.ItemDataRole.EditRole)
+    _select_row0(tab, obj_row)
+    assert sort_selection_keys(view, recursive=False)
+    assert isinstance(_last_command(tab), _SortKeysCmd)
+
+    # Verify NO snapshot command was pushed at any point.
+    for i in range(tab.undo_stack.count()):
+        cmd = tab.undo_stack.command(i)
+        assert not isinstance(cmd, _SnapshotCommand), f"command at {i} is _SnapshotCommand: {cmd.text()}"
+
+
+def test_large_leaf_edit_does_not_store_full_document(qtbot):
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+
+    # Replace the model with a huge array containing one tiny leaf to edit.
+    from tree_model import JsonTreeModel
+
+    big = list(range(3000))
+    big[7] = "before"
+    tab.model.beginResetModel()
+    from tree_item import JsonTreeItem
+
+    tab.model.root_item = JsonTreeItem(None, big)
+    tab.model.endResetModel()
+
+    target_idx = tab.model.index(7, 2, QModelIndex())
+    assert tab.commit_set_data(target_idx, "after", Qt.ItemDataRole.EditRole)
+
+    cmd = _last_command(tab)
+    assert isinstance(cmd, _EditValueCmd)
+    # Affected subtree on each side is the leaf only — never the whole 3000-element array.
+    assert cmd._old_subtree == "before"
+    assert cmd._new_value == "after"
+    # Defensive: there is no attribute holding the full document on the cmd.
+    for attr in ("_before", "_after"):
+        assert not hasattr(cmd, attr), f"_EditValueCmd unexpectedly stores {attr}"
+
+
+def test_delete_stores_removed_subset_only(qtbot):
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+
+    # Find the "object" child {"key": "value"} and delete it.
+    obj_row: int | None = None
+    for r in range(tab.model.rowCount(QModelIndex())):
+        idx = tab.model.index(r, 0, QModelIndex())
+        if tab.model.get_item(idx).name == "object":
+            obj_row = r
+            break
+    assert obj_row is not None
+    _select_row0(tab, obj_row)
+    assert delete_selection(tab.view)
+
+    cmd = _last_command(tab)
+    assert isinstance(cmd, _RemoveRowsCmd)
+    assert len(cmd._removals) == 1
+    rec = cmd._removals[0]
+    assert rec["name"] == "object"
+    # Stored subtree is the deleted subset only.
+    assert rec["value"] == {"key": "value"}
+    # Sanity: no full-document field on the command.
+    assert not hasattr(cmd, "_before")
+    assert not hasattr(cmd, "_after")
+
+
+def test_sort_stores_sorted_subtree_only(qtbot):
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+
+    # Find the nested "object" entry, add a child so sort reorders.
+    obj_row: int | None = None
+    for r in range(tab.model.rowCount(QModelIndex())):
+        idx = tab.model.index(r, 0, QModelIndex())
+        if tab.model.get_item(idx).name == "object":
+            obj_row = r
+            break
+    assert obj_row is not None
+    obj_idx = tab.model.index(obj_row, 0, QModelIndex())
+    _select_row0(tab, obj_row)
+    assert insert_child_current(tab.view)
+    new_child = tab.model.index(0, 0, obj_idx)
+    assert tab.commit_set_data(new_child, "zzz", Qt.ItemDataRole.EditRole)
+
+    _select_row0(tab, obj_row)
+    assert sort_selection_keys(tab.view, recursive=False)
+    cmd = _last_command(tab)
+    assert isinstance(cmd, _SortKeysCmd)
+    # Stored subtree is the OBJECT subset, not the whole document.
+    assert set(cmd._old_subtree.keys()) == {"zzz", "key"}
+    # Defensive: command does not store full document.
+    assert not hasattr(cmd, "_before")
+    assert not hasattr(cmd, "_after")
+
+
+def test_move_row_command_is_o1(qtbot):
+    """Move row command should store only parent path + 2 row indices."""
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+
+    _select_row0(tab, 1)
+    assert move_selection_up(tab.view)
+    cmd = _last_command(tab)
+    assert isinstance(cmd, _MoveRowCmd)
+    # Compact state only — no snapshot fields.
+    assert cmd._src == 1
+    assert cmd._dst == 0
+    assert isinstance(cmd._parent_path, tuple)
+    assert not hasattr(cmd, "_before")
+    assert not hasattr(cmd, "_after")
