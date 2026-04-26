@@ -1,150 +1,64 @@
-"""
-class TreeItem
-{
-public:
-    explicit TreeItem(QVariantList data, TreeItem *parent = nullptr);
+# Ported from: https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/editabletreemodel
 
-    TreeItem *child(int number);
-    int childCount() const;
-    int columnCount() const;
-    QVariant data(int column) const;
-    bool insertChildren(int position, int count, int columns);
-    bool insertColumns(int position, int columns);
-    TreeItem *parent();
-    bool removeChildren(int position, int count);
-    bool removeColumns(int position, int columns);
-    int row() const;
-    bool setData(int column, const QVariant &value);
-
-private:
-    std::vector<std::unique_ptr<TreeItem>> m_childItems;
-    QVariantList itemData;
-    TreeItem *m_parentItem;
-};
-
-TreeItem *TreeItem::parent()
-{
-    return m_parentItem;
-}
-
-TreeItem *TreeItem::child(int number)
-{
-    return (number >= 0 && number < childCount())
-        ? m_childItems.at(number).get() : nullptr;
-}
-
-int TreeItem::childCount() const
-{
-    return int(m_childItems.size());
-}
-
-int TreeItem::row() const
-{
-    if (!m_parentItem)
-        return 0;
-    const auto it = std::find_if(m_parentItem->m_childItems.cbegin(), m_parentItem->m_childItems.cend(),
-                                 [this](const std::unique_ptr<TreeItem> &treeItem) {
-        return treeItem.get() == this;
-    });
-
-    if (it != m_parentItem->m_childItems.cend())
-        return std::distance(m_parentItem->m_childItems.cbegin(), it);
-    Q_ASSERT(false); // should not happen
-    return -1;
-}
-
-int TreeItem::columnCount() const
-{
-    return int(itemData.count());
-}
-
-QVariant TreeItem::data(int column) const
-{
-    return itemData.value(column);
-}
-
-bool TreeItem::setData(int column, const QVariant &value)
-{
-    if (column < 0 || column >= itemData.size())
-        return false;
-
-    itemData[column] = value;
-    return true;
-}
-
-bool TreeItem::insertChildren(int position, int count, int columns)
-{
-    if (position < 0 || position > qsizetype(m_childItems.size()))
-        return false;
-
-    for (int row = 0; row < count; ++row) {
-        QVariantList data(columns);
-        m_childItems.insert(m_childItems.cbegin() + position,
-                std::make_unique<TreeItem>(data, this));
-    }
-
-    return true;
-}
-
-bool TreeItem::removeChildren(int position, int count)
-{
-    if (position < 0 || position + count > qsizetype(m_childItems.size()))
-        return false;
-
-    for (int row = 0; row < count; ++row)
-        m_childItems.erase(m_childItems.cbegin() + position);
-
-    return true;
-}
-
-bool TreeItem::insertColumns(int position, int columns)
-{
-    if (position < 0 || position > itemData.size())
-        return false;
-
-    for (int column = 0; column < columns; ++column)
-        itemData.insert(position, QVariant());
-
-    for (auto &child : std::as_const(m_childItems))
-        child->insertColumns(position, columns);
-
-    return true;
-}
-"""
-
+import base64
+import binascii
+import gzip
+import zlib
 from typing import Any
 
+from gmpy2 import mpq
 
-class TreeItem:
+from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
+
+
+class JsonTreeItem:
+    EDITABLE_BLOB_LIMIT = 10_000
+
     def __init__(
         self,
-        values: list[Any] = None,
-        items: list[Any] = None,
-        parent_item: "TreeItem" = None,
+        parent_item: "JsonTreeItem | None" = None,
+        value: Any = None,
+        name: str | int = None,
     ) -> None:
-        self.parent_item: "TreeItem" = parent_item
-        self.item_data: list = values or []
-        self.child_items: list["TreeItem"] = []
+        self.parent_item: "JsonTreeItem | None" = parent_item
 
-        if items is None:
-            return
+        self.name = name
+        self.child_items: list["JsonTreeItem"] = []
+        self.explicit_type = False
 
-        self.child_items: list["TreeItem"] = [
-            TreeItem(
-                [it["title"], it["description"]],
-                it.get("items", None),
-                parent_item=self,
-            )
-            for it in items
-        ]
+        # Cached row-in-parent index for O(1) ``row()`` lookups. The parent
+        # owns the dirty flag below; when it flips True any of its children
+        # may have stale ``_row_in_parent``, and the next ``row()`` call on
+        # any child re-numbers the whole sibling list in one O(K) pass.
+        self._row_in_parent: int = -1
+        self._children_dirty: bool = True
 
-    def append_child(self, child: "TreeItem") -> None:
+        self.json_type = parse_json_type(value)
+        self.value = None
+        self._apply_typed_value(self.json_type, value)
+
+        self.editable = self._compute_editable()
+
+    def to_json(self) -> Any:
+        match self.json_type:
+            case JsonType.ARRAY:
+                return [t.to_json() for t in self.child_items]
+            case JsonType.OBJECT:
+                for child in self.child_items:
+                    if child.name is None:
+                        raise ValueError(f"OBJECT child has no name (row {child.row()})")
+                return {t.name: t.to_json() for t in self.child_items}
+
+        return self.value
+
+    def append_child(self, child: "JsonTreeItem") -> None:
         self.child_items.append(child)
+        self._children_dirty = True
 
-    def parent(self) -> "TreeItem | None":
+    def parent(self) -> "JsonTreeItem | None":
         return self.parent_item
 
-    def child(self, number: int) -> "TreeItem | None":
+    def child(self, number: int) -> "JsonTreeItem | None":
         if 0 <= number < len(self.child_items):
             return self.child_items[number]
 
@@ -152,28 +66,104 @@ class TreeItem:
         return len(self.child_items)
 
     def row(self) -> int:
-        return (
-            0 if self.parent_item is None else self.parent_item.child_items.index(self)
-        )
+        parent = self.parent_item
+        if parent is None:
+            return 0
+        if parent._children_dirty:
+            # Re-number all siblings in one pass; subsequent row() calls on
+            # any sibling are O(1) until the parent's child_items mutates.
+            for i, c in enumerate(parent.child_items):
+                c._row_in_parent = i
+            parent._children_dirty = False
+        return self._row_in_parent
+
+    def mark_children_dirty(self) -> None:
+        """Flag that ``self.child_items`` was mutated externally.
+
+        Call this whenever a non-``JsonTreeItem`` API touches ``child_items``
+        directly (e.g. ``tree_model.move_row`` doing ``pop`` + ``insert``,
+        ``sort_keys`` doing an in-place sort, ``change_type`` clearing the
+        list). Lazy re-numbering keeps ``row()`` O(1) on subsequent reads.
+        """
+        self._children_dirty = True
 
     def column_count(self) -> int:
-        return len(self.item_data)
+        return 3
 
     def data(self, column: int) -> Any:
-        if 0 <= column < len(self.item_data):
-            return self.item_data[column]
+        match column:
+            case 0:
+                if self.parent_item is not None and self.parent_item.json_type is JsonType.ARRAY:
+                    return str(self.row())
+                return self.name if self.name is not None else "<no name>"
+            case 1:
+                return self.json_type or "<no type>"
+            case 2:
+                return self.value
+
+        raise IndexError(f"`JsonTreeItem.data()` does not support {column=}")
 
     def set_data(self, column: int, value: Any) -> bool:
-        if 0 <= column < len(self.item_data):
-            self.item_data[column] = value
+        if column == 0:
+            return self._set_name(value)
+
+        if column == 1:
+            try:
+                new_type = value if isinstance(value, JsonType) else JsonType(str(value))
+            except ValueError:
+                return False
+
+            old_value = self.to_json() if self.json_type in (JsonType.ARRAY, JsonType.OBJECT) else self.value
+            ok, coerced = self._coerce_value_for_type(new_type, old_value, strict=False)
+            if not ok:
+                return False
+
+            if isinstance(coerced, str) and new_type in TEXT_FAMILY:
+                # Keep pseudo text kinds canonical for current content when
+                # user changes type manually in column 1.
+                new_type = text_pseudotype_for(new_type, coerced)
+
+            self.explicit_type = True
+            self._apply_typed_value(new_type, coerced)
             return True
+
+        if column == 2:
+            if self.explicit_type:
+                ok, coerced = self._coerce_value_for_type(self.json_type, value, strict=True)
+                if not ok:
+                    return False
+                if isinstance(coerced, str) and self.json_type in TEXT_FAMILY:
+                    # Pseudo text types auto-track ASCII vs non-ASCII even when
+                    # type was explicitly chosen.
+                    self._apply_typed_value(text_pseudotype_for(self.json_type, coerced), coerced)
+                else:
+                    self._apply_typed_value(self.json_type, coerced)
+                return True
+
+            if isinstance(value, str) and self.json_type in TEXT_FAMILY:
+                self._apply_typed_value(text_pseudotype_for(self.json_type, value), value)
+                return True
+
+            inferred_type = parse_json_type(value)
+            self._apply_typed_value(inferred_type, value)
+            return True
+
         return False
 
-    def insert_children(self, position: int, count: int, columns: int) -> bool:
+    def insert_children(self, position: int, count: int, _columns: int) -> bool:
         if 0 <= position <= len(self.child_items):
-            self.child_items[position:position] = [
-                TreeItem([None] * columns, parent_item=self) for _ in range(count)
-            ]
+            reserved_names: set[str] = set()
+            new_items = []
+            for _ in range(count):
+                child_name = (
+                    self._unique_child_name(used_names=reserved_names) if self.json_type is JsonType.OBJECT else None
+                )
+                if child_name is not None:
+                    reserved_names.add(child_name)
+                new_items.append(JsonTreeItem(parent_item=self, value=None, name=child_name))
+
+            self.child_items[position:position] = new_items
+            self._children_dirty = True
             return True
         return False
 
@@ -181,27 +171,169 @@ class TreeItem:
         end = begin + count
         if 0 <= begin and end <= len(self.child_items):
             del self.child_items[begin:end]
+            self._children_dirty = True
             return True
         return False
 
     def insert_columns(self, position: int, columns: int) -> bool:
-        if 0 <= position <= len(self.item_data):
-            self.item_data[position:position] = [None] * columns
-            if not all(
-                child.insert_columns(position, columns) for child in self.child_items
-            ):
-                raise IndexError("Failed to insert columns in child items")
-            return True
+        # Columns API is not used for this JSON model; return False to keep interface consistent
         return False
 
     def remove_columns(self, begin: int, columns: int) -> bool:
         """declared but not implemented in c++"""
-        end = begin + columns
-        if 0 <= begin and end <= len(self.item_data):
-            del self.item_data[begin:end]
-            if not all(
-                child.remove_columns(begin, columns) for child in self.child_items
-            ):
-                raise IndexError("Failed to remove columns in child items")
-            return True
         return False
+
+    def _unique_child_name(self, base: str = "new_key", used_names: set[str] | None = None) -> str:
+        used = {child.name for child in self.child_items if isinstance(child.name, str)}
+        if used_names is not None:
+            used |= used_names
+
+        if base not in used:
+            return base
+
+        i = 2
+        while f"{base}_{i}" in used:
+            i += 1
+        return f"{base}_{i}"
+
+    def _normalize_value_for_type(self, value: Any) -> Any:
+        if self.json_type in (JsonType.STRING, JsonType.UNICODE) and not isinstance(value, str):
+            return repr(value)
+        return value
+
+    def _apply_typed_value(self, json_type: JsonType, value: Any) -> None:
+        self.json_type = json_type
+        self.child_items = []
+        self._children_dirty = True
+
+        match json_type:
+            case JsonType.ARRAY:
+                arr = value if isinstance(value, list) else []
+                self.child_items = [JsonTreeItem(self, x) for x in arr]
+                self.value = []
+            case JsonType.OBJECT:
+                obj = value if isinstance(value, dict) else {}
+                self.child_items = [JsonTreeItem(self, v, k) for k, v in obj.items()]
+                self.value = {}
+            case _:
+                self.value = self._normalize_value_for_type(value)
+
+        self.editable = self._compute_editable()
+
+    def _set_name(self, value: Any) -> bool:
+        if self.parent_item is None:
+            return False
+        if self.parent_item.json_type is JsonType.ARRAY:
+            return False
+        if not isinstance(value, str):
+            return False
+
+        candidate = value.strip()
+        if not candidate:
+            return False
+
+        if self.parent_item.json_type is JsonType.OBJECT:
+            siblings = {
+                child.name
+                for child in self.parent_item.child_items
+                if child is not self and isinstance(child.name, str)
+            }
+            if candidate in siblings:
+                return False
+
+        self.name = candidate
+        return True
+
+    def _coerce_value_for_type(self, json_type: JsonType, value: Any, strict: bool) -> tuple[bool, Any]:
+        match json_type:
+            case JsonType.NULL:
+                return True, None
+            case JsonType.BOOLEAN:
+                if isinstance(value, str):
+                    normalized = value.strip().lower()
+                    if normalized in ("true", "1", "yes", "y"):
+                        return True, True
+                    if normalized in ("false", "0", "no", "n"):
+                        return True, False
+                    return (False, None) if strict else (True, False)
+                return True, bool(value)
+            case JsonType.INTEGER:
+                try:
+                    return True, int(value)
+                except Exception:
+                    return (False, None) if strict else (True, 0)
+            case JsonType.FLOAT:
+                try:
+                    return True, mpq(str(value))
+                except Exception:
+                    return (False, None) if strict else (True, mpq(0))
+            case JsonType.PERCENT:
+                try:
+                    v = mpq(str(value))
+                except Exception:
+                    return (False, None) if strict else (True, mpq(0))
+                if 0 <= v <= 1:
+                    return True, v
+                return (False, None) if strict else (True, mpq(0))
+            case JsonType.STRING:
+                return True, "" if value is None else str(value)
+            case JsonType.UNICODE:
+                return True, "" if value is None else str(value)
+            case JsonType.MULTILINE:
+                return True, "" if value is None else str(value)
+            case JsonType.TEXT:
+                return True, "" if value is None else str(value)
+            case JsonType.DATE:
+                return True, "1970-01-01" if value is None else str(value)
+            case JsonType.TIME:
+                return True, "00:00" if value is None else str(value)
+            case JsonType.DATETIME:
+                return True, "1970-01-01T00:00" if value is None else str(value)
+            case JsonType.DATETIMEZONE:
+                return True, "1970-01-01T00:00:00+00:00" if value is None else str(value)
+            case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
+                if value is None:
+                    return True, ""
+                if not isinstance(value, str):
+                    return (False, None) if strict else (True, "")
+                if not value:
+                    return True, ""
+                try:
+                    raw = base64.b64decode(value, validate=True)
+                    if json_type is JsonType.ZLIB:
+                        zlib.decompress(raw)
+                    elif json_type is JsonType.GZIP:
+                        gzip.decompress(raw)
+                    return True, value
+                except Exception:
+                    return (False, None) if strict else (True, "")
+            case JsonType.ARRAY:
+                if isinstance(value, list):
+                    return True, value
+                return (False, None) if strict else (True, [])
+            case JsonType.OBJECT:
+                if isinstance(value, dict):
+                    return True, value
+                return (False, None) if strict else (True, {})
+
+    def _compute_editable(self) -> bool:
+        if self.json_type in (JsonType.NULL, JsonType.ARRAY, JsonType.OBJECT):
+            return False
+
+        try:
+            match self.json_type:
+                case JsonType.STRING | JsonType.UNICODE | JsonType.MULTILINE | JsonType.TEXT:
+                    return len(self.value) <= self.EDITABLE_BLOB_LIMIT
+                case JsonType.BYTES:
+                    raw = base64.b64decode(self.value, validate=True)
+                    return len(raw) <= self.EDITABLE_BLOB_LIMIT
+                case JsonType.ZLIB:
+                    raw = base64.b64decode(self.value, validate=True)
+                    return len(zlib.decompress(raw)) <= self.EDITABLE_BLOB_LIMIT
+                case JsonType.GZIP:
+                    raw = base64.b64decode(self.value, validate=True)
+                    return len(gzip.decompress(raw)) <= self.EDITABLE_BLOB_LIMIT
+                case _:
+                    return True
+        except (binascii.Error, zlib.error, OSError, ValueError, TypeError):
+            return False

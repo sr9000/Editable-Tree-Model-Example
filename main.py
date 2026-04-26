@@ -2,6 +2,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
+from settings import WINDOW_DEFAULT_SIZE
 from ui import MainWindow
 
 
@@ -16,6 +17,7 @@ def main():
 
     app = QApplication(sys.argv)
     window = MainWindow(filename)
+    window.resize(*WINDOW_DEFAULT_SIZE)
     window.show()
 
     sys.exit(app.exec())
