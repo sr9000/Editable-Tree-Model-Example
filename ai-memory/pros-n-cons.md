@@ -1,24 +1,30 @@
 # JSON Editor — Pros & Cons
 
 _Last analysis: 2026-04-26. Phases 0–5 are shipped (all sub-phases of
-Phase 5 included); Phase 6 testing is partial. **401 tests pass** under
+Phase 5 included); the package refactor (Phases 01–37) is complete and
+all old top-level "god modules" have been split into cohesive packages
+and removed; Phase 6 testing is partial. **401 tests pass** under
 `QT_QPA_PLATFORM=offscreen pytest -q` in ~3 s. No teardown segfault._
 
 This document evaluates the **current** state of the JSON tree editor
-implementation across `main.py`, `ui.py`, `json_tab.py`,
-`tree_model.py`, `tree_item.py`, `delegate.py`, `tree_view.py`,
-`tree_filter_proxy.py`, `view_state.py`, `file_io.py`,
-`model_actions.py`, `enums.py`, `settings.py`.
+implementation across the canonical package layout: `main.py`, `app/`,
+`documents/`, `undo/`, `tree/`, `delegates/`, `tree_actions/`,
+`io_formats/`, `state/`, `tree_filter_proxy.py`, `model_actions.py`,
+`settings.py`. See `repo-map.md` for the full module breakdown.
 
 ## ✅ Pros
 
 ### Architecture & design
-- **Clean separation of concerns** — data layer (`JsonTreeItem`),
-  model layer (`JsonTreeModel`), filter layer (`TreeFilterProxy`),
-  view + action layer (`JsonTab` / `tree_view.py` / `QTreeView`),
-  editing layer (`ValueDelegate` / `JsonTypeDelegate` /
-  `NameDelegate`), shell layer (`ui.py`), persistence
-  (`view_state.py` / `file_io.py`).
+- **Clean separation of concerns** — data layer (`tree/item.py`),
+  model layer (`tree/model.py`), filter layer (`tree_filter_proxy.py`),
+  view + action layer (`documents/tab.py` + `tree_actions/`),
+  editing layer (`delegates/`), shell layer (`app/`), persistence
+  (`state/` + `io_formats/`).
+- **Package refactor delivered** — no source file (other than
+  generated `mainwindow.py`) exceeds ~510 lines; `JsonTab` shrank from
+  ~1050 to ~500 lines; `tree_view.py`/`delegate.py`/`json_tab.py`/`ui.py`
+  monolith files were split into focused packages with narrow public
+  APIs.
 - **Tabbed multi-document architecture** — each `JsonTab` owns its
   model, proxy, view, delegates, undo stack, search bar, font zoom,
   shortcuts, dirty state, and status callbacks.
@@ -141,9 +147,6 @@ implementation across `main.py`, `ui.py`, `json_tab.py`,
   unsupported `json_type` (`OBJECT`, `ARRAY`, `NULL`); these branches
   *should* be unreachable thanks to `flags()`, but a defensive
   `return None` would degrade more gracefully.
-- `tree_view._commit_on_tab` exists but always falls back to direct
-  mutator calls (`commit_mutation` is no longer a `JsonTab` method —
-  superseded by `push_*`). It is dead code worth deleting.
 - `MainWindow.update_actions` enables `Save` whenever a tab exists;
   could be tightened to `tab.is_dirty` only, but matches the user
   expectation of "Save anyway".
@@ -156,18 +159,19 @@ implementation across `main.py`, `ui.py`, `json_tab.py`,
 - `simplejson` and `pytest-qt` are imported but not pinned in
   `requirements.txt`.
 - Save-time validation is best-effort: malformed datetimes / bytes
-  surface as Python exceptions caught generically in `JsonTab.save`.
-  No structured user-facing diagnostics.
-- `view_state` persists expanded paths as positional-only `(int,…)`
-  tuples. After a structural mutation that reorders rows (sort,
-  insert, paste), restoring to the same path can land on a different
-  node. Acceptable trade-off given persistence is keyed per-file
-  on close.
+  surface as Python exceptions caught generically in
+  `documents/tab_io.py`. No structured user-facing diagnostics.
+- `state.view_state` persists expanded paths as positional-only
+  `(int,…)` tuples. After a structural mutation that reorders rows
+  (sort, insert, paste), restoring to the same path can land on a
+  different node. Acceptable trade-off given persistence is keyed
+  per-file on close.
 
 ### Code hygiene
 - `_demo_data()` and its base64 / gzip / zlib / gmpy2 imports remain
-  in `json_tab.py` purely for legacy bare-`JsonTab(...)` test paths.
-  Removable once those tests migrate to explicit `data=` constructors.
+  in `documents/tab.py` purely for legacy bare-`JsonTab(...)` test
+  paths. Removable once those tests migrate to explicit `data=`
+  constructors.
 - `header_view_editor.py` is dormant code (commented out at the call
   site) — keep or delete decision pending.
 
