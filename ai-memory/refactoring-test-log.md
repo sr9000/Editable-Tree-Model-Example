@@ -1050,3 +1050,41 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 29 — move JsonTab
+
+- Date: 2026-04-26
+- Commit subject: Move JsonTab
+- Status: PASS
+- Files changed:
+  - `documents/tab.py`
+  - `json_tab.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_smoke_mainwindow.py tests/test_undo_redo.py tests/test_phase_5_1_carryover.py tests/test_phase_5_5_search_filter.py
+  python - <<'PY'
+  from json_tab import JsonTab
+  from documents.tab import JsonTab as JsonTab2
+  assert JsonTab is JsonTab2
+  print('JsonTab compatibility imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests: 25 passed in 0.63s
+  JsonTab compatibility imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  final rerun: 401 passed in 3.14s
+  ```
+- Known failures / skipped checks:
+  - Initial full-suite attempt failed because `json_tab.py` shim omitted private command exports used by `tests/test_typed_undo_commands.py`; fixed in this phase by re-exporting `_ChangeTypeCmd`, `_InsertRowsCmd`, `_RenameCmd`, and `_SortKeysCmd`.
+- Decision:
+  - proceed
