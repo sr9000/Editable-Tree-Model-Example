@@ -1,7 +1,7 @@
 # Ported from: https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/editabletreemodel
 
 from contextlib import contextmanager
-from typing import Any, Mapping, Optional
+from typing import Any, Optional
 
 import gmpy2
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
@@ -16,12 +16,20 @@ class JsonTreeModel(QAbstractItemModel):
 
     def __init__(
         self,
-        data: Mapping[str, Any],
+        data: Any,
         /,
         parent: Optional[Any] = None,
+        *,
+        show_root: bool = False,
     ) -> None:
         super().__init__(parent)
         self.root_item = JsonTreeItem(None, data)
+        self.show_root = show_root
+
+    def _root_index(self) -> QModelIndex:
+        if not self.show_root:
+            return QModelIndex()
+        return self.createIndex(0, 0, self.root_item)
 
     def get_item(self, index) -> JsonTreeItem:
         if index.isValid() and (item := index.internalPointer()):
@@ -31,6 +39,8 @@ class JsonTreeModel(QAbstractItemModel):
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         if parent.isValid() and parent.column() != 0:
             return 0  # No children for column != 0
+        if not parent.isValid() and self.show_root:
+            return 1
         return self.get_item(parent).child_count()
 
     def columnCount(self, _: QModelIndex = QModelIndex()) -> int:
@@ -44,6 +54,8 @@ class JsonTreeModel(QAbstractItemModel):
         item = self.get_item(index)
 
         if index.column() == 0:
+            if item is self.root_item:
+                return default
             parent_item = item.parent()
             if parent_item is not None and parent_item.json_type is JsonType.OBJECT:
                 return default | Qt.ItemFlag.ItemIsEditable
@@ -55,6 +67,10 @@ class JsonTreeModel(QAbstractItemModel):
         return default | Qt.ItemFlag.ItemIsEditable if item.editable else default
 
     def index(self, row: int, column: int, parent: QModelIndex = QModelIndex()) -> QModelIndex:
+        if not parent.isValid() and self.show_root:
+            if row == 0:
+                return self.createIndex(0, column, self.root_item)
+            return QModelIndex()
         if parent.isValid() and parent.column() != 0:
             return QModelIndex()
         if childItem := self.get_item(parent).child(row):
@@ -67,6 +83,9 @@ class JsonTreeModel(QAbstractItemModel):
 
         parent_item = self.get_item(index).parent()
 
+        if parent_item is self.root_item and self.show_root:
+            return self.createIndex(0, 0, self.root_item)
+
         if parent_item not in (self.root_item, None):
             return self.createIndex(parent_item.row(), 0, parent_item)
         return QModelIndex()
@@ -76,7 +95,10 @@ class JsonTreeModel(QAbstractItemModel):
             Qt.ItemDataRole.DisplayRole,
             Qt.ItemDataRole.EditRole,
         ):
-            data = self.get_item(index).data(index.column())
+            item = self.get_item(index)
+            if item is self.root_item and index.column() == 0:
+                return "<root>"
+            data = item.data(index.column())
             match data:
                 case bool():
                     # Show JSON-style lowercase
@@ -106,6 +128,8 @@ class JsonTreeModel(QAbstractItemModel):
             self.endInsertRows()
 
     def insertRows(self, position: int, rows: int, parent: QModelIndex = QModelIndex()) -> bool:
+        if self.show_root and not parent.isValid():
+            parent = self._root_index()
         if parent_item := self.get_item(parent):
             with self.rows_insertion(parent, position, rows):
                 return parent_item.insert_children(position, rows, self.root_item.column_count())
@@ -120,6 +144,8 @@ class JsonTreeModel(QAbstractItemModel):
             self.endRemoveRows()
 
     def removeRows(self, position: int, rows: int, parent: QModelIndex = QModelIndex()) -> bool:
+        if self.show_root and not parent.isValid():
+            parent = self._root_index()
         if parent_item := self.get_item(parent):
             with self.rows_removal(parent, position, rows):
                 return parent_item.remove_children(position, rows)
@@ -192,6 +218,9 @@ class JsonTreeModel(QAbstractItemModel):
         return True
 
     def sort_keys(self, index: QModelIndex, recursive: bool = False) -> bool:
+        if not index.isValid() and self.show_root:
+            index = self._root_index()
+
         if not index.isValid():
             return False
 

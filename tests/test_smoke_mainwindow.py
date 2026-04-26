@@ -6,7 +6,7 @@ QMainWindow.statusBar() method that broke "Create new file").
 """
 
 import pytest
-from PySide6.QtCore import Qt, qInstallMessageHandler
+from PySide6.QtCore import QModelIndex, Qt, qInstallMessageHandler
 from PySide6.QtWidgets import QApplication, QStatusBar
 
 from enums import JsonType
@@ -14,20 +14,36 @@ from json_tab import JsonTab
 from ui import MainWindow
 
 
-def _ensure_seed_row(tab: JsonTab) -> None:
-    if tab.model.rowCount() > 0:
-        return
-    assert tab.push_insert_rows(
-        [
-            {
-                "parent_path": (),
-                "row": 0,
-                "value": 1,
-                "name": "seed",
-            }
-        ],
-        label="seed row",
-    )
+def _ensure_seed_row(tab: JsonTab) -> QModelIndex:
+    if tab.model.show_root:
+        root = tab.model.index(0, 0, QModelIndex())
+        if tab.model.rowCount(root) == 0:
+            assert tab.push_insert_rows(
+                [
+                    {
+                        "parent_path": (),
+                        "row": 0,
+                        "value": 1,
+                        "name": "seed",
+                    }
+                ],
+                label="seed row",
+            )
+        return tab.model.index(0, 0, root)
+
+    if tab.model.rowCount() == 0:
+        assert tab.push_insert_rows(
+            [
+                {
+                    "parent_path": (),
+                    "row": 0,
+                    "value": 1,
+                    "name": "seed",
+                }
+            ],
+            label="seed row",
+        )
+    return tab.model.index(0, 0)
 
 
 @pytest.fixture(scope="module")
@@ -95,7 +111,7 @@ def test_create_new_file_action_opens_tab(main_window):
     assert main_window.tabWidget.count() == 1
     tab = main_window.tabWidget.widget(0)
     assert isinstance(tab, JsonTab)
-    assert tab.model.rowCount() == 0
+    assert tab.model.rowCount() == 1
 
 
 def test_create_multiple_new_file_tabs(main_window):
@@ -124,8 +140,8 @@ def test_type_change_does_not_log_edit_failed(main_window, qt_messages, json_typ
     """
     main_window.create_new_file()
     tab = main_window.tabWidget.currentWidget()
-    _ensure_seed_row(tab)
-    type_index = tab.model.index(0, 1)
+    row0 = _ensure_seed_row(tab)
+    type_index = tab.model.index(row0.row(), 1, row0.parent())
 
     qt_messages.clear()
     assert tab.model.setData(type_index, json_type, Qt.ItemDataRole.EditRole)
@@ -150,8 +166,8 @@ def test_cycling_inline_types_does_not_log_edit_failed(main_window, qt_messages,
     qapp.processEvents()
     main_window.create_new_file()
     tab = main_window.tabWidget.currentWidget()
-    _ensure_seed_row(tab)
-    type_index = tab.model.index(0, 1)
+    row0 = _ensure_seed_row(tab)
+    type_index = tab.model.index(row0.row(), 1, row0.parent())
 
     cycle = [
         JsonType.INTEGER,

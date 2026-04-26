@@ -2,11 +2,11 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QModelIndex, QSettings, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView, QVBoxLayout
 
-from file_io import load_file
+from file_io import load_file_with_format
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID
@@ -151,6 +151,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.statusBar.showMessage,
                 data=data,
                 file_path=file_path,
+                show_root=True,
                 parent=self,
             )
         except Exception as exc:
@@ -164,6 +165,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab.view.expandAll()
         for column in range(tab.model.columnCount() - 1):
             tab.view.resizeColumnToContents(column)
+        if tab.model.show_root:
+            tab.view.setCurrentIndex(tab.model.index(0, 0, QModelIndex()))
 
         self._bind_undo_signals(tab)
         self.update_actions()
@@ -178,7 +181,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _open_path(self, path: str) -> bool:
         resolved = str(Path(path).resolve())
         try:
-            data = load_file(resolved)
+            data, source_format = load_file_with_format(resolved)
         except Exception as exc:
             QMessageBox.critical(self, "Open failed", f"Could not open {resolved}:\n{exc}")
             return False
@@ -186,6 +189,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab = self._add_tab(data=data, file_path=resolved)
         if tab is None:
             return False
+        tab.save_format = source_format
         self._push_recent(resolved)
         self.statusBar.showMessage(f"Opened: {resolved}", 2000)
         return True
@@ -234,7 +238,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._recent_menu.setEnabled(bool(self._recent_menu.actions()))
 
     def open_file_dialog(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Open", "", "JSON/YAML (*.json *.yaml *.yml)")
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open",
+            "",
+            "All supported (*.json *.jsonl *.ndjson *.yaml *.yml);;JSON (*.json);;JSON Lines (*.jsonl *.ndjson);;YAML (*.yaml *.yml)",
+        )
         if not path:
             return
         self._open_path(path)

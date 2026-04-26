@@ -12,7 +12,14 @@ from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QTreeView, QVBoxLa
 
 from delegate import JsonTypeDelegate, ValueDelegate
 from enums import JsonType, parse_json_type
-from file_io import save_file
+from file_io import (
+    SAVE_FORMAT_JSON,
+    SAVE_FORMAT_JSONL,
+    SAVE_FORMAT_YAML,
+    SAVE_FORMAT_YAML_MULTI,
+    detect_format,
+    save_file,
+)
 from tree_item import JsonTreeItem
 from tree_model import JsonTreeModel
 from tree_view import (
@@ -257,6 +264,7 @@ class JsonTab(QWidget):
         status_message_callback: Callable[[str, int], None] | None = None,
         data: Any = _DEFAULT_DATA,
         file_path: str | None = None,
+        show_root: bool = False,
         parent=None,
     ):
         super().__init__(parent)
@@ -283,10 +291,13 @@ class JsonTab(QWidget):
             model_data = _demo_data()
         else:
             model_data = data if data is not None else {}
-        self.model = JsonTreeModel(model_data, self.view)
         self.undo_stack = QUndoStack(self)
         self.file_path = file_path
+        self.save_format: str | None = None
         self._dirty = False
+
+        # Optional synthetic root row for app UX; tests can keep legacy shape.
+        self.model = JsonTreeModel(model_data, self.view, show_root=show_root)
 
         self.view.setModel(self.model)
 
@@ -374,7 +385,7 @@ class JsonTab(QWidget):
         if not self.file_path:
             return self.save_as()
         try:
-            save_file(self.file_path, self.model.root_item.to_json())
+            save_file(self.file_path, self.model.root_item.to_json(), save_format=self.save_format)
         except Exception as exc:
             if self._status_message_callback is not None:
                 self._status_message_callback(f"Save failed: {exc}", 4000)
@@ -386,15 +397,29 @@ class JsonTab(QWidget):
 
     def save_as(self, path: str | None = None) -> bool:
         target = path
+        selected_filter = ""
         if not target:
-            target, _ = QFileDialog.getSaveFileName(
+            target, selected_filter = QFileDialog.getSaveFileName(
                 self,
                 "Save As",
                 self.file_path or "",
-                "JSON/YAML (*.json *.yaml *.yml)",
+                "JSON (*.json);;JSON Lines (*.jsonl *.ndjson);;YAML (*.yaml *.yml);;YAML multi-document (*.yaml *.yml)",
             )
         if not target:
             return False
+        if selected_filter.startswith("JSON Lines"):
+            self.save_format = SAVE_FORMAT_JSONL
+        elif selected_filter.startswith("YAML multi-document"):
+            self.save_format = SAVE_FORMAT_YAML_MULTI
+        elif selected_filter.startswith("YAML"):
+            self.save_format = SAVE_FORMAT_YAML
+        elif selected_filter.startswith("JSON"):
+            self.save_format = SAVE_FORMAT_JSON
+        elif target:
+            try:
+                self.save_format = detect_format(target)
+            except ValueError:
+                pass
         self.file_path = target
         return self.save()
 
@@ -402,6 +427,10 @@ class JsonTab(QWidget):
         return self.model.root_item.to_json()
 
     def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
+        if not index.isValid():
+            return ()
+        if self.model.show_root and self.model.get_item(index) is self.model.root_item:
+            return ()
         path: list[int] = []
         cursor = index
         while cursor.isValid():
@@ -410,6 +439,8 @@ class JsonTab(QWidget):
         return tuple(reversed(path))
 
     def _index_from_path(self, path: tuple[int, ...]) -> QModelIndex:
+        if self.model.show_root and not path:
+            return self.model.index(0, 0, QModelIndex())
         idx = QModelIndex()
         for row in path:
             nxt = self.model.index(row, 0, idx)
@@ -424,6 +455,10 @@ class JsonTab(QWidget):
         Uses ``$`` as the document root. Returns ``$`` when the index is invalid.
         """
         if not index.isValid():
+            return "$"
+
+        item = self.model.get_item(index)
+        if item is self.model.root_item:
             return "$"
 
         # Walk up from the leaf collecting (parent_type, child_item) pairs.
@@ -610,6 +645,7 @@ class JsonTab(QWidget):
             if cur_pos is None:
                 self._insert_typed_item(item, item_index, target_pos, target_value, name=target_name)
                 continue
+            assert cur_pos is not None
             if cur_pos != target_pos:
                 self.model.move_row(item_index, cur_pos, target_pos)
             child = item.child_items[target_pos]

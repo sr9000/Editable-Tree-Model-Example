@@ -126,6 +126,10 @@ def action_move_down(view: QTreeView, index: QModelIndex, model) -> bool:
 
 def action_sort_keys(index: QModelIndex, model, recursive: bool = False) -> bool:
     row0 = _row0_index(index, model)
-    if not row0.isValid() or not hasattr(model, "sort_keys"):
+    if not hasattr(model, "sort_keys"):
+        return False
+    if not row0.isValid() and getattr(model, "show_root", False):
+        row0 = model.index(0, 0, QModelIndex())
+    if not row0.isValid():
         return False
     return model.sort_keys(row0, recursive=recursive)
