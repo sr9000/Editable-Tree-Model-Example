@@ -687,3 +687,41 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 17 — move ValueDelegate
+
+- Date: 2026-04-26
+- Commit subject: Move ValueDelegate
+- Status: PASS
+- Files changed:
+  - `delegates/value.py`
+  - `delegate.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_type_editing.py tests/test_phase_5_1_carryover.py tests/test_phase_5_2_display_formatting.py
+  python - <<'PY'
+  from delegate import ValueDelegate
+  from delegates.value import ValueDelegate as ValueDelegate2
+  assert ValueDelegate is ValueDelegate2
+  print('value delegate compatibility imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests: 39 passed in 0.14s
+  value delegate compatibility imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.24s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed

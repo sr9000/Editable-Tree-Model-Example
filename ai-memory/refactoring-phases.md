@@ -1562,7 +1562,7 @@ Update this table as phases land.
 | 14 | Extract delegate formatting helpers | PASS | 401 passed in 3.17s |  |
 | 15 | Extract delegate base classes | PASS | 401 passed in 3.19s |  |
 | 16 | Move name/type delegates | PASS | 401 passed in 3.20s |  |
-| 17 | Move ValueDelegate | TODO | Not run |  |
+| 17 | Move ValueDelegate | PASS | 401 passed in 3.24s |  |
 | 18 | Extract tree-action selection helpers | TODO | Not run |  |
 | 19 | Extract tree-action clipboard helpers | TODO | Not run |  |
 | 20 | Extract paste action | TODO | Not run |  |
