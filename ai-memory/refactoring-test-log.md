@@ -725,3 +725,35 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 18 — extract tree-action selection helpers
+
+- Date: 2026-04-26
+- Commit subject: Extract tree-action selection helpers
+- Status: PASS
+- Files changed:
+  - `tree_actions/selection.py`
+  - `tree_view.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_tree_actions_clipboard.py tests/test_tree_actions_structure.py tests/test_phase_5_5_search_filter.py
+  ```
+- Focused result:
+  ```text
+  13 passed in 0.55s
+  process exited with post-test segmentation fault during interpreter shutdown
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.17s
+  ```
+- Known failures / skipped checks:
+  - Focused command reports a teardown-time segfault after tests pass; full suite remained green and was used as gate.
+- Decision:
+  - proceed
