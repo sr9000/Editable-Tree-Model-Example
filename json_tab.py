@@ -1,5 +1,4 @@
 import base64
-import functools
 import gzip
 import time
 import zlib
@@ -8,17 +7,14 @@ from typing import Any, Callable
 
 import gmpy2
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QShortcut, QUndoStack
-from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QTreeView, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QWidget
 
-from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate
 from documents.tab_io import save as tab_save, save_as as tab_save_as, snapshot as tab_snapshot
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
+from documents.tab_setup import init_delegates_and_connections, init_layout, init_model, init_search_filter, init_shortcuts
 from documents.tab_status import on_current_changed, size_hint_for_item
 from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
-from tree_filter_proxy import TreeFilterProxy
 from tree_item import JsonTreeItem
-from tree_model import JsonTreeModel
 from tree_view import (
     copy_selection,
     cut_selection,
@@ -30,7 +26,6 @@ from tree_view import (
     move_selection_down,
     move_selection_up,
     paste_from_clipboard,
-    show_context_menu,
     sort_selection_keys,
 )
 from undo.commands import (
@@ -105,25 +100,7 @@ class JsonTab(QWidget):
         self._status_message_callback = status_message_callback
         self._permanent_message_callback = permanent_message_callback
 
-        self.layout = QVBoxLayout(self)
-
-        self.search_edit = QLineEdit(self)
-        self.search_edit.setPlaceholderText("Filter (Ctrl+F)")
-
-        self.view = QTreeView(self)
-        self.view.setUniformRowHeights(True)
-        self.view.setAlternatingRowColors(True)
-        self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
-        self.view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-        self.view.setAnimated(False)
-        self.view.setAllColumnsShowFocus(True)
-        initial_pt = self.view.font().pointSize()
-        self._default_font_pt = initial_pt if initial_pt > 0 else 10
-        self._font_pt = self._default_font_pt
-
-        self.layout.addWidget(self.search_edit)
-        self.layout.addWidget(self.view)
+        init_layout(self)
 
         # option to edit headers is not needed
         # self.header_editor = HeaderViewEditorMixin(self.view.header())
@@ -132,75 +109,15 @@ class JsonTab(QWidget):
             model_data = _demo_data()
         else:
             model_data = data if data is not None else {}
-        self.undo_stack = QUndoStack(self)
+
         self.file_path = file_path
         self.save_format: str | None = None
         self._dirty = False
 
-        # Optional synthetic root row for app UX; tests can keep legacy shape.
-        self.model = JsonTreeModel(model_data, self.view, show_root=show_root)
-        self.proxy = TreeFilterProxy(self)
-        self.proxy.setSourceModel(self.model)
-
-        self.view.setModel(self.proxy)
-        self.model.modelReset.connect(self._on_model_reset)
-
-        self.name_delegate = NameDelegate(self)
-        self.type_delegate = JsonTypeDelegate(self)
-        self.value_delegate = ValueDelegate(self)
-
-        self.view.setItemDelegateForColumn(0, self.name_delegate)
-        self.view.setItemDelegateForColumn(1, self.type_delegate)
-        self.view.setItemDelegateForColumn(2, self.value_delegate)
-
-        self.view.selectionModel().selectionChanged.connect(update_actions_callback)
-        self.view.selectionModel().currentChanged.connect(self._on_current_changed)
-        self.model.typeChanged.connect(self._on_type_changed)
-        self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.view.customContextMenuRequested.connect(functools.partial(show_context_menu, self.view))
-
-        # Keep keyboard shortcuts at the tab level so they work regardless of focused column.
-        self._copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, self.view)
-        self._copy_shortcut.activated.connect(lambda: self._run_tree_action("Copied selection", copy_only=True))
-
-        self._cut_shortcut = QShortcut(QKeySequence.StandardKey.Cut, self.view)
-        self._cut_shortcut.activated.connect(lambda: self._run_tree_action("Cut selection", cut=True))
-
-        self._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, self.view)
-        self._paste_shortcut.activated.connect(lambda: self._run_tree_action("Pasted JSON", paste=True))
-
-        self._delete_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self.view)
-        self._delete_shortcut.activated.connect(lambda: self._run_tree_action("Deleted selection", delete=True))
-
-        self._duplicate_shortcut = QShortcut(QKeySequence("Ctrl+D"), self.view)
-        self._duplicate_shortcut.activated.connect(
-            lambda: self._run_tree_action("Duplicated selection", duplicate=True)
-        )
-
-        self._move_up_shortcut = QShortcut(QKeySequence("Alt+Up"), self.view)
-        self._move_up_shortcut.activated.connect(lambda: self._run_tree_action("Moved up", move_up=True))
-
-        self._move_down_shortcut = QShortcut(QKeySequence("Alt+Down"), self.view)
-        self._move_down_shortcut.activated.connect(lambda: self._run_tree_action("Moved down", move_down=True))
-
-        self._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), self.view)
-        self._sort_shortcut.activated.connect(lambda: self._run_tree_action("Sorted keys", sort_keys=True))
-
-        self._find_shortcut = QShortcut(QKeySequence.StandardKey.Find, self.view)
-        self._find_shortcut.activated.connect(self.search_edit.setFocus)
-
-        self._filter_timer = QTimer(self)
-        self._filter_timer.setSingleShot(True)
-        self._filter_timer.setInterval(150)
-        self._filter_timer.timeout.connect(self._apply_filter)
-        self.search_edit.textChanged.connect(lambda _text: self._filter_timer.start())
-
-        self._zoom_in_shortcut = QShortcut(QKeySequence.StandardKey.ZoomIn, self.view)
-        self._zoom_in_shortcut.activated.connect(self.zoom_in)
-        self._zoom_out_shortcut = QShortcut(QKeySequence.StandardKey.ZoomOut, self.view)
-        self._zoom_out_shortcut.activated.connect(self.zoom_out)
-        self._zoom_reset_shortcut = QShortcut(QKeySequence("Ctrl+0"), self.view)
-        self._zoom_reset_shortcut.activated.connect(self.zoom_reset)
+        init_model(self, model_data, show_root=show_root)
+        init_delegates_and_connections(self, update_actions_callback)
+        init_shortcuts(self)
+        init_search_filter(self)
 
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
         self.undo_stack.setClean()
