@@ -100,3 +100,43 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 01 — add package skeletons
+
+- Date: 2026-04-26
+- Commit subject: Add package skeletons
+- Status: PASS
+- Files changed:
+  - `app/__init__.py`
+  - `documents/__init__.py`
+  - `undo/__init__.py`
+  - `tree/__init__.py`
+  - `delegates/__init__.py`
+  - `tree_actions/__init__.py`
+  - `io_formats/__init__.py`
+  - `state/__init__.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  python - <<'PY'
+  import app, documents, undo, tree, delegates, tree_actions, io_formats, state
+  print('package skeleton imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  package skeleton imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.23s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
