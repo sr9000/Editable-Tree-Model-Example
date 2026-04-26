@@ -1,5 +1,10 @@
 # Phase 5.4 — Persisted view state
 
+> **Status (2026-04-26): ✅ done** — `view_state.py` provides
+> `state_key / save / restore / discard`. `MainWindow._add_tab` /
+> `close_tab` / `closeEvent` / `_save_tab` are wired. `JsonTab` exposes
+> `zoom_in / zoom_out / zoom_reset` shortcuts (Ctrl+= / Ctrl+- / Ctrl+0).
+
 ## Goal
 
 Remember per-file column widths, expansion, last selection, and font

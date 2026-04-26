@@ -7,12 +7,19 @@ YAML, track dirty state per tab, prompt on close, remember recent files.
 
 ## Status snapshot (2026-04-26)
 
-- Core Phase 4 plumbing is implemented in `ui.py`, `json_tab.py`, and
-  new `file_io.py`.
-- New tests `tests/test_file_io_phase4.py` pass along with
-  `tests/test_smoke_mainwindow.py`.
-- Full suite currently reports **346 passed**, but there is still a
-  post-pytest interpreter teardown segfault to investigate separately.
+- ✅ **Phase 4 is feature-complete.** `file_io.py` supports four formats
+  (JSON, JSONL, YAML, YAML multi-document) with atomic write.
+- ✅ Open / Save / Save-As / Recent files / dirty marker / close-confirm
+  / `closeEvent` walk are all wired in `ui.py`.
+- ✅ `JsonTab` accepts `data` / `file_path` / `show_root` and tracks
+  dirty state via `undo_stack.cleanChanged`.
+- ⚠️ Backward-compat demo seed in `JsonTab` (when `data` is omitted) is
+  intentionally retained for legacy tests; no longer a roadblock.
+- ⚠️ Round-trip property tests are partial: `tests/test_file_io_phase4.py`
+  exercises load+save+dirty-state, but Phase 6 still wants explicit
+  parametrized JSON/YAML round-trip + mpq/datetime preservation tests.
+- ✅ Full pytest suite reports **401 passed** with no segfault as of
+  2026-04-26.
 
 ## Entry criteria
 

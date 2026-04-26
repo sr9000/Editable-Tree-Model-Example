@@ -1,5 +1,9 @@
 # Phase 5 — UX Polish
 
+> **Status (2026-04-26): ✅ done** — split into 5.1–5.6, all sub-phases
+> shipped. Stretch goals (type icons, match-highlight delegate) are
+> intentionally deferred to follow-up phases.
+
 ## Goal
 
 Make the editor pleasant to use day-to-day: human-friendly value

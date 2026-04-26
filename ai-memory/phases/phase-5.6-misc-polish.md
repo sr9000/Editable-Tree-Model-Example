@@ -1,5 +1,11 @@
 # Phase 5.6 — Misc polish
 
+> **Status (2026-04-26): ✅ done** — `JsonTab.resize_key_columns` runs
+> on tab switch (`MainWindow._on_tab_changed`) and `model.modelReset`;
+> `expand_all` / `collapse_all` are exposed in the View menu and the
+> tree context menu. Match-highlight delegate and SVG type icons remain
+> stretch goals.
+
 ## Goal
 
 Ship the small touches that round out Phase 5: column-resize hooks,

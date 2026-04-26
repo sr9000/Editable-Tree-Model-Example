@@ -1,5 +1,10 @@
 # Phase 5.2 — Display formatting
 
+> **Status (2026-04-26): ✅ done** — `ValueDelegate.initStyleOption` /
+> `displayText` shipped, `JSON_TYPE_ROLE` exposed by `JsonTreeModel`,
+> `ToolTipRole` returns capped full text for long cells, `units.format_bytes`
+> available. Type-column SVG icons remain a stretch goal.
+
 ## Goal
 
 Render values in a human-friendly form without changing what editors

@@ -1,5 +1,19 @@
 # Phase 6 — Tests
 
+> **Status (2026-04-26): ⚠️ partial.** 401 tests pass under
+> `QT_QPA_PLATFORM=offscreen pytest -q` (no post-run segfault). Phase-5
+> sub-phases each shipped focused suites:
+> `test_phase_5_1_carryover.py`, `test_phase_5_2_display_formatting.py`,
+> `test_phase_5_3_status_bar_breadcrumb.py`,
+> `test_phase_5_4_persisted_view_state.py`,
+> `test_phase_5_5_search_filter.py`, `test_phase_5_6_misc_polish.py`,
+> plus `test_file_io_phase4.py`. Still missing: full
+> `ValueDelegate` editor matrix (`tests/test_value_delegate.py`),
+> JSON/YAML round-trip property tests against `data.json`/`data.yaml`
+> with mpq + datetimes, model invariants (`removeRows` persistent
+> indices, 3-level `parent`/`index` round-trip), `pytest-qt` in
+> `requirements.txt`, `make test` target, and a coverage snapshot.
+
 ## Goal
 
 Bring test coverage of the **GUI / model layer** up to the level of the

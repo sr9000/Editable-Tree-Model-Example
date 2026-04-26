@@ -1,5 +1,10 @@
 # Phase 5.3 — Status bar breadcrumb
 
+> **Status (2026-04-26): ✅ done** — `JsonTab` accepts a
+> `permanent_message_callback`; `_on_current_changed` builds a JSON-style
+> qualified path with type + size hint. Open / Save / tree actions emit
+> transient messages via `_status_message_callback`.
+
 ## Goal
 
 Give the user always-on context about what they have selected, plus

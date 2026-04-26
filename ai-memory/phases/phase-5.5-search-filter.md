@@ -1,5 +1,12 @@
 # Phase 5.5 — Search / filter bar
 
+> **Status (2026-04-26): ✅ done** — `tree_filter_proxy.TreeFilterProxy`
+> implements recursive case-insensitive name+value filtering;
+> `JsonTab.search_edit` is a debounced (`QTimer` 150 ms) `QLineEdit`
+> above the tree. All delegates and `tree_view.py` helpers map proxy
+> indices to source via `_proxy_to_source` / `_resolve_model`. Optional
+> match-highlight delegate (`paint` override) is deferred.
+
 ## Goal
 
 A debounced, recursive substring filter above each tab's tree, with
