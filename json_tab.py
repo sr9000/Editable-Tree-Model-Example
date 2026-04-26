@@ -11,8 +11,9 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signa
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLineEdit, QTreeView, QVBoxLayout, QWidget
 
-from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate, decode_bytes
+from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
+from documents.tab_status import on_current_changed, size_hint_for_item
 from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
 from file_io import (
     SAVE_FORMAT_JSON,
@@ -48,7 +49,6 @@ from undo.commands import (
     _RenameCmd,
     _SortKeysCmd,
 )
-from units import format_bytes
 
 
 def _make_label(text: str, target_qname: str) -> str:
@@ -364,37 +364,10 @@ class JsonTab(QWidget):
         return qualified_name(self, index)
 
     def _size_hint_for_item(self, item: JsonTreeItem) -> str | None:
-        if item.json_type in (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT):
-            return f"{len(str(item.value or ''))} chars"
-        if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
-            return f"{item.child_count()} items"
-        if item.json_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
-            try:
-                raw = decode_bytes(str(item.value or ""), item.json_type)
-            except Exception:
-                return None
-            return format_bytes(len(raw))
-        return None
+        return size_hint_for_item(item)
 
     def _on_current_changed(self, current: QModelIndex, _previous: QModelIndex) -> None:
-        if self._permanent_message_callback is None:
-            return
-        if not current.isValid():
-            self._permanent_message_callback("")
-            return
-
-        current = self._proxy_to_source(current)
-        row0 = current.siblingAtColumn(0)
-        if not row0.isValid():
-            self._permanent_message_callback("")
-            return
-
-        item = self.model.get_item(row0)
-        breadcrumb = self._qualified_name(row0)
-        item_type = item.json_type.value
-        size_hint = self._size_hint_for_item(item)
-        extra = f", {size_hint}" if size_hint else ""
-        self._permanent_message_callback(f"{breadcrumb}  ({item_type}{extra})")
+        on_current_changed(self, current, _previous)
 
     def _collect_expanded_paths(self) -> list[tuple[int, ...]]:
         """Return paths of every currently expanded row.
