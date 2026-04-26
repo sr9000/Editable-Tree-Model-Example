@@ -893,3 +893,36 @@ Copy this template for each phase:
   - Focused combined command reports a teardown-time segfault after tests pass; import smoke was run separately and full suite remained green.
 - Decision:
   - proceed
+
+## Phase 23 — move undo command classes
+
+- Date: 2026-04-26
+- Commit subject: Move undo command classes
+- Status: PASS
+- Files changed:
+  - `undo/commands.py`
+  - `json_tab.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_undo_redo.py tests/test_undo_redo_scenario.py tests/test_typed_undo_commands.py tests/test_typed_undo_perf.py
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_undo_redo.py tests/test_undo_redo_scenario.py tests/test_typed_undo_commands.py tests/test_typed_undo_perf.py tests/test_phase_5_1_carryover.py
+  ```
+- Focused result:
+  ```text
+  first run: 18 passed in 1.73s
+  after restoring `json_tab.time` compatibility import used by monkeypatch tests: 24 passed in 1.88s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  final rerun: 401 passed in 3.23s
+  ```
+- Known failures / skipped checks:
+  - Initial full-suite attempt failed at `tests/test_phase_5_1_carryover.py::test_edits_outside_merge_window_do_not_merge` because `json_tab.time` import compatibility was removed; fixed in the same phase by restoring `import time` in `json_tab.py`.
+- Decision:
+  - proceed
