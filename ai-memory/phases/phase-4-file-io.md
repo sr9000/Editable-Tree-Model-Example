@@ -5,6 +5,15 @@
 Turn the editor into a real file-backed application: open/save JSON and
 YAML, track dirty state per tab, prompt on close, remember recent files.
 
+## Status snapshot (2026-04-26)
+
+- Core Phase 4 plumbing is implemented in `ui.py`, `json_tab.py`, and
+  new `file_io.py`.
+- New tests `tests/test_file_io_phase4.py` pass along with
+  `tests/test_smoke_mainwindow.py`.
+- Full suite currently reports **346 passed**, but there is still a
+  post-pytest interpreter teardown segfault to investigate separately.
+
 ## Entry criteria
 
 - ✅ Phase 3 complete (2026-04-26): model mutations are reliable and
@@ -51,65 +60,68 @@ YAML, track dirty state per tab, prompt on close, remember recent files.
 ## Work items
 
 ### Loading
-- [ ] [io] Implement `MainWindow.setup_model(filename)` to detect format
+- [x] [io] Implement `MainWindow.setup_model(filename)` to detect format
       by extension and load:
-      - `.json` → `simplejson.load(parse_float=mpq, use_decimal=True)`
+      - `.json` → `simplejson.load(parse_float=mpq)`
       - `.yaml` / `.yml` → `yaml.load(Loader=MpqSafeLoader)`
       Pass parsed data into `JsonTab(data=..., file_path=...)`.
       — `ui.py:MainWindow.setup_model`
       Empty `filename` (the test fixture passes `""`) must remain a no-op.
-- [ ] [io] Update `JsonTab.__init__` to accept `data` and `file_path`
+- [x] [io] Update `JsonTab.__init__` to accept `data` and `file_path`
       keyword parameters. Drop the hardcoded demo dict in favour of the
       passed-in `data`. When `data is None`, default to `{}` (empty
       object). Keep the existing `update_actions_callback` and
       `status_message_callback` parameters.
       — `json_tab.py:JsonTab.__init__`
-- [ ] [io] Add `MainWindow.open_file_dialog()` triggered by
+- [ ] [io] Keep `JsonTab` backward compatibility: preserve demo seed only
+      for legacy/tests that call bare `JsonTab(...)`; explicit
+      `data={}` in `MainWindow.create_new_file()` yields an empty file tab.
+- [x] [io] Add `MainWindow.open_file_dialog()` triggered by
       `fileOpenAction`. Filters: `*.json *.yaml *.yml`.
       The action already exists in `mainwindow.ui` — only the
       `triggered.connect(...)` wiring and the slot are new.
 
 ### Saving
-- [ ] [io] Implement `JsonTab.save()`: dispatch on file extension,
+- [x] [io] Implement `JsonTab.save()`: dispatch on file extension,
       serialize via `JsonTreeItem.to_json()` plus the right encoder.
       Use `mpq_json_default` for JSON; mpq YAML dumper for YAML.
-- [ ] [io] Implement `JsonTab.save_as(path)`: ask via `QFileDialog`,
+- [x] [io] Implement `JsonTab.save_as(path)`: ask via `QFileDialog`,
       then call `save()`.
-- [ ] [io] Wire `fileSaveAction` (Ctrl+S) and `fileSaveAsAction`
+- [x] [io] Wire `fileSaveAction` (Ctrl+S) and `fileSaveAsAction`
       (Ctrl+Shift+S) in `MainWindow`.
-- [ ] [io] Optionally write through a temp file + atomic rename to
+- [x] [io] Optionally write through a temp file + atomic rename to
       avoid partial writes.
 
 ### Dirty / close flow
-- [ ] [tab] Add `JsonTab.is_dirty` boolean. Connect to
+- [x] [tab] Add `JsonTab.is_dirty` boolean. Connect to
       `model.dataChanged`, `rowsInserted`, `rowsRemoved`, plus the undo
       stack's `cleanChanged` (introduced in Phase 3).
-- [ ] [tab] Emit a `JsonTab.dirtyChanged(bool)` signal; `MainWindow`
+- [x] [tab] Emit a `JsonTab.dirtyChanged(bool)` signal; `MainWindow`
       updates the tab title (`name`, `name *`).
-- [ ] [shell] Extend the existing `MainWindow.close_tab(index)` (currently
+- [x] [shell] Extend the existing `MainWindow.close_tab(index)` (currently
       always closes) with a dirty-check + `QMessageBox.question` (Save /
       Discard / Cancel) before removal.
       — `ui.py:MainWindow.close_tab`
-- [ ] [shell] Override `closeEvent` on `MainWindow` to walk all tabs
+- [x] [shell] Override `closeEvent` on `MainWindow` to walk all tabs
       and confirm.
 
 ### Recent files
-- [ ] [shell] Add a `File → Recent` submenu populated from
+- [x] [shell] Add a `File → Recent` submenu populated from
       `QSettings("EditableTreeModel", "recent_files")`. Cap at 8 entries.
-- [ ] [shell] Update on every successful open/save.
+- [x] [shell] Update on every successful open/save.
 
 ### MainWindow plumbing
-- [ ] [shell] Implement `MainWindow.update_actions()`: enable Save /
+- [x] [shell] Implement `MainWindow.update_actions()`: enable Save /
       Save As only when there is a current tab; enable insert/remove only
       when the current tab has a valid current index.
       — `ui.py:MainWindow.update_actions`
-- [ ] [shell] Connect `tabWidget.currentChanged` to `update_actions`.
+- [x] [shell] Connect `tabWidget.currentChanged` to `update_actions`.
 
 ### Tests
 - [ ] [tests] Round-trip: load a JSON file, mutate, save, reload — tree
       equals expectation.
 - [ ] [tests] YAML round-trip with `mpq` values.
-- [ ] [tests] Dirty-state flips on edit, clears on save.
+- [x] [tests] Dirty-state flips on edit, clears on save.
 
 ## Tips & Deep Dives
 
@@ -145,7 +157,7 @@ def load_file(path: str):
     with open(path, "r", encoding="utf-8") as f:
         if fmt == "json":
             import simplejson as sj   # only here Decimals/mpq survive
-            return sj.load(f, parse_float=mpq, use_decimal=True)
+            return sj.load(f, parse_float=mpq)
         return yaml.load(f, Loader=MpqSafeLoader)
 
 def save_file(path: str, data) -> None:
@@ -290,12 +302,13 @@ Trigger it from `tabWidget.currentChanged` and from each tab's
 
 ### Round-trip caveat for `simplejson`
 
-`simplejson.dumps(...)` with `use_decimal=True` will emit Decimals
-without quotes — which is what we want. Without `use_decimal=True` the
-encoder falls back to `default=`, and that path is exactly what was
-broken in Phase 0. After the Phase 0 fix to `mpq_json_default`,
-**always** prefer `use_decimal=True` on the dump path; it short-circuits
-the `default` callback for the ideal case.
+On the current pinned `simplejson` version, `load(..., use_decimal=True)`
+cannot be combined with `parse_float=mpq` (`TypeError: use_decimal=True
+implies parse_float=Decimal`). The compatible load path is
+`load(parse_float=mpq)`.
+
+For dumps, keeping `use_decimal=True` is still desirable because
+`mpq_json_default` may return `Decimal` for terminating fractions.
 
 ### Test sketch
 

@@ -1,6 +1,6 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: 2026-04-26 (Phases 0–3 complete; 343 tests pass.)_
+_Last scanned: 2026-04-26 (Phase 4 core in progress; 346 tests pass + post-run segfault risk.)_
 
 ## 1) What this repo is
 
@@ -19,10 +19,10 @@ Compared with the original example, the in-tree code now provides:
   `qmpq_spinbox`) and helper packages (`mpq2py`, `jsontream`,
   `coalesce`, `binary`, `qt2py`, `units`)
 
-File I/O (open / save / dirty-state / recent-files) is the next
-milestone — see `ai-memory/phases/phase-4-file-io.md`. The runtime
-still seeds new tabs with a hardcoded demo dict instead of loading
-`data.json` / `data.yaml` from disk.
+File I/O core plumbing (open / save / dirty-state / recent-files) now
+exists — see `ai-memory/phases/phase-4-file-io.md`. A compatibility
+bridge remains: bare `JsonTab(...)` still seeds demo data for legacy
+tests, while `MainWindow.create_new_file()` passes explicit `{}`.
 
 ## 2) Current app entry flow
 
@@ -30,19 +30,20 @@ still seeds new tabs with a hardcoded demo dict instead of loading
 - `main.py`
   - creates `QApplication`
   - instantiates `ui.MainWindow`
-  - passes a filename argument (defaulting to `data.yaml`) — currently
-    a no-op until Phase 4 lands.
+  - passes a filename argument (defaulting to `data.yaml`) into
+    `MainWindow.setup_model()`.
   - resizes window using `settings.WINDOW_DEFAULT_SIZE`
 
 ### Main window layer
 - `ui.py` (~230 lines, slimmed down in Phase 0)
   - subclasses generated `mainwindow.Ui_MainWindow`
   - `create_new_file()` opens an empty `JsonTab` in `tabWidget`
-  - `close_tab(index)` removes a tab and `deleteLater()`s it (no
-    dirty-confirm yet — added in Phase 4)
+  - `setup_model()` now loads JSON/YAML files into tabs
+  - file actions (`Open`, `Save`, `Save As`) are wired
+  - recent files submenu is persisted in `QSettings`
+  - `close_tab(index)` and `closeEvent()` now run dirty-save confirm flow
   - `_current_tab()` / `_current_view()` resolve the active tab
-  - `setup_model()` and `update_actions()` are deliberate stubs until
-    Phase 4
+  - `update_actions()` now drives Save/SaveAs and insert/remove enablement
   - all original C++ reference docstrings have been deleted
 
 ### Per-tab editor
@@ -63,8 +64,17 @@ still seeds new tabs with a hardcoded demo dict instead of loading
     `_convert_container`, `_convert_to_leaf`) replays undo/redo with
     surgical Qt model signals — no `beginResetModel`, view expansion
     and selection survive
-  - still seeds the model with hardcoded demo data (Phase 4 will
-    replace this with a `data` ctor argument)
+  - has `data` + `file_path` constructor arguments, plus
+    `is_dirty` / `dirtyChanged` / `display_name` / `save()` / `save_as()`
+  - dirty state is tied to `undo_stack.cleanChanged` and `setClean()`
+  - compatibility note: bare `JsonTab(...)` still uses demo seed;
+    explicit `data={}` creates an empty document
+
+### File I/O helper module
+- `file_io.py`
+  - `detect_format(path)` for extension dispatch
+  - `load_file(path)` for JSON/YAML parsing (`parse_float=mpq` for JSON)
+  - `save_file(path, data)` using atomic write (`os.replace`)
 
 ## 3) Core JSON/tree architecture
 
@@ -231,8 +241,12 @@ modified-byte highlighting, theming via `ColorManager`.
 
 ## 8) Tests and what they cover
 
-`pytest -q` baseline (2026-04-26): **343 tests pass in ~1 s** under
+`pytest -q` baseline (2026-04-26): **346 tests pass in ~1 s** under
 `QT_QPA_PLATFORM=offscreen`.
+
+Known risk: after the passing summary, the interpreter currently emits
+`Segmentation fault (core dumped)` on teardown; this is tracked as an
+open bug.
 
 JSON-editor specific suites delivered in Phases 0–3:
 
@@ -262,16 +276,17 @@ Pre-existing widget-stack suites continue to cover `datetime_editor`,
 `qhexedit`, `mpq2py`, `jsontream`, dialog `QSettings`, units, regex /
 partial input.
 
-## 9) Status of the unfinished surface (post Phase 3)
+## 9) Status of the unfinished surface (post Phase 4 core)
 
 The "transitional" list from earlier scans has shrunk substantially.
 Remaining gaps map to Phases 4–6:
 
-1. **File I/O** — `MainWindow.setup_model()`, open/save/save-as,
-   dirty-state, recent files, close-confirm dialog. (Phase 4.)
-2. **`JsonTab` data ingest** — replace the hardcoded demo dict with a
-   `data` ctor argument and remove the `base64` / `gzip` / `zlib` /
-   `gmpy2` import-only-for-demo lines. (Phase 4.)
+1. **File I/O follow-up** — add dedicated JSON/YAML round-trip tests,
+   better save-time value validation, and polish Save action dirty-only
+   enablement. (Phase 4.)
+2. **`JsonTab` data ingest cleanup** — remove legacy demo-seed fallback
+   and corresponding imports once all bare-ctor tests are migrated.
+   (Phase 4.)
 3. **`displayText` / status bar / persisted view state /
    search-filter** — none of the cosmetic UX layer exists yet.
    (Phase 5.)
@@ -282,14 +297,16 @@ Remaining gaps map to Phases 4–6:
 5. **Coverage gaps** — model invariants (`removeRows` persistent
    indices, `parent`/`index` round-trip), full delegate matrix tests,
    round-trip tests against `data.json` / `data.yaml`. (Phase 6.)
+6. **Stability bug** — post-pytest interpreter teardown segfault after
+   successful runs. (New, investigate.)
 
 ## 10) Data/sample files
 
 - `data.yaml`
 - `data.json`
 
-These are currently inert at runtime (not yet loaded by any code path)
-but are kept around as Phase 4 fixtures and for round-trip tests.
+These are now usable via CLI/open flow and remain useful as Phase 4/6
+round-trip fixtures.
 
 ## 11) Dependencies / tooling
 

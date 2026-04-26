@@ -1,6 +1,6 @@
 # JSON Editor — Pros & Cons
 
-_Last analysis: 2026-04-26 (Phases 0–3 complete; 343 tests pass.)_
+_Last analysis: 2026-04-26 (Phase 4 core in progress; 346 tests pass, but post-pytest segfault remains.)_
 
 This document evaluates the **current** state of the JSON tree editor
 implementation (`tree_model.py`, `tree_item.py`, `delegate.py`,
@@ -56,10 +56,14 @@ implementation (`tree_model.py`, `tree_item.py`, `delegate.py`,
 - **Path-based addressing** in undo commands (`(int, …)` paths
   resolved by `JsonTab._index_from_path()`) sidesteps
   `QModelIndex` invalidation across mutations.
-- **Substantial test coverage**: 343 tests, including end-to-end
+- **Substantial test coverage**: 346 tests, including end-to-end
   scenario coverage of every JsonType crossed with every mutating
   action, plus wall-clock + memory bounds locking the typed-command
   contract in place.
+- **Phase 4 core shell plumbing is now present**: `MainWindow.setup_model`
+  loads CLI files, File menu open/save/save-as are wired, recent-files
+  menu is persisted via `QSettings`, and dirty-state/tab-title flow is
+  wired through `QUndoStack.cleanChanged`.
 - **Reusable widget stack**: `qhexedit`, `qmultiline_editor`,
   `datetime_editor`, `qbigint_spinbox`, `qmpq_spinbox` are
   independently useful packages.
@@ -77,20 +81,16 @@ implementation (`tree_model.py`, `tree_item.py`, `delegate.py`,
 
 ## ❌ Cons
 
-### App shell is incomplete (Phase 4)
-- `MainWindow.setup_model()` is still a no-op; the `data.yaml` /
-  `data.json` argument from `main.py` is currently ignored.
-- `MainWindow.update_actions()` is still a stub; menu/toolbar
-  enabled-state is not driven by selection or active-tab state.
-- `JsonTab` is seeded with **hard-coded demo data**; there is no
-  file-open, file-save, save-as, recent-files, or close-confirm
-  dialog yet.
-- `MainWindow.close_tab()` removes the tab and `deleteLater()`s it
-  but does **not** prompt for unsaved changes — dirty state itself
-  is not tracked.
-- The `JsonTab` constructor still imports `base64`, `gzip`, `zlib`,
-  `gmpy2` purely to build the demo dictionary; these imports go away
-  with Phase 4 once `data` is passed in.
+### App shell remaining work (Phase 4)
+- Core file I/O is implemented, but `JsonTab` still keeps legacy demo
+  seed behavior for bare `JsonTab(...)` construction to preserve older
+  tests; full constructor migration is still pending.
+- `MainWindow.update_actions()` currently enables Save whenever a tab
+  exists; optional refinement is to enable Save only when dirty.
+- Round-trip tests are only partially covered (JSON load/save smoke and
+  dirty-state tests exist; dedicated YAML round-trip tests are pending).
+- A new issue appeared during Phase 4 runs: full `pytest` reports all
+  tests passing, then the interpreter segfaults on teardown.
 
 ### Delegate / editor remaining issues (Phase 5)
 - `ValueDelegate.createEditor` for `MULTILINE` / `BYTES` / `ZLIB` /
@@ -139,16 +139,14 @@ implementation (`tree_model.py`, `tree_item.py`, `delegate.py`,
   be unreachable thanks to `flags()`, but a defensive `return None`
   would degrade more gracefully.
 
-### Persistence / I/O (Phase 4)
-- No save/load round-trip path (YAML or JSON) wired into the actual
-  UI flow — the JSON / YAML helpers in `mpq2py` exist but aren't
-  called from any menu action.
-- No dirty-state tracking; closing a modified tab silently loses
-  data. The hook is `JsonTab.undo_stack.cleanChanged`, which already
-  fires; Phase 4 just needs to consume it and call
-  `setClean()` after a successful save.
-- No error feedback path for I/O failures beyond a single
-  `QMessageBox` in `create_new_file`.
+### Persistence / I/O remaining risks (Phase 4)
+- JSON load path cannot use `simplejson.load(..., use_decimal=True)`
+  together with `parse_float=mpq` on the pinned version; compatibility
+  path is now `parse_float=mpq` only.
+- YAML and JSON format validation before save (datetime/bytes strictness)
+  is still not surfaced as dedicated user-facing diagnostics.
+- App-level teardown stability needs investigation due to the post-test
+  segfault noted above.
 
 ### Test gaps (Phase 6)
 - No model-invariant suite covering `setData` row-wide

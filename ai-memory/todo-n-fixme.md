@@ -8,21 +8,21 @@ discovered while auditing the JSON editor codebase. Cross-reference with
 
 Format: `- [ ] [scope] description — file:symbol`
 
-> **Status (2026-04-26)** — Phases 0–3 of the roadmap are complete; their
-> items below are checked off. The remaining open items map to Phases 4–6
-> (see `phases/`).
+> **Status (2026-04-26)** — Phases 0–3 are complete; Phase 4 core shell/I/O
+> plumbing is in progress and partially checked off below. Remaining open
+> items map to late Phase 4 follow-ups plus Phases 5–6 (see `phases/`).
 
 ---
 
 ## TODO — missing or incomplete features
 
 ### Application shell (`ui.py`, `main.py`)
-- [ ] [shell] Implement `MainWindow.setup_model(yaml_filename)` to actually
+- [x] [shell] Implement `MainWindow.setup_model(yaml_filename)` to actually
       load the file passed via CLI into a tab.
-      — `ui.py:MainWindow.setup_model` (Phase 4)
-- [ ] [shell] Implement `MainWindow.update_actions()` to drive enabled-state
+      — `ui.py:MainWindow.setup_model` ✅ Phase 4
+- [x] [shell] Implement `MainWindow.update_actions()` to drive enabled-state
       of insert/remove/save/copy actions from current selection and tab.
-      — `ui.py:MainWindow.update_actions` (Phase 4)
+      — `ui.py:MainWindow.update_actions` ✅ Phase 4
 - [x] [shell] Implement `MainWindow.close_tab(index)` connected to
       `tabCloseRequested`. Dirty-check confirm dialog deferred to Phase 4.
       — `ui.py:MainWindow.close_tab` ✅ Phase 0
@@ -30,13 +30,13 @@ Format: `- [ ] [scope] description — file:symbol`
       ✅ Phase 0 (placeholder); Phase 3 superseded the placeholder by
       routing copy through `JsonTab._run_tree_action`.
       — `ui.py:MainWindow.copy_action`
-- [ ] [shell] Add **File → Open** action: detect format (`.json` / `.yaml`)
-      and feed parsed data into a new `JsonTab`. (Phase 4)
-- [ ] [shell] Add **File → Save / Save As** actions, JSON & YAML, using
-      `mpq_json_default` / mpq YAML dumper. (Phase 4)
-- [ ] [shell] Wire dirty/modified state per tab; reflect in tab title
-      (`*` suffix) and confirm-on-close. (Phase 4)
-- [ ] [shell] Add **recent files** submenu (persisted via `QSettings`). (Phase 4)
+- [x] [shell] Add **File → Open** action: detect format (`.json` / `.yaml`)
+      and feed parsed data into a new `JsonTab`. ✅ Phase 4
+- [x] [shell] Add **File → Save / Save As** actions, JSON & YAML, using
+      `mpq_json_default` / mpq YAML dumper. ✅ Phase 4
+- [x] [shell] Wire dirty/modified state per tab; reflect in tab title
+      (`*` suffix) and confirm-on-close. ✅ Phase 4
+- [x] [shell] Add **recent files** submenu (persisted via `QSettings`). ✅ Phase 4
 - [x] [shell] Make `MainWindow.insert_row` / `insert_child` / `remove_row`
       operate on the **currently active tab's** view, not the
       non-existent `self.view`.
@@ -48,10 +48,13 @@ Format: `- [ ] [scope] description — file:symbol`
 
 ### Tab / data flow (`json_tab.py`)
 - [ ] [tab] Replace hardcoded demo dict with a `data` ctor argument.
-      — `json_tab.py:JsonTab.__init__` (Phase 4)
-- [ ] [tab] Track and expose `JsonTab.file_path` (declared, never set). (Phase 4)
-- [ ] [tab] Track dirty state; emit signal on `model.dataChanged` /
-      `rowsInserted` / `rowsRemoved`. (Phase 4)
+      — `json_tab.py:JsonTab.__init__` (Phase 4, partial: explicit
+      `data` is supported; bare `JsonTab(...)` still seeds demo data
+      for backward compatibility in existing tests)
+- [x] [tab] Track and expose `JsonTab.file_path` (declared, never set). ✅ Phase 4
+- [x] [tab] Track dirty state; emit signal on `model.dataChanged` /
+      `rowsInserted` / `rowsRemoved`. ✅ Phase 4 (implemented via
+      `undo_stack.cleanChanged` + `dirtyChanged`)
 - [ ] [tab] Provide `JsonTab.to_json()` / `JsonTab.to_yaml()` save helpers
       using `tree_item.JsonTreeItem.to_json()` + the proper encoders. (Phase 4)
 
@@ -206,6 +209,11 @@ Format: `- [ ] [scope] description — file:symbol`
       cleanly become non-editable instead of raising.
 
 ### Confirmed bugs — still open (Phase 4+)
+- [ ] [BUG] Running `pytest` now exits with a post-run interpreter
+      segmentation fault after all tests pass (`346 passed`, then
+      `Segmentation fault (core dumped)`). Suspected Qt/PySide teardown
+      interaction introduced/exposed during Phase 4 UI test work.
+      — investigate test teardown / app lifecycle ordering.
 - [ ] [BUG] `ValueDelegate.createEditor` for `MULTILINE` / `BYTES` /
       `ZLIB` / `GZIP` opens a `QDialog` parented to the editor parent
       and returns `None`. Reentrant edit triggers can stack dialogs.
