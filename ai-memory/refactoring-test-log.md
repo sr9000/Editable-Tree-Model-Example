@@ -436,3 +436,41 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 10 — move JsonTreeItem
+
+- Date: 2026-04-26
+- Commit subject: Move JsonTreeItem
+- Status: PASS
+- Files changed:
+  - `tree/item.py`
+  - `tree_item.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_smoke_model.py tests/test_tree_correctness.py tests/test_type_editing.py
+  python - <<'PY'
+  from tree_item import JsonTreeItem
+  from tree.item import JsonTreeItem as JsonTreeItem2
+  assert JsonTreeItem is JsonTreeItem2
+  print('tree item compatibility imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests: 37 passed in 0.13s
+  tree item compatibility imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.21s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
