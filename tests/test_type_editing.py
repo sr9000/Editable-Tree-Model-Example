@@ -142,8 +142,9 @@ def test_caps_lock_does_not_close_name_editor(qtbot):
 
     name_index = tab.model.index(0, 0, QModelIndex())
     assert name_index.isValid()
-    tab.view.setCurrentIndex(name_index)
-    tab.view.edit(name_index)
+    view_index = tab._source_to_view(name_index)
+    tab.view.setCurrentIndex(view_index)
+    tab.view.edit(view_index)
 
     qtbot.waitUntil(lambda: tab.view.findChild(QLineEdit) is not None)
     editor = tab.view.findChild(QLineEdit)

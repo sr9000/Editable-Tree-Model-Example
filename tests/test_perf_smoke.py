@@ -32,6 +32,10 @@ def _make_big_tab(qtbot, *, fanout: int = 200) -> JsonTab:
     return tab
 
 
+def _view_idx(tab: JsonTab, source_index: QModelIndex) -> QModelIndex:
+    return tab._source_to_view(source_index)
+
+
 def test_row_index_is_o1_per_call(qtbot):
     """``row()`` must be ~O(1) per call after the lazy re-numbering pass.
 
@@ -75,8 +79,9 @@ def test_commit_set_data_on_big_tree_is_responsive(qtbot):
 
     # Select an inner row of the big array and move it up.
     inner = tab.model.index(500, 0, arr_idx)
-    tab.view.setCurrentIndex(inner)
-    tab.view.selectionModel().select(inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    v_inner = _view_idx(tab, inner)
+    tab.view.setCurrentIndex(v_inner)
+    tab.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     start = time.perf_counter()
     assert move_selection_up(tab.view)
@@ -129,8 +134,9 @@ def test_duplicate_then_undo_redo_on_big_array(qtbot):
     assert arr_idx is not None
 
     inner = tab.model.index(50, 0, arr_idx)
-    tab.view.setCurrentIndex(inner)
-    tab.view.selectionModel().select(inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    v_inner = _view_idx(tab, inner)
+    tab.view.setCurrentIndex(v_inner)
+    tab.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     before = tab._snapshot()
     assert duplicate_selection(tab.view)
@@ -163,10 +169,12 @@ def test_expansion_preserved_across_undo_redo(qtbot):
         elif name == "array":
             arr_idx = tab.model.index(r, 0, QModelIndex())
     assert obj_idx is not None and arr_idx is not None
-    tab.view.setExpanded(obj_idx, True)
-    tab.view.setExpanded(arr_idx, True)
-    assert tab.view.isExpanded(obj_idx)
-    assert tab.view.isExpanded(arr_idx)
+    v_obj = _view_idx(tab, obj_idx)
+    v_arr = _view_idx(tab, arr_idx)
+    tab.view.setExpanded(v_obj, True)
+    tab.view.setExpanded(v_arr, True)
+    assert tab.view.isExpanded(v_obj)
+    assert tab.view.isExpanded(v_arr)
 
     # Edit a leaf inside the array — sibling expansion must survive
     # the resulting commit + the subsequent undo + redo.
@@ -182,16 +190,16 @@ def test_expansion_preserved_across_undo_redo(qtbot):
             obj_idx = tab.model.index(r, 0, QModelIndex())
         elif name == "array":
             arr_idx = tab.model.index(r, 0, QModelIndex())
-    assert tab.view.isExpanded(obj_idx)
-    assert tab.view.isExpanded(arr_idx)
+    assert tab.view.isExpanded(_view_idx(tab, obj_idx))
+    assert tab.view.isExpanded(_view_idx(tab, arr_idx))
 
     tab.undo_stack.undo()
-    assert tab.view.isExpanded(obj_idx)
-    assert tab.view.isExpanded(arr_idx)
+    assert tab.view.isExpanded(_view_idx(tab, obj_idx))
+    assert tab.view.isExpanded(_view_idx(tab, arr_idx))
 
     tab.undo_stack.redo()
-    assert tab.view.isExpanded(obj_idx)
-    assert tab.view.isExpanded(arr_idx)
+    assert tab.view.isExpanded(_view_idx(tab, obj_idx))
+    assert tab.view.isExpanded(_view_idx(tab, arr_idx))
 
 
 def test_undo_walking_is_responsive(qtbot):
@@ -205,8 +213,9 @@ def test_undo_walking_is_responsive(qtbot):
             arr_idx = tab.model.index(r, 0, QModelIndex())
             break
     inner = tab.model.index(1500, 0, arr_idx)
-    tab.view.setCurrentIndex(inner)
-    tab.view.selectionModel().select(inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    v_inner = _view_idx(tab, inner)
+    tab.view.setCurrentIndex(v_inner)
+    tab.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     # 10 mutations.
     for _ in range(10):

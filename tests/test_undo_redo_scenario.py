@@ -26,8 +26,9 @@ from tree_view import (
 
 def _select(tab: JsonTab, index: QModelIndex) -> None:
     sel = tab.view.selectionModel()
-    tab.view.setCurrentIndex(index)
-    sel.select(index, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    view_index = tab._source_to_view(index)
+    tab.view.setCurrentIndex(view_index)
+    sel.select(view_index, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
 
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:

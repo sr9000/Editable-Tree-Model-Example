@@ -5,7 +5,8 @@ from tree_view import delete_selection, move_selection_down, move_selection_up, 
 
 
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:
-    idx = tab.model.index(row, 0, parent)
+    source_index = tab.model.index(row, 0, parent)
+    idx = tab._source_to_view(source_index)
     tab.view.setCurrentIndex(idx)
     tab.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
@@ -33,8 +34,9 @@ def test_undo_redo_paste(qtbot):
 
     before = tab.model.root_item.to_json()
     idx = tab.model.index(0, 0, QModelIndex())
-    tab.view.setCurrentIndex(idx)
-    tab.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    view_idx = tab._source_to_view(idx)
+    tab.view.setCurrentIndex(view_idx)
+    tab.view.selectionModel().select(view_idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     from PySide6.QtWidgets import QApplication
 
