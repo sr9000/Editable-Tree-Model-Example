@@ -140,3 +140,43 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 02 — extract file-format detection
+
+- Date: 2026-04-26
+- Commit subject: Extract file-format detection
+- Status: PASS
+- Files changed:
+  - `io_formats/detect.py`
+  - `io_formats/__init__.py`
+  - `file_io.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_file_io_phase4.py
+  python - <<'PY'
+  from file_io import detect_format, SAVE_FORMAT_JSON
+  from io_formats import detect_format as detect_format2, SAVE_FORMAT_JSON as JSON2
+  assert detect_format('x.json') == SAVE_FORMAT_JSON
+  assert detect_format2('x.json') == JSON2
+  print('file format detection imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests/test_file_io_phase4.py: 12 passed in 0.15s
+  file format detection imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.23s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
