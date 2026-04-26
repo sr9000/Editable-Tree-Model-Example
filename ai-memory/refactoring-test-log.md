@@ -1243,3 +1243,41 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 34 — move MainWindow
+
+- Date: 2026-04-26
+- Commit subject: Move MainWindow
+- Status: PASS
+- Files changed:
+  - `app/main_window.py`
+  - `ui.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_smoke_mainwindow.py tests/test_file_io_phase4.py tests/test_dialog_settings.py
+  python - <<'PY'
+  from ui import MainWindow
+  from app.main_window import MainWindow as MainWindow2
+  assert MainWindow is MainWindow2
+  print('MainWindow compatibility imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests: 24 passed in 0.26s
+  MainWindow compatibility imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.19s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
