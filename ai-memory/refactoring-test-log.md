@@ -505,3 +505,43 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 12 — move JsonTreeModel
+
+- Date: 2026-04-26
+- Commit subject: Move JsonTreeModel
+- Status: PASS
+- Files changed:
+  - `tree/model.py`
+  - `tree_model.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_smoke_model.py tests/test_tree_correctness.py tests/test_type_editing.py
+  python - <<'PY'
+  from tree_model import JsonTreeModel, JSON_TYPE_ROLE
+  from tree.model import JsonTreeModel as JsonTreeModel2
+  from tree.model_roles import JSON_TYPE_ROLE as ROLE2
+  assert JsonTreeModel is JsonTreeModel2
+  assert JSON_TYPE_ROLE == ROLE2
+  print('tree model compatibility imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests: 37 passed in 0.14s
+  tree model compatibility imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.22s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
