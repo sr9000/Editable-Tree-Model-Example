@@ -7,9 +7,9 @@ from datetime import datetime
 from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoCommand, QUndoStack
-from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QTreeView, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLineEdit, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate, decode_bytes
 from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
@@ -21,6 +21,7 @@ from file_io import (
     detect_format,
     save_file,
 )
+from tree_filter_proxy import TreeFilterProxy
 from tree_item import JsonTreeItem
 from tree_model import JsonTreeModel
 from tree_view import (
@@ -96,12 +97,14 @@ class _MoveRowCmd(QUndoCommand):
     def redo(self):
         p = self._tab._index_from_path(self._parent_path)
         if self._tab.model.move_row(p, self._src, self._dst):
-            self._tab.view.setCurrentIndex(self._tab.model.index(self._dst, 0, p))
+            source_index = self._tab.model.index(self._dst, 0, p)
+            self._tab.view.setCurrentIndex(self._tab._source_to_view(source_index))
 
     def undo(self):
         p = self._tab._index_from_path(self._parent_path)
         if self._tab.model.move_row(p, self._dst, self._src):
-            self._tab.view.setCurrentIndex(self._tab.model.index(self._src, 0, p))
+            source_index = self._tab.model.index(self._src, 0, p)
+            self._tab.view.setCurrentIndex(self._tab._source_to_view(source_index))
 
 
 class _RenameCmd(QUndoCommand):
@@ -244,7 +247,7 @@ class _InsertRowsCmd(QUndoCommand):
             if first_idx is None:
                 first_idx = self._tab.model.index(rec["row"], 0, p)
         if self._set_current and first_idx is not None and first_idx.isValid():
-            self._tab.view.setCurrentIndex(first_idx)
+            self._tab.view.setCurrentIndex(self._tab._source_to_view(first_idx))
 
     def undo(self):
         for rec in reversed(self._inserts):
@@ -321,6 +324,9 @@ class JsonTab(QWidget):
 
         self.layout = QVBoxLayout(self)
 
+        self.search_edit = QLineEdit(self)
+        self.search_edit.setPlaceholderText("Filter (Ctrl+F)")
+
         self.view = QTreeView(self)
         self.view.setUniformRowHeights(True)
         self.view.setAlternatingRowColors(True)
@@ -333,6 +339,7 @@ class JsonTab(QWidget):
         self._default_font_pt = initial_pt if initial_pt > 0 else 10
         self._font_pt = self._default_font_pt
 
+        self.layout.addWidget(self.search_edit)
         self.layout.addWidget(self.view)
 
         # option to edit headers is not needed
@@ -349,8 +356,10 @@ class JsonTab(QWidget):
 
         # Optional synthetic root row for app UX; tests can keep legacy shape.
         self.model = JsonTreeModel(model_data, self.view, show_root=show_root)
+        self.proxy = TreeFilterProxy(self)
+        self.proxy.setSourceModel(self.model)
 
-        self.view.setModel(self.model)
+        self.view.setModel(self.proxy)
 
         self.name_delegate = NameDelegate(self)
         self.type_delegate = JsonTypeDelegate(self)
@@ -393,6 +402,15 @@ class JsonTab(QWidget):
         self._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), self.view)
         self._sort_shortcut.activated.connect(lambda: self._run_tree_action("Sorted keys", sort_keys=True))
 
+        self._find_shortcut = QShortcut(QKeySequence.StandardKey.Find, self.view)
+        self._find_shortcut.activated.connect(self.search_edit.setFocus)
+
+        self._filter_timer = QTimer(self)
+        self._filter_timer.setSingleShot(True)
+        self._filter_timer.setInterval(150)
+        self._filter_timer.timeout.connect(self._apply_filter)
+        self.search_edit.textChanged.connect(lambda _text: self._filter_timer.start())
+
         self._zoom_in_shortcut = QShortcut(QKeySequence.StandardKey.ZoomIn, self.view)
         self._zoom_in_shortcut.activated.connect(self.zoom_in)
         self._zoom_out_shortcut = QShortcut(QKeySequence.StandardKey.ZoomOut, self.view)
@@ -403,6 +421,24 @@ class JsonTab(QWidget):
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
         self.undo_stack.setClean()
         self._set_dirty(False)
+
+    @staticmethod
+    def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
+        src = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+        model = src.model()
+        if isinstance(model, QSortFilterProxyModel):
+            return model.mapToSource(src)
+        return src
+
+    def _source_to_view(self, source_index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
+        src = QModelIndex(source_index) if isinstance(source_index, QPersistentModelIndex) else source_index
+        model = self.view.model()
+        if isinstance(model, QSortFilterProxyModel):
+            return model.mapFromSource(src)
+        return src
+
+    def _apply_filter(self) -> None:
+        self.proxy.set_filter_text(self.search_edit.text())
 
     def _set_font_pt(self, pt: int) -> None:
         clamped = max(6, min(48, int(pt)))
@@ -426,7 +462,7 @@ class JsonTab(QWidget):
         # the value cell. We additionally close it explicitly so the row is
         # in a clean state before any auto-reopen below.
         value_index = self.model.index(item_index.row(), 2, item_index.parent())
-        self.view.closePersistentEditor(value_index)
+        self.view.closePersistentEditor(self._source_to_view(value_index))
 
         if lossy and self._status_message_callback is not None:
             self._status_message_callback("Type change dropped existing child nodes", 3000)
@@ -456,8 +492,11 @@ class JsonTab(QWidget):
         flags = self.model.flags(value_index)
         if not (flags & Qt.ItemFlag.ItemIsEditable):
             return
-        self.view.setCurrentIndex(value_index)
-        self.view.edit(value_index)
+        view_index = self._source_to_view(value_index)
+        if not view_index.isValid():
+            return
+        self.view.setCurrentIndex(view_index)
+        self.view.edit(view_index)
 
     @property
     def is_dirty(self) -> bool:
@@ -522,6 +561,7 @@ class JsonTab(QWidget):
         return self.model.root_item.to_json()
 
     def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
+        index = self._proxy_to_source(index)
         if not index.isValid():
             return ()
         if self.model.show_root and self.model.get_item(index) is self.model.root_item:
@@ -549,6 +589,7 @@ class JsonTab(QWidget):
 
         Uses ``$`` as the document root. Returns ``$`` when the index is invalid.
         """
+        index = self._proxy_to_source(index)
         if not index.isValid():
             return "$"
 
@@ -596,6 +637,7 @@ class JsonTab(QWidget):
             self._permanent_message_callback("")
             return
 
+        current = self._proxy_to_source(current)
         row0 = current.siblingAtColumn(0)
         if not row0.isValid():
             self._permanent_message_callback("")
@@ -622,7 +664,8 @@ class JsonTab(QWidget):
                 child = self.model.index(r, 0, parent_index)
                 if not child.isValid():
                     continue
-                if self.view.isExpanded(child):
+                view_child = self._source_to_view(child)
+                if self.view.isExpanded(view_child):
                     paths.append(self._index_path(child))
                     visit(child)
 
@@ -805,6 +848,7 @@ class JsonTab(QWidget):
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
         if role != Qt.ItemDataRole.EditRole or not index.isValid():
             return False
+        index = self._proxy_to_source(index)
         col = index.column()
         if col == 0:
             return self.push_rename(index, value)

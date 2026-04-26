@@ -168,7 +168,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         for column in range(tab.model.columnCount() - 1):
             tab.view.resizeColumnToContents(column)
         if tab.model.show_root:
-            tab.view.setCurrentIndex(tab.model.index(0, 0, QModelIndex()))
+            source_index = tab.model.index(0, 0, QModelIndex())
+            tab.view.setCurrentIndex(tab._source_to_view(source_index))
         view_state.restore(tab)
 
         self._bind_undo_signals(tab)

@@ -17,7 +17,7 @@ def test_breadcrumb_callback_updates_on_selection_and_clear(qtbot):
     bar_index = tab.model.index(0, 0, foo_index)
     leaf_index = tab.model.index(1, 0, bar_index)
 
-    tab.view.setCurrentIndex(leaf_index)
+    tab.view.setCurrentIndex(tab._source_to_view(leaf_index))
     assert captured, "expected breadcrumb callback to be called"
     assert captured[-1] == "$.foo.bar[1]  (string, 3 chars)"
 
@@ -36,9 +36,9 @@ def test_breadcrumb_size_hints_for_container_and_binary(qtbot):
     qtbot.addWidget(tab)
 
     obj_index = tab.model.index(0, 0, QModelIndex())
-    tab.view.setCurrentIndex(obj_index)
+    tab.view.setCurrentIndex(tab._source_to_view(obj_index))
     assert captured[-1] == "$.obj  (object, 1 items)"
 
     blob_name_index = tab.model.index(1, 0, QModelIndex())
-    tab.view.setCurrentIndex(blob_name_index)
+    tab.view.setCurrentIndex(tab._source_to_view(blob_name_index))
     assert captured[-1] == "$.blob  (bytes, 4 byte)"

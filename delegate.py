@@ -4,7 +4,7 @@ import gzip
 import zlib
 
 from gmpy2 import mpq
-from PySide6.QtCore import QAbstractItemModel, QEvent, QModelIndex, QPersistentModelIndex, Qt
+from PySide6.QtCore import QAbstractItemModel, QEvent, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
@@ -77,6 +77,14 @@ class _TextEditorDelegateBase(QStyledItemDelegate):
 
 
 class ValueDelegate(_TextEditorDelegateBase):
+    @staticmethod
+    def _source_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
+        idx = ValueDelegate._to_index(index)
+        model = idx.model()
+        if isinstance(model, QSortFilterProxyModel):
+            return model.mapToSource(idx)
+        return idx
+
     @staticmethod
     def _format_default(value) -> str:
         if value is None:
@@ -162,8 +170,8 @@ class ValueDelegate(_TextEditorDelegateBase):
                 pass
 
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget | None:
-
-        item: JsonTreeItem = index.internalPointer()
+        source_index = self._source_index(index)
+        item: JsonTreeItem = source_index.internalPointer()
 
         editor = None
         match item.json_type:
@@ -242,7 +250,8 @@ class ValueDelegate(_TextEditorDelegateBase):
         # widget. Keying off ``item.json_type`` would then call methods
         # that don't exist on the old widget (``setText`` on
         # ``QMpqSpinBox`` etc.).
-        item: JsonTreeItem = index.internalPointer()
+        source_index = self._source_index(index)
+        item: JsonTreeItem = source_index.internalPointer()
         value = item.value
 
         if isinstance(editor, QBigIntSpinBox):
@@ -292,7 +301,8 @@ class ValueDelegate(_TextEditorDelegateBase):
             return
 
         if isinstance(editor, QMpqSpinBox):
-            item: JsonTreeItem = index.internalPointer()
+            source_index = self._source_index(index)
+            item: JsonTreeItem = source_index.internalPointer()
             value = editor.value()
             if item is not None and item.json_type is JsonType.PERCENT:
                 value = value / mpq("100")
@@ -331,6 +341,14 @@ class ValueDelegate(_TextEditorDelegateBase):
 
 class JsonTypeDelegate(QStyledItemDelegate):
     @staticmethod
+    def _source_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
+        idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+        model = idx.model()
+        if isinstance(model, QSortFilterProxyModel):
+            return model.mapToSource(idx)
+        return idx
+
+    @staticmethod
     def _find_tab(host) -> object | None:
         cursor = host
         while cursor is not None:
@@ -359,7 +377,8 @@ class JsonTypeDelegate(QStyledItemDelegate):
         return editor
 
     def setEditorData(self, editor: QComboBox, index: QModelIndex):
-        item: JsonTreeItem = index.internalPointer()
+        source_index = self._source_index(index)
+        item: JsonTreeItem = source_index.internalPointer()
         idx = editor.findData(item.json_type)
         editor.setCurrentIndex(idx if idx >= 0 else 0)
 

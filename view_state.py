@@ -117,12 +117,14 @@ def restore(tab) -> bool:
     if expanded is not None:
         tab.view.collapseAll()
         for path in expanded:
-            idx = tab._index_from_path(path)
-            if idx.isValid():
-                tab.view.expand(idx)
+            source_index = tab._index_from_path(path)
+            view_index = tab._source_to_view(source_index)
+            if view_index.isValid():
+                tab.view.expand(view_index)
 
     if current_path is not None:
-        current_index = tab._index_from_path(current_path)
+        source_index = tab._index_from_path(current_path)
+        current_index = tab._source_to_view(source_index)
         if current_index.isValid():
             # Always select column 0 when restoring row focus.
             row_index = current_index.siblingAtColumn(0)

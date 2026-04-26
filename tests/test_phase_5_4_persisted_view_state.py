@@ -46,9 +46,9 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     leaf = tab.model.index(1, 0, bar)
 
     tab.view.collapseAll()
-    tab.view.expand(root)
-    tab.view.expand(foo)
-    tab.view.setCurrentIndex(leaf)
+    tab.view.expand(tab._source_to_view(root))
+    tab.view.expand(tab._source_to_view(foo))
+    tab.view.setCurrentIndex(tab._source_to_view(leaf))
 
     tab.zoom_in()
     tab.zoom_in()
@@ -74,10 +74,10 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     bar2 = restored.model.index(0, 0, foo2)
     leaf2 = restored.model.index(1, 0, bar2)
 
-    assert restored.view.isExpanded(root2)
-    assert restored.view.isExpanded(foo2)
-    assert not restored.view.isExpanded(bar2)
-    assert restored.view.currentIndex() == leaf2
+    assert restored.view.isExpanded(restored._source_to_view(root2))
+    assert restored.view.isExpanded(restored._source_to_view(foo2))
+    assert not restored.view.isExpanded(restored._source_to_view(bar2))
+    assert restored.view.currentIndex() == restored._source_to_view(leaf2)
     assert restored.view.font().pointSize() == saved_font_pt
 
 

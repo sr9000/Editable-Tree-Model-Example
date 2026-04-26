@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 import simplejson
-from PySide6.QtCore import QMimeData, QModelIndex, QPoint, Qt
+from PySide6.QtCore import QMimeData, QModelIndex, QPoint, QSortFilterProxyModel, Qt
 from PySide6.QtWidgets import QApplication, QMenu, QTreeView
 
 from enums import JsonType
@@ -25,11 +25,34 @@ from tree_model import JsonTreeModel
 MIME_JSON_TREE = "application/x-json-tree"
 
 
+def _resolve_model(tree_view: QTreeView) -> tuple[JsonTreeModel | None, QSortFilterProxyModel | None]:
+    model = tree_view.model()
+    if isinstance(model, JsonTreeModel):
+        return model, None
+    if isinstance(model, QSortFilterProxyModel) and isinstance(model.sourceModel(), JsonTreeModel):
+        return model.sourceModel(), model
+    return None, None
+
+
+def _to_source_index(index: QModelIndex) -> QModelIndex:
+    model = index.model()
+    if isinstance(model, QSortFilterProxyModel):
+        return model.mapToSource(index)
+    return index
+
+
+def _to_view_index(tree_view: QTreeView, index: QModelIndex) -> QModelIndex:
+    _source_model, proxy = _resolve_model(tree_view)
+    if proxy is None:
+        return index
+    return proxy.mapFromSource(index)
+
+
 def show_context_menu(tree_view: QTreeView, position: QPoint):
     context_menu = QMenu(tree_view)
 
     index = tree_view.indexAt(position)
-    model = tree_view.model()
+    source_model, _proxy = _resolve_model(tree_view)
     if index.isValid():
         tree_view.setCurrentIndex(index)
 
@@ -37,15 +60,16 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     can_sort_keys = False
     can_move_up = False
     can_move_down = False
-    if isinstance(model, JsonTreeModel) and index.isValid():
-        row0 = index.siblingAtColumn(0)
-        item = model.get_item(row0)
+    if source_model is not None and index.isValid():
+        source_index = _to_source_index(index)
+        row0 = source_model.index(source_index.row(), 0, source_index.parent())
+        item = source_model.get_item(row0)
         can_insert_child = item.json_type in (JsonType.OBJECT, JsonType.ARRAY)
         can_sort_keys = item.json_type is JsonType.OBJECT
         can_move_up = row0.row() > 0
-        can_move_down = row0.row() < model.rowCount(row0.parent()) - 1
+        can_move_down = row0.row() < source_model.rowCount(row0.parent()) - 1
 
-        data = model.data(index, Qt.ItemDataRole.DisplayRole)
+        data = tree_view.model().data(index, Qt.ItemDataRole.DisplayRole)
         item_menu = context_menu.addMenu(str(data) if data is not None else "Item")
 
         copy_action = item_menu.addAction("Copy")
@@ -111,16 +135,23 @@ def _is_ancestor(ancestor, index) -> bool:
 
 
 def _selected_rows(tree_view: QTreeView) -> list:
+    source_model, _proxy = _resolve_model(tree_view)
+    if source_model is None:
+        return []
+
     selection = tree_view.selectionModel()
     if selection is None:
         return []
 
     rows = selection.selectedRows(0)
     if rows:
-        return rows
+        return [_to_source_index(idx) for idx in rows]
 
     current = selection.currentIndex()
-    return [current.siblingAtColumn(0)] if current.isValid() else []
+    if not current.isValid():
+        return []
+    source_current = _to_source_index(current)
+    return [source_model.index(source_current.row(), 0, source_current.parent())]
 
 
 def _top_level_selected_rows(tree_view: QTreeView) -> list:
@@ -162,8 +193,8 @@ def _entries_text_payload(model: JsonTreeModel, rows, entries: list[dict[str, An
 
 
 def copy_selection(tree_view: QTreeView) -> bool:
-    model = tree_view.model()
-    if not isinstance(model, JsonTreeModel):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
         return False
 
     rows = sorted(_top_level_selected_rows(tree_view), key=_index_path)
@@ -209,11 +240,11 @@ def _is_root_index(model: JsonTreeModel, index: QModelIndex) -> bool:
 
 
 def insert_sibling_before(tree_view: QTreeView) -> bool:
-    model = tree_view.model()
-    if not isinstance(model, JsonTreeModel):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
         return False
 
-    current = tree_view.currentIndex()
+    current = _to_source_index(tree_view.currentIndex())
     tab = _tab_of(tree_view)
     if tab is not None:
         if not current.isValid():
@@ -243,11 +274,11 @@ def insert_sibling_before(tree_view: QTreeView) -> bool:
 
 
 def insert_sibling_after(tree_view: QTreeView) -> bool:
-    model = tree_view.model()
-    if not isinstance(model, JsonTreeModel):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
         return False
 
-    current = tree_view.currentIndex()
+    current = _to_source_index(tree_view.currentIndex())
     tab = _tab_of(tree_view)
     if tab is not None:
         if not current.isValid():
@@ -277,11 +308,11 @@ def insert_sibling_after(tree_view: QTreeView) -> bool:
 
 
 def insert_child_current(tree_view: QTreeView) -> bool:
-    model = tree_view.model()
-    if not isinstance(model, JsonTreeModel):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
         return False
 
-    current = tree_view.currentIndex()
+    current = _to_source_index(tree_view.currentIndex())
     if not current.isValid():
         return False
 
@@ -305,15 +336,15 @@ def insert_child_current(tree_view: QTreeView) -> bool:
             label="insert child",
         )
         if ok:
-            tree_view.expand(parent_row0)
+            tree_view.expand(_to_view_index(tree_view, parent_row0))
         return ok
 
     return action_insert_child(tree_view, current, model)
 
 
 def delete_selection(tree_view: QTreeView) -> bool:
-    model = tree_view.model()
-    if not isinstance(model, JsonTreeModel):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
         return False
 
     rows = [idx for idx in _top_level_selected_rows(tree_view) if not _is_root_index(model, idx)]
@@ -383,8 +414,8 @@ def _clipboard_entries() -> list[dict[str, Any]] | None:
 
 
 def paste_from_clipboard(tree_view: QTreeView) -> bool:
-    model = tree_view.model()
-    if not isinstance(model, JsonTreeModel):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
         return False
 
     entries = _clipboard_entries()
@@ -392,7 +423,7 @@ def paste_from_clipboard(tree_view: QTreeView) -> bool:
         return False
     entries_list = entries
 
-    current = tree_view.currentIndex()
+    current = _to_source_index(tree_view.currentIndex())
     if current.isValid():
         current_row0 = current.siblingAtColumn(0)
         current_item = model.get_item(current_row0)
@@ -459,7 +490,7 @@ def paste_from_clipboard(tree_view: QTreeView) -> bool:
     if inserted <= 0:
         return False
 
-    tree_view.setCurrentIndex(model.index(insert_pos, 0, parent_index))
+    tree_view.setCurrentIndex(_to_view_index(tree_view, model.index(insert_pos, 0, parent_index)))
     return True
 
 
@@ -470,8 +501,8 @@ def to_json(item):
 
 
 def duplicate_selection(tree_view: QTreeView) -> bool:
-    model = tree_view.model()
-    if not isinstance(model, JsonTreeModel):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
         return False
 
     rows = [idx for idx in _top_level_selected_rows(tree_view) if not _is_root_index(model, idx)]
@@ -517,11 +548,11 @@ def duplicate_selection(tree_view: QTreeView) -> bool:
 
 
 def move_selection_up(tree_view: QTreeView) -> bool:
-    model = tree_view.model()
-    if not isinstance(model, JsonTreeModel):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
         return False
 
-    current = tree_view.currentIndex()
+    current = _to_source_index(tree_view.currentIndex())
     if not current.isValid():
         return False
 
@@ -539,11 +570,11 @@ def move_selection_up(tree_view: QTreeView) -> bool:
 
 
 def move_selection_down(tree_view: QTreeView) -> bool:
-    model = tree_view.model()
-    if not isinstance(model, JsonTreeModel):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
         return False
 
-    current = tree_view.currentIndex()
+    current = _to_source_index(tree_view.currentIndex())
     if not current.isValid():
         return False
 
@@ -562,11 +593,11 @@ def move_selection_down(tree_view: QTreeView) -> bool:
 
 
 def sort_selection_keys(tree_view: QTreeView, recursive: bool = False) -> bool:
-    model = tree_view.model()
-    if not isinstance(model, JsonTreeModel):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
         return False
 
-    current = tree_view.currentIndex()
+    current = _to_source_index(tree_view.currentIndex())
     if current.isValid():
         row0 = _row0(model, current)
     elif model.show_root:
