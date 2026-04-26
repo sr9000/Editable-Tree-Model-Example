@@ -405,3 +405,34 @@ Copy this template for each phase:
   - Focused command reports a teardown-time segfault after all tests pass; full suite remained green and was used as gate.
 - Decision:
   - proceed
+
+## Phase 09 — extract tree-item coercion helpers
+
+- Date: 2026-04-26
+- Commit subject: Extract tree-item coercion helpers
+- Status: PASS
+- Files changed:
+  - `tree/item_coercion.py`
+  - `tree_item.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_type_editing.py tests/test_phase_5_1_carryover.py tests/test_phase_5_2_display_formatting.py
+  ```
+- Focused result:
+  ```text
+  39 passed in 0.14s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.18s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
