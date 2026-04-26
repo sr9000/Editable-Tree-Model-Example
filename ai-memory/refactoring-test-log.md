@@ -988,3 +988,34 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 27 — extract JsonTab save/save-as helpers
+
+- Date: 2026-04-26
+- Commit subject: Extract JsonTab save/save-as helpers
+- Status: PASS
+- Files changed:
+  - `documents/tab_io.py`
+  - `json_tab.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_file_io_phase4.py tests/test_smoke_mainwindow.py
+  ```
+- Focused result:
+  ```text
+  22 passed in 0.21s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.12s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed

@@ -1572,7 +1572,7 @@ Update this table as phases land.
 | 24 | Extract diff replay helper | TODO | Not run |  |
 | 25 | Extract JsonTab path helpers | PASS | 401 passed in 3.22s |  |
 | 26 | Extract JsonTab status helpers | PASS | 401 passed in 3.17s |  |
-| 27 | Extract JsonTab save/save-as helpers | TODO | Not run |  |
+| 27 | Extract JsonTab save/save-as helpers | PASS | 401 passed in 3.12s |  |
 | 28 | Extract JsonTab setup helpers | TODO | Not run |  |
 | 29 | Move JsonTab | TODO | Not run |  |
 | 30 | Extract recent-files helper | TODO | Not run |  |

@@ -9,20 +9,13 @@ from typing import Any, Callable
 import gmpy2
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoStack
-from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLineEdit, QTreeView, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate
+from documents.tab_io import save as tab_save, save_as as tab_save_as, snapshot as tab_snapshot
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
 from documents.tab_status import on_current_changed, size_hint_for_item
 from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
-from file_io import (
-    SAVE_FORMAT_JSON,
-    SAVE_FORMAT_JSONL,
-    SAVE_FORMAT_YAML,
-    SAVE_FORMAT_YAML_MULTI,
-    detect_format,
-    save_file,
-)
 from tree_filter_proxy import TreeFilterProxy
 from tree_item import JsonTreeItem
 from tree_model import JsonTreeModel
@@ -310,49 +303,13 @@ class JsonTab(QWidget):
         return f"{name} *" if self._dirty else name
 
     def save(self) -> bool:
-        if not self.file_path:
-            return self.save_as()
-        try:
-            save_file(self.file_path, self.model.root_item.to_json(), save_format=self.save_format)
-        except Exception as exc:
-            if self._status_message_callback is not None:
-                self._status_message_callback(f"Save failed: {exc}", 4000)
-            return False
-        self.undo_stack.setClean()
-        if self._status_message_callback is not None:
-            self._status_message_callback(f"Saved: {self.file_path}", 2000)
-        return True
+        return tab_save(self)
 
     def save_as(self, path: str | None = None) -> bool:
-        target = path
-        selected_filter = ""
-        if not target:
-            target, selected_filter = QFileDialog.getSaveFileName(
-                self,
-                "Save As",
-                self.file_path or "",
-                "JSON (*.json);;JSON Lines (*.jsonl *.ndjson);;YAML (*.yaml *.yml);;YAML multi-document (*.yaml *.yml)",
-            )
-        if not target:
-            return False
-        if selected_filter.startswith("JSON Lines"):
-            self.save_format = SAVE_FORMAT_JSONL
-        elif selected_filter.startswith("YAML multi-document"):
-            self.save_format = SAVE_FORMAT_YAML_MULTI
-        elif selected_filter.startswith("YAML"):
-            self.save_format = SAVE_FORMAT_YAML
-        elif selected_filter.startswith("JSON"):
-            self.save_format = SAVE_FORMAT_JSON
-        elif target:
-            try:
-                self.save_format = detect_format(target)
-            except ValueError:
-                pass
-        self.file_path = target
-        return self.save()
+        return tab_save_as(self, path=path)
 
     def _snapshot(self) -> Any:
-        return self.model.root_item.to_json()
+        return tab_snapshot(self)
 
     def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
         return index_path(self, index)
