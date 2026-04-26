@@ -1567,7 +1567,7 @@ Update this table as phases land.
 | 19 | Extract tree-action clipboard helpers | PASS | 401 passed in 3.19s | Focused command segfaults post-run |
 | 20 | Extract paste action | PASS | 401 passed in 3.22s | Focused command segfaults post-run |
 | 21 | Extract structural tree actions | PASS | 401 passed in 3.16s |  |
-| 22 | Extract context menu / finish tree_view | TODO | Not run |  |
+| 22 | Extract context menu / finish tree_view | PASS | 401 passed in 3.15s | Focused command segfaults post-run |
 | 23 | Move undo command classes | TODO | Not run |  |
 | 24 | Extract diff replay helper | TODO | Not run |  |
 | 25 | Extract JsonTab path helpers | TODO | Not run |  |

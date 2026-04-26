@@ -852,3 +852,44 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 22 — extract context menu / finish tree_view
+
+- Date: 2026-04-26
+- Commit subject: Extract context menu and finish tree_view
+- Status: PASS
+- Files changed:
+  - `tree_actions/context_menu.py`
+  - `tree_view.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_tree_actions_clipboard.py tests/test_tree_actions_structure.py tests/test_phase_5_6_misc_polish.py
+  python - <<'PY'
+  from tree_view import show_context_menu, copy_selection, paste_from_clipboard
+  from tree_actions.context_menu import show_context_menu as show_context_menu2
+  assert show_context_menu is show_context_menu2
+  assert copy_selection is not None
+  assert paste_from_clipboard is not None
+  print('tree_view compatibility imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests: 13 passed in 0.13s
+  process exited with post-test segmentation fault during interpreter shutdown when running the combined command
+  tree_view compatibility imports ok (verified in separate run)
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.15s
+  ```
+- Known failures / skipped checks:
+  - Focused combined command reports a teardown-time segfault after tests pass; import smoke was run separately and full suite remained green.
+- Decision:
+  - proceed
