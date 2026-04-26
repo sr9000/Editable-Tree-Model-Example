@@ -926,3 +926,34 @@ Copy this template for each phase:
   - Initial full-suite attempt failed at `tests/test_phase_5_1_carryover.py::test_edits_outside_merge_window_do_not_merge` because `json_tab.time` import compatibility was removed; fixed in the same phase by restoring `import time` in `json_tab.py`.
 - Decision:
   - proceed
+
+## Phase 25 — extract JsonTab path helpers
+
+- Date: 2026-04-26
+- Commit subject: Extract JsonTab path helpers
+- Status: PASS
+- Files changed:
+  - `documents/tab_paths.py`
+  - `json_tab.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_phase_5_3_status_bar_breadcrumb.py tests/test_phase_5_4_persisted_view_state.py tests/test_phase_5_5_search_filter.py
+  ```
+- Focused result:
+  ```text
+  8 passed in 0.58s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.22s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed

@@ -7,11 +7,12 @@ from datetime import datetime
 from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt, QTimer, Signal
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLineEdit, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate, decode_bytes
+from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
 from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
 from file_io import (
     SAVE_FORMAT_JSON,
@@ -214,18 +215,10 @@ class JsonTab(QWidget):
 
     @staticmethod
     def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
-        src = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
-        model = src.model()
-        if isinstance(model, QSortFilterProxyModel):
-            return model.mapToSource(src)
-        return src
+        return proxy_to_source(index)
 
     def _source_to_view(self, source_index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
-        src = QModelIndex(source_index) if isinstance(source_index, QPersistentModelIndex) else source_index
-        model = self.view.model()
-        if isinstance(model, QSortFilterProxyModel):
-            return model.mapFromSource(src)
-        return src
+        return source_to_view(self, source_index)
 
     def _apply_filter(self) -> None:
         self.proxy.set_filter_text(self.search_edit.text())
@@ -362,61 +355,13 @@ class JsonTab(QWidget):
         return self.model.root_item.to_json()
 
     def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
-        index = self._proxy_to_source(index)
-        if not index.isValid():
-            return ()
-        if self.model.show_root and self.model.get_item(index) is self.model.root_item:
-            return ()
-        path: list[int] = []
-        cursor = index
-        while cursor.isValid():
-            path.append(cursor.row())
-            cursor = cursor.parent()
-        return tuple(reversed(path))
+        return index_path(self, index)
 
     def _index_from_path(self, path: tuple[int, ...]) -> QModelIndex:
-        if self.model.show_root and not path:
-            return self.model.index(0, 0, QModelIndex())
-        idx = QModelIndex()
-        for row in path:
-            nxt = self.model.index(row, 0, idx)
-            if not nxt.isValid():
-                return QModelIndex()
-            idx = nxt
-        return idx
+        return index_from_path(self, path)
 
     def _qualified_name(self, index: QModelIndex) -> str:
-        """Return a JSON-style qualified path of *index* (e.g. ``$.foo.bar[2].baz``).
-
-        Uses ``$`` as the document root. Returns ``$`` when the index is invalid.
-        """
-        index = self._proxy_to_source(index)
-        if not index.isValid():
-            return "$"
-
-        item = self.model.get_item(index)
-        if item is self.model.root_item:
-            return "$"
-
-        # Walk up from the leaf collecting (parent_type, child_item) pairs.
-        chain: list[tuple[JsonType | None, Any]] = []
-        cursor = self.model.index(index.row(), 0, index.parent())
-        while cursor.isValid():
-            item = self.model.get_item(cursor)
-            parent_item = item.parent() if item is not None else None
-            parent_type = parent_item.json_type if parent_item is not None else None
-            chain.append((parent_type, item))
-            cursor = cursor.parent()
-
-        chain.reverse()
-        parts: list[str] = ["$"]
-        for parent_type, item in chain:
-            if parent_type is JsonType.ARRAY:
-                parts.append(f"[{item.row()}]")
-            else:
-                name = item.name if isinstance(item.name, str) and item.name else "<no name>"
-                parts.append(f".{name}")
-        return "".join(parts)
+        return qualified_name(self, index)
 
     def _size_hint_for_item(self, item: JsonTreeItem) -> str | None:
         if item.json_type in (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT):
