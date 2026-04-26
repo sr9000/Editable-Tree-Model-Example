@@ -2,7 +2,7 @@ import base64
 import gzip
 import zlib
 
-from enums import JsonType
+from tree.types import JsonType
 
 
 def decode_bytes(b64string: str, json_type: JsonType) -> bytes:

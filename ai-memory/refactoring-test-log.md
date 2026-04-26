@@ -1369,3 +1369,34 @@ Copy this template for each phase:
   - tests intentionally not executed for this doc-only skip decision
 - Decision:
   - skip accepted
+
+## Phase 37 — optional remove compatibility shims (executed)
+
+- Date: 2026-04-26
+- Commit subject: Remove compatibility wrappers and migrate imports everywhere
+- Status: PASS
+- Files changed:
+  - deleted: `view_state.py`, `delegate.py`, `enums.py`, `file_io.py`, `json_tab.py`, `tree_item.py`, `tree_model.py`, `tree_view.py`, `ui.py`
+  - updated import call sites to canonical modules (`state.*`, `delegates.*`, `tree.*`, `tree_actions.*`, `documents.tab`, `app.main_window`, `io_formats.*`)
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_smoke_mainwindow.py tests/test_file_io_phase4.py tests/test_type_editing.py tests/test_tree_actions_clipboard.py tests/test_tree_actions_structure.py tests/test_undo_redo.py tests/test_typed_undo_commands.py tests/test_phase_5_4_persisted_view_state.py
+  ```
+- Focused result:
+  ```text
+  74 passed in 0.49s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.22s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed

@@ -1,9 +1,9 @@
 from PySide6.QtCore import QModelIndex
 
-from json_tab import JsonTab
+from documents.tab import JsonTab
 from tree_filter_proxy import TreeFilterProxy
-from tree_model import JsonTreeModel
-from tree_view import delete_selection
+from tree.model import JsonTreeModel
+from tree_actions.structure import delete_selection
 
 
 def test_tree_filter_proxy_keeps_ancestors_of_matching_leaf():

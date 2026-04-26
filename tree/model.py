@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
 
-from enums import JsonType
+from tree.types import JsonType
 from tree.item import JsonTreeItem
 from tree.model_roles import (
     JSON_TYPE_ROLE,

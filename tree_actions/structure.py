@@ -1,7 +1,7 @@
 from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QTreeView
 
-from enums import JsonType
+from tree.types import JsonType
 from model_actions import (
     _copy_name,
     action_duplicate,

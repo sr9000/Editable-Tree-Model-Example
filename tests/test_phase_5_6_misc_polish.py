@@ -1,7 +1,7 @@
 from PySide6.QtCore import QModelIndex
 
-from json_tab import JsonTab
-from ui import MainWindow
+from app.main_window import MainWindow
+from documents.tab import JsonTab
 
 
 def test_view_menu_expand_collapse_toggles_expansion(qtbot):

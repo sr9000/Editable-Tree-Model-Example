@@ -3,7 +3,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from settings import WINDOW_DEFAULT_SIZE
-from ui import MainWindow
+from app.main_window import MainWindow
 
 
 def main():

@@ -3,7 +3,7 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QTreeView
 
-from enums import JsonType
+from tree.types import JsonType
 from tree_actions.clipboard import _clipboard_entries
 from tree_actions.selection import _resolve_model, _to_source_index, _to_view_index
 

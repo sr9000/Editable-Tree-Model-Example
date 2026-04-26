@@ -1,4 +1,4 @@
-from tree_model import JsonTreeModel
+from tree.model import JsonTreeModel
 
 
 def test_construct_simple_model():

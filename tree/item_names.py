@@ -1,6 +1,6 @@
 from typing import Any
 
-from enums import JsonType
+from tree.types import JsonType
 
 
 def unique_child_name(child_items, base: str = "new_key", used_names: set[str] | None = None) -> str:

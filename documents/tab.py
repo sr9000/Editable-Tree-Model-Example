@@ -21,7 +21,7 @@ from documents.tab_setup import (
     init_shortcuts,
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
-from enums import JsonType
+from tree.types import JsonType
 from tree.item import JsonTreeItem
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_from_clipboard

@@ -9,9 +9,9 @@ import pytest
 from PySide6.QtCore import QModelIndex, Qt, qInstallMessageHandler
 from PySide6.QtWidgets import QApplication, QStatusBar
 
-from enums import JsonType
-from json_tab import JsonTab
-from ui import MainWindow
+from app.main_window import MainWindow
+from documents.tab import JsonTab
+from tree.types import JsonType
 
 
 def _ensure_seed_row(tab: JsonTab) -> QModelIndex:

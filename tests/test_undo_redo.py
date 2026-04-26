@@ -1,7 +1,8 @@
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
 
-from json_tab import JsonTab
-from tree_view import delete_selection, move_selection_down, move_selection_up, paste_from_clipboard
+from documents.tab import JsonTab
+from tree_actions.paste import paste_from_clipboard
+from tree_actions.structure import delete_selection, move_selection_down, move_selection_up
 
 
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:
@@ -112,7 +113,7 @@ def test_undo_redo_move_object_member_down(qtbot):
 def test_undo_command_text_includes_path_and_timestamp(qtbot):
     import re
 
-    from tree_view import duplicate_selection
+    from tree_actions.structure import duplicate_selection
 
     tab = JsonTab(lambda *_: None)
     qtbot.addWidget(tab)

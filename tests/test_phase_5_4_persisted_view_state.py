@@ -1,9 +1,9 @@
 from PySide6.QtCore import QModelIndex, QSettings
 
-from json_tab import JsonTab
+from app.main_window import MainWindow
+from documents.tab import JsonTab
 from settings import APPLICATION_ID
-from ui import MainWindow
-from view_state import restore, save, state_key
+from state.view_state import restore, save, state_key
 
 
 def _view_settings() -> QSettings:

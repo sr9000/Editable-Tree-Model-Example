@@ -9,7 +9,7 @@ from model_actions import (
     action_move_up,
     action_sort_keys,
 )
-from tree_model import JsonTreeModel
+from tree.model import JsonTreeModel
 
 
 def test_insert_row_before_and_after(qtbot):

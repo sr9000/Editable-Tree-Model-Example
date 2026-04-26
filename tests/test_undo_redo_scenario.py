@@ -7,10 +7,11 @@ tree-mutating actions and across every JsonType.
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
 from PySide6.QtWidgets import QApplication
 
-from enums import JsonType
-from json_tab import JsonTab
-from tree_view import (
-    copy_selection,
+from documents.tab import JsonTab
+from tree.types import JsonType
+from tree_actions.clipboard import copy_selection
+from tree_actions.paste import paste_from_clipboard
+from tree_actions.structure import (
     cut_selection,
     delete_selection,
     duplicate_selection,
@@ -19,7 +20,6 @@ from tree_view import (
     insert_sibling_before,
     move_selection_down,
     move_selection_up,
-    paste_from_clipboard,
     sort_selection_keys,
 )
 

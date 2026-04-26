@@ -4,7 +4,7 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QUndoCommand
 
-from enums import JsonType
+from tree.types import JsonType
 
 _CMD_ID_RENAME = 0x0E71_0001
 _CMD_ID_EDIT_VALUE = 0x0E71_0002

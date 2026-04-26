@@ -1,7 +1,7 @@
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QMenu, QTreeView
 
-from enums import JsonType
+from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_from_clipboard
 from tree_actions.selection import _resolve_model, _to_source_index

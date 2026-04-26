@@ -2,8 +2,8 @@ from typing import Any
 
 from PySide6.QtCore import QModelIndex, Qt
 
-from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
-from tree_item import JsonTreeItem
+from tree.item import JsonTreeItem
+from tree.types import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
 
 
 class DiffApplier:

@@ -6,7 +6,7 @@ from typing import Any
 
 from gmpy2 import mpq
 
-from enums import JsonType
+from tree.types import JsonType
 
 
 def normalize_value_for_type(json_type: JsonType, value: Any) -> Any:

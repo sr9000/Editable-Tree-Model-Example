@@ -1582,4 +1582,4 @@ Update this table as phases land.
 | 34 | Move MainWindow | PASS | 401 passed in 3.19s |  |
 | 35 | Migrate internal imports | PASS | 401 passed in 3.22s |  |
 | 36 | Optional dead-code cleanup | PASS | 401 passed in 3.26s |  |
-| 37 | Optional remove compatibility shims | SKIP | Not run | Keep shims by default |
+| 37 | Optional remove compatibility shims | PASS | 401 passed in 3.22s | Removed top-level compatibility wrapper modules |

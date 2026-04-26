@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QFileDialog
 
-from file_io import (
+from io_formats import (
     SAVE_FORMAT_JSON,
     SAVE_FORMAT_JSONL,
     SAVE_FORMAT_YAML,

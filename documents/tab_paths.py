@@ -2,7 +2,7 @@ from typing import Any
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSortFilterProxyModel
 
-from enums import JsonType
+from tree.types import JsonType
 
 
 def proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:

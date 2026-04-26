@@ -1,6 +1,6 @@
 from PySide6.QtCore import QModelIndex
 
-from json_tab import JsonTab
+from documents.tab import JsonTab
 
 
 def test_breadcrumb_callback_updates_on_selection_and_clear(qtbot):

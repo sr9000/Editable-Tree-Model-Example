@@ -1,7 +1,7 @@
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtWidgets import QComboBox, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
-from enums import JsonType
+from tree.types import JsonType
 from tree.item import JsonTreeItem
 
 
