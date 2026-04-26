@@ -153,6 +153,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 file_path=file_path,
                 show_root=True,
                 parent=self,
+                permanent_message_callback=lambda msg: self.statusBar.showMessage(msg, 0),
             )
         except Exception as exc:
             QMessageBox.critical(self, "Error", f"Failed to create tab:\n{exc}")
@@ -180,9 +181,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _open_path(self, path: str) -> bool:
         resolved = str(Path(path).resolve())
+        self.statusBar.showMessage(f"Loading: {resolved}", 0)
         try:
             data, source_format = load_file_with_format(resolved)
         except Exception as exc:
+            self.statusBar.showMessage(f"Open failed: {resolved}", 3000)
             QMessageBox.critical(self, "Open failed", f"Could not open {resolved}:\n{exc}")
             return False
 

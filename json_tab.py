@@ -11,7 +11,7 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signa
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoCommand, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QTreeView, QVBoxLayout, QWidget
 
-from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate
+from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate, decode_bytes
 from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
 from file_io import (
     SAVE_FORMAT_JSON,
@@ -37,6 +37,7 @@ from tree_view import (
     show_context_menu,
     sort_selection_keys,
 )
+from units import format_bytes
 
 
 def _make_label(text: str, target_qname: str) -> str:
@@ -311,10 +312,12 @@ class JsonTab(QWidget):
         file_path: str | None = None,
         show_root: bool = False,
         parent=None,
+        permanent_message_callback: Callable[[str], None] | None = None,
     ):
         super().__init__(parent)
 
         self._status_message_callback = status_message_callback
+        self._permanent_message_callback = permanent_message_callback
 
         self.layout = QVBoxLayout(self)
 
@@ -355,6 +358,7 @@ class JsonTab(QWidget):
         self.view.setItemDelegateForColumn(2, self.value_delegate)
 
         self.view.selectionModel().selectionChanged.connect(update_actions_callback)
+        self.view.selectionModel().currentChanged.connect(self._on_current_changed)
         self.model.typeChanged.connect(self._on_type_changed)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.view.customContextMenuRequested.connect(functools.partial(show_context_menu, self.view))
@@ -545,6 +549,38 @@ class JsonTab(QWidget):
                 name = item.name if isinstance(item.name, str) and item.name else "<no name>"
                 parts.append(f".{name}")
         return "".join(parts)
+
+    def _size_hint_for_item(self, item: JsonTreeItem) -> str | None:
+        if item.json_type in (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT):
+            return f"{len(str(item.value or ''))} chars"
+        if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+            return f"{item.child_count()} items"
+        if item.json_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
+            try:
+                raw = decode_bytes(str(item.value or ""), item.json_type)
+            except Exception:
+                return None
+            return format_bytes(len(raw))
+        return None
+
+    def _on_current_changed(self, current: QModelIndex, _previous: QModelIndex) -> None:
+        if self._permanent_message_callback is None:
+            return
+        if not current.isValid():
+            self._permanent_message_callback("")
+            return
+
+        row0 = current.siblingAtColumn(0)
+        if not row0.isValid():
+            self._permanent_message_callback("")
+            return
+
+        item = self.model.get_item(row0)
+        breadcrumb = self._qualified_name(row0)
+        item_type = item.json_type.value
+        size_hint = self._size_hint_for_item(item)
+        extra = f", {size_hint}" if size_hint else ""
+        self._permanent_message_callback(f"{breadcrumb}  ({item_type}{extra})")
 
     def _collect_expanded_paths(self) -> list[tuple[int, ...]]:
         """Return paths of every currently expanded row.
