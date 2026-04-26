@@ -8,10 +8,10 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessage
 
 import view_state
 from app.close_confirm import confirm_close
-from app.history import bind_undo_signals, do_redo, do_undo, setup_history_menu, show_history_dialog
+from app.history import bind_undo_signals, setup_history_menu
 from app.main_window_actions import setup_connections as setup_main_window_connections
 from app.main_window_actions import update_actions as update_main_window_actions
-from app.recent_files import push_recent, recent_files, refresh_recent_menu
+from app.recent_files import push_recent, refresh_recent_menu
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
@@ -52,20 +52,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def setup_connections(self):
         setup_main_window_connections(self)
 
-    def _setup_history_menu(self) -> None:
-        setup_history_menu(self)
-
     def _bind_undo_signals(self, tab: JsonTab | None) -> None:
         bind_undo_signals(self, tab)
-
-    def _do_undo(self) -> None:
-        do_undo(self)
-
-    def _do_redo(self) -> None:
-        do_redo(self)
-
-    def _show_history_dialog(self) -> None:
-        show_history_dialog(self)
 
     def _on_tab_changed(self, _index: int) -> None:
         tab = self._current_tab()
@@ -147,14 +135,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _confirm_close(self, tab: JsonTab) -> bool:
         return confirm_close(self, tab)
 
-    def _recent_files(self) -> list[str]:
-        return recent_files(self)
-
-    def _push_recent(self, path: str) -> None:
-        push_recent(self, path)
-
-    def _refresh_recent_menu(self) -> None:
-        refresh_recent_menu(self)
 
     def open_file_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
