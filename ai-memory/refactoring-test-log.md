@@ -646,3 +646,44 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 16 — move name/type delegates
+
+- Date: 2026-04-26
+- Commit subject: Move name/type delegates
+- Status: PASS
+- Files changed:
+  - `delegates/name_delegate.py`
+  - `delegates/type_delegate.py`
+  - `delegate.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_type_editing.py tests/test_phase_5_1_carryover.py
+  python - <<'PY'
+  from delegate import NameDelegate, JsonTypeDelegate
+  from delegates.name_delegate import NameDelegate as NameDelegate2
+  from delegates.type_delegate import JsonTypeDelegate as JsonTypeDelegate2
+  assert NameDelegate is NameDelegate2
+  assert JsonTypeDelegate is JsonTypeDelegate2
+  print('name/type delegate compatibility imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests: 33 passed in 0.13s
+  name/type delegate compatibility imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.20s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
