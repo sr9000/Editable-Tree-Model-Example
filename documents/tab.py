@@ -13,7 +13,7 @@ from documents.tab_io import save as tab_save, save_as as tab_save_as, snapshot 
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
 from documents.tab_setup import init_delegates_and_connections, init_layout, init_model, init_search_filter, init_shortcuts
 from documents.tab_status import on_current_changed, size_hint_for_item
-from enums import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
+from enums import JsonType
 from tree_item import JsonTreeItem
 from tree_view import (
     copy_selection,
@@ -37,6 +37,7 @@ from undo.commands import (
     _RenameCmd,
     _SortKeysCmd,
 )
+from undo.diff import DiffApplier
 
 
 def _make_label(text: str, target_qname: str) -> str:
@@ -118,6 +119,7 @@ class JsonTab(QWidget):
         init_delegates_and_connections(self, update_actions_callback)
         init_shortcuts(self)
         init_search_filter(self)
+        self._diff_applier = DiffApplier(self)
 
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
         self.undo_stack.setClean()
@@ -270,73 +272,15 @@ class JsonTab(QWidget):
     # ------------------------------------------------------------------
 
     def _diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool:
-        """Mutate *item*'s subtree in place to match *target*.
-
-        Always returns True. Container <-> leaf type changes are handled
-        in place via ``_convert_container`` / ``_convert_to_leaf``, emitting
-        the necessary ``beginRemoveRows`` / ``beginInsertRows`` /
-        ``dataChanged`` signals so the view stays consistent without a
-        full ``beginResetModel``.
-
-        This is the hot path for undo / redo replay. Cheap ``isinstance``
-        discriminates container vs leaf in O(1); identical-Python-typed
-        leaves bypass ``parse_json_type`` re-parsing altogether.
-        """
-        if isinstance(target, dict):
-            if item.json_type is JsonType.OBJECT:
-                return self._diff_object(item, target, item_index)
-            self._convert_container(item, item_index, JsonType.OBJECT, target)
-            return True
-        if isinstance(target, list):
-            if item.json_type is JsonType.ARRAY:
-                return self._diff_array(item, target, item_index)
-            self._convert_container(item, item_index, JsonType.ARRAY, target)
-            return True
-
-        # Target is a leaf.
-        if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
-            self._convert_to_leaf(item, item_index, target)
-            return True
-
-        # Leaf -> leaf fast path.
-        if item.value == target:
-            return True
-        if type(item.value) is type(target) and not isinstance(target, str):
-            item.value = item._normalize_value_for_type(target)
-            item.editable = item._compute_editable()
-        else:
-            if isinstance(target, str) and item.json_type in TEXT_FAMILY:
-                new_type = text_pseudotype_for(item.json_type, target)
-            else:
-                new_type = parse_json_type(target)
-            if new_type in (JsonType.OBJECT, JsonType.ARRAY):
-                self._convert_container(item, item_index, new_type, target)
-                return True
-            item._apply_typed_value(new_type, target)
-        self._emit_row_changed(item_index)
-        return True
+        return self._diff_applier.apply(item, target, item_index)
 
     # -- low-level mutators used by diff and typed commands --------------
 
     def _emit_row_changed(self, item_index: QModelIndex) -> None:
-        if item_index.isValid():
-            row = item_index.row()
-            parent = item_index.parent()
-            top = self.model.index(row, 0, parent)
-            bot = self.model.index(row, 2, parent)
-            self.model.dataChanged.emit(
-                top,
-                bot,
-                [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole],
-            )
+        self._diff_applier.emit_row_changed(item_index)
 
     def _clear_children(self, item: JsonTreeItem, item_index: QModelIndex) -> None:
-        n = len(item.child_items)
-        if n > 0:
-            self.model.beginRemoveRows(item_index, 0, n - 1)
-            item.child_items.clear()
-            item.mark_children_dirty()
-            self.model.endRemoveRows()
+        self._diff_applier.clear_children(item, item_index)
 
     def _convert_container(
         self,
@@ -345,28 +289,10 @@ class JsonTab(QWidget):
         new_type: JsonType,
         value: Any,
     ) -> None:
-        """Switch *item* to OBJECT or ARRAY and populate from *value*."""
-        self._clear_children(item, item_index)
-        item.json_type = new_type
-        item.value = {} if new_type is JsonType.OBJECT else []
-        item.editable = item._compute_editable()
-        if new_type is JsonType.OBJECT:
-            pairs = list(value.items())
-        else:
-            pairs = [(None, v) for v in value]
-        if pairs:
-            self.model.beginInsertRows(item_index, 0, len(pairs) - 1)
-            for name, v in pairs:
-                item.child_items.append(JsonTreeItem(item, v, name))
-            item.mark_children_dirty()
-            self.model.endInsertRows()
-        self._emit_row_changed(item_index)
+        self._diff_applier.convert_container(item, item_index, new_type, value)
 
     def _convert_to_leaf(self, item: JsonTreeItem, item_index: QModelIndex, target: Any) -> None:
-        self._clear_children(item, item_index)
-        new_type = parse_json_type(target)
-        item._apply_typed_value(new_type, target)
-        self._emit_row_changed(item_index)
+        self._diff_applier.convert_to_leaf(item, item_index, target)
 
     def _insert_typed_item(
         self,
@@ -376,67 +302,13 @@ class JsonTab(QWidget):
         value: Any,
         name: str | int | None = None,
     ) -> bool:
-        """Insert a fully-built ``JsonTreeItem`` at *position*."""
-        new_item = JsonTreeItem(parent_item, value, name)
-        self.model.beginInsertRows(parent_index, position, position)
-        parent_item.child_items.insert(position, new_item)
-        parent_item.mark_children_dirty()
-        self.model.endInsertRows()
-        return True
+        return self._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
 
     def _diff_object(self, item: JsonTreeItem, target_dict: dict, item_index: QModelIndex) -> bool:
-        target_names = list(target_dict.keys())
-        target_name_set = set(target_names)
-
-        # Phase 1: drop children whose names are not in target. Walk
-        # backwards so positional indices stay valid as we remove.
-        for i in range(len(item.child_items) - 1, -1, -1):
-            if item.child_items[i].name not in target_name_set:
-                self.model.removeRow(i, item_index)
-
-        # Phase 2: walk the target order, recursing in lockstep when
-        # children are already aligned and falling back to a linear search
-        # only on disorder.
-        for target_pos, target_name in enumerate(target_names):
-            target_value = target_dict[target_name]
-            cur_pos: int | None = None
-            children = item.child_items
-            if target_pos < len(children) and children[target_pos].name == target_name:
-                cur_pos = target_pos
-            else:
-                for i in range(target_pos, len(children)):
-                    if children[i].name == target_name:
-                        cur_pos = i
-                        break
-            if cur_pos is None:
-                self._insert_typed_item(item, item_index, target_pos, target_value, name=target_name)
-                continue
-            assert cur_pos is not None
-            if cur_pos != target_pos:
-                self.model.move_row(item_index, cur_pos, target_pos)
-            child = item.child_items[target_pos]
-            child_index = self.model.index(target_pos, 0, item_index)
-            self._diff_apply(child, target_value, child_index)
-        return True
+        return self._diff_applier.diff_object(item, target_dict, item_index)
 
     def _diff_array(self, item: JsonTreeItem, target_list: list, item_index: QModelIndex) -> bool:
-        target_len = len(target_list)
-
-        # Trim trailing rows.
-        while len(item.child_items) > target_len:
-            last = len(item.child_items) - 1
-            self.model.removeRow(last, item_index)
-
-        # Recurse positionally; extend by appending.
-        for pos in range(target_len):
-            target_value = target_list[pos]
-            if pos >= len(item.child_items):
-                self._insert_typed_item(item, item_index, pos, target_value, name=None)
-                continue
-            child = item.child_items[pos]
-            child_index = self.model.index(pos, 0, item_index)
-            self._diff_apply(child, target_value, child_index)
-        return True
+        return self._diff_applier.diff_array(item, target_list, item_index)
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
         if role != Qt.ItemDataRole.EditRole or not index.isValid():

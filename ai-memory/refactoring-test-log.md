@@ -927,6 +927,37 @@ Copy this template for each phase:
 - Decision:
   - proceed
 
+## Phase 24 — extract diff replay helper
+
+- Date: 2026-04-26
+- Commit subject: Extract diff replay helper
+- Status: PASS
+- Files changed:
+  - `undo/diff.py`
+  - `documents/tab.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_undo_redo.py tests/test_undo_redo_scenario.py tests/test_typed_undo_commands.py tests/test_typed_undo_perf.py tests/test_perf_smoke.py
+  ```
+- Focused result:
+  ```text
+  24 passed in 2.29s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.33s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
+
 ## Phase 25 — extract JsonTab path helpers
 
 - Date: 2026-04-26

@@ -1569,7 +1569,7 @@ Update this table as phases land.
 | 21 | Extract structural tree actions | PASS | 401 passed in 3.16s |  |
 | 22 | Extract context menu / finish tree_view | PASS | 401 passed in 3.15s | Focused command segfaults post-run |
 | 23 | Move undo command classes | PASS | 401 passed in 3.23s | Restored `json_tab.time` monkeypatch compatibility |
-| 24 | Extract diff replay helper | TODO | Not run |  |
+| 24 | Extract diff replay helper | PASS | 401 passed in 3.33s |  |
 | 25 | Extract JsonTab path helpers | PASS | 401 passed in 3.22s |  |
 | 26 | Extract JsonTab status helpers | PASS | 401 passed in 3.17s |  |
 | 27 | Extract JsonTab save/save-as helpers | PASS | 401 passed in 3.12s |  |
