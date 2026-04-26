@@ -329,6 +329,9 @@ class JsonTab(QWidget):
         self.view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.view.setAnimated(False)
         self.view.setAllColumnsShowFocus(True)
+        initial_pt = self.view.font().pointSize()
+        self._default_font_pt = initial_pt if initial_pt > 0 else 10
+        self._font_pt = self._default_font_pt
 
         self.layout.addWidget(self.view)
 
@@ -390,9 +393,32 @@ class JsonTab(QWidget):
         self._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), self.view)
         self._sort_shortcut.activated.connect(lambda: self._run_tree_action("Sorted keys", sort_keys=True))
 
+        self._zoom_in_shortcut = QShortcut(QKeySequence.StandardKey.ZoomIn, self.view)
+        self._zoom_in_shortcut.activated.connect(self.zoom_in)
+        self._zoom_out_shortcut = QShortcut(QKeySequence.StandardKey.ZoomOut, self.view)
+        self._zoom_out_shortcut.activated.connect(self.zoom_out)
+        self._zoom_reset_shortcut = QShortcut(QKeySequence("Ctrl+0"), self.view)
+        self._zoom_reset_shortcut.activated.connect(self.zoom_reset)
+
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
         self.undo_stack.setClean()
         self._set_dirty(False)
+
+    def _set_font_pt(self, pt: int) -> None:
+        clamped = max(6, min(48, int(pt)))
+        self._font_pt = clamped
+        font = self.view.font()
+        font.setPointSize(clamped)
+        self.view.setFont(font)
+
+    def zoom_in(self) -> None:
+        self._set_font_pt(self._font_pt + 1)
+
+    def zoom_out(self) -> None:
+        self._set_font_pt(self._font_pt - 1)
+
+    def zoom_reset(self) -> None:
+        self._set_font_pt(self._default_font_pt)
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
         # ``change_type`` already emitted ``dataChanged`` for the row, which

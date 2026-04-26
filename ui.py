@@ -6,6 +6,7 @@ from PySide6.QtCore import QModelIndex, QSettings, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView, QVBoxLayout
 
+import view_state
 from file_io import load_file_with_format
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow
@@ -168,6 +169,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             tab.view.resizeColumnToContents(column)
         if tab.model.show_root:
             tab.view.setCurrentIndex(tab.model.index(0, 0, QModelIndex()))
+        view_state.restore(tab)
 
         self._bind_undo_signals(tab)
         self.update_actions()
@@ -198,9 +200,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return True
 
     def _save_tab(self, tab: JsonTab, *, save_as: bool = False) -> bool:
+        old_path = tab.file_path
         ok = tab.save_as() if save_as else tab.save()
         if not ok:
             return False
+        if save_as and isinstance(old_path, str) and tab.file_path and old_path != tab.file_path:
+            view_state.discard(old_path)
+        view_state.save(tab)
         if tab.file_path:
             self._push_recent(tab.file_path)
         self._on_tab_dirty(tab)
@@ -270,6 +276,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         widget = self.tabWidget.widget(index)
         if isinstance(widget, JsonTab) and not self._confirm_close(widget):
             return
+        if isinstance(widget, JsonTab):
+            view_state.save(widget)
         if widget is self._bound_undo_tab:
             self._bind_undo_signals(None)
         self.tabWidget.removeTab(index)
@@ -365,4 +373,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if isinstance(widget, JsonTab) and not self._confirm_close(widget):
                 event.ignore()
                 return
+            if isinstance(widget, JsonTab):
+                view_state.save(widget)
         super().closeEvent(event)

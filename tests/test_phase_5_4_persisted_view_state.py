@@ -1,0 +1,124 @@
+from PySide6.QtCore import QModelIndex, QSettings
+
+from json_tab import JsonTab
+from settings import APPLICATION_ID
+from ui import MainWindow
+from view_state import restore, save, state_key
+
+
+def _view_settings() -> QSettings:
+    return QSettings(APPLICATION_ID, "view_state")
+
+
+def test_state_key_is_stable_for_same_resolved_path(tmp_path):
+    base = tmp_path / "folder"
+    base.mkdir()
+    direct = str(base / "doc.json")
+    via_parent = str(base / "." / "doc.json")
+
+    key_a = state_key(direct)
+    key_b = state_key(via_parent)
+
+    assert key_a == key_b
+    assert key_a.startswith("view_state/")
+    assert len(key_a.rsplit("/", 1)[-1]) == 16
+
+
+def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    _view_settings().clear()
+
+    file_path = str(tmp_path / "doc.json")
+    tab = JsonTab(
+        lambda *_: None,
+        data={"foo": {"bar": [1, 2]}},
+        file_path=file_path,
+        show_root=True,
+    )
+    qtbot.addWidget(tab)
+
+    for column in range(3):
+        tab.view.setColumnWidth(column, 140 + (column * 25))
+
+    root = tab.model.index(0, 0, QModelIndex())
+    foo = tab.model.index(0, 0, root)
+    bar = tab.model.index(0, 0, foo)
+    leaf = tab.model.index(1, 0, bar)
+
+    tab.view.collapseAll()
+    tab.view.expand(root)
+    tab.view.expand(foo)
+    tab.view.setCurrentIndex(leaf)
+
+    tab.zoom_in()
+    tab.zoom_in()
+    saved_font_pt = tab.view.font().pointSize()
+
+    save(tab)
+
+    restored = JsonTab(
+        lambda *_: None,
+        data={"foo": {"bar": [1, 2]}},
+        file_path=file_path,
+        show_root=True,
+    )
+    qtbot.addWidget(restored)
+
+    assert restore(restored)
+
+    for column in range(3):
+        assert restored.view.columnWidth(column) == 140 + (column * 25)
+
+    root2 = restored.model.index(0, 0, QModelIndex())
+    foo2 = restored.model.index(0, 0, root2)
+    bar2 = restored.model.index(0, 0, foo2)
+    leaf2 = restored.model.index(1, 0, bar2)
+
+    assert restored.view.isExpanded(root2)
+    assert restored.view.isExpanded(foo2)
+    assert not restored.view.isExpanded(bar2)
+    assert restored.view.currentIndex() == leaf2
+    assert restored.view.font().pointSize() == saved_font_pt
+
+
+def test_save_as_discards_old_view_state_group(tmp_path, monkeypatch, qtbot):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    settings = _view_settings()
+    settings.clear()
+
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    win.create_new_file()
+    tab = win._current_tab()
+    assert tab is not None
+
+    old_path = str(tmp_path / "old.json")
+    new_path = str(tmp_path / "new.json")
+    tab.file_path = old_path
+
+    tab.view.setColumnWidth(0, 222)
+    save(tab)
+
+    def _fake_save_as() -> bool:
+        tab.file_path = new_path
+        return True
+
+    monkeypatch.setattr(tab, "save_as", _fake_save_as)
+
+    assert win._save_tab(tab, save_as=True)
+
+    settings.beginGroup(state_key(old_path))
+    old_widths = settings.value("col_widths")
+    settings.endGroup()
+
+    settings.beginGroup(state_key(new_path))
+    new_widths = settings.value("col_widths")
+    settings.endGroup()
+
+    assert old_widths is None
+    assert isinstance(new_widths, list)
+    assert int(new_widths[0]) == 222
+
+    tab.undo_stack.setClean()
+    win.close()
+    win.deleteLater()
