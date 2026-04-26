@@ -1,4 +1,4 @@
-from units import bits, counts
+from units import bits, counts, format_bytes
 
 
 def test_bits_bytes():
@@ -55,3 +55,9 @@ def test_counts_units():
     assert counts(999_000_000_000) == "∞"
     assert counts(999_000_000_001) == "∞"
     assert counts(10**100) == "∞"
+
+
+def test_format_bytes_is_bits_alias():
+    assert format_bytes(0) == bits(0)
+    assert format_bytes(1536) == bits(1536)
+    assert format_bytes(1024**8) == bits(1024**8)

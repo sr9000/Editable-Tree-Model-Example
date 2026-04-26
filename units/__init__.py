@@ -17,6 +17,10 @@ def bits(n: int) -> str:
     return "∞ byte"
 
 
+def format_bytes(n: int) -> str:
+    return bits(n)
+
+
 def counts(n: int) -> str:
     units = ("", "K", "M", "B")
 

@@ -11,6 +11,8 @@ from enums import JsonType
 from mpq2py import mpq_serialization
 from tree_item import JsonTreeItem
 
+JSON_TYPE_ROLE = Qt.ItemDataRole.UserRole + 1
+
 
 class JsonTreeModel(QAbstractItemModel):
     typeChanged = Signal(QModelIndex, bool)
@@ -92,18 +94,34 @@ class JsonTreeModel(QAbstractItemModel):
         return QModelIndex()
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
-        if index.isValid() and role == Qt.ItemDataRole.FontRole and index.column() == 0:
-            item = self.get_item(index)
+        if not index.isValid():
+            return None
+
+        item = self.get_item(index)
+
+        if role == Qt.ItemDataRole.FontRole and index.column() == 0:
             if item is not self.root_item and isinstance(item.name, str) and any(ord(ch) > 127 for ch in item.name):
                 font = QFont()
                 font.setItalic(True)
                 return font
+            return None
 
-        if index.isValid() and role in (
-            Qt.ItemDataRole.DisplayRole,
-            Qt.ItemDataRole.EditRole,
-        ):
-            item = self.get_item(index)
+        if role == JSON_TYPE_ROLE and index.column() == 2:
+            return item.json_type
+
+        if role == Qt.ItemDataRole.ToolTipRole and index.column() == 2:
+            raw = item.data(2)
+            text = "" if raw is None else str(raw)
+            if len(text) <= 80:
+                return None
+            return text[:4096] + ("…" if len(text) > 4096 else "")
+
+        if role == Qt.ItemDataRole.EditRole:
+            if item is self.root_item and index.column() == 0:
+                return "<root>"
+            return item.data(index.column())
+
+        if role == Qt.ItemDataRole.DisplayRole:
             if item is self.root_item and index.column() == 0:
                 return "<root>"
             data = item.data(index.column())
@@ -117,6 +135,8 @@ class JsonTreeModel(QAbstractItemModel):
                     return "null"
 
             return str(data)
+
+        return None
 
     def headerData(
         self,
