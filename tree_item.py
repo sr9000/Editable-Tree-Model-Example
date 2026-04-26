@@ -118,6 +118,11 @@ class JsonTreeItem:
             if not ok:
                 return False
 
+            if isinstance(coerced, str) and new_type in TEXT_FAMILY:
+                # Keep pseudo text kinds canonical for current content when
+                # user changes type manually in column 1.
+                new_type = text_pseudotype_for(new_type, coerced)
+
             self.explicit_type = True
             self._apply_typed_value(new_type, coerced)
             return True
@@ -127,7 +132,12 @@ class JsonTreeItem:
                 ok, coerced = self._coerce_value_for_type(self.json_type, value, strict=True)
                 if not ok:
                     return False
-                self._apply_typed_value(self.json_type, coerced)
+                if isinstance(coerced, str) and self.json_type in TEXT_FAMILY:
+                    # Pseudo text types auto-track ASCII vs non-ASCII even when
+                    # type was explicitly chosen.
+                    self._apply_typed_value(text_pseudotype_for(self.json_type, coerced), coerced)
+                else:
+                    self._apply_typed_value(self.json_type, coerced)
                 return True
 
             if isinstance(value, str) and self.json_type in TEXT_FAMILY:

@@ -95,6 +95,46 @@ def test_value_edit_does_not_autopromote_string_to_bytes_like_type():
     assert item.json_type is JsonType.STRING
 
 
+def test_ascii_value_auto_downgrades_unicode_and_text_pseudotypes():
+    model = JsonTreeModel({"value": "seed"})
+    name_index = model.index(0, 0, QModelIndex())
+    type_index = model.index(0, 1, QModelIndex())
+    value_index = model.index(0, 2, QModelIndex())
+
+    assert model.setData(type_index, JsonType.UNICODE)
+    assert model.setData(value_index, "ascii only")
+    item = model.get_item(name_index)
+    assert item.json_type is JsonType.STRING
+
+    assert model.setData(type_index, JsonType.TEXT)
+    assert model.setData(value_index, "line1\nline2\nline3")
+    item = model.get_item(name_index)
+    assert item.json_type is JsonType.MULTILINE
+
+
+def test_manual_type_change_auto_canonicalizes_text_pseudotypes_by_content():
+    model = JsonTreeModel({"line": "ascii", "multi": "a\nb\nc", "u": "caf\u00e9", "t": "a\nb\n\u03a9"})
+
+    line_type = model.index(0, 1, QModelIndex())
+    multi_type = model.index(1, 1, QModelIndex())
+    u_type = model.index(2, 1, QModelIndex())
+    t_type = model.index(3, 1, QModelIndex())
+
+    # ASCII content cannot stay in UNICODE/TEXT pseudo-types.
+    assert model.setData(line_type, JsonType.UNICODE)
+    assert model.get_item(model.index(0, 0, QModelIndex())).json_type is JsonType.STRING
+
+    assert model.setData(multi_type, JsonType.TEXT)
+    assert model.get_item(model.index(1, 0, QModelIndex())).json_type is JsonType.MULTILINE
+
+    # Non-ASCII content canonicalizes to UNICODE/TEXT even when choosing base kinds.
+    assert model.setData(u_type, JsonType.STRING)
+    assert model.get_item(model.index(2, 0, QModelIndex())).json_type is JsonType.UNICODE
+
+    assert model.setData(t_type, JsonType.MULTILINE)
+    assert model.get_item(model.index(3, 0, QModelIndex())).json_type is JsonType.TEXT
+
+
 def test_caps_lock_does_not_close_name_editor(qtbot):
     tab = JsonTab(lambda *_: None, data={"alpha": 1})
     qtbot.addWidget(tab)
