@@ -1150,3 +1150,34 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 31 — extract close-confirm helper
+
+- Date: 2026-04-26
+- Commit subject: Extract close-confirm helper
+- Status: PASS
+- Files changed:
+  - `app/close_confirm.py`
+  - `ui.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_smoke_mainwindow.py tests/test_dialog_settings.py
+  ```
+- Focused result:
+  ```text
+  12 passed in 0.21s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.16s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed

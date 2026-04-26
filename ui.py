@@ -6,6 +6,7 @@ from PySide6.QtCore import QModelIndex, QSettings, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView, QVBoxLayout
 
+from app.close_confirm import confirm_close
 from app.recent_files import push_recent, recent_files, refresh_recent_menu
 import view_state
 from file_io import load_file_with_format
@@ -222,20 +223,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return True
 
     def _confirm_close(self, tab: JsonTab) -> bool:
-        if not tab.is_dirty:
-            return True
-        choice = QMessageBox.question(
-            self,
-            "Unsaved changes",
-            f"Save changes to {tab.display_name().replace(' *', '')}?",
-            QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Save,
-        )
-        if choice == QMessageBox.StandardButton.Cancel:
-            return False
-        if choice == QMessageBox.StandardButton.Save:
-            return self._save_tab(tab)
-        return True
+        return confirm_close(self, tab)
 
     def _recent_files(self) -> list[str]:
         return recent_files(self)
