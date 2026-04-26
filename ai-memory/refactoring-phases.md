@@ -1578,7 +1578,7 @@ Update this table as phases land.
 | 30 | Extract recent-files helper | PASS | 401 passed in 3.17s |  |
 | 31 | Extract close-confirm helper | PASS | 401 passed in 3.16s |  |
 | 32 | Extract history helper | PASS | 401 passed in 3.22s |  |
-| 33 | Extract main-window action wiring/state | TODO | Not run |  |
+| 33 | Extract main-window action wiring/state | PASS | 401 passed in 3.22s |  |
 | 34 | Move MainWindow | TODO | Not run |  |
 | 35 | Migrate internal imports | TODO | Not run |  |
 | 36 | Optional dead-code cleanup | TODO | Not run |  |

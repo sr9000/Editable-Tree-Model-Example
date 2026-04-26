@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessage
 
 from app.close_confirm import confirm_close
 from app.history import bind_undo_signals, do_redo, do_undo, setup_history_menu, show_history_dialog
+from app.main_window_actions import setup_connections as setup_main_window_connections, update_actions as update_main_window_actions
 from app.recent_files import push_recent, recent_files, refresh_recent_menu
 import view_state
 from file_io import load_file_with_format
@@ -47,28 +48,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return tab.view if tab is not None else None
 
     def setup_connections(self):
-        self.appExitAction.triggered.connect(self.close)
-
-        self.fileCreateNewAction.triggered.connect(self.create_new_file)
-        self.fileOpenAction.triggered.connect(self.open_file_dialog)
-        self.fileSaveAction.triggered.connect(self.save_file)
-        self.fileSaveAsAction.triggered.connect(self.save_file_as)
-
-        self.actionsMenu.aboutToShow.connect(self.update_actions)
-        self.rowInsertAction.triggered.connect(self.insert_row_before)
-        self.rowInsertAfterAction.triggered.connect(self.insert_row_after)
-        self.rowRemoveAction.triggered.connect(self.remove_row)
-
-        self.viewExpandAllAction.triggered.connect(self.expand_all)
-        self.viewCollapseAllAction.triggered.connect(self.collapse_all)
-        self.viewZoomInAction.triggered.connect(self.zoom_in)
-        self.viewZoomOutAction.triggered.connect(self.zoom_out)
-        self.viewResetZoomAction.triggered.connect(self.reset_zoom)
-
-        self.update_actions()
-
-        self.tabWidget.tabCloseRequested.connect(self.close_tab)
-        self.tabWidget.currentChanged.connect(self._on_tab_changed)
+        setup_main_window_connections(self)
 
     def _setup_history_menu(self) -> None:
         setup_history_menu(self)
@@ -305,20 +285,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab.zoom_reset()
 
     def update_actions(self):
-        tab = self._current_tab()
-        has_tab = tab is not None
-        has_valid_index = bool(tab and tab.view.selectionModel().currentIndex().isValid())
-
-        self.fileSaveAction.setEnabled(has_tab)
-        self.fileSaveAsAction.setEnabled(has_tab)
-        self.rowInsertAction.setEnabled(has_valid_index)
-        self.rowInsertAfterAction.setEnabled(has_valid_index)
-        self.rowRemoveAction.setEnabled(has_valid_index)
-        self.viewExpandAllAction.setEnabled(has_tab)
-        self.viewCollapseAllAction.setEnabled(has_tab)
-        self.viewZoomInAction.setEnabled(has_tab)
-        self.viewZoomOutAction.setEnabled(has_tab)
-        self.viewResetZoomAction.setEnabled(has_tab)
+        update_main_window_actions(self)
 
     def copy_action(self):
         view = self._current_view()
