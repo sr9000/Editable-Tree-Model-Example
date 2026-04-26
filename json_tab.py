@@ -1,12 +1,13 @@
 import base64
 import functools
 import gzip
+import time
 import zlib
 from datetime import datetime
 from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QModelIndex, Qt, Signal
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoCommand, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QTreeView, QVBoxLayout, QWidget
 
@@ -44,6 +45,16 @@ def _make_label(text: str, target_qname: str) -> str:
 
 
 _DEFAULT_DATA = object()
+
+# QUndoCommand.id() values for typed commands that support mergeWith().
+# Qt requires id() to fit in a signed 32-bit int (anything larger overflows
+# the C++ ``int`` return type and raises ``SystemError`` from PySide).
+_CMD_ID_RENAME = 0x0E71_0001
+_CMD_ID_EDIT_VALUE = 0x0E71_0002
+
+# Time window in seconds during which two consecutive same-path edits
+# collapse into one undo entry. Tuned for keystroke-level typing.
+_MERGE_WINDOW_SECONDS = 0.5
 
 
 def _demo_data() -> dict[str, Any]:
@@ -101,6 +112,22 @@ class _RenameCmd(QUndoCommand):
         self._path = path
         self._old = old_name
         self._new = new_name
+        self._timestamp = time.monotonic()
+
+    def id(self) -> int:  # noqa: A003 - Qt API
+        return _CMD_ID_RENAME
+
+    def mergeWith(self, other: QUndoCommand) -> bool:  # type: ignore[override]
+        if not isinstance(other, _RenameCmd):
+            return False
+        if other._path != self._path:
+            return False
+        if other._timestamp - self._timestamp > _MERGE_WINDOW_SECONDS:
+            return False
+        # Collapse: keep our original ``_old``, adopt the latest ``_new``.
+        self._new = other._new
+        self._timestamp = other._timestamp
+        return True
 
     def redo(self):
         self._apply(self._new)
@@ -129,6 +156,22 @@ class _EditValueCmd(QUndoCommand):
         self._path = path
         self._old_subtree = old_subtree
         self._new_value = new_value
+        self._timestamp = time.monotonic()
+
+    def id(self) -> int:  # noqa: A003 - Qt API
+        return _CMD_ID_EDIT_VALUE
+
+    def mergeWith(self, other: QUndoCommand) -> bool:  # type: ignore[override]
+        if not isinstance(other, _EditValueCmd):
+            return False
+        if other._path != self._path:
+            return False
+        if other._timestamp - self._timestamp > _MERGE_WINDOW_SECONDS:
+            return False
+        # Keep original ``_old_subtree``; adopt latest ``_new_value``.
+        self._new_value = other._new_value
+        self._timestamp = other._timestamp
+        return True
 
     def redo(self):
         idx = self._tab._index_from_path(self._path)
@@ -348,25 +391,43 @@ class JsonTab(QWidget):
         self._set_dirty(False)
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
-        # ``change_type`` already emits ``dataChanged`` for the row, which
-        # triggers the view to refresh and to close any inline editor that
-        # might have been open on the value cell. We deliberately do NOT
-        # call ``view.edit(value_index)`` here:
-        #
-        # * In programmatic / offscreen contexts (tests, scripted edits)
-        #   ``view.edit()`` logs a spurious "edit: editing failed" warning
-        #   because the view has no focus / no real editor host.
-        # * In interactive contexts the user just dismissed the type combo;
-        #   they can click or press F2 on the value cell when ready.
-        #
-        # The "reopen value editor" UX nicety is deferred to a later phase
-        # where it can be wired through a single source of editor state
-        # (e.g. an undo-stack-backed action).
+        # ``change_type`` already emitted ``dataChanged`` for the row, which
+        # closes any persistent inline editor that might have been open on
+        # the value cell. We additionally close it explicitly so the row is
+        # in a clean state before any auto-reopen below.
         value_index = self.model.index(item_index.row(), 2, item_index.parent())
         self.view.closePersistentEditor(value_index)
 
         if lossy and self._status_message_callback is not None:
             self._status_message_callback("Type change dropped existing child nodes", 3000)
+
+        # Auto-reopen the value editor only when the type change came from
+        # a user-driven combo commit (Phase 5.1). Programmatic
+        # ``model.setData`` paths (tests, scripted edits) bypass the
+        # delegate entirely so ``_interactive`` stays ``False`` and we
+        # avoid the spurious "edit: editing failed" warning that
+        # ``tests/test_smoke_mainwindow.py`` regression-tests.
+        if not getattr(self.type_delegate, "_interactive", False):
+            return
+        if not value_index.isValid():
+            return
+        # Defer via single-shot timer so Qt finishes the current commit
+        # cycle (combo close + setModelData unwind) before we open a new
+        # editor on the same row.
+        pidx = QPersistentModelIndex(value_index)
+        QTimer.singleShot(0, lambda: self._reopen_value_editor(pidx))
+
+    def _reopen_value_editor(self, value_pindex: QPersistentModelIndex) -> None:
+        if not value_pindex.isValid():
+            return
+        value_index = QModelIndex(value_pindex) if isinstance(value_pindex, QPersistentModelIndex) else value_pindex
+        if not value_index.isValid():
+            return
+        flags = self.model.flags(value_index)
+        if not (flags & Qt.ItemFlag.ItemIsEditable):
+            return
+        self.view.setCurrentIndex(value_index)
+        self.view.edit(value_index)
 
     @property
     def is_dirty(self) -> bool:

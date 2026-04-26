@@ -218,18 +218,21 @@ Format: `- [ ] [scope] description — file:symbol`
       `ZLIB` / `GZIP` opens a `QDialog` parented to the editor parent
       and returns `None`. Reentrant edit triggers can stack dialogs.
       — `delegate.py:ValueDelegate.createEditor` (Phase 5)
-- [ ] [BUG] The dialog callbacks capture raw `QModelIndex` by closure;
+- [x] [BUG] The dialog callbacks capture raw `QModelIndex` by closure;
       if the model is mutated while the dialog is open the index becomes
       stale and `setData` may write to the wrong row. Convert to
       `QPersistentModelIndex` and route the commit through
       `JsonTab.commit_set_data` so the edit lands on the typed-undo
       stack.
-      — `delegate.py:ValueDelegate.createEditor` (Phase 5)
-- [ ] [BUG] `QHexDialog` is constructed eagerly with
+      ✅ Phase 5.1 — `_save_multiline` / `_save_binary` already used
+      `QPersistentModelIndex`; commit path now goes through
+      `JsonTab.commit_set_data` via `ValueDelegate._commit`.
+- [x] [BUG] `QHexDialog` is constructed eagerly with
       `decode_bytes(item.value, item.json_type)` inside `createEditor`. A
       malformed `ZLIB`/`GZIP` payload raises before the dialog is shown.
       Wrap construction in try/except and surface via status bar.
-      — `delegate.py:ValueDelegate.createEditor` (Phase 5)
+      ✅ Phase 5.1 — wrapped in try/except; failure surfaced via
+      `ValueDelegate._notify_status`.
 - [x] [BUG] Context-menu `Cut` and `Delete` actions are created but
       never `.triggered.connect(...)`'d. ✅ Phase 3.
 - [x] [BUG] `rowInsertAction` and `rowInsertAfterAction` both call

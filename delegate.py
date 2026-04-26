@@ -1,4 +1,5 @@
 import base64
+import binascii
 import gzip
 import zlib
 
@@ -103,6 +104,18 @@ class ValueDelegate(_TextEditorDelegateBase):
             return bool(tab.commit_set_data(idx, value, role))
         return bool(model.setData(idx, value, role))
 
+    @staticmethod
+    def _notify_status(host, message: str, timeout: int = 3000) -> None:
+        """Surface a transient status message via the owning tab's
+        status callback, if available. Falls back to a no-op."""
+        tab = ValueDelegate._find_tab(host)
+        cb = getattr(tab, "_status_message_callback", None) if tab is not None else None
+        if cb is not None:
+            try:
+                cb(message, timeout)
+            except Exception:
+                pass
+
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget | None:
 
         item: JsonTreeItem = index.internalPointer()
@@ -145,6 +158,12 @@ class ValueDelegate(_TextEditorDelegateBase):
                 return None  # Do not return an inline editor for multiline values
 
             case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
+                try:
+                    decoded = decode_bytes(item.value, item.json_type)
+                except (ValueError, OSError, zlib.error, binascii.Error) as exc:
+                    self._notify_status(parent, f"Decode failed: {exc}", 4000)
+                    return None
+
                 pidx = QPersistentModelIndex(index)
 
                 def _save_binary(data: bytes) -> None:
@@ -155,7 +174,7 @@ class ValueDelegate(_TextEditorDelegateBase):
 
                 QHexDialog(  # Use a modal dialog-based editor for binary data
                     parent=parent,
-                    data=(decode_bytes(item.value, item.json_type)),
+                    data=decoded,
                     callback=_save_binary,
                 ).open()
 
@@ -275,6 +294,19 @@ class JsonTypeDelegate(QStyledItemDelegate):
             cursor = cursor.parent() if hasattr(cursor, "parent") else None
         return None
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # ``_interactive`` is set to ``True`` for the duration of an
+        # interactive (user-driven) commit out of the type combo. The
+        # ``JsonTab._on_type_changed`` slot reads it to decide whether to
+        # auto-reopen the value editor on the row whose type just changed.
+        # Programmatic ``model.setData(...)`` calls bypass this delegate
+        # entirely, so the flag stays ``False`` and no editor is reopened —
+        # this is what keeps the smoke tests in
+        # ``tests/test_smoke_mainwindow.py`` from logging
+        # ``edit: editing failed``.
+        self._interactive: bool = False
+
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         editor = QComboBox(parent)
         for tp in JsonType:
@@ -289,12 +321,16 @@ class JsonTypeDelegate(QStyledItemDelegate):
     def setModelData(self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex):
         selected_type = editor.currentData()
 
-        tab = self._find_tab(editor)
-        if tab is not None:
-            tab.commit_set_data(index, selected_type, Qt.ItemDataRole.EditRole)
-            return
+        self._interactive = True
+        try:
+            tab = self._find_tab(editor)
+            if tab is not None:
+                tab.commit_set_data(index, selected_type, Qt.ItemDataRole.EditRole)
+                return
 
-        model.setData(index, selected_type, Qt.ItemDataRole.EditRole)
+            model.setData(index, selected_type, Qt.ItemDataRole.EditRole)
+        finally:
+            self._interactive = False
 
 
 class NameDelegate(_TextEditorDelegateBase):
