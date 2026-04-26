@@ -69,11 +69,11 @@ class ValueDelegate(QStyledItemDelegate):
                 editor = QComboBox(parent)
                 editor.addItem("true", True)
                 editor.addItem("false", False)
-            case JsonType.STRING:
+            case JsonType.STRING | JsonType.UNICODE:
                 editor = QLineEdit(parent)
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
                 editor = BetterDateTimeEditor(parent)
-            case JsonType.MULTILINE:
+            case JsonType.MULTILINE | JsonType.TEXT:
                 pidx = QPersistentModelIndex(index)
 
                 def _save_multiline(text: str) -> None:

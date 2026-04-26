@@ -183,7 +183,7 @@ class JsonTreeItem:
         return f"{base}_{i}"
 
     def _normalize_value_for_type(self, value: Any) -> Any:
-        if self.json_type is JsonType.STRING and not isinstance(value, str):
+        if self.json_type in (JsonType.STRING, JsonType.UNICODE) and not isinstance(value, str):
             return repr(value)
         return value
 
@@ -263,7 +263,11 @@ class JsonTreeItem:
                 return (False, None) if strict else (True, mpq(0))
             case JsonType.STRING:
                 return True, "" if value is None else str(value)
+            case JsonType.UNICODE:
+                return True, "" if value is None else str(value)
             case JsonType.MULTILINE:
+                return True, "" if value is None else str(value)
+            case JsonType.TEXT:
                 return True, "" if value is None else str(value)
             case JsonType.DATE:
                 return True, "1970-01-01" if value is None else str(value)
@@ -304,7 +308,7 @@ class JsonTreeItem:
 
         try:
             match self.json_type:
-                case JsonType.STRING | JsonType.MULTILINE:
+                case JsonType.STRING | JsonType.UNICODE | JsonType.MULTILINE | JsonType.TEXT:
                     return len(self.value) <= self.EDITABLE_BLOB_LIMIT
                 case JsonType.BYTES:
                     raw = base64.b64decode(self.value, validate=True)

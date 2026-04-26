@@ -34,6 +34,14 @@ def _looks_like_base64(s: str) -> bool:
     return True
 
 
+def _contains_non_ascii(s: str) -> bool:
+    return any(ord(ch) > 127 for ch in s)
+
+
+def _looks_like_multiline_text(s: str) -> bool:
+    return "\n" in s and (s.count("\n") > 1 or len(s) > 80)
+
+
 def parse_json_type(value: Any) -> "JsonType":
     match value:
         case None:
@@ -56,8 +64,8 @@ def parse_json_type(value: Any) -> "JsonType":
             return JsonType.FLOAT
 
         case str(s):
-            if "\n" in s and (s.count("\n") > 1 or len(s) > 80):
-                return JsonType.MULTILINE
+            if _looks_like_multiline_text(s):
+                return JsonType.TEXT if _contains_non_ascii(s) else JsonType.MULTILINE
 
             try:
                 val = parse_datetime_text(s)
@@ -90,7 +98,7 @@ def parse_json_type(value: Any) -> "JsonType":
 
                 return JsonType.BYTES
 
-            return JsonType.STRING
+            return JsonType.UNICODE if _contains_non_ascii(s) else JsonType.STRING
 
         case list(_):
             return JsonType.ARRAY
@@ -107,6 +115,7 @@ class JsonType(StrEnum):
     INTEGER = "integer"
     FLOAT = "float"
     STRING = "string"
+    UNICODE = "utf-8 line"
     BOOLEAN = "boolean"
     OBJECT = "object"
     ARRAY = "array"
@@ -117,6 +126,7 @@ class JsonType(StrEnum):
 
     # Multiline Text Format
     MULTILINE = "multiline"
+    TEXT = "utf-8 text"
 
     # Datetime Text Format
     DATE = "date"

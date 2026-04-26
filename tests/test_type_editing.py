@@ -58,6 +58,32 @@ def test_type_pinning_keeps_string_for_base64_like_value():
     assert item.json_type is JsonType.STRING
 
 
+def test_value_edit_auto_switches_to_unicode_pseudo_types():
+    model = JsonTreeModel({"value": "hello"})
+    value_index = model.index(0, 2, QModelIndex())
+
+    assert model.setData(value_index, "caf\u00e9")
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.UNICODE
+
+    assert model.setData(value_index, "line1\nline2\n\u03a9")
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.TEXT
+
+
+def test_unicode_name_uses_italic_font_role():
+    model = JsonTreeModel({"caf\u00e9": 1, "plain": 2})
+    unicode_name = model.index(0, 0, QModelIndex())
+    plain_name = model.index(1, 0, QModelIndex())
+
+    unicode_font = model.data(unicode_name, Qt.ItemDataRole.FontRole)
+    plain_font = model.data(plain_name, Qt.ItemDataRole.FontRole)
+
+    assert unicode_font is not None
+    assert unicode_font.italic()
+    assert plain_font is None
+
+
 def test_json_type_delegate_preselects_and_commits(qtbot):
     model = JsonTreeModel({"value": 1})
     type_index = model.index(0, 1, QModelIndex())

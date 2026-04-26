@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 import gmpy2
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
+from PySide6.QtGui import QFont
 
 from enums import JsonType
 from mpq2py import mpq_serialization
@@ -91,6 +92,13 @@ class JsonTreeModel(QAbstractItemModel):
         return QModelIndex()
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+        if index.isValid() and role == Qt.ItemDataRole.FontRole and index.column() == 0:
+            item = self.get_item(index)
+            if item is not self.root_item and isinstance(item.name, str) and any(ord(ch) > 127 for ch in item.name):
+                font = QFont()
+                font.setItalic(True)
+                return font
+
         if index.isValid() and role in (
             Qt.ItemDataRole.DisplayRole,
             Qt.ItemDataRole.EditRole,
@@ -159,7 +167,7 @@ class JsonTreeModel(QAbstractItemModel):
             return self.change_type(index, value)
 
         if self.get_item(index).set_data(index.column(), value):
-            roles = [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]
+            roles = [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole, Qt.ItemDataRole.FontRole]
             top = self.index(index.row(), 0, index.parent())
             bot = self.index(index.row(), 2, index.parent())
             self.dataChanged.emit(top, bot, roles)
@@ -190,7 +198,7 @@ class JsonTreeModel(QAbstractItemModel):
         if not item.set_data(1, target_type):
             return False
 
-        roles = [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]
+        roles = [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole, Qt.ItemDataRole.FontRole]
         top = self.index(index.row(), 0, index.parent())
         bot = self.index(index.row(), 2, index.parent())
         self.dataChanged.emit(top, bot, roles)

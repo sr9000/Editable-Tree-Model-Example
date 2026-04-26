@@ -4,13 +4,7 @@ from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from enums import JsonType
-from file_io import (
-    SAVE_FORMAT_JSONL,
-    SAVE_FORMAT_YAML_MULTI,
-    dump_text,
-    load_file_with_format,
-    save_file,
-)
+from file_io import SAVE_FORMAT_JSONL, SAVE_FORMAT_YAML_MULTI, dump_text, load_file_with_format, save_file
 from json_tab import JsonTab
 from ui import MainWindow
 
@@ -64,7 +58,7 @@ def test_setup_model_loads_json_file(tmp_path, monkeypatch, qapp):
 def test_setup_model_loads_json_array_root(tmp_path, monkeypatch, qapp):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     path = tmp_path / "in.json"
-    path.write_text('[1, 2, 3]\n', encoding="utf-8")
+    path.write_text("[1, 2, 3]\n", encoding="utf-8")
 
     win = MainWindow(str(path))
     try:

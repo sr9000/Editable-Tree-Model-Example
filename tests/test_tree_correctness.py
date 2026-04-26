@@ -73,6 +73,9 @@ def test_parse_json_type_is_total_and_has_narrower_heuristics():
     # Strings that aren't valid base64 stay STRING.
     assert parse_json_type("hi\n") is JsonType.STRING
     assert parse_json_type("hello") is JsonType.STRING
+    assert parse_json_type("caf\u00e9") is JsonType.UNICODE
+    assert parse_json_type("line1\nline2\n\u03a9") is JsonType.TEXT
+    assert parse_json_type("line1\nline2\nline3") is JsonType.MULTILINE
     assert parse_json_type((1, 2)) is JsonType.STRING
 
     unknown = JsonTreeItem(None, (1, 2), "tuple_value")
