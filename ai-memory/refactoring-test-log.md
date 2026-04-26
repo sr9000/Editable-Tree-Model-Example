@@ -1350,3 +1350,22 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 37 — optional remove compatibility shims
+
+- Date: 2026-04-26
+- Commit subject: Optional remove compatibility shims
+- Status: SKIP
+- Files changed:
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Rationale:
+  - Skipped by design to keep compatibility shims (`json_tab.py`, `ui.py`, `tree_view.py`, and similar) for stable import paths and lower integration risk.
+- Focused tests:
+  - not run (no runtime code changes)
+- Full suite:
+  - not run (doc-only phase)
+- Known failures / skipped checks:
+  - tests intentionally not executed for this doc-only skip decision
+- Decision:
+  - skip accepted
