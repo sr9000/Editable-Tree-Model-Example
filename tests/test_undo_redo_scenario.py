@@ -34,8 +34,22 @@ def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) ->
     _select(tab, tab.model.index(row, 0, parent))
 
 
+def _ordered_repr(value):
+    """Order-preserving deep representation for state comparison.
+
+    Plain ``dict`` equality ignores key order, which would mask
+    object-member reorderings (e.g. move-up / move-down). Wrap the
+    snapshot through this helper before comparing.
+    """
+    if isinstance(value, dict):
+        return ("__obj__", [(k, _ordered_repr(v)) for k, v in value.items()])
+    if isinstance(value, list):
+        return ("__arr__", [_ordered_repr(v) for v in value])
+    return value
+
+
 def _state(tab: JsonTab):
-    return tab._ordered_repr(tab._snapshot())
+    return _ordered_repr(tab._snapshot())
 
 
 def _gather_types(tab: JsonTab) -> set[JsonType]:
@@ -94,8 +108,8 @@ def test_undo_redo_comprehensive_scenario(qtbot):
             assert tab.undo_stack.count() == prev_count, f"action expected NOT to push but did at step {prev_count + 1}"
 
     # 1. Edit a value: commit_set_data on a value column (column 2).
-    # NOTE: every commit_mutation resets the model, invalidating QModelIndex
-    # objects, so we always re-fetch indexes immediately before each step.
+    # NOTE: re-fetch indexes immediately before each step in case earlier
+    # actions (or undo/redo replay) shift positions.
     commit_step(lambda: tab.commit_set_data(model.index(1, 2, QModelIndex()), 1234567890, Qt.ItemDataRole.EditRole))
 
     # 2. Change a type: commit_set_data on the type column (column 1).

@@ -30,37 +30,6 @@ from tree_view import (
 )
 
 
-class _SnapshotCommand(QUndoCommand):
-    def __init__(
-        self,
-        tab: "JsonTab",
-        text: str,
-        before: dict,
-        after: dict,
-        *,
-        skip_first_redo: bool = False,
-    ):
-        super().__init__(text)
-        self._tab = tab
-        self._before = before
-        self._after = after
-        # ``QUndoStack.push()`` automatically invokes ``redo()``. The model
-        # is already in the after-state right after the mutator ran, so
-        # the implicit redo would only mean rebuilding the same state from
-        # a snapshot. Skipping that first redo avoids one O(N) restore per
-        # commit on large trees.
-        self._skip_next_redo = skip_first_redo
-
-    def undo(self):
-        self._tab._restore_state(self._before)
-
-    def redo(self):
-        if self._skip_next_redo:
-            self._skip_next_redo = False
-            return
-        self._tab._restore_state(self._after)
-
-
 def _make_label(text: str, target_qname: str) -> str:
     timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
     return f"[{timestamp}] {text} @ {target_qname}"
@@ -370,45 +339,6 @@ class JsonTab(QWidget):
     def _snapshot(self) -> Any:
         return self.model.root_item.to_json()
 
-    @staticmethod
-    def _ordered_repr(value: Any) -> Any:
-        # Build a comparison key that preserves dict key order (Python dict
-        # equality ignores order, which would mask object-member reorderings
-        # like move-up / move-down on object children).
-        if isinstance(value, dict):
-            return ("__obj__", [(k, JsonTab._ordered_repr(v)) for k, v in value.items()])
-        if isinstance(value, list):
-            return ("__arr__", [JsonTab._ordered_repr(v) for v in value])
-        return value
-
-    @classmethod
-    def _tree_equals_data(cls, item: JsonTreeItem, data: Any) -> bool:
-        """Return True iff *item*'s subtree matches the python *data* snapshot.
-
-        Single-pass, allocation-free, early-exit. Order-sensitive on dicts
-        so reorderings of OBJECT members are detected as a real change.
-
-        This replaces the deep ``_ordered_repr`` build+compare on the no-op
-        detection path: we walk the live tree against the ``before`` data
-        directly without materialising the after-state into Python data.
-        """
-        jt = item.json_type
-        if jt is JsonType.OBJECT:
-            if not isinstance(data, dict) or len(item.child_items) != len(data):
-                return False
-            for child, (k, v) in zip(item.child_items, data.items()):
-                if child.name != k or not cls._tree_equals_data(child, v):
-                    return False
-            return True
-        if jt is JsonType.ARRAY:
-            if not isinstance(data, list) or len(item.child_items) != len(data):
-                return False
-            for child, v in zip(item.child_items, data):
-                if not cls._tree_equals_data(child, v):
-                    return False
-            return True
-        return item.value == data
-
     def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
         path: list[int] = []
         cursor = index
@@ -455,6 +385,12 @@ class JsonTab(QWidget):
         return "".join(parts)
 
     def _collect_expanded_paths(self) -> list[tuple[int, ...]]:
+        """Return paths of every currently expanded row.
+
+        Kept as a standalone helper because a few tests (and any future
+        view-state save/restore) want to enumerate expansion. It is no
+        longer part of any undo/redo path.
+        """
         paths: list[tuple[int, ...]] = []
 
         def visit(parent_index: QModelIndex) -> None:
@@ -469,63 +405,9 @@ class JsonTab(QWidget):
         visit(QModelIndex())
         return paths
 
-    def _capture_state(self) -> dict:
-        current = self.view.currentIndex()
-        return {
-            "data": self._snapshot(),
-            "expansion": self._collect_expanded_paths(),
-            "current": self._index_path(current) if current.isValid() else None,
-        }
-
-    def _restore_state(self, state: dict) -> None:
-        """Converge the live model onto *state* with minimal model signals.
-
-        First tries a surgical diff (``_diff_apply_root``) which emits only
-        the necessary ``insertRows`` / ``removeRows`` / ``move_row`` /
-        ``dataChanged`` signals: undo / redo cost is then O(diff size),
-        not O(tree size), and the view's selection / expansion / current
-        index are preserved by Qt automatically.
-
-        Falls back to a full ``beginResetModel`` rebuild only when the
-        diff cannot succeed in place (root type changed, or a sub-step
-        rejected — both rare).
-        """
-        target_data = state["data"]
-        success = False
-        try:
-            success = self._diff_apply_root(target_data)
-        except Exception:
-            success = False
-
-        if not success:
-            self.model.beginResetModel()
-            self.model.root_item = JsonTreeItem(None, target_data)
-            self.model.endResetModel()
-
-        # Re-apply expansion + current-index by path. After a successful
-        # surgical diff most of this is a no-op (state was preserved); on
-        # the reset fallback path it is essential.
-        for path in state.get("expansion", ()):
-            idx = self._index_from_path(path)
-            if idx.isValid():
-                self.view.setExpanded(idx, True)
-
-        current_path = state.get("current")
-        if isinstance(current_path, tuple):
-            idx = self._index_from_path(current_path)
-            if idx.isValid():
-                sel_model = self.view.selectionModel()
-                if sel_model is not None:
-                    self.view.setCurrentIndex(idx)
-
     # ------------------------------------------------------------------
     # Smart-restore diff helpers
     # ------------------------------------------------------------------
-
-    def _diff_apply_root(self, target_data: Any) -> bool:
-        """Top-level entry. Always succeeds (type changes handled in place)."""
-        self._diff_apply(self.model.root_item, target_data, QModelIndex())
-        return True
 
     def _diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool:
         """Mutate *item*'s subtree in place to match *target*.
@@ -690,42 +572,6 @@ class JsonTab(QWidget):
             child = item.child_items[pos]
             child_index = self.model.index(pos, 0, item_index)
             self._diff_apply(child, target_value, child_index)
-        return True
-
-    def _restore_snapshot(self, data: Any) -> None:
-        # Backward-compatible helper: restore data only (used by older callers / tests).
-        self._restore_state({"data": data, "expansion": [], "current": None})
-
-    def commit_mutation(
-        self,
-        text: str,
-        mutator: Callable[[], bool],
-        *,
-        target_index: QModelIndex | None = None,
-    ) -> bool:
-        before = self._capture_state()
-        # Capture the target path BEFORE the mutator runs: for delete/move/edit
-        # this is the affected node; for insert/duplicate the path of the
-        # parent / sibling that triggered the action is still informative.
-        target = target_index if (target_index is not None and target_index.isValid()) else self.view.currentIndex()
-        target_qname = self._qualified_name(target)
-        if not bool(mutator()):
-            return False
-
-        # Single-pass walk against the ``before`` snapshot — early-exit, no
-        # extra ``to_json`` build for the after-state.
-        if self._tree_equals_data(self.model.root_item, before["data"]):
-            # Mutation reported success but produced no visible change; skip undo entry.
-            return False
-
-        # Build ``after`` only when we know we will push.
-        after = self._capture_state()
-
-        timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
-        label = f"[{timestamp}] {text} @ {target_qname}"
-        # The model is already in the after-state, so tell the command to
-        # skip the implicit redo Qt fires from ``push()``.
-        self.undo_stack.push(_SnapshotCommand(self, label, before, after, skip_first_redo=True))
         return True
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:

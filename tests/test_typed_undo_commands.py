@@ -15,7 +15,6 @@ from json_tab import (
     _MoveRowCmd,
     _RemoveRowsCmd,
     _RenameCmd,
-    _SnapshotCommand,
     _SortKeysCmd,
 )
 from tree_view import (
@@ -48,7 +47,6 @@ def test_commit_set_data_uses_typed_commands(qtbot):
     # Edit value (column 2).
     assert tab.commit_set_data(tab.model.index(1, 2, QModelIndex()), 999, Qt.ItemDataRole.EditRole)
     assert isinstance(_last_command(tab), _EditValueCmd)
-    assert not isinstance(_last_command(tab), _SnapshotCommand)
 
     # Rename (column 0).
     assert tab.commit_set_data(tab.model.index(0, 0, QModelIndex()), "renamed", Qt.ItemDataRole.EditRole)
@@ -129,10 +127,10 @@ def test_tree_actions_use_typed_commands(qtbot):
     assert sort_selection_keys(view, recursive=False)
     assert isinstance(_last_command(tab), _SortKeysCmd)
 
-    # Verify NO snapshot command was pushed at any point.
+    # Verify all expected typed commands were pushed.
     for i in range(tab.undo_stack.count()):
         cmd = tab.undo_stack.command(i)
-        assert not isinstance(cmd, _SnapshotCommand), f"command at {i} is _SnapshotCommand: {cmd.text()}"
+        assert cmd is not None and cmd.text(), f"command at {i} has no label"
 
 
 def test_large_leaf_edit_does_not_store_full_document(qtbot):

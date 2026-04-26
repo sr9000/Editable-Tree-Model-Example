@@ -62,7 +62,7 @@ def test_row_index_is_o1_per_call(qtbot):
     assert elapsed < 1.0, f"row() loop too slow: {elapsed:.3f}s"
 
 
-def test_commit_mutation_on_big_tree_is_responsive(qtbot):
+def test_commit_set_data_on_big_tree_is_responsive(qtbot):
     """A single mutation on a 2000-member array must complete quickly."""
     tab = _make_big_tab(qtbot, fanout=2000)
 
@@ -98,7 +98,7 @@ def test_commit_mutation_on_big_tree_is_responsive(qtbot):
 
 
 def test_no_op_set_data_does_not_push(qtbot):
-    """The fast-path ``_tree_equals_data`` skips pushing when nothing changed."""
+    """``push_edit_value`` skips pushing when nothing changed (subset compare)."""
     tab = _make_big_tab(qtbot, fanout=500)
     initial_count = tab.undo_stack.count()
 
@@ -113,7 +113,7 @@ def test_no_op_set_data_does_not_push(qtbot):
 
     inner_value = tab.model.index(0, 2, arr_idx)
     same = tab.model.get_item(inner_value).to_json()
-    # Setting the same value must not push (commit_mutation returns False).
+    # Setting the same value must not push.
     assert not tab.commit_set_data(inner_value, same, Qt.ItemDataRole.EditRole)
     assert tab.undo_stack.count() == initial_count
 
@@ -145,12 +145,11 @@ def test_duplicate_then_undo_redo_on_big_array(qtbot):
 
 
 def test_expansion_preserved_across_undo_redo(qtbot):
-    """The smart-restore diff must keep view expansion intact.
+    """The view's expansion state must survive undo / redo.
 
-    Pre-Phase-2 ``_restore_state`` did a full ``beginResetModel`` which
-    collapsed every expanded sibling node — a UX regression. The diff
-    path emits only minimal model signals, so any sibling that was
-    expanded before the mutation must remain expanded after undo / redo.
+    Typed commands emit minimal model signals (no ``beginResetModel``),
+    so any sibling that was expanded before the mutation must remain
+    expanded after undo / redo.
     """
     tab = _make_big_tab(qtbot, fanout=200)
 
