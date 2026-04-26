@@ -7,8 +7,8 @@ from PySide6.QtWidgets import QApplication, QTreeView
 
 from enums import JsonType
 from mpq2py import mpq_json_default
-from tree_actions.selection import _index_path, _resolve_model, _top_level_selected_rows
 from tree.model import JsonTreeModel
+from tree_actions.selection import _index_path, _resolve_model, _top_level_selected_rows
 
 MIME_JSON_TREE = "application/x-json-tree"
 

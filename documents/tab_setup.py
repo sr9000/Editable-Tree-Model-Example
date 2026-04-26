@@ -5,13 +5,13 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QTreeView, QVBoxLayout
 
-from delegates.type_delegate import JsonTypeDelegate
 from delegates.name_delegate import NameDelegate
+from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from tree.model import JsonTreeModel
+from tree_actions.clipboard import copy_selection
 from tree_actions.context_menu import show_context_menu
 from tree_actions.paste import paste_from_clipboard
-from tree_actions.clipboard import copy_selection
 from tree_actions.structure import (
     cut_selection,
     delete_selection,

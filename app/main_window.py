@@ -135,7 +135,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _confirm_close(self, tab: JsonTab) -> bool:
         return confirm_close(self, tab)
 
-
     def open_file_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
