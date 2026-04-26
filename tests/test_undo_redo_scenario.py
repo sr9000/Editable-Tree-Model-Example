@@ -249,3 +249,10 @@ def test_undo_redo_comprehensive_scenario(qtbot):
     tab.undo_stack.redo()  # past final -> no-op
     assert _state(tab) == final_state
     assert not tab.undo_stack.canRedo()
+
+    # Defensive teardown: this scenario drives clipboard-heavy actions and a
+    # long command stack; explicit disposal avoids a flaky process-exit crash.
+    tab.close()
+    tab.deleteLater()
+    QApplication.processEvents()
+    QApplication.clipboard().setText("")
