@@ -1281,3 +1281,42 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 35 — migrate internal imports
+
+- Date: 2026-04-26
+- Commit subject: Migrate internal imports
+- Status: PASS
+- Files changed:
+  - `app/main_window.py`
+  - `documents/tab.py`
+  - `documents/tab_setup.py`
+  - `documents/tab_status.py`
+  - `delegates/type_delegate.py`
+  - `delegates/value.py`
+  - `tree/model.py`
+  - `tree_actions/selection.py`
+  - `tree_actions/clipboard.py`
+  - `tree_filter_proxy.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_smoke_mainwindow.py tests/test_type_editing.py tests/test_tree_actions_clipboard.py tests/test_tree_actions_structure.py tests/test_undo_redo.py
+  ```
+- Focused result:
+  ```text
+  53 passed in 0.29s
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.22s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed

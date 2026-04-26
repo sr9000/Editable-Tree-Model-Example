@@ -5,20 +5,22 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QTreeView, QVBoxLayout
 
-from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate
-from tree_filter_proxy import TreeFilterProxy
-from tree_model import JsonTreeModel
-from tree_view import (
-    copy_selection,
+from delegates.type_delegate import JsonTypeDelegate
+from delegates.name_delegate import NameDelegate
+from delegates.value import ValueDelegate
+from tree.model import JsonTreeModel
+from tree_actions.context_menu import show_context_menu
+from tree_actions.paste import paste_from_clipboard
+from tree_actions.clipboard import copy_selection
+from tree_actions.structure import (
     cut_selection,
     delete_selection,
     duplicate_selection,
     move_selection_down,
     move_selection_up,
-    paste_from_clipboard,
-    show_context_menu,
     sort_selection_keys,
 )
+from tree_filter_proxy import TreeFilterProxy
 
 
 def init_layout(tab) -> None:

@@ -13,7 +13,7 @@ from tree.model_roles import (
     font_role_for_name,
     tooltip_role_for_value,
 )
-from tree_item import JsonTreeItem
+from tree.item import JsonTreeItem
 
 
 class JsonTreeModel(QAbstractItemModel):

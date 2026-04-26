@@ -15,8 +15,8 @@ from dialogs.qmultiline_dlg import QMultilineDialog
 from enums import JsonType
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
-from tree_item import JsonTreeItem
-from tree_model import JSON_TYPE_ROLE
+from tree.item import JsonTreeItem
+from tree.model_roles import JSON_TYPE_ROLE
 
 
 class ValueDelegate(_TextEditorDelegateBase):

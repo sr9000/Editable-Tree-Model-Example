@@ -12,11 +12,12 @@ from app.history import bind_undo_signals, do_redo, do_undo, setup_history_menu,
 from app.main_window_actions import setup_connections as setup_main_window_connections
 from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, recent_files, refresh_recent_menu
-from file_io import load_file_with_format
-from json_tab import JsonTab
+from documents.tab import JsonTab
+from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID
-from tree_view import collapse_all, copy_selection, delete_selection, expand_all
+from tree_actions.clipboard import copy_selection
+from tree_actions.structure import collapse_all, delete_selection, expand_all
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):

@@ -1580,6 +1580,6 @@ Update this table as phases land.
 | 32 | Extract history helper | PASS | 401 passed in 3.22s |  |
 | 33 | Extract main-window action wiring/state | PASS | 401 passed in 3.22s |  |
 | 34 | Move MainWindow | PASS | 401 passed in 3.19s |  |
-| 35 | Migrate internal imports | TODO | Not run |  |
+| 35 | Migrate internal imports | PASS | 401 passed in 3.22s |  |
 | 36 | Optional dead-code cleanup | TODO | Not run |  |
 | 37 | Optional remove compatibility shims | SKIP recommended | Not run | Keep shims by default |

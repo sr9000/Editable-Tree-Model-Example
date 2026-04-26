@@ -1,7 +1,7 @@
 from PySide6.QtCore import QModelIndex, QSortFilterProxyModel
 from PySide6.QtWidgets import QTreeView
 
-from tree_model import JsonTreeModel
+from tree.model import JsonTreeModel
 
 
 def _resolve_model(tree_view: QTreeView) -> tuple[JsonTreeModel | None, QSortFilterProxyModel | None]:

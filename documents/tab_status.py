@@ -1,6 +1,6 @@
 from PySide6.QtCore import QModelIndex
 
-from delegate import decode_bytes
+from delegates.bytes_codec import decode_bytes
 from enums import JsonType
 from tree_item import JsonTreeItem
 from units import format_bytes

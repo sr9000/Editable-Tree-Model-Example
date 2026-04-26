@@ -22,9 +22,10 @@ from documents.tab_setup import (
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
 from enums import JsonType
-from tree_item import JsonTreeItem
-from tree_view import (
-    copy_selection,
+from tree.item import JsonTreeItem
+from tree_actions.clipboard import copy_selection
+from tree_actions.paste import paste_from_clipboard
+from tree_actions.structure import (
     cut_selection,
     delete_selection,
     duplicate_selection,
@@ -33,7 +34,6 @@ from tree_view import (
     insert_sibling_before,
     move_selection_down,
     move_selection_up,
-    paste_from_clipboard,
     sort_selection_keys,
 )
 from undo.commands import (
