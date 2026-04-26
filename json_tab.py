@@ -6,12 +6,13 @@ from datetime import datetime
 from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoCommand, QUndoStack
-from PySide6.QtWidgets import QAbstractItemView, QTreeView, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QTreeView, QVBoxLayout, QWidget
 
 from delegate import JsonTypeDelegate, ValueDelegate
 from enums import JsonType, parse_json_type
+from file_io import save_file
 from tree_item import JsonTreeItem
 from tree_model import JsonTreeModel
 from tree_view import (
@@ -33,6 +34,32 @@ from tree_view import (
 def _make_label(text: str, target_qname: str) -> str:
     timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
     return f"[{timestamp}] {text} @ {target_qname}"
+
+
+_DEFAULT_DATA = object()
+
+
+def _demo_data() -> dict[str, Any]:
+    return {
+        "question": "The Ultimate Question of Life, the Universe, and Everything.",
+        "answer": 42,
+        "integer": 9223372036854775808,
+        "float": gmpy2.mpq("3.14"),
+        "percent": gmpy2.mpq("50/100"),
+        "single-line": "Hello, world!" * 100,
+        "multi-line": "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6",
+        "bytes": base64.b64encode(b"hello " * 10).decode(),
+        "zlib": base64.b64encode(zlib.compress(b"hello " * 10)).decode(),
+        "gzip": base64.b64encode(gzip.compress(b"hello " * 10)).decode(),
+        "date": "2024-06-01",
+        "time": "12:34",
+        "datetime": "2024-06-01 12:34:56",
+        "dt+timezone": "2024-06-01T12:34:56.9999+00:00",
+        "boolean": True,
+        "object": {"key": "value"},
+        "array": [1, 2, 3],
+        "null": None,
+    }
 
 
 class _MoveRowCmd(QUndoCommand):
@@ -222,10 +249,14 @@ class _SortKeysCmd(QUndoCommand):
 
 
 class JsonTab(QWidget):
+    dirtyChanged = Signal(bool)
+
     def __init__(
         self,
         update_actions_callback,
         status_message_callback: Callable[[str, int], None] | None = None,
+        data: Any = _DEFAULT_DATA,
+        file_path: str | None = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -248,30 +279,14 @@ class JsonTab(QWidget):
         # option to edit headers is not needed
         # self.header_editor = HeaderViewEditorMixin(self.view.header())
 
-        self.model = JsonTreeModel(
-            {
-                "question": "The Ultimate Question of Life, the Universe, and Everything.",
-                "answer": 42,
-                "integer": 9223372036854775808,
-                "float": gmpy2.mpq("3.14"),
-                "percent": gmpy2.mpq("50/100"),
-                "single-line": "Hello, world!" * 100,
-                "multi-line": "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6",
-                "bytes": base64.b64encode(b"hello " * 10).decode(),
-                "zlib": base64.b64encode(zlib.compress(b"hello " * 10)).decode(),
-                "gzip": base64.b64encode(gzip.compress(b"hello " * 10)).decode(),
-                "date": "2024-06-01",
-                "time": "12:34",
-                "datetime": "2024-06-01 12:34:56",
-                "dt+timezone": "2024-06-01T12:34:56.9999+00:00",
-                "boolean": True,
-                "object": {"key": "value"},
-                "array": [1, 2, 3],
-                "null": None,
-            },
-            self.view,
-        )
+        if data is _DEFAULT_DATA:
+            model_data = _demo_data()
+        else:
+            model_data = data if data is not None else {}
+        self.model = JsonTreeModel(model_data, self.view)
         self.undo_stack = QUndoStack(self)
+        self.file_path = file_path
+        self._dirty = False
 
         self.view.setModel(self.model)
 
@@ -313,7 +328,9 @@ class JsonTab(QWidget):
         self._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), self.view)
         self._sort_shortcut.activated.connect(lambda: self._run_tree_action("Sorted keys", sort_keys=True))
 
-        self.file_path = None
+        self.undo_stack.cleanChanged.connect(self._on_clean_changed)
+        self.undo_stack.setClean()
+        self._set_dirty(False)
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
         # ``change_type`` already emits ``dataChanged`` for the row, which
@@ -335,6 +352,51 @@ class JsonTab(QWidget):
 
         if lossy and self._status_message_callback is not None:
             self._status_message_callback("Type change dropped existing child nodes", 3000)
+
+    @property
+    def is_dirty(self) -> bool:
+        return self._dirty
+
+    def _set_dirty(self, dirty: bool) -> None:
+        if self._dirty == dirty:
+            return
+        self._dirty = dirty
+        self.dirtyChanged.emit(dirty)
+
+    def _on_clean_changed(self, clean: bool) -> None:
+        self._set_dirty(not clean)
+
+    def display_name(self) -> str:
+        name = self.file_path.rsplit("/", 1)[-1] if self.file_path else "Untitled"
+        return f"{name} *" if self._dirty else name
+
+    def save(self) -> bool:
+        if not self.file_path:
+            return self.save_as()
+        try:
+            save_file(self.file_path, self.model.root_item.to_json())
+        except Exception as exc:
+            if self._status_message_callback is not None:
+                self._status_message_callback(f"Save failed: {exc}", 4000)
+            return False
+        self.undo_stack.setClean()
+        if self._status_message_callback is not None:
+            self._status_message_callback(f"Saved: {self.file_path}", 2000)
+        return True
+
+    def save_as(self, path: str | None = None) -> bool:
+        target = path
+        if not target:
+            target, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save As",
+                self.file_path or "",
+                "JSON/YAML (*.json *.yaml *.yml)",
+            )
+        if not target:
+            return False
+        self.file_path = target
+        return self.save()
 
     def _snapshot(self) -> Any:
         return self.model.root_item.to_json()
