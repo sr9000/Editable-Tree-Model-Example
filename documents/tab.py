@@ -9,9 +9,17 @@ import gmpy2
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
 from PySide6.QtWidgets import QWidget
 
-from documents.tab_io import save as tab_save, save_as as tab_save_as, snapshot as tab_snapshot
+from documents.tab_io import save as tab_save
+from documents.tab_io import save_as as tab_save_as
+from documents.tab_io import snapshot as tab_snapshot
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
-from documents.tab_setup import init_delegates_and_connections, init_layout, init_model, init_search_filter, init_shortcuts
+from documents.tab_setup import (
+    init_delegates_and_connections,
+    init_layout,
+    init_model,
+    init_search_filter,
+    init_shortcuts,
+)
 from documents.tab_status import on_current_changed, size_hint_for_item
 from enums import JsonType
 from tree_item import JsonTreeItem

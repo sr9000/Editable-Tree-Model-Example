@@ -6,11 +6,12 @@ from PySide6.QtCore import QModelIndex, QSettings, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView, QVBoxLayout
 
+import view_state
 from app.close_confirm import confirm_close
 from app.history import bind_undo_signals, do_redo, do_undo, setup_history_menu, show_history_dialog
-from app.main_window_actions import setup_connections as setup_main_window_connections, update_actions as update_main_window_actions
+from app.main_window_actions import setup_connections as setup_main_window_connections
+from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, recent_files, refresh_recent_menu
-import view_state
 from file_io import load_file_with_format
 from json_tab import JsonTab
 from mainwindow import Ui_MainWindow

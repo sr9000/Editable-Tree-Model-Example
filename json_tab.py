@@ -3,13 +3,13 @@
 import time
 
 from documents.tab import (
-    JsonTab,
     _CMD_ID_EDIT_VALUE,
     _CMD_ID_RENAME,
+    _MERGE_WINDOW_SECONDS,
+    JsonTab,
     _ChangeTypeCmd,
     _EditValueCmd,
     _InsertRowsCmd,
-    _MERGE_WINDOW_SECONDS,
     _MoveRowCmd,
     _RemoveRowsCmd,
     _RenameCmd,
