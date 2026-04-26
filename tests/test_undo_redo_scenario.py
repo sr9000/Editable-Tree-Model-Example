@@ -77,7 +77,7 @@ def test_undo_redo_comprehensive_scenario(qtbot):
     """Single sophisticated scenario covering every action and every JsonType.
 
     The scenario:
-      * exercises every JsonType (the default seed contains all 16),
+      * exercises every JsonType (the default seed contains all enum members),
       * exercises every mutating tree action plus copy and edits,
       * verifies undo x3 / redo x2 / new action / redo-no-op,
       * verifies undo x2 / new action / redo-no-op,
