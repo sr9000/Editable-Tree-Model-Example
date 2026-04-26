@@ -6,9 +6,9 @@ Bring test coverage of the **GUI / model layer** up to the level of the
 existing widget packages. The widget stack (datetime, hex, mpq,
 jsontream) is well covered; the JSON tree editor itself is not.
 
-## Already shipped (Phases 0–2)
+## Already shipped (Phases 0–3)
 
-A substantial slice of Phase 6 was delivered alongside Phases 0–2:
+A substantial slice of Phase 6 was delivered alongside Phases 0–3:
 
 - ✅ `tests/test_smoke_model.py` — model construction smoke test.
 - ✅ `tests/test_smoke_mainwindow.py` — full `MainWindow` lifecycle:
@@ -22,7 +22,26 @@ A substantial slice of Phase 6 was delivered alongside Phases 0–2:
 - ✅ `tests/test_type_editing.py` — name editing under OBJECT/ARRAY,
   type-change coercion, type pinning vs. base64-like values, delegate
   preselection and commit.
-- ✅ Baseline: **308 tests pass** as of 2026-04-25.
+- ✅ `tests/test_tree_actions_clipboard.py` — copy / cut / paste round
+  trips through the `application/x-json-tree` MIME, name-collision
+  avoidance under OBJECT parents.
+- ✅ `tests/test_tree_actions_structure.py` — duplicate, move up/down,
+  insert-sibling-before/after, insert-child, sort-keys structural
+  invariants.
+- ✅ `tests/test_undo_redo.py` — per-action undo/redo + label format
+  (`[HH:MM:SS] {action} @ {qname}`).
+- ✅ `tests/test_undo_redo_scenario.py` — 16-step end-to-end scenario
+  covering every JsonType + every mutating action with branched
+  undo/redo + redo-stack truncation.
+- ✅ `tests/test_typed_undo_commands.py` — every routine action pushes
+  the correct typed `QUndoCommand` subclass (no `_SnapshotCommand`).
+- ✅ `tests/test_typed_undo_perf.py` — wall-clock + transitive command
+  state size bounds proving undo entries store O(affected subset),
+  never the full document.
+- ✅ `tests/test_perf_smoke.py` — generic perf bounds (3000-row
+  fan-out).
+- ✅ Baseline: **343 tests pass** as of 2026-04-26 (Phases 0–3
+  shipped).
 
 The remaining Phase 6 scope below covers what's still missing.
 
@@ -76,7 +95,9 @@ The remaining Phase 6 scope below covers what's still missing.
         focused regression test, complementing the existing
         `test_cycling_inline_types_does_not_log_edit_failed`)
       - dialog-based delegates (multiline / hex) commit through
-        `QPersistentModelIndex` (new — depends on Phase 3 fix)
+        `QPersistentModelIndex` and route through
+        `JsonTab.commit_set_data` (depends on the Phase 5 carry-over
+        fix from `phase-5-ux-polish.md`).
 
 ### File I/O tests
 - [ ] [tests] `tests/test_io_roundtrip.py`
@@ -97,8 +118,12 @@ The remaining Phase 6 scope below covers what's still missing.
       - `test_create_multiple_new_file_tabs` (also exercises `close_tab`)
       - parametrized `test_type_change_does_not_log_edit_failed`
       - `test_cycling_inline_types_does_not_log_edit_failed`
-- [ ] [tests] Extend smoke to cover Phase 3+ actions once they land
-      (cut/copy/paste/delete, undo/redo, file open/save).
+- [x] Phase 3 tree-action coverage (delivered) — see
+      `test_tree_actions_clipboard.py`, `test_tree_actions_structure.py`,
+      `test_undo_redo.py`, `test_undo_redo_scenario.py`,
+      `test_typed_undo_commands.py`, `test_typed_undo_perf.py`.
+- [ ] [tests] Extend smoke to cover Phase 4+ actions once they land
+      (file open/save round-trip, dirty marker, recent-files menu).
 
 ### Tooling
 - [ ] [tooling] Add `pytest-qt` to `requirements.txt`.

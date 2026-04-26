@@ -1,8 +1,65 @@
 # Phase 3 Follow-up: Compensating Undo/Redo Plan
 
+_Status: ✅ **complete** (2026-04-26)._
+
 Date: 2026-04-26
 
-## Goal
+## Outcome (2026-04-26)
+
+All goals of this plan are met. The full-document snapshot history was
+not just downgraded to a fallback — `_SnapshotCommand` and
+`commit_mutation()` were **deleted entirely** from `json_tab.py`. The
+editor is now structurally incapable of producing a whole-document
+snapshot undo entry.
+
+### What was shipped
+
+- Typed command classes on `json_tab.py`: `_MoveRowCmd`, `_RenameCmd`,
+  `_EditValueCmd`, `_ChangeTypeCmd`, `_InsertRowsCmd`, `_RemoveRowsCmd`,
+  `_SortKeysCmd`.
+- Public push API on `JsonTab`: `push_move_row`, `push_rename`,
+  `push_edit_value`, `push_change_type`, `push_insert_rows`,
+  `push_remove_rows`, `push_sort_keys`.
+- `commit_set_data(index, value, role)` dispatches by column to the
+  three column-level helpers.
+- `tree_view.py` mutating actions now call typed helpers when the
+  view's parent is a `JsonTab`, falling back to direct model mutation
+  otherwise.
+- Surgical `_diff_apply()` family (`_diff_object`, `_diff_array`,
+  `_convert_container`, `_convert_to_leaf`) drives undo/redo replay
+  with minimal Qt model signals — no `beginResetModel`.
+- Removed: `_SnapshotCommand`, `commit_mutation()`, `_capture_state()`,
+  `_restore_state()`, `_restore_snapshot()`, `_diff_apply_root()`,
+  `_tree_equals_data()`, `_ordered_repr()`. `json_tab.py` shrank from
+  882 → 765 lines.
+
+### Performance (5000-row, ~1.35 MB array document)
+
+| operation | wall time | per-op | command state | vs full doc |
+|---|---:|---:|---:|---:|
+| 50 moves (push) | 9.3 ms | 0.19 ms | 524 B | 0.04 % |
+| 50 undo (move) | 1.4 ms | 0.03 ms | — | — |
+| 50 redo (move) | 1.4 ms | 0.03 ms | — | — |
+| 200 leaf-edit undo/redo cycles | 2.7 ms | 0.01 ms | 645 B | 0.05 % |
+| 1 inner-row delete | — | — | 1 224 B | 0.09 % |
+
+### Tests covering the contract
+
+- `tests/test_typed_undo_commands.py` — every routine action pushes the
+  correct typed command class.
+- `tests/test_typed_undo_perf.py` — wall-clock + transitive-state-size
+  bounds, plus `_before` / `_after` attribute-presence checks.
+- `tests/test_undo_redo.py` — per-action undo/redo behaviour and label
+  format (`[HH:MM:SS] {action} @ {qname}`).
+- `tests/test_undo_redo_scenario.py` — 16-step end-to-end scenario
+  covering every JsonType + every mutating action with branched
+  undo/redo.
+- `tests/test_perf_smoke.py` — generic perf bounds (still green at
+  3000-row fan-out).
+
+Full suite: **343 / 343** passing in ~1 s.
+
+## Goal (original)
 
 Move undo/redo away from whole-document snapshot history and toward typed action/compensation commands.
 

@@ -1,6 +1,6 @@
 # TODO & FIXME
 
-_Last updated: 2026-04-25_
+_Last updated: 2026-04-26_
 
 Tracks **missing/incomplete features** (TODO) and **bugs/issues** (FIXME)
 discovered while auditing the JSON editor codebase. Cross-reference with
@@ -8,8 +8,8 @@ discovered while auditing the JSON editor codebase. Cross-reference with
 
 Format: `- [ ] [scope] description — file:symbol`
 
-> **Status (2026-04-25)** — Phases 0–2 of the roadmap are complete; their
-> items below are checked off. The remaining open items map to Phases 3–6
+> **Status (2026-04-26)** — Phases 0–3 of the roadmap are complete; their
+> items below are checked off. The remaining open items map to Phases 4–6
 > (see `phases/`).
 
 ---
@@ -26,8 +26,10 @@ Format: `- [ ] [scope] description — file:symbol`
 - [x] [shell] Implement `MainWindow.close_tab(index)` connected to
       `tabCloseRequested`. Dirty-check confirm dialog deferred to Phase 4.
       — `ui.py:MainWindow.close_tab` ✅ Phase 0
-- [x] [shell] Finish `MainWindow.copy_action()` (currently truncated).
-      — `ui.py:MainWindow.copy_action` ✅ Phase 0 (placeholder; real impl in Phase 3)
+- [x] [shell] Finish `MainWindow.copy_action()`.
+      ✅ Phase 0 (placeholder); Phase 3 superseded the placeholder by
+      routing copy through `JsonTab._run_tree_action`.
+      — `ui.py:MainWindow.copy_action`
 - [ ] [shell] Add **File → Open** action: detect format (`.json` / `.yaml`)
       and feed parsed data into a new `JsonTab`. (Phase 4)
 - [ ] [shell] Add **File → Save / Save As** actions, JSON & YAML, using
@@ -39,9 +41,10 @@ Format: `- [ ] [scope] description — file:symbol`
       operate on the **currently active tab's** view, not the
       non-existent `self.view`.
       — `ui.py:MainWindow._current_view` ✅ Phase 0
-- [ ] [shell] Distinguish `rowInsertAction` (before) from
-      `rowInsertAfterAction` (after); currently both call the same slot.
-      — `ui.py:setup_connections` (Phase 3)
+- [x] [shell] Distinguish `rowInsertAction` (before) from
+      `rowInsertAfterAction` (after).
+      — `tree_view.insert_sibling_before` /
+        `tree_view.insert_sibling_after` ✅ Phase 3
 
 ### Tab / data flow (`json_tab.py`)
 - [ ] [tab] Replace hardcoded demo dict with a `data` ctor argument.
@@ -73,14 +76,16 @@ Format: `- [ ] [scope] description — file:symbol`
       — `enums.py:parse_json_type`, `JsonTreeItem.explicit_type` ✅ Phase 2
 
 ### Tree mutation / context menu (`tree_view.py`, `model_actions.py`)
-- [ ] [tree] Wire `Cut` and `Delete` context-menu actions in
-      `tree_view.show_context_menu` (currently created but disconnected).
-      — `tree_view.py:show_context_menu` (Phase 3)
-- [ ] [tree] Implement **Paste** from clipboard JSON (parse + insert as
-      child or sibling). (Phase 3)
-- [ ] [tree] Add context-menu entries: *Insert Sibling Before*,
+- [x] [tree] Wire `Cut` and `Delete` context-menu actions in
+      `tree_view.show_context_menu`.
+      — `tree_view.cut_selection` / `tree_view.delete_selection` ✅ Phase 3
+- [x] [tree] Implement **Paste** from clipboard JSON (parse + insert as
+      child or sibling).
+      — `tree_view.paste_from_clipboard` ✅ Phase 3
+- [x] [tree] Add context-menu entries: *Insert Sibling Before*,
       *Insert Sibling After*, *Duplicate*, *Move Up/Down*,
-      *Sort Keys*, *Collapse/Expand All*, *Change Type*. (Phase 3)
+      *Sort Keys*, *Change Type*. (Collapse/Expand All deferred to Phase 5.)
+      ✅ Phase 3 — `tree_view.show_context_menu`.
 - [x] [tree] Either remove or properly implement *Insert Column* — removed.
       ✅ Phase 1
 - [x] [tree] Make `model.insertRow`/`insertRows` create properly initialized
@@ -88,8 +93,13 @@ Format: `- [ ] [scope] description — file:symbol`
       — `tree_item.py:JsonTreeItem.insert_children` ✅ Phase 1
 - [x] [tree] When inserting under an `OBJECT` parent, generate
       a unique name. — `_unique_child_name` ✅ Phase 1
-- [ ] [tree] Add undo/redo via `QUndoStack` covering set/insert/remove on
-      the model. (Phase 3)
+- [x] [tree] Add undo/redo via `QUndoStack` covering set/insert/remove on
+      the model.
+      ✅ Phase 3 — typed action/compensation commands per mutation
+      (`_MoveRowCmd`, `_RenameCmd`, `_EditValueCmd`, `_ChangeTypeCmd`,
+      `_InsertRowsCmd`, `_RemoveRowsCmd`, `_SortKeysCmd`). No
+      whole-document snapshots — see
+      `phases/phase-3-compensating-undo-plan.md`.
 
 ### I/O & serialization (Phase 4)
 - [ ] [io] Provide YAML round-trip through `mpq2py` YAML loader/dumper.
@@ -119,8 +129,15 @@ Format: `- [ ] [scope] description — file:symbol`
 - [x] [tests] Add unit tests for `parse_json_type` priority rules and
       ambiguous strings (`"abcd"` → STRING after stricter heuristic).
       ✅ Phase 1 — `test_parse_json_type_is_total_and_has_narrower_heuristics`.
-- [ ] [tests] Add a smoke test that `QApplication` + `JsonTab` constructs
-      successfully (using `pytest-qt` if introduced).
+- [x] [tests] Add a smoke test that `QApplication` + `JsonTab` constructs
+      successfully (using `pytest-qt`).
+      ✅ Phase 6 partial — `tests/test_smoke_mainwindow.py`.
+- [x] [tests] Round-trip / typed-command coverage for tree actions and
+      undo stack.
+      ✅ Phase 3 — `tests/test_tree_actions_clipboard.py`,
+      `test_tree_actions_structure.py`, `test_undo_redo.py`,
+      `test_undo_redo_scenario.py`, `test_typed_undo_commands.py`,
+      `test_typed_undo_perf.py`, `test_perf_smoke.py`.
 
 ### Code hygiene
 - [x] [hygiene] Strip the embedded C++ reference docstrings from
@@ -188,27 +205,29 @@ Format: `- [ ] [scope] description — file:symbol`
       only on construction / `_apply_typed_value`. Malformed payloads
       cleanly become non-editable instead of raising.
 
-### Confirmed bugs — still open (Phase 3+)
+### Confirmed bugs — still open (Phase 4+)
 - [ ] [BUG] `ValueDelegate.createEditor` for `MULTILINE` / `BYTES` /
       `ZLIB` / `GZIP` opens a `QDialog` parented to the editor parent
       and returns `None`. Reentrant edit triggers can stack dialogs.
-      — `delegate.py:ValueDelegate.createEditor` (Phase 3)
+      — `delegate.py:ValueDelegate.createEditor` (Phase 5)
 - [ ] [BUG] The dialog callbacks capture raw `QModelIndex` by closure;
       if the model is mutated while the dialog is open the index becomes
       stale and `setData` may write to the wrong row. Convert to
-      `QPersistentModelIndex`.
-      — `delegate.py:ValueDelegate.createEditor` (Phase 3)
+      `QPersistentModelIndex` and route the commit through
+      `JsonTab.commit_set_data` so the edit lands on the typed-undo
+      stack.
+      — `delegate.py:ValueDelegate.createEditor` (Phase 5)
 - [ ] [BUG] `QHexDialog` is constructed eagerly with
       `decode_bytes(item.value, item.json_type)` inside `createEditor`. A
       malformed `ZLIB`/`GZIP` payload raises before the dialog is shown.
       Wrap construction in try/except and surface via status bar.
-      — `delegate.py:ValueDelegate.createEditor` (Phase 3)
-- [ ] [BUG] Context-menu `Cut` and `Delete` actions are created but
-      never `.triggered.connect(...)`'d.
-      — `tree_view.py:show_context_menu` (Phase 3)
-- [ ] [BUG] `rowInsertAction` and `rowInsertAfterAction` both call
+      — `delegate.py:ValueDelegate.createEditor` (Phase 5)
+- [x] [BUG] Context-menu `Cut` and `Delete` actions are created but
+      never `.triggered.connect(...)`'d. ✅ Phase 3.
+- [x] [BUG] `rowInsertAction` and `rowInsertAfterAction` both call
       `MainWindow.insert_row` — there is no "insert before" semantic.
-      — `ui.py:setup_connections` (Phase 3)
+      ✅ Phase 3 — separate `tree_view.insert_sibling_before` /
+      `insert_sibling_after`.
 
 ### Suspected issues / smells
 - [ ] [SMELL] `JsonTreeModel.data()` returns `None` implicitly for

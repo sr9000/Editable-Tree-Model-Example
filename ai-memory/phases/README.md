@@ -1,6 +1,6 @@
 # Roadmap — Phased Plan
 
-_Last updated: 2026-04-25_
+_Last updated: 2026-04-26_
 
 The work captured in `todo-n-fixme.md` has been split into **7 sequential
 phases**. Each phase is a self-contained milestone: it can be merged,
@@ -19,10 +19,11 @@ Phases are ordered so that:
 | 0 | [`phase-0-stabilize.md`](phase-0-stabilize.md) | Stabilize: fix critical runtime bugs, dead imports, failing test, embedded C++ blocks | ✅ done |
 | 1 | [`phase-1-tree-correctness.md`](phase-1-tree-correctness.md) | Tree/model correctness: insertion semantics, naming, type-detection robustness, `flags()` hot-path | ✅ done |
 | 2 | [`phase-2-type-editing.md`](phase-2-type-editing.md) | Type & name editing: wire `JsonTypeDelegate`, rename, value coercion, type pinning | ✅ done |
-| 3 | [`phase-3-tree-actions.md`](phase-3-tree-actions.md) | Tree mutation actions: cut / copy / paste / delete / duplicate / move / sort, plus undo-redo | not started |
+| 3 | [`phase-3-tree-actions.md`](phase-3-tree-actions.md) | Tree mutation actions: cut / copy / paste / delete / duplicate / move / sort, plus typed-command undo/redo | ✅ done |
+| 3.x | [`phase-3-compensating-undo-plan.md`](phase-3-compensating-undo-plan.md) | Phase 3 follow-up: replace whole-document snapshot history with typed action/compensation commands | ✅ done |
 | 4 | [`phase-4-file-io.md`](phase-4-file-io.md) | File I/O: open / save / save-as JSON & YAML, dirty state, close-tab, recent files | not started |
 | 5 | [`phase-5-ux-polish.md`](phase-5-ux-polish.md) | UX polish: `displayText`, status bar, persisted column widths & expansion, search/filter | not started |
-| 6 | [`phase-6-tests.md`](phase-6-tests.md) | Test coverage: model unit tests, round-trip tests, GUI smoke tests | partially done (Phase 0–2 already shipped strong coverage) |
+| 6 | [`phase-6-tests.md`](phase-6-tests.md) | Test coverage: model unit tests, round-trip tests, GUI smoke tests | partially done (Phases 0–3 already shipped 343-test baseline) |
 
 ## How to use these files
 

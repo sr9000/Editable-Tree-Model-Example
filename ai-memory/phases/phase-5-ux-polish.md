@@ -8,6 +8,17 @@ display, persistent layout, status-bar feedback, and a search/filter bar.
 ## Entry criteria
 
 - Phase 4 complete: files open, save, dirty state works.
+- Phase 3 carry-over (deferred to this phase, see
+  `phase-3-tree-actions.md` for context):
+  - auto-reopen value editor after a user-initiated `typeChanged`
+  - `QUndoCommand.mergeWith` for consecutive value/name edits to the
+    same path (typed commands already store path + old/new — merge is
+    a small addition on `_EditValueCmd` / `_RenameCmd`)
+  - convert `ValueDelegate.createEditor` dialog callbacks
+    (`MULTILINE` / `BYTES` / `ZLIB` / `GZIP`) to use
+    `QPersistentModelIndex` *and* route the commit through
+    `JsonTab.commit_set_data` so dialog edits land on the typed undo
+    stack instead of bypassing it via `model.setData`.
 
 ## Exit criteria
 
@@ -66,6 +77,33 @@ display, persistent layout, status-bar feedback, and a search/filter bar.
 - [ ] [ux] Add zoom in / out (Ctrl++/Ctrl+-) for tree font.
 - [ ] [ux] Provide "Collapse All" / "Expand All" entries in context
       menu and View menu.
+
+### Phase 3 carry-over
+- [ ] [ux] **Auto-reopen value editor** after
+      `JsonTreeModel.typeChanged` when the change came from the user
+      (not programmatic `setData`). Approaches: track an "interactive"
+      flag on the type combo's commit path, or hook `view.commitData`
+      from `JsonTypeDelegate` and call `view.edit(value_index)` only
+      from there. Must keep
+      `tests/test_smoke_mainwindow.py::test_cycling_inline_types_does_not_log_edit_failed`
+      green. — `json_tab.py:JsonTab._on_type_changed`,
+      `delegate.py:JsonTypeDelegate.setModelData`.
+- [ ] [undo] Implement `mergeWith` on `_EditValueCmd` and `_RenameCmd`
+      so consecutive edits to the *same path* within a small time
+      window collapse into one undo entry. Typed-command shape already
+      supports this — see `json_tab.py`.
+- [ ] [delegate] Convert `ValueDelegate.createEditor` dialog callbacks
+      (`_save_multiline`, `_save_binary`) to capture
+      `QPersistentModelIndex` and route the commit through
+      `JsonTab.commit_set_data(index, value, EditRole)` instead of
+      calling `model.setData` directly. This keeps dialog edits on the
+      typed undo stack and survives row insertions/removals during the
+      modal session. — `delegate.py:ValueDelegate.createEditor`.
+- [ ] [delegate] Wrap `decode_bytes(item.value, item.json_type)` inside
+      `createEditor` for `BYTES` / `ZLIB` / `GZIP` in try/except;
+      surface decode failures via the status bar instead of letting
+      them propagate out of `createEditor`.
+      — `delegate.py:ValueDelegate.createEditor`.
 
 ## Tips & Deep Dives
 

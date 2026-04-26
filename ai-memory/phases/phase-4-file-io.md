@@ -7,9 +7,15 @@ YAML, track dirty state per tab, prompt on close, remember recent files.
 
 ## Entry criteria
 
-- Phase 3 complete: model mutations are reliable and undoable.
+- ✅ Phase 3 complete (2026-04-26): model mutations are reliable and
+  undoable through typed action/compensation commands. Each `JsonTab`
+  owns a `QUndoStack`; `commit_set_data()` and the seven
+  `push_*` helpers are the single mutation API for tree actions and
+  delegates. **All Phase 4 dirty-state work should hang off
+  `undo_stack.cleanChanged`** — never off `dataChanged` directly —
+  because the typed commands already collapse cleanly there.
 
-## Already available from Phases 0–2
+## Already available from Phases 0–3
 
 - `MainWindow._current_tab()` / `MainWindow._current_view()` helpers.
 - `MainWindow.close_tab(index)` removes the tab and `deleteLater()`s it
@@ -22,6 +28,14 @@ YAML, track dirty state per tab, prompt on close, remember recent files.
 - `mainwindow.ui` already declares `fileOpenAction`, `fileSaveAction`,
   `fileSaveAsAction`, `fileCreateNewAction`, `appExitAction` — Phase 4
   only wires their `triggered` signals.
+- ✅ `JsonTab.undo_stack` (Phase 3) exposes `cleanChanged(bool)` —
+  Phase 4 dirty tracking should consume that signal directly. After a
+  successful save call `self.undo_stack.setClean()` to mark the new
+  baseline.
+- ✅ `JsonTab.commit_set_data` / `push_*` (Phase 3) are the only
+  mutation entry points — file-loading code should bypass them and
+  build the model fresh, then `setClean()` afterwards (loading is not
+  itself an undoable action).
 
 ## Exit criteria
 
