@@ -30,7 +30,9 @@ def validated_child_name(parent_item, current_item, value: Any) -> str | None:
         return None
 
     if parent_item.json_type is JsonType.OBJECT:
-        siblings = {child.name for child in parent_item.child_items if child is not current_item and isinstance(child.name, str)}
+        siblings = {
+            child.name for child in parent_item.child_items if child is not current_item and isinstance(child.name, str)
+        }
         if candidate in siblings:
             return None
 

@@ -6,7 +6,13 @@ from typing import Any, Optional
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
 
 from enums import JsonType
-from tree.model_roles import JSON_TYPE_ROLE, display_role_value, edit_role_value, font_role_for_name, tooltip_role_for_value
+from tree.model_roles import (
+    JSON_TYPE_ROLE,
+    display_role_value,
+    edit_role_value,
+    font_role_for_name,
+    tooltip_role_for_value,
+)
 from tree_item import JsonTreeItem
 
 

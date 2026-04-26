@@ -38,7 +38,15 @@ from tree_view import (
     show_context_menu,
     sort_selection_keys,
 )
-from undo.commands import _ChangeTypeCmd, _EditValueCmd, _InsertRowsCmd, _MoveRowCmd, _RemoveRowsCmd, _RenameCmd, _SortKeysCmd
+from undo.commands import (
+    _ChangeTypeCmd,
+    _EditValueCmd,
+    _InsertRowsCmd,
+    _MoveRowCmd,
+    _RemoveRowsCmd,
+    _RenameCmd,
+    _SortKeysCmd,
+)
 from units import format_bytes
 
 
@@ -83,8 +91,6 @@ def _demo_data() -> dict[str, Any]:
         "array": [1, 2, 3],
         "null": None,
     }
-
-
 
 
 class JsonTab(QWidget):
