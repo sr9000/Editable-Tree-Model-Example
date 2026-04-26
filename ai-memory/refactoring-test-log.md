@@ -220,3 +220,45 @@ Copy this template for each phase:
   - none
 - Decision:
   - proceed
+
+## Phase 04 — extract file dumping/write
+
+- Date: 2026-04-26
+- Commit subject: Extract file dumping and atomic write
+- Status: PASS
+- Files changed:
+  - `io_formats/dump.py`
+  - `io_formats/atomic.py`
+  - `io_formats/__init__.py`
+  - `file_io.py`
+  - `ai-memory/refactoring-phases.md`
+  - `ai-memory/refactoring-test-log.md`
+- Focused tests:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q tests/test_file_io_phase4.py
+  python - <<'PY'
+  from file_io import dump_text, atomic_write, save_file
+  from io_formats import dump_text as dump_text2, save_file as save_file2
+  assert dump_text is dump_text2
+  assert save_file is save_file2
+  assert atomic_write is not None
+  print('file dumping imports ok')
+  PY
+  ```
+- Focused result:
+  ```text
+  tests/test_file_io_phase4.py: 12 passed in 0.15s
+  file dumping imports ok
+  ```
+- Full suite:
+  ```bash
+  QT_QPA_PLATFORM=offscreen pytest -q
+  ```
+- Full-suite result:
+  ```text
+  401 passed in 3.18s
+  ```
+- Known failures / skipped checks:
+  - none
+- Decision:
+  - proceed
