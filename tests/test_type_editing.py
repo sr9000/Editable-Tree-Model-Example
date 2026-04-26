@@ -1,5 +1,5 @@
 from PySide6.QtCore import QModelIndex, Qt
-from PySide6.QtWidgets import QComboBox, QStyleOptionViewItem, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
 from delegate import JsonTypeDelegate
 from enums import JsonType
@@ -69,6 +69,33 @@ def test_value_edit_auto_switches_to_unicode_pseudo_types():
     assert model.setData(value_index, "line1\nline2\n\u03a9")
     item = model.get_item(model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.TEXT
+
+
+def test_value_edit_does_not_autopromote_string_to_bytes_like_type():
+    model = JsonTreeModel({"value": "hello"})
+    value_index = model.index(0, 2, QModelIndex())
+
+    assert model.setData(value_index, "YWJjZGVmZ2hpamtsbW5vcA==")
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.STRING
+
+
+def test_caps_lock_does_not_close_name_editor(qtbot):
+    tab = JsonTab(lambda *_: None, data={"alpha": 1})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    name_index = tab.model.index(0, 0, QModelIndex())
+    assert name_index.isValid()
+    tab.view.setCurrentIndex(name_index)
+    tab.view.edit(name_index)
+
+    qtbot.waitUntil(lambda: tab.view.findChild(QLineEdit) is not None)
+    editor = tab.view.findChild(QLineEdit)
+    assert editor is not None
+    qtbot.keyPress(editor, Qt.Key.Key_CapsLock)
+
+    assert tab.view.state() == QAbstractItemView.State.EditingState
 
 
 def test_unicode_name_uses_italic_font_role():

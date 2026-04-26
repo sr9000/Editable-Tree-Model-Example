@@ -42,6 +42,13 @@ def _looks_like_multiline_text(s: str) -> bool:
     return "\n" in s and (s.count("\n") > 1 or len(s) > 80)
 
 
+def infer_text_json_type(s: str) -> "JsonType":
+    """Classify *s* within the text-only pseudo-type family."""
+    if _looks_like_multiline_text(s):
+        return JsonType.TEXT if _contains_non_ascii(s) else JsonType.MULTILINE
+    return JsonType.UNICODE if _contains_non_ascii(s) else JsonType.STRING
+
+
 def parse_json_type(value: Any) -> "JsonType":
     match value:
         case None:

@@ -4,6 +4,7 @@ import zlib
 
 from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
@@ -14,6 +15,16 @@ from enums import JsonType
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
 from tree_item import JsonTreeItem
+
+
+class _CapsLockSafeLineEdit(QLineEdit):
+    """Ignore CapsLock key events so item editing stays active."""
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_CapsLock:
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 class ValueDelegate(QStyledItemDelegate):
@@ -70,7 +81,7 @@ class ValueDelegate(QStyledItemDelegate):
                 editor.addItem("true", True)
                 editor.addItem("false", False)
             case JsonType.STRING | JsonType.UNICODE:
-                editor = QLineEdit(parent)
+                editor = _CapsLockSafeLineEdit(parent)
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
                 editor = BetterDateTimeEditor(parent)
             case JsonType.MULTILINE | JsonType.TEXT:
@@ -239,6 +250,17 @@ class JsonTypeDelegate(QStyledItemDelegate):
             return
 
         model.setData(index, selected_type, Qt.ItemDataRole.EditRole)
+
+
+class NameDelegate(QStyledItemDelegate):
+    def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
+        return _CapsLockSafeLineEdit(parent)
+
+    def setEditorData(self, editor: QLineEdit, index: QModelIndex):
+        editor.setText(str(index.data(Qt.ItemDataRole.EditRole) or ""))
+
+    def setModelData(self, editor: QLineEdit, model: QAbstractItemModel, index: QModelIndex):
+        ValueDelegate._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
 
 
 def decode_bytes(b64string: str, json_type: JsonType) -> bytes:

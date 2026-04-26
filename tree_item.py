@@ -8,7 +8,7 @@ from typing import Any
 
 from gmpy2 import mpq
 
-from enums import JsonType, parse_json_type
+from enums import JsonType, infer_text_json_type, parse_json_type
 
 
 class JsonTreeItem:
@@ -128,6 +128,15 @@ class JsonTreeItem:
                 if not ok:
                     return False
                 self._apply_typed_value(self.json_type, coerced)
+                return True
+
+            if isinstance(value, str) and self.json_type in (
+                JsonType.STRING,
+                JsonType.UNICODE,
+                JsonType.MULTILINE,
+                JsonType.TEXT,
+            ):
+                self._apply_typed_value(infer_text_json_type(value), value)
                 return True
 
             inferred_type = parse_json_type(value)

@@ -10,8 +10,8 @@ from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoCommand, QUndoStack
 from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QTreeView, QVBoxLayout, QWidget
 
-from delegate import JsonTypeDelegate, ValueDelegate
-from enums import JsonType, parse_json_type
+from delegate import JsonTypeDelegate, NameDelegate, ValueDelegate
+from enums import JsonType, infer_text_json_type, parse_json_type
 from file_io import (
     SAVE_FORMAT_JSON,
     SAVE_FORMAT_JSONL,
@@ -303,9 +303,11 @@ class JsonTab(QWidget):
 
         self.view.setModel(self.model)
 
+        self.name_delegate = NameDelegate(self)
         self.type_delegate = JsonTypeDelegate(self)
         self.value_delegate = ValueDelegate(self)
 
+        self.view.setItemDelegateForColumn(0, self.name_delegate)
         self.view.setItemDelegateForColumn(1, self.type_delegate)
         self.view.setItemDelegateForColumn(2, self.value_delegate)
 
@@ -544,7 +546,15 @@ class JsonTab(QWidget):
             item.value = item._normalize_value_for_type(target)
             item.editable = item._compute_editable()
         else:
-            new_type = parse_json_type(target)
+            if isinstance(target, str) and item.json_type in (
+                JsonType.STRING,
+                JsonType.UNICODE,
+                JsonType.MULTILINE,
+                JsonType.TEXT,
+            ):
+                new_type = infer_text_json_type(target)
+            else:
+                new_type = parse_json_type(target)
             if new_type in (JsonType.OBJECT, JsonType.ARRAY):
                 self._convert_container(item, item_index, new_type, target)
                 return True
