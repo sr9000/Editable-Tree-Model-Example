@@ -1,0 +1,33 @@
+name: Default Light
+mode: light
+
+palette:
+  base_fg: "#657b83"
+  base_bg: "#fdf6e3"
+  selection_fg: "#fdf6e3"
+  selection_bg: "#268bd2"
+  accent: "#b58900"
+
+types:
+  integer: { fg: "#268bd2" }
+  float: { fg: "#1f8f89" }
+  percent: { fg: "#1f8f89", italic: true }
+  boolean: { fg: "#d33682" }
+  string: { fg: "#657b83" }
+  unicode: { fg: "#6f8100" }
+  multiline: { fg: "#6f8100", italic: true }
+  text: { fg: "#6f8100", italic: true }
+  date: { fg: "#946f00" }
+  time: { fg: "#946f00" }
+  datetime: { fg: "#946f00" }
+  datetimezone: { fg: "#946f00" }
+  bytes: { fg: "#cb4b16" }
+  zlib: { fg: "#cb4b16", italic: true }
+  gzip: { fg: "#cb4b16", italic: true }
+  "null": { fg: "#7f8c8d", italic: true }
+  object: { fg: "#073642", bold: true }
+  array: { fg: "#073642", bold: true }
+
+icons:
+  search_paths: []
+  map: {}

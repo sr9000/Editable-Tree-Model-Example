@@ -33,21 +33,21 @@ def _theme(
 
 _LIGHT_TYPES: dict[JsonType, TypeStyle] = {
     JsonType.INTEGER: TypeStyle(fg=_c("#268bd2")),
-    JsonType.FLOAT: TypeStyle(fg=_c("#2aa198")),
-    JsonType.PERCENT: TypeStyle(fg=_c("#2aa198"), italic=True),
+    JsonType.FLOAT: TypeStyle(fg=_c("#1f8f89")),
+    JsonType.PERCENT: TypeStyle(fg=_c("#1f8f89"), italic=True),
     JsonType.BOOLEAN: TypeStyle(fg=_c("#d33682")),
     JsonType.STRING: TypeStyle(fg=_c("#657b83")),
-    JsonType.UNICODE: TypeStyle(fg=_c("#859900")),
-    JsonType.MULTILINE: TypeStyle(fg=_c("#859900"), italic=True),
-    JsonType.TEXT: TypeStyle(fg=_c("#859900"), italic=True),
-    JsonType.DATE: TypeStyle(fg=_c("#b58900")),
-    JsonType.TIME: TypeStyle(fg=_c("#b58900")),
-    JsonType.DATETIME: TypeStyle(fg=_c("#b58900")),
-    JsonType.DATETIMEZONE: TypeStyle(fg=_c("#b58900")),
+    JsonType.UNICODE: TypeStyle(fg=_c("#6f8100")),
+    JsonType.MULTILINE: TypeStyle(fg=_c("#6f8100"), italic=True),
+    JsonType.TEXT: TypeStyle(fg=_c("#6f8100"), italic=True),
+    JsonType.DATE: TypeStyle(fg=_c("#946f00")),
+    JsonType.TIME: TypeStyle(fg=_c("#946f00")),
+    JsonType.DATETIME: TypeStyle(fg=_c("#946f00")),
+    JsonType.DATETIMEZONE: TypeStyle(fg=_c("#946f00")),
     JsonType.BYTES: TypeStyle(fg=_c("#cb4b16")),
     JsonType.ZLIB: TypeStyle(fg=_c("#cb4b16"), italic=True),
     JsonType.GZIP: TypeStyle(fg=_c("#cb4b16"), italic=True),
-    JsonType.NULL: TypeStyle(fg=_c("#93a1a1"), italic=True),
+    JsonType.NULL: TypeStyle(fg=_c("#7f8c8d"), italic=True),
     JsonType.OBJECT: TypeStyle(fg=_c("#073642"), bold=True),
     JsonType.ARRAY: TypeStyle(fg=_c("#073642"), bold=True),
 }
@@ -68,14 +68,14 @@ _DARK_TYPES: dict[JsonType, TypeStyle] = {
     JsonType.BYTES: TypeStyle(fg=_c("#ff9e64")),
     JsonType.ZLIB: TypeStyle(fg=_c("#ff9e64"), italic=True),
     JsonType.GZIP: TypeStyle(fg=_c("#ff9e64"), italic=True),
-    JsonType.NULL: TypeStyle(fg=_c("#565f89"), italic=True),
+    JsonType.NULL: TypeStyle(fg=_c("#6b739f"), italic=True),
     JsonType.OBJECT: TypeStyle(fg=_c("#7dcfff"), bold=True),
     JsonType.ARRAY: TypeStyle(fg=_c("#7dcfff"), bold=True),
 }
 
 
 LIGHT_DEFAULT = _theme(
-    name="Builtin Light",
+    name="Default Light",
     mode="light",
     palette=Palette(
         base_fg=_c("#657b83"),
@@ -88,7 +88,7 @@ LIGHT_DEFAULT = _theme(
 )
 
 DARK_DEFAULT = _theme(
-    name="Builtin Dark",
+    name="Default Dark",
     mode="dark",
     palette=Palette(
         base_fg=_c("#c0caf5"),
