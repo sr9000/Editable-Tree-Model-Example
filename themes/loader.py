@@ -45,7 +45,7 @@ def _copy_color(value: QColor | None) -> QColor | None:
 
 
 def _parse_color(value: Any, *, key: str) -> QColor:
-    if not isinstance(value, str) or not QColor.isValidColor(value):
+    if not isinstance(value, str):
         raise ThemeLoadError(f"Invalid color for '{key}': {value!r}")
     color = QColor(value)
     if not color.isValid():
