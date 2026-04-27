@@ -100,12 +100,8 @@ def init_shortcuts(tab) -> None:
     tab._find_shortcut = QShortcut(QKeySequence.StandardKey.Find, tab.view)
     tab._find_shortcut.activated.connect(tab.search_edit.setFocus)
 
-    tab._zoom_in_shortcut = QShortcut(QKeySequence.StandardKey.ZoomIn, tab.view)
-    tab._zoom_in_shortcut.activated.connect(tab.zoom_in)
-    tab._zoom_out_shortcut = QShortcut(QKeySequence.StandardKey.ZoomOut, tab.view)
-    tab._zoom_out_shortcut.activated.connect(tab.zoom_out)
-    tab._zoom_reset_shortcut = QShortcut(QKeySequence("Ctrl+0"), tab.view)
-    tab._zoom_reset_shortcut.activated.connect(tab.zoom_reset)
+    # Zoom shortcuts are owned by MainWindow QAction entries (View menu).
+    # Keeping a second per-tab QShortcut copy causes ambiguous shortcut warnings.
 
 
 def init_search_filter(tab) -> None:
