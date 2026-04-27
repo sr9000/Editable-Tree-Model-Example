@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QSettings, Qt
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView, QVBoxLayout
 
 import state.view_state as view_state
@@ -16,6 +16,8 @@ from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID
+from state.theme_settings import resolve_active_theme
+from themes import ThemeRegistry
 from tree_actions.clipboard import copy_selection
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 
@@ -28,6 +30,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._history_view: QUndoView | None = None
         self._bound_undo_tab: JsonTab | None = None
         self._settings = QSettings(APPLICATION_ID, "app")
+        self._theme_registry = ThemeRegistry()
+        app = QGuiApplication.instance()
+        if isinstance(app, QGuiApplication):
+            self._theme = resolve_active_theme(self._theme_registry, app)
+        else:
+            self._theme = self._theme_registry.default_for_mode("light")
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
@@ -75,6 +83,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 show_root=True,
                 parent=self,
                 permanent_message_callback=lambda msg: self.statusBar.showMessage(msg, 0),
+                theme=self._theme,
             )
         except Exception as exc:
             QMessageBox.critical(self, "Error", f"Failed to create tab:\n{exc}")

@@ -58,8 +58,8 @@ def init_model(tab, model_data: Any, show_root: bool) -> None:
 
 def init_delegates_and_connections(tab, update_actions_callback) -> None:
     tab.name_delegate = NameDelegate(tab)
-    tab.type_delegate = JsonTypeDelegate(tab)
-    tab.value_delegate = ValueDelegate(tab)
+    tab.type_delegate = JsonTypeDelegate(tab, theme=tab._theme)
+    tab.value_delegate = ValueDelegate(tab, theme=tab._theme)
 
     tab.view.setItemDelegateForColumn(0, tab.name_delegate)
     tab.view.setItemDelegateForColumn(1, tab.type_delegate)

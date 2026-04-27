@@ -21,6 +21,8 @@ from documents.tab_setup import (
     init_shortcuts,
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
+from themes import LIGHT_DEFAULT
+from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
@@ -103,11 +105,13 @@ class JsonTab(QWidget):
         show_root: bool = False,
         parent=None,
         permanent_message_callback: Callable[[str], None] | None = None,
+        theme: ThemeSpec | None = None,
     ):
         super().__init__(parent)
 
         self._status_message_callback = status_message_callback
         self._permanent_message_callback = permanent_message_callback
+        self._theme = theme or LIGHT_DEFAULT
 
         init_layout(self)
 
@@ -132,6 +136,28 @@ class JsonTab(QWidget):
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
         self.undo_stack.setClean()
         self._set_dirty(False)
+
+    def set_theme(self, theme: ThemeSpec) -> None:
+        self._theme = theme
+        self.value_delegate.set_theme(theme)
+        self.type_delegate.set_theme(theme)
+
+        roles = [Qt.ItemDataRole.ForegroundRole, Qt.ItemDataRole.BackgroundRole, Qt.ItemDataRole.FontRole]
+
+        def emit_ranges(parent: QModelIndex) -> None:
+            rows = self.model.rowCount(parent)
+            if rows <= 0:
+                return
+
+            top_left = self.model.index(0, 0, parent)
+            bottom_right = self.model.index(rows - 1, self.model.columnCount(parent) - 1, parent)
+            self.model.dataChanged.emit(top_left, bottom_right, roles)
+
+            for row in range(rows):
+                child_parent = self.model.index(row, 0, parent)
+                emit_ranges(child_parent)
+
+        emit_ranges(QModelIndex())
 
     @staticmethod
     def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
