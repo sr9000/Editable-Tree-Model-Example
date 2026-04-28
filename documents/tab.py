@@ -22,6 +22,7 @@ from documents.tab_setup import (
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
 from themes import LIGHT_DEFAULT
+from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.types import JsonType
@@ -106,12 +107,14 @@ class JsonTab(QWidget):
         parent=None,
         permanent_message_callback: Callable[[str], None] | None = None,
         theme: ThemeSpec | None = None,
+        icon_provider: IconProvider | None = None,
     ):
         super().__init__(parent)
 
         self._status_message_callback = status_message_callback
         self._permanent_message_callback = permanent_message_callback
         self._theme = theme or LIGHT_DEFAULT
+        self._icon_provider = icon_provider
 
         init_layout(self)
 

@@ -6,11 +6,11 @@ from importlib import resources
 from pathlib import Path
 from typing import Literal
 
-import yaml
 from PySide6.QtCore import QStandardPaths
 
 from themes._defaults import DARK_DEFAULT, LIGHT_DEFAULT
-from themes.loader import ThemeLoadError, load_theme_yaml, parse_theme_mapping
+from themes.icon_provider import FileIconProvider, IconProvider, StubIconProvider
+from themes.loader import ThemeLoadError, load_theme_yaml
 from themes.spec import ThemeSpec
 
 LOGGER = logging.getLogger(__name__)
@@ -58,6 +58,11 @@ class ThemeRegistry:
             return self._themes[default_name]
         return LIGHT_DEFAULT if mode == "light" else DARK_DEFAULT
 
+    def build_icon_provider(self, theme: ThemeSpec) -> IconProvider:
+        if any(style.icon for style in theme.types.values()):
+            return FileIconProvider(theme)
+        return StubIconProvider()
+
     def _register(self, theme: ThemeSpec, path: Path, *, is_builtin: bool) -> None:
         if not is_builtin and theme.name in self._builtin_names:
             LOGGER.info("User theme '%s' overrides built-in theme", theme.name)
@@ -75,11 +80,9 @@ class ThemeRegistry:
                 continue
 
             try:
-                loaded = yaml.safe_load(entry.read_text(encoding="utf-8"))
-                if loaded is None:
-                    loaded = {}
-                theme = parse_theme_mapping(loaded, mode_default=LIGHT_DEFAULT)
-            except (ThemeLoadError, yaml.YAMLError, OSError) as exc:
+                with resources.as_file(entry) as file_path:
+                    theme = load_theme_yaml(file_path, mode_default=LIGHT_DEFAULT)
+            except (ThemeLoadError, OSError) as exc:
                 LOGGER.warning("Failed to load built-in theme '%s': %s", entry.name, exc)
                 continue
 

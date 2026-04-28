@@ -36,6 +36,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self._theme = resolve_active_theme(self._theme_registry, app)
         else:
             self._theme = self._theme_registry.default_for_mode("light")
+        self._icon_provider = self._theme_registry.build_icon_provider(self._theme)
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
@@ -84,6 +85,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 parent=self,
                 permanent_message_callback=lambda msg: self.statusBar.showMessage(msg, 0),
                 theme=self._theme,
+                icon_provider=self._icon_provider,
             )
         except Exception as exc:
             QMessageBox.critical(self, "Error", f"Failed to create tab:\n{exc}")

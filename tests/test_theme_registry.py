@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor, QGuiApplication
 
 from themes import DARK_DEFAULT, LIGHT_DEFAULT, ThemeRegistry, detect_system_mode, load_theme_yaml
 from themes._contrast import contrast_ratio
+from themes.icon_provider import FileIconProvider, StubIconProvider
 
 
 def _color_hex(color: QColor | None) -> str | None:
@@ -95,6 +96,31 @@ def test_broken_user_file_is_skipped(tmp_path, caplog):
 
     assert registry.get("Default Light")
     assert any("Skipping broken user theme" in rec.message for rec in caplog.records)
+
+
+def test_registry_build_icon_provider_uses_stub_without_icons_and_file_with_map(tmp_path):
+    registry = ThemeRegistry(user_dir=tmp_path / "themes")
+    assert isinstance(registry.build_icon_provider(registry.get("Default Light")), StubIconProvider)
+
+    user_dir = tmp_path / "themes"
+    user_dir.mkdir(parents=True, exist_ok=True)
+    (user_dir / "mapped.yaml").write_text(
+        "\n".join(
+            [
+                "name: Mapped",
+                "mode: light",
+                "icons:",
+                "  search_paths: []",
+                "  map:",
+                "    integer: number",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    registry.reload()
+    assert isinstance(registry.build_icon_provider(registry.get("Mapped")), FileIconProvider)
 
 
 class _FakeStyleHints:

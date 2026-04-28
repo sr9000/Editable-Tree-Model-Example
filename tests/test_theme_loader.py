@@ -54,11 +54,33 @@ def test_round_trip_yaml_parse_load_and_hashable(tmp_path):
     path = tmp_path / "theme.yaml"
     path.write_text(yaml.safe_dump(mapping, sort_keys=False), encoding="utf-8")
 
-    expected = parse_theme_mapping(mapping, mode_default=LIGHT_DEFAULT)
+    expected = parse_theme_mapping(mapping, mode_default=LIGHT_DEFAULT, base_dir=tmp_path)
     loaded = load_theme_yaml(path, mode_default=LIGHT_DEFAULT)
 
     assert loaded == expected
     assert hash(loaded) == hash(expected)
+
+
+def test_icons_map_merges_into_type_style_icon_and_paths_are_resolved(tmp_path):
+    theme_file = tmp_path / "theme.yaml"
+    theme_file.write_text(
+        "\n".join(
+            [
+                "name: With Icons",
+                "mode: light",
+                "icons:",
+                "  search_paths: ['./icons']",
+                "  map:",
+                "    integer: number-icon",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    theme = load_theme_yaml(theme_file, mode_default=LIGHT_DEFAULT)
+    assert theme.types[JsonType.INTEGER].icon == "number-icon"
+    assert theme.icon_search_paths == ((tmp_path / "icons").resolve(),)
 
 
 def test_partial_theme_overrides_only_integer_type():

@@ -126,7 +126,7 @@ def _merge_style(style_data: dict[str, Any], base: TypeStyle, *, key_prefix: str
     return TypeStyle(fg=fg, bg=bg, bold=bold, italic=italic, icon=icon)
 
 
-def _merge_types(types_data: dict[str, Any], base: ThemeSpec) -> MappingProxyType:
+def _merge_types(types_data: dict[str, Any], base: ThemeSpec) -> dict[JsonType, TypeStyle]:
     merged: dict[JsonType, TypeStyle] = {}
     for json_type in JsonType:
         merged[json_type] = _merge_style({}, base.types[json_type], key_prefix=f"types.{json_type.value}")
@@ -144,28 +144,56 @@ def _merge_types(types_data: dict[str, Any], base: ThemeSpec) -> MappingProxyTyp
         style_data = _as_mapping(raw_style, key=f"types.{raw_key}")
         merged[json_type] = _merge_style(style_data, base.types[json_type], key_prefix=f"types.{raw_key}")
 
-    return MappingProxyType(merged)
+    return merged
 
 
-def _parse_icon_search_paths(data: dict[str, Any]) -> tuple[Path, ...]:
+def _parse_icons_block(data: dict[str, Any], *, base_dir: Path | None) -> tuple[tuple[Path, ...], dict[JsonType, str]]:
     icons_data = _as_mapping(data.get("icons"), key="icons")
+
     raw_paths = icons_data.get("search_paths", [])
     if raw_paths is None:
-        return ()
+        raw_paths = []
     if not isinstance(raw_paths, list):
         LOGGER.warning("Theme key 'icons.search_paths' should be a list; ignoring")
-        return ()
+        raw_paths = []
 
     paths: list[Path] = []
     for item in raw_paths:
-        if isinstance(item, str):
-            paths.append(Path(item))
-        else:
+        if not isinstance(item, str):
             LOGGER.warning("Ignoring non-string icon search path: %r", item)
-    return tuple(paths)
+            continue
+        candidate = Path(item)
+        if not candidate.is_absolute() and base_dir is not None:
+            candidate = (base_dir / candidate).resolve()
+        elif candidate.is_absolute():
+            candidate = candidate.resolve()
+        paths.append(candidate)
+
+    raw_map = icons_data.get("map", {})
+    if raw_map is None:
+        raw_map = {}
+    if not isinstance(raw_map, dict):
+        LOGGER.warning("Theme key 'icons.map' should be a mapping; ignoring")
+        raw_map = {}
+
+    mapped_icons: dict[JsonType, str] = {}
+    for raw_key, raw_value in raw_map.items():
+        if not isinstance(raw_key, str):
+            LOGGER.warning("Theme icon map key %r is not a string; ignoring", raw_key)
+            continue
+        json_type = _TYPE_KEYS.get(raw_key.casefold())
+        if json_type is None:
+            LOGGER.warning("Unknown JsonType key in icons.map: %s", raw_key)
+            continue
+        if not isinstance(raw_value, str) or not raw_value.strip():
+            LOGGER.warning("Theme key 'icons.map.%s' should be a non-empty string; ignoring", raw_key)
+            continue
+        mapped_icons[json_type] = raw_value.strip()
+
+    return tuple(paths), mapped_icons
 
 
-def parse_theme_mapping(data: dict, *, mode_default: ThemeSpec) -> ThemeSpec:
+def parse_theme_mapping(data: dict, *, mode_default: ThemeSpec, base_dir: Path | None = None) -> ThemeSpec:
     if not isinstance(data, dict):
         raise ThemeLoadError("Theme YAML root must be a mapping")
 
@@ -183,13 +211,26 @@ def parse_theme_mapping(data: dict, *, mode_default: ThemeSpec) -> ThemeSpec:
 
     palette_data = _as_mapping(data.get("palette"), key="palette")
     types_data = _as_mapping(data.get("types"), key="types")
+    icon_search_paths, icon_map = _parse_icons_block(data, base_dir=base_dir)
+    merged_types = _merge_types(types_data, base_default)
+
+    for json_type, icon_key in icon_map.items():
+        style = merged_types[json_type]
+        if style.icon is None:
+            merged_types[json_type] = TypeStyle(
+                fg=style.fg,
+                bg=style.bg,
+                bold=style.bold,
+                italic=style.italic,
+                icon=icon_key,
+            )
 
     return ThemeSpec(
         name=name,
         mode=mode,
         palette=_merge_palette(palette_data, base_default.palette),
-        types=_merge_types(types_data, base_default),
-        icon_search_paths=_parse_icon_search_paths(data),
+        types=MappingProxyType(merged_types),
+        icon_search_paths=icon_search_paths,
     )
 
 
@@ -206,4 +247,4 @@ def load_theme_yaml(path: Path, *, mode_default: ThemeSpec) -> ThemeSpec:
     if not isinstance(loaded, dict):
         raise ThemeLoadError("Theme YAML root must be a mapping")
 
-    return parse_theme_mapping(loaded, mode_default=mode_default)
+    return parse_theme_mapping(loaded, mode_default=mode_default, base_dir=path.resolve().parent)
