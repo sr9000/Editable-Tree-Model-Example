@@ -130,8 +130,11 @@ def test_copy_paste_preserves_object_key_name_when_possible(qtbot):
     assert paste_from_clipboard(view)
 
     assert model.get_item(dst).to_json() == {"keep": 7}
+
+
 def test_copy_selection_with_name_and_value_only(qtbot):
-    from tree_actions.clipboard import copy_selection_with_name, copy_selection_value_only
+    from tree_actions.clipboard import copy_selection_value_only, copy_selection_with_name
+
     model = JsonTreeModel({"foo": 42})
     view = QTreeView()
     qtbot.addWidget(view)
@@ -146,23 +149,30 @@ def test_copy_selection_with_name_and_value_only(qtbot):
     md = QApplication.clipboard().mimeData()
     assert md.text() == "42"
     assert not md.hasFormat(MIME_JSON_TREE)
+
+
 def test_context_menu_column1_mutating_actions_disabled(qtbot, monkeypatch):
     from tree_actions.context_menu import show_context_menu
+
     model = JsonTreeModel({"foo": 42})
     view = QTreeView()
     qtbot.addWidget(view)
     view.setModel(model)
     added_actions = []
     import PySide6.QtWidgets
+
     original_add_action = PySide6.QtWidgets.QMenu.addAction
+
     def mock_add_action(self, text):
         added_actions.append(text)
         return original_add_action(self, text)
+
     monkeypatch.setattr(PySide6.QtWidgets.QMenu, "addAction", mock_add_action)
     mock_index = model.index(0, 1, QModelIndex())
     monkeypatch.setattr(view, "indexAt", lambda pos: mock_index)
     monkeypatch.setattr(PySide6.QtWidgets.QMenu, "exec", lambda *args, **kwargs: None)
     from PySide6.QtCore import QPoint
+
     show_context_menu(view, QPoint(0, 0))
     assert "Expand All" in added_actions
     assert "Collapse All" in added_actions
