@@ -151,6 +151,24 @@ def test_copy_selection_with_name_and_value_only(qtbot):
     assert not md.hasFormat(MIME_JSON_TREE)
 
 
+def test_copy_selection_string_value_is_json_quoted(qtbot):
+    model = JsonTreeModel({"greeting": "hello world"})
+    view = QTreeView()
+    qtbot.addWidget(view)
+    view.setModel(model)
+
+    greet = model.index(0, 0, QModelIndex())
+    _select_rows(view, greet)
+
+    assert copy_selection_with_name(view)
+    md = QApplication.clipboard().mimeData()
+    assert md.text() == '"greeting": "hello world"'
+
+    assert copy_selection_value_only(view)
+    md = QApplication.clipboard().mimeData()
+    assert md.text() == '"hello world"'
+
+
 def test_copy_selection_object_array_includes_internal_values(qtbot):
     from tree_actions.clipboard import copy_selection_value_only, copy_selection_with_name
 
@@ -165,6 +183,7 @@ def test_copy_selection_object_array_includes_internal_values(qtbot):
     assert copy_selection_with_name(view)
     md = QApplication.clipboard().mimeData()
     import json
+
     parsed = json.loads("{" + md.text() + "}")
     assert parsed == {"foo": {"bar": [1, 2]}}
 

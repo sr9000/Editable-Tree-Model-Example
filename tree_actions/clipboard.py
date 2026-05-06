@@ -5,19 +5,17 @@ import simplejson
 from PySide6.QtCore import QMimeData
 from PySide6.QtWidgets import QApplication, QTreeView
 
+
 from mpq2py import mpq_json_default
 from tree.model import JsonTreeModel
 from tree.types import JsonType
 from tree_actions.selection import _index_path, _resolve_model, _top_level_selected_rows
-from delegates.value_formatting import format_with_type
 
 MIME_JSON_TREE = "application/x-json-tree"
 
 
 def _get_val_str(item) -> str:
-    if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
-        return simplejson.dumps(item.to_json(), default=mpq_json_default, indent=2)
-    return format_with_type(item.value, item.json_type)
+    return simplejson.dumps(item.to_json(), default=mpq_json_default, indent=2)
 
 
 def _build_copy_entries(model: JsonTreeModel, rows) -> list[dict[str, Any]]:
