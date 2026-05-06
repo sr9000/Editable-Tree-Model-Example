@@ -153,27 +153,43 @@ def test_copy_selection_with_name_and_value_only(qtbot):
 
 def test_context_menu_column1_mutating_actions_disabled(qtbot, monkeypatch):
     from tree_actions.context_menu import show_context_menu
-
     model = JsonTreeModel({"foo": 42})
     view = QTreeView()
     qtbot.addWidget(view)
     view.setModel(model)
+
     added_actions = []
-    import PySide6.QtWidgets
 
-    original_add_action = PySide6.QtWidgets.QMenu.addAction
+    class MockAction:
+        def __init__(self, text):
+            pass
+        class Triggered:
+            def connect(self, fn):
+                pass
+        triggered = Triggered()
 
-    def mock_add_action(self, text):
-        added_actions.append(text)
-        return original_add_action(self, text)
+    class MockMenu:
+        def __init__(self, *args):
+            pass
+        def addAction(self, text):
+            added_actions.append(text)
+            return MockAction(text)
+        def addMenu(self, text):
+            return MockMenu()
+        def addSeparator(self):
+            pass
+        def exec(self, pos):
+            pass
 
-    monkeypatch.setattr(PySide6.QtWidgets.QMenu, "addAction", mock_add_action)
+    import tree_actions.context_menu
+    monkeypatch.setattr(tree_actions.context_menu, "QMenu", MockMenu)
+
     mock_index = model.index(0, 1, QModelIndex())
     monkeypatch.setattr(view, "indexAt", lambda pos: mock_index)
-    monkeypatch.setattr(PySide6.QtWidgets.QMenu, "exec", lambda *args, **kwargs: None)
-    from PySide6.QtCore import QPoint
 
+    from PySide6.QtCore import QPoint
     show_context_menu(view, QPoint(0, 0))
+
     assert "Expand All" in added_actions
     assert "Collapse All" in added_actions
     assert "Copy" not in added_actions
