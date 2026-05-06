@@ -143,12 +143,35 @@ def test_copy_selection_with_name_and_value_only(qtbot):
     _select_rows(view, foo)
     assert copy_selection_with_name(view)
     md = QApplication.clipboard().mimeData()
-    assert md.text() == "foo: 42"
+    assert md.text() == '"foo": 42'
     assert md.hasFormat(MIME_JSON_TREE)
     assert copy_selection_value_only(view)
     md = QApplication.clipboard().mimeData()
     assert md.text() == "42"
     assert not md.hasFormat(MIME_JSON_TREE)
+
+
+def test_copy_selection_object_array_includes_internal_values(qtbot):
+    from tree_actions.clipboard import copy_selection_value_only, copy_selection_with_name
+
+    model = JsonTreeModel({"foo": {"bar": [1, 2]}})
+    view = QTreeView()
+    qtbot.addWidget(view)
+    view.setModel(model)
+
+    foo = model.index(0, 0, QModelIndex())
+    _select_rows(view, foo)
+
+    assert copy_selection_with_name(view)
+    md = QApplication.clipboard().mimeData()
+    import json
+    parsed = json.loads("{" + md.text() + "}")
+    assert parsed == {"foo": {"bar": [1, 2]}}
+
+    assert copy_selection_value_only(view)
+    md = QApplication.clipboard().mimeData()
+    parsed = json.loads(md.text())
+    assert parsed == {"bar": [1, 2]}
 
 
 def test_context_menu_column1_mutating_actions_disabled(qtbot, monkeypatch):

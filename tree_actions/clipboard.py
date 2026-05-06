@@ -5,13 +5,19 @@ import simplejson
 from PySide6.QtCore import QMimeData
 from PySide6.QtWidgets import QApplication, QTreeView
 
-from delegates.value_formatting import format_with_type
 from mpq2py import mpq_json_default
 from tree.model import JsonTreeModel
 from tree.types import JsonType
 from tree_actions.selection import _index_path, _resolve_model, _top_level_selected_rows
+from delegates.value_formatting import format_with_type
 
 MIME_JSON_TREE = "application/x-json-tree"
+
+
+def _get_val_str(item) -> str:
+    if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+        return simplejson.dumps(item.to_json(), default=mpq_json_default, indent=2)
+    return format_with_type(item.value, item.json_type)
 
 
 def _build_copy_entries(model: JsonTreeModel, rows) -> list[dict[str, Any]]:
@@ -82,8 +88,12 @@ def copy_selection_with_name(tree_view: QTreeView) -> bool:
 
     if len(rows) == 1:
         item = model.get_item(rows[0])
-        val_str = format_with_type(item.value, item.json_type)
-        text = f"{item.name}: {val_str}" if item.name is not None else val_str
+        val_str = _get_val_str(item)
+        if item.name is not None:
+            name_str = simplejson.dumps(item.name, default=mpq_json_default)
+            text = f"{name_str}: {val_str}"
+        else:
+            text = val_str
     else:
         text_payload = _entries_text_payload(model, rows, entries)
         text = simplejson.dumps(text_payload, default=mpq_json_default, indent=2)
@@ -107,7 +117,7 @@ def copy_selection_value_only(tree_view: QTreeView) -> bool:
 
     if len(rows) == 1:
         item = model.get_item(rows[0])
-        text = format_with_type(item.value, item.json_type)
+        text = _get_val_str(item)
     else:
         entries = _build_copy_entries(model, rows)
         text_payload = _entries_text_payload(model, rows, entries)
