@@ -63,6 +63,10 @@ class ThemeRegistry:
             return FileIconProvider(theme)
         return StubIconProvider()
 
+    @property
+    def user_dir(self) -> Path:
+        return self._user_dir
+
     def _register(self, theme: ThemeSpec, path: Path, *, is_builtin: bool) -> None:
         if not is_builtin and theme.name in self._builtin_names:
             LOGGER.info("User theme '%s' overrides built-in theme", theme.name)

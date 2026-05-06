@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QModelIndex, QSettings, Qt
-from PySide6.QtGui import QAction, QGuiApplication, QKeySequence
-from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView, QVBoxLayout
+from PySide6.QtCore import QFileSystemWatcher, QModelIndex, QSettings, Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication
+from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
 
 import state.view_state as view_state
 from app.close_confirm import confirm_close
@@ -16,8 +16,16 @@ from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID
-from state.theme_settings import resolve_active_theme
+from state.theme_settings import (
+    get_follow_system,
+    get_watch_user_dir,
+    resolve_active_theme,
+    set_follow_system,
+    set_manual_theme_name,
+    set_preferred_theme_name,
+)
 from themes import ThemeRegistry
+from themes.auto import detect_system_mode
 from tree_actions.clipboard import copy_selection
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 
@@ -31,12 +39,31 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._bound_undo_tab: JsonTab | None = None
         self._settings = QSettings(APPLICATION_ID, "app")
         self._theme_registry = ThemeRegistry()
+        self._theme_menu: QMenu | None = None
+        self._theme_light_menu: QMenu | None = None
+        self._theme_dark_menu: QMenu | None = None
+        self._theme_follow_action: QAction | None = None
+        self._theme_light_group: QActionGroup | None = None
+        self._theme_dark_group: QActionGroup | None = None
+        self._theme_actions: dict[str, QAction] = {}
+        self._theme_fs_watcher = QFileSystemWatcher(self)
+        self._theme_reload_timer = QTimer(self)
+        self._theme_reload_timer.setSingleShot(True)
+        self._theme_reload_timer.setInterval(250)
+        self._theme_reload_timer.timeout.connect(self._reload_themes_from_disk)
+        self._theme_fs_watcher.directoryChanged.connect(self._on_theme_fs_event)
+        self._theme_fs_watcher.fileChanged.connect(self._on_theme_fs_event)
         app = QGuiApplication.instance()
         if isinstance(app, QGuiApplication):
             self._theme = resolve_active_theme(self._theme_registry, app)
+            style_hints = app.styleHints()
+            if hasattr(style_hints, "colorSchemeChanged"):
+                style_hints.colorSchemeChanged.connect(self._on_system_color_scheme_changed)
         else:
             self._theme = self._theme_registry.default_for_mode("light")
         self._icon_provider = self._theme_registry.build_icon_provider(self._theme)
+        if get_watch_user_dir():
+            self._refresh_theme_watcher_paths()
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
@@ -60,6 +87,186 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def setup_connections(self):
         setup_main_window_connections(self)
+
+    def _theme_tabs(self) -> list[JsonTab]:
+        tabs: list[JsonTab] = []
+        for i in range(self.tabWidget.count()):
+            widget = self.tabWidget.widget(i)
+            if isinstance(widget, JsonTab):
+                tabs.append(widget)
+        return tabs
+
+    @staticmethod
+    def _emit_theme_roles(tab: JsonTab) -> None:
+        roles = [
+            Qt.ItemDataRole.ForegroundRole,
+            Qt.ItemDataRole.BackgroundRole,
+            Qt.ItemDataRole.FontRole,
+            Qt.ItemDataRole.DecorationRole,
+        ]
+
+        def emit_ranges(parent: QModelIndex) -> None:
+            rows = tab.model.rowCount(parent)
+            if rows <= 0:
+                return
+            top_left = tab.model.index(0, 0, parent)
+            bottom_right = tab.model.index(rows - 1, tab.model.columnCount(parent) - 1, parent)
+            tab.model.dataChanged.emit(top_left, bottom_right, roles)
+            for row in range(rows):
+                child_parent = tab.model.index(row, 0, parent)
+                emit_ranges(child_parent)
+
+        emit_ranges(QModelIndex())
+
+    def _apply_theme(self, theme) -> None:
+        self._theme = theme
+        self._icon_provider = self._theme_registry.build_icon_provider(theme)
+        for tab in self._theme_tabs():
+            tab.set_theme(theme, self._icon_provider)
+            self._emit_theme_roles(tab)
+        self._refresh_theme_menu_checks()
+
+    def _setup_theme_menu(self) -> None:
+        self._theme_menu = QMenu("Theme", self)
+        follow_action = QAction("Follow system", self)
+        follow_action.setCheckable(True)
+        follow_action.triggered.connect(self._on_follow_system_toggled)
+        self._theme_follow_action = follow_action
+        self._theme_menu.addAction(follow_action)
+        self._theme_menu.addSeparator()
+
+        self._theme_light_menu = self._theme_menu.addMenu("Light themes")
+        self._theme_dark_menu = self._theme_menu.addMenu("Dark themes")
+        self._theme_light_group = QActionGroup(self)
+        self._theme_light_group.setExclusive(True)
+        self._theme_dark_group = QActionGroup(self)
+        self._theme_dark_group.setExclusive(True)
+
+        self._theme_menu.addSeparator()
+        reload_action = QAction("Reload themes", self)
+        reload_action.triggered.connect(self._reload_themes_from_disk)
+        self._theme_menu.addAction(reload_action)
+
+        open_folder_action = QAction("Open themes folder...", self)
+        open_folder_action.triggered.connect(self._open_themes_folder)
+        self._theme_menu.addAction(open_folder_action)
+
+        self.viewMenu.addMenu(self._theme_menu)
+        self._rebuild_theme_menu_entries()
+        self._refresh_theme_menu_checks()
+
+    def _rebuild_theme_menu_entries(self) -> None:
+        if self._theme_light_menu is None or self._theme_dark_menu is None:
+            return
+        if self._theme_light_group is not None:
+            for action in list(self._theme_light_group.actions()):
+                self._theme_light_group.removeAction(action)
+        if self._theme_dark_group is not None:
+            for action in list(self._theme_dark_group.actions()):
+                self._theme_dark_group.removeAction(action)
+        self._theme_light_menu.clear()
+        self._theme_dark_menu.clear()
+        self._theme_actions.clear()
+
+        for handle in self._theme_registry.list_themes():
+            action = QAction(handle.name, self)
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked=False, n=handle.name: self._on_theme_selected(n))
+            self._theme_actions[handle.name] = action
+            if handle.mode == "light":
+                assert self._theme_light_group is not None
+                self._theme_light_group.addAction(action)
+                self._theme_light_menu.addAction(action)
+            else:
+                assert self._theme_dark_group is not None
+                self._theme_dark_group.addAction(action)
+                self._theme_dark_menu.addAction(action)
+
+    def _refresh_theme_menu_checks(self) -> None:
+        follow = get_follow_system()
+        if self._theme_follow_action is not None:
+            self._theme_follow_action.setChecked(follow)
+        for name, action in self._theme_actions.items():
+            action.setChecked(name == self._theme.name)
+
+    def _on_theme_selected(self, name: str) -> None:
+        try:
+            selected = self._theme_registry.get(name)
+        except KeyError:
+            return
+
+        app = QGuiApplication.instance()
+        mode = "light"
+        if isinstance(app, QGuiApplication):
+            mode = detect_system_mode(app)
+
+        if get_follow_system():
+            set_preferred_theme_name(mode, selected.name)
+        else:
+            set_manual_theme_name(selected.name)
+
+        self._apply_theme(selected)
+
+    def _on_follow_system_toggled(self, checked: bool) -> None:
+        set_follow_system(checked)
+        if checked:
+            app = QGuiApplication.instance()
+            if isinstance(app, QGuiApplication):
+                self._apply_theme(resolve_active_theme(self._theme_registry, app))
+            return
+
+        set_manual_theme_name(self._theme.name)
+        self._refresh_theme_menu_checks()
+
+    def _open_themes_folder(self) -> None:
+        user_dir = self._theme_registry.user_dir
+        user_dir.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(user_dir)))
+
+    def _refresh_theme_watcher_paths(self) -> None:
+        user_dir = self._theme_registry.user_dir
+        user_dir.mkdir(parents=True, exist_ok=True)
+        desired = {str(user_dir.resolve())}
+        desired.update(str(path.resolve()) for path in user_dir.glob("*.yaml"))
+        current = set(self._theme_fs_watcher.directories()) | set(self._theme_fs_watcher.files())
+
+        to_remove = [path for path in current if path not in desired]
+        if to_remove:
+            self._theme_fs_watcher.removePaths(to_remove)
+        to_add = [path for path in desired if path not in current]
+        if to_add:
+            self._theme_fs_watcher.addPaths(to_add)
+
+    def _on_theme_fs_event(self, _path: str) -> None:
+        if not get_watch_user_dir():
+            return
+        self._theme_reload_timer.start()
+
+    def _reload_themes_from_disk(self) -> None:
+        self._theme_registry.reload()
+        self._rebuild_theme_menu_entries()
+
+        active_name = self._theme.name
+        try:
+            selected = self._theme_registry.get(active_name)
+        except KeyError:
+            app = QGuiApplication.instance()
+            if isinstance(app, QGuiApplication):
+                selected = resolve_active_theme(self._theme_registry, app)
+            else:
+                selected = self._theme_registry.default_for_mode("light")
+        self._apply_theme(selected)
+
+        if get_watch_user_dir():
+            self._refresh_theme_watcher_paths()
+
+    def _on_system_color_scheme_changed(self, *_args) -> None:
+        if not get_follow_system():
+            return
+        app = QGuiApplication.instance()
+        if not isinstance(app, QGuiApplication):
+            return
+        self._apply_theme(resolve_active_theme(self._theme_registry, app))
 
     def _bind_undo_signals(self, tab: JsonTab | None) -> None:
         bind_undo_signals(self, tab)
