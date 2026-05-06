@@ -3,23 +3,32 @@ import zlib
 
 from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
-from PySide6.QtWidgets import QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
+from PySide6.QtWidgets import QComboBox, QLineEdit, QStyle, QStyleOptionViewItem, QWidget
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
 from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase
 from delegates.bytes_codec import decode_bytes, encode_bytes
-from delegates.value_formatting import format_default, format_with_type
+from delegates.value_formatting import _apply_type_style, format_default, format_with_type
 from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
+from themes import LIGHT_DEFAULT
+from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model_roles import JSON_TYPE_ROLE
 from tree.types import JsonType
 
 
 class ValueDelegate(_TextEditorDelegateBase):
+    def __init__(self, parent=None, *, theme: ThemeSpec | None = None):
+        super().__init__(parent)
+        self._theme = theme or LIGHT_DEFAULT
+
+    def set_theme(self, theme: ThemeSpec) -> None:
+        self._theme = theme
+
     @staticmethod
     def _source_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
         idx = ValueDelegate._to_index(index)
@@ -44,11 +53,21 @@ class ValueDelegate(_TextEditorDelegateBase):
         model = index.model()
         raw = model.data(index, Qt.ItemDataRole.EditRole) if model is not None else index.data(Qt.ItemDataRole.EditRole)
         json_type = model.data(index, JSON_TYPE_ROLE) if model is not None else index.data(JSON_TYPE_ROLE)
-        option.text = self._format_with_type(raw, json_type if isinstance(json_type, JsonType) else None)
+        typed = json_type if isinstance(json_type, JsonType) else None
+        option.text = self._format_with_type(raw, typed)
+        if typed is not None:
+            _apply_type_style(
+                option,
+                self._theme.types[typed],
+                selected=bool(option.state & QStyle.StateFlag.State_Selected),
+                allow_background=True,
+            )
 
     @staticmethod
     def _to_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
-        return QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+        if isinstance(index, QPersistentModelIndex):
+            return QModelIndex(index)
+        return index
 
     @staticmethod
     def _find_tab(host) -> object | None:

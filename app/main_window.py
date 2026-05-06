@@ -2,9 +2,8 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QModelIndex, QSettings, Qt
-from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView, QVBoxLayout
+from PySide6.QtCore import QModelIndex, QSettings
+from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
 
 import state.view_state as view_state
 from app.close_confirm import confirm_close
@@ -12,6 +11,7 @@ from app.history import bind_undo_signals, setup_history_menu
 from app.main_window_actions import setup_connections as setup_main_window_connections
 from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, refresh_recent_menu
+from app.theme_controller import ThemeController
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
@@ -28,6 +28,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._history_view: QUndoView | None = None
         self._bound_undo_tab: JsonTab | None = None
         self._settings = QSettings(APPLICATION_ID, "app")
+        self._theme_controller = ThemeController(self, self._on_theme_applied)
+        self._theme_registry = self._theme_controller.registry
+        self._theme = self._theme_controller.theme
+        self._icon_provider = self._theme_controller.icon_provider
+        self._theme_follow_action = self._theme_controller.follow_action
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
@@ -52,6 +57,54 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def setup_connections(self):
         setup_main_window_connections(self)
 
+    def _theme_tabs(self) -> list[JsonTab]:
+        tabs: list[JsonTab] = []
+        for i in range(self.tabWidget.count()):
+            widget = self.tabWidget.widget(i)
+            if isinstance(widget, JsonTab):
+                tabs.append(widget)
+        return tabs
+
+    def _on_theme_applied(self, theme, icon_provider) -> None:
+        self._theme = theme
+        self._icon_provider = icon_provider
+        for tab in self._theme_tabs():
+            tab.set_theme(theme, icon_provider)
+
+    def _apply_theme(self, theme) -> None:
+        self._theme_controller.apply_theme(theme)
+
+    def _setup_theme_menu(self) -> None:
+        self._theme_controller.setup_theme_menu(self.viewMenu)
+        self._theme_follow_action = self._theme_controller.follow_action
+
+    def _rebuild_theme_menu_entries(self) -> None:
+        self._theme_controller.rebuild_theme_menu_entries()
+
+    def _refresh_theme_menu_checks(self) -> None:
+        self._theme_controller.refresh_theme_menu_checks()
+
+    def _on_theme_selected(self, name: str) -> None:
+        self._theme_controller.on_theme_selected(name)
+
+    def _on_follow_system_toggled(self, checked: bool) -> None:
+        self._theme_controller.on_follow_system_toggled(checked)
+
+    def _open_themes_folder(self) -> None:
+        self._theme_controller.open_themes_folder()
+
+    def _refresh_theme_watcher_paths(self) -> None:
+        self._theme_controller.refresh_theme_watcher_paths()
+
+    def _on_theme_fs_event(self, _path: str) -> None:
+        self._theme_controller.on_theme_fs_event(_path)
+
+    def _reload_themes_from_disk(self) -> None:
+        self._theme_controller.reload_themes()
+
+    def _on_system_color_scheme_changed(self, *_args) -> None:
+        self._theme_controller.on_system_color_scheme_changed(*_args)
+
     def _bind_undo_signals(self, tab: JsonTab | None) -> None:
         bind_undo_signals(self, tab)
 
@@ -75,6 +128,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 show_root=True,
                 parent=self,
                 permanent_message_callback=lambda msg: self.statusBar.showMessage(msg, 0),
+                theme=self._theme,
+                icon_provider=self._icon_provider,
             )
         except Exception as exc:
             QMessageBox.critical(self, "Error", f"Failed to create tab:\n{exc}")

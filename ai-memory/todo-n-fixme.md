@@ -1,6 +1,6 @@
 # TODO & FIXME
 
-_Last updated: 2026-04-26._
+_Last updated: 2026-05-06._
 
 Tracks **missing/incomplete features** (TODO) and **bugs/issues** (FIXME)
 discovered while auditing the JSON editor codebase. Cross-reference with
@@ -8,20 +8,23 @@ discovered while auditing the JSON editor codebase. Cross-reference with
 
 Format: `- [ ] [scope] description — file:symbol`
 
-> **Status (2026-04-26)** — Phases 0–5 are fully shipped (all sub-phases
-> of Phase 5 included). The package refactor (Phases 01–37) is complete:
+> **Status (2026-05-06)** — Phases 0–6 are fully shipped, including the
+> full theming stack and the Phase-6 `ThemeController` refactor. The
+> package refactor (Phases 01–37) is complete:
 > all old top-level "god modules" (`json_tab.py`, `ui.py`, `tree_view.py`,
 > `tree_model.py`, `tree_item.py`, `delegate.py`, `enums.py`, `file_io.py`,
 > `view_state.py`) have been split into the canonical packages and removed.
-> Phase 6 testing is the only milestone still open. **401 tests pass**
-> under `QT_QPA_PLATFORM=offscreen pytest -q` in ~3 s; the post-test
-> segfault previously tracked is no longer reproducible.
+> The current tree collects **451 tests**; the dedicated Phase-1–6
+> theming surface contributes **50 passing tests** under
+> `QT_QPA_PLATFORM=offscreen pytest -q`. The older full-suite baseline in
+> memory remains 401 passing tests (`2026-04-26`); the post-test segfault
+> previously tracked is still not reproducible.
 
 ---
 
 ## TODO — open items
 
-### Phase 6 — Tests (the only open milestone)
+### Broader QA / tooling gaps
 - [ ] [tests] `tests/test_value_delegate.py`: full editor matrix.
       - editor widget class per JsonType
       - `setEditorData` / `setModelData` round-trip for INTEGER, mpq
@@ -45,21 +48,34 @@ Format: `- [ ] [scope] description — file:symbol`
 - [ ] [tooling] Add `pytest-qt` to `requirements.txt`.
 - [ ] [tooling] Add a `make test` target running
       `QT_QPA_PLATFORM=offscreen pytest -q`.
-- [ ] [tooling] Pin `simplejson` (currently imported by `io_formats/`
-      without an entry in `requirements.txt`).
 - [ ] [tooling] Add `coverage`/`pytest-cov` and commit a short
       summary to `ai-memory/coverage.md`.
 - [ ] [tests] Smoke-cover Phase 4+ actions in `test_smoke_mainwindow.py`
       end-to-end (open → edit → Save → reopen → verify dirty marker
       cleared, recent-files menu populated).
 
+### Phase 7 — theme docs / contributor tooling
+- [ ] [docs] Add `themes/builtin/schema.md` covering YAML grammar,
+      every `JsonType`, fallback semantics, icon path resolution, and
+      worked examples.
+- [ ] [docs] Add a README theming section with screenshots and the user
+      theme directory location per OS.
+- [ ] [tests] Add `tests/test_theme_snapshot.py` for deterministic
+      built-in theme snapshots and partial-override coverage checks.
+- [ ] [tests] Add `tests/test_theme_accessibility.py` for WCAG-style
+      contrast regression coverage on built-in themes.
+- [ ] [tooling] Add a `themes-check` target to `Makefile`.
+
 ### Stretch UX items (optional, deferred from Phase 5)
 - [ ] [ux] Match-highlight delegate (`ValueDelegate.paint` override
       drawing a yellow background span over substring matches when
       a filter is active). — `delegates/value.py:ValueDelegate.paint`
-- [ ] [ux] Type icons in column 1: register `:/icons/<type>.svg` and
-      return them from `JsonTreeModel.data(..., DecorationRole)`.
-      — `tree/model.py`, `tree/model_roles.py`, `delegates/value.py`
+- [ ] [ux] Apply the active theme to more of the application chrome
+      (menus/toolbars/dialog palette), not just tree content and icons.
+      — `app/theme_controller.py`, `app/main_window.py`
+- [ ] [ux] Watch user theme icon asset folders in addition to YAML
+      files so custom SVG/PNG edits hot-reload without touching the YAML.
+      — `app/theme_controller.py`
 
 ### Code hygiene (low priority)
 - [ ] [hygiene] Drop the legacy `_demo_data()` seed and its
@@ -113,8 +129,31 @@ failure escaping `createEditor`, post-test segfault) are resolved as of
 
 ## Resolved (kept for posterity)
 
-The following bugs were fixed during Phases 0–5; they're listed once
+The following bugs/features were fixed or delivered during Phases 0–6;
+they're listed once
 here so future audits don't reopen them.
+
+### Theme phases 1–6 (2026-05-06)
+- Phase 1 — `themes/spec.py`, `themes/loader.py`, and
+  `themes/_defaults.py` landed with frozen/hashable theme dataclasses,
+  YAML parsing, total fallback semantics, and icon-block parsing.
+- Phase 2 — built-in `themes/builtin/light.yaml` / `dark.yaml`,
+  `themes/registry.py`, `themes/auto.py`, and
+  `state/theme_settings.py` landed with built-in/user discovery,
+  system-mode detection, and persisted theme preferences.
+- Phase 3 — `ValueDelegate` / `JsonTypeDelegate` became theme-aware;
+  `JsonTab.set_theme(...)` repaints open tabs via `dataChanged`
+  instead of rebuilding models/views.
+- Phase 4 — `themes/icon_provider.py` landed with
+  `StubIconProvider` / `FileIconProvider`, icon-path resolution, and
+  reloadable icon caching.
+- Phase 5 — bundled SVG icons now ship under `themes/builtin/icons/`,
+  `JsonTreeModel` returns `DecorationRole` for column 1, and the type
+  combobox reuses the same icon provider.
+- Phase 6 — live View → Theme switching, follow-system persistence,
+  opt-in `QFileSystemWatcher` hot reload, and
+  `colorSchemeChanged` handling shipped; the follow-system selection bug
+  was fixed and the logic was refactored into `app/theme_controller.py`.
 
 ### Phase 0
 - `tests/test_mpq2py.py::test_mpq_with_json` — fixed by returning

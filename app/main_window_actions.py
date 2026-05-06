@@ -17,6 +17,8 @@ def setup_connections(window):
     window.viewZoomOutAction.triggered.connect(window.zoom_out)
     window.viewResetZoomAction.triggered.connect(window.reset_zoom)
 
+    window._setup_theme_menu()
+
     window.update_actions()
 
     window.tabWidget.tabCloseRequested.connect(window.close_tab)

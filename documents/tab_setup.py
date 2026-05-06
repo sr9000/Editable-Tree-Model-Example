@@ -48,7 +48,7 @@ def init_layout(tab) -> None:
 def init_model(tab, model_data: Any, show_root: bool) -> None:
     tab.undo_stack = QUndoStack(tab)
 
-    tab.model = JsonTreeModel(model_data, tab.view, show_root=show_root)
+    tab.model = JsonTreeModel(model_data, tab.view, show_root=show_root, icon_provider=tab._icon_provider)
     tab.proxy = TreeFilterProxy(tab)
     tab.proxy.setSourceModel(tab.model)
 
@@ -58,8 +58,8 @@ def init_model(tab, model_data: Any, show_root: bool) -> None:
 
 def init_delegates_and_connections(tab, update_actions_callback) -> None:
     tab.name_delegate = NameDelegate(tab)
-    tab.type_delegate = JsonTypeDelegate(tab)
-    tab.value_delegate = ValueDelegate(tab)
+    tab.type_delegate = JsonTypeDelegate(tab, theme=tab._theme, icon_provider=tab._icon_provider)
+    tab.value_delegate = ValueDelegate(tab, theme=tab._theme)
 
     tab.view.setItemDelegateForColumn(0, tab.name_delegate)
     tab.view.setItemDelegateForColumn(1, tab.type_delegate)
@@ -100,12 +100,8 @@ def init_shortcuts(tab) -> None:
     tab._find_shortcut = QShortcut(QKeySequence.StandardKey.Find, tab.view)
     tab._find_shortcut.activated.connect(tab.search_edit.setFocus)
 
-    tab._zoom_in_shortcut = QShortcut(QKeySequence.StandardKey.ZoomIn, tab.view)
-    tab._zoom_in_shortcut.activated.connect(tab.zoom_in)
-    tab._zoom_out_shortcut = QShortcut(QKeySequence.StandardKey.ZoomOut, tab.view)
-    tab._zoom_out_shortcut.activated.connect(tab.zoom_out)
-    tab._zoom_reset_shortcut = QShortcut(QKeySequence("Ctrl+0"), tab.view)
-    tab._zoom_reset_shortcut.activated.connect(tab.zoom_reset)
+    # Zoom shortcuts are owned by MainWindow QAction entries (View menu).
+    # Keeping a second per-tab QShortcut copy causes ambiguous shortcut warnings.
 
 
 def init_search_filter(tab) -> None:

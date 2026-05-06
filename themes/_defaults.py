@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+from types import MappingProxyType
+from typing import Literal
+
+from PySide6.QtGui import QColor
+
+from themes.spec import Palette, ThemeSpec, TypeStyle
+from tree.types import JsonType
+
+
+def _c(value: str) -> QColor:
+    color = QColor(value)
+    if not color.isValid():
+        raise ValueError(f"Invalid default color: {value}")
+    return color
+
+
+def _theme(
+    name: str,
+    mode: Literal["light", "dark"],
+    palette: Palette,
+    styles: dict[JsonType, TypeStyle],
+) -> ThemeSpec:
+    return ThemeSpec(
+        name=name,
+        mode=mode,
+        palette=palette,
+        types=MappingProxyType(dict(styles)),
+        icon_search_paths=(),
+    )
+
+
+_LIGHT_TYPES: dict[JsonType, TypeStyle] = {
+    JsonType.INTEGER: TypeStyle(fg=_c("#268bd2")),
+    JsonType.FLOAT: TypeStyle(fg=_c("#1f8f89")),
+    JsonType.PERCENT: TypeStyle(fg=_c("#1f8f89"), italic=True),
+    JsonType.BOOLEAN: TypeStyle(fg=_c("#d33682")),
+    JsonType.STRING: TypeStyle(fg=_c("#657b83")),
+    JsonType.UNICODE: TypeStyle(fg=_c("#6f8100")),
+    JsonType.MULTILINE: TypeStyle(fg=_c("#6f8100"), italic=True),
+    JsonType.TEXT: TypeStyle(fg=_c("#6f8100"), italic=True),
+    JsonType.DATE: TypeStyle(fg=_c("#946f00")),
+    JsonType.TIME: TypeStyle(fg=_c("#946f00")),
+    JsonType.DATETIME: TypeStyle(fg=_c("#946f00")),
+    JsonType.DATETIMEZONE: TypeStyle(fg=_c("#946f00")),
+    JsonType.BYTES: TypeStyle(fg=_c("#cb4b16")),
+    JsonType.ZLIB: TypeStyle(fg=_c("#cb4b16"), italic=True),
+    JsonType.GZIP: TypeStyle(fg=_c("#cb4b16"), italic=True),
+    JsonType.NULL: TypeStyle(fg=_c("#7f8c8d"), italic=True),
+    JsonType.OBJECT: TypeStyle(fg=_c("#073642"), bold=True),
+    JsonType.ARRAY: TypeStyle(fg=_c("#073642"), bold=True),
+}
+
+_DARK_TYPES: dict[JsonType, TypeStyle] = {
+    JsonType.INTEGER: TypeStyle(fg=_c("#7aa2f7")),
+    JsonType.FLOAT: TypeStyle(fg=_c("#73daca")),
+    JsonType.PERCENT: TypeStyle(fg=_c("#73daca"), italic=True),
+    JsonType.BOOLEAN: TypeStyle(fg=_c("#f7768e")),
+    JsonType.STRING: TypeStyle(fg=_c("#c0caf5")),
+    JsonType.UNICODE: TypeStyle(fg=_c("#9ece6a")),
+    JsonType.MULTILINE: TypeStyle(fg=_c("#9ece6a"), italic=True),
+    JsonType.TEXT: TypeStyle(fg=_c("#9ece6a"), italic=True),
+    JsonType.DATE: TypeStyle(fg=_c("#e0af68")),
+    JsonType.TIME: TypeStyle(fg=_c("#e0af68")),
+    JsonType.DATETIME: TypeStyle(fg=_c("#e0af68")),
+    JsonType.DATETIMEZONE: TypeStyle(fg=_c("#e0af68")),
+    JsonType.BYTES: TypeStyle(fg=_c("#ff9e64")),
+    JsonType.ZLIB: TypeStyle(fg=_c("#ff9e64"), italic=True),
+    JsonType.GZIP: TypeStyle(fg=_c("#ff9e64"), italic=True),
+    JsonType.NULL: TypeStyle(fg=_c("#6b739f"), italic=True),
+    JsonType.OBJECT: TypeStyle(fg=_c("#7dcfff"), bold=True),
+    JsonType.ARRAY: TypeStyle(fg=_c("#7dcfff"), bold=True),
+}
+
+
+LIGHT_DEFAULT = _theme(
+    name="Default Light",
+    mode="light",
+    palette=Palette(
+        base_fg=_c("#657b83"),
+        base_bg=_c("#fdf6e3"),
+        selection_fg=_c("#fdf6e3"),
+        selection_bg=_c("#268bd2"),
+        accent=_c("#b58900"),
+    ),
+    styles=_LIGHT_TYPES,
+)
+
+DARK_DEFAULT = _theme(
+    name="Default Dark",
+    mode="dark",
+    palette=Palette(
+        base_fg=_c("#c0caf5"),
+        base_bg=_c("#1a1b26"),
+        selection_fg=_c("#1a1b26"),
+        selection_bg=_c("#7aa2f7"),
+        accent=_c("#e0af68"),
+    ),
+    styles=_DARK_TYPES,
+)

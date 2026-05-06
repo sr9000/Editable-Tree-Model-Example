@@ -1,10 +1,14 @@
 # JSON Editor — Pros & Cons
 
-_Last analysis: 2026-04-26. Phases 0–5 are shipped (all sub-phases of
-Phase 5 included); the package refactor (Phases 01–37) is complete and
-all old top-level "god modules" have been split into cohesive packages
-and removed; Phase 6 testing is partial. **401 tests pass** under
-`QT_QPA_PLATFORM=offscreen pytest -q` in ~3 s. No teardown segfault._
+_Last analysis: 2026-05-06. Phases 0–6 are shipped, including the
+theming stack (loader → registry → delegate coloring → icon provider →
+live theme switching) and a follow-up Phase-6 refactor that extracted
+`app/theme_controller.py`. The package refactor (Phases 01–37) remains
+complete and all old top-level "god modules" stay removed. The last
+recorded full-suite baseline in memory is still **401 passed**
+(`2026-04-26`), while the current tree now **collects 451 tests** and
+the dedicated theming surface (**50 tests**) passes under
+`QT_QPA_PLATFORM=offscreen pytest -q`._
 
 This document evaluates the **current** state of the JSON tree editor
 implementation across the canonical package layout: `main.py`, `app/`,
@@ -21,8 +25,8 @@ implementation across the canonical package layout: `main.py`, `app/`,
   editing layer (`delegates/`), shell layer (`app/`), persistence
   (`state/` + `io_formats/`).
 - **Package refactor delivered** — no source file (other than
-  generated `mainwindow.py`) exceeds ~510 lines; `JsonTab` shrank from
-  ~1050 to ~500 lines; `tree_view.py`/`delegate.py`/`json_tab.py`/`ui.py`
+  generated `mainwindow.py`) exceeds ~540 lines; `JsonTab` shrank from
+  ~1050 to ~540 lines; `tree_view.py`/`delegate.py`/`json_tab.py`/`ui.py`
   monolith files were split into focused packages with narrow public
   APIs.
 - **Tabbed multi-document architecture** — each `JsonTab` owns its
@@ -80,6 +84,31 @@ implementation across the canonical package layout: `main.py`, `app/`,
   - Expand All / Collapse All in both the tree context menu and the
     View menu; Ctrl+= / Ctrl+- / Ctrl+0 zoom shortcuts persist with
     view state.
+- **Phase 1–6 theming shipped cleanly**:
+  - `themes/` is now a self-contained package with immutable,
+    hashable `ThemeSpec` / `Palette` / `TypeStyle` dataclasses,
+    YAML loading with total fallback semantics, built-in light/dark
+    themes, and a `ThemeRegistry` that merges built-in and user
+    themes.
+  - `state/theme_settings.py` persists follow-system mode, per-mode
+    preferred theme names, a manual override, and the opt-in file
+    watcher flag.
+  - `ValueDelegate` and `JsonTypeDelegate` are theme-aware:
+    per-`JsonType` foreground/font styling is applied without
+    polluting model roles, and selection highlight still wins.
+  - Type icons are fully wired: `FileIconProvider` resolves SVG/PNG/ICO
+    assets from theme search paths, `JsonTreeModel` serves
+    `DecorationRole` on the Type column, and the type combobox reuses
+    the same provider.
+  - Theme switching is live and non-destructive: open tabs keep undo
+    history, expansion, and current selection while `JsonTab.set_theme`
+    repaints in place.
+  - The Phase-6 refactor extracted `ThemeController`, pulling menu
+    building, follow-system logic, persistence, hot reload and watcher
+    plumbing out of `MainWindow` into a cohesive helper.
+- **Built-in theme assets are shipped** — `themes/builtin/` now carries
+  `light.yaml`, `dark.yaml`, and a bundled monochrome SVG icon set used
+  by both defaults.
 - **CapsLock-safe inline editing** — `_TextEditorDelegateBase` and
   `_CapsLockSafeLineEdit` swallow lock-key key events and
   layout-switch focus changes so xkb layout-switch keybinds don't
@@ -91,10 +120,11 @@ implementation across the canonical package layout: `main.py`, `app/`,
 - **Synthetic root row** — `JsonTreeModel.show_root` lets the user
   edit the root container in the app while keeping the existing
   test fixtures (which use `show_root=False`) green.
-- **Substantial test coverage** — 401 tests, including phase-specific
-  suites for every Phase-5 sub-phase, end-to-end scenario coverage of
-  every JsonType x every mutating action, and wall-clock + memory
-  bounds locking the typed-command contract.
+- **Substantial test coverage** — the old 401-test baseline is now
+  supplemented by a 50-test theming surface:
+  `test_theme_loader.py`, `test_theme_registry.py`,
+  `test_icon_provider.py`, `test_value_delegate_theme.py`,
+  `test_icons_in_view.py`, and `test_theme_switching.py`.
 - **Reusable widget stack** — `qhexedit`, `qmultiline_editor`,
   `datetime_editor`, `qbigint_spinbox`, `qmpq_spinbox` are
   independently useful packages.
@@ -113,7 +143,7 @@ implementation across the canonical package layout: `main.py`, `app/`,
 
 ## ❌ Cons
 
-### Test surface gaps (Phase 6)
+### Remaining test / tooling gaps
 - **Full delegate matrix** is still missing
   (`tests/test_value_delegate.py`): editor type per JsonType,
   `setEditorData` / `setModelData` round-trips for integers, mpq,
@@ -129,16 +159,24 @@ implementation across the canonical package layout: `main.py`, `app/`,
   `parent()` / `index()` round-trip, `change_type` lossy=True only
   with prior children, `_unique_child_name` collision avoidance with
   reserved-name set.
-- **`pytest-qt`** is still not in `requirements.txt`; smoke tests
-  hand-roll a `QApplication` fixture.
-- **`make test`** target and `coverage.md` snapshot from Phase 6
-  tooling have not landed.
+- **`pytest-qt`** is still not pinned in `requirements.txt`, even
+  though newer theme-switching tests use `qtbot`.
+- **`make test`** / `themes-check` targets and a `coverage.md`
+  snapshot have not landed.
 
-### Stretch UX items (deferred from Phase 5)
-- **Type icons** in column 1 (SVG resource plumbing). Tracked as
-  optional in `phase-5.6-misc-polish.md`.
+### Theme / UX caveats
+- **Theme switching is content-scoped, not full-app chrome scoped** —
+  the tree content, type column and icons update live, but the code does
+  not currently install a full `QPalette` / stylesheet for menus,
+  toolbars and dialogs.
+- **Hot reload watches user YAML files, not icon asset folders** —
+  editing a custom SVG/PNG under a user theme directory will not be
+  noticed unless the YAML changes or the user triggers a manual reload.
 - **Match-highlight delegate** — `ValueDelegate.paint` overlay on
   filter matches. Tracked as optional in `phase-5.5-search-filter.md`.
+- **Phase 7 docs/tests remain open** — no `themes/builtin/schema.md`,
+  no README theming section/screenshots, and no theme snapshot or
+  accessibility suites yet.
 
 ### Tree/model semantic smells (low priority)
 - `JsonTreeItem.row()` returns `0` for the root rather than signalling
@@ -156,8 +194,7 @@ implementation across the canonical package layout: `main.py`, `app/`,
   together with `parse_float=mpq` on the pinned `simplejson`; the
   compatible path is `parse_float=mpq` only. Save still uses
   `use_decimal=True`.
-- `simplejson` and `pytest-qt` are imported but not pinned in
-  `requirements.txt`.
+- `simplejson` is now pinned, but `pytest-qt` still is not.
 - Save-time validation is best-effort: malformed datetimes / bytes
   surface as Python exceptions caught generically in
   `documents/tab_io.py`. No structured user-facing diagnostics.
@@ -189,10 +226,15 @@ The editor is **functionally complete for daily use**:
 - Type-aware presentation (PERCENT, mpq, bytes-family) plus
   full-text tooltips on long values.
 - A breadcrumb-driven status bar with transient action feedback.
-- 401 passing tests with no teardown segfault.
+- App-global theme loading, live switching, per-type colors, bundled
+  type icons, follow-system mode, and opt-in hot reload of user theme
+  YAML files.
+- The theming surface is verified by 50 passing targeted tests, and the
+  repository currently collects 451 tests overall.
 
-Outstanding work is concentrated in **Phase 6** (delegate matrix +
-round-trip property tests + tooling) and a handful of optional UX
-stretch items (type icons, match highlight delegate). The codebase
-itself is clean enough that those can ship as targeted PRs without
-restructuring.
+Outstanding work has shifted from Phase 6 into **Phase 7 polish**
+(theme docs, snapshots, accessibility checks, contributor tooling),
+plus a few broader QA and UX items (full delegate matrix,
+round-trip/property tests, match highlighting, full-app palette
+application). The codebase is structurally clean enough that those can
+ship as targeted PRs without further restructuring.
