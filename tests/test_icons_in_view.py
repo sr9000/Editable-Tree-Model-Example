@@ -2,23 +2,14 @@ from __future__ import annotations
 
 from importlib import resources
 
-import pytest
 from PySide6.QtCore import QModelIndex, Qt
-from PySide6.QtWidgets import QApplication, QComboBox, QStyleOptionViewItem, QWidget
+from PySide6.QtWidgets import QComboBox, QStyleOptionViewItem, QWidget
 
 from delegates.type_delegate import JsonTypeDelegate
 from documents.tab import JsonTab
 from themes import LIGHT_DEFAULT, ThemeRegistry, load_theme_yaml
 from themes.icon_provider import FileIconProvider, StubIconProvider
 from tree.model import JsonTreeModel
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    return app
 
 
 def _builtin_light_theme():
@@ -61,7 +52,7 @@ def test_file_provider_returns_non_null_icons_for_leaf_rows():
         assert icon.isNull() is False
 
 
-def test_json_type_delegate_combobox_entries_have_icons(qapp):
+def test_json_type_delegate_combobox_entries_have_icons(qtbot):
     theme = _builtin_light_theme()
     delegate = JsonTypeDelegate(theme=theme, icon_provider=FileIconProvider(theme))
     parent = QWidget()
@@ -78,7 +69,7 @@ def test_json_type_delegate_combobox_entries_have_icons(qapp):
         parent.deleteLater()
 
 
-def test_json_tab_set_theme_emits_data_changed_for_type_column_icons(qapp):
+def test_json_tab_set_theme_emits_data_changed_for_type_column_icons(qtbot):
     registry = ThemeRegistry()
     light = registry.default_for_mode("light")
     dark = registry.default_for_mode("dark")
@@ -104,5 +95,5 @@ def test_json_tab_set_theme_emits_data_changed_for_type_column_icons(qapp):
         tab.deleteLater()
 
     assert emissions
-    assert any(top_col == 1 and bottom_col == 1 for top_col, bottom_col, _roles in emissions)
+    assert any(top_col <= 1 <= bottom_col for top_col, bottom_col, _roles in emissions)
     assert any(Qt.ItemDataRole.DecorationRole in roles for _top, _bottom, roles in emissions)

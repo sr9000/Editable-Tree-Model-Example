@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+
+from PySide6.QtCore import QFileSystemWatcher, QTimer, QUrl
+from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication
+from PySide6.QtWidgets import QMenu, QWidget
+
+from state.theme_settings import (
+    get_follow_system,
+    get_watch_user_dir,
+    resolve_active_theme,
+    set_follow_system,
+    set_manual_theme_name,
+    set_preferred_theme_name,
+    set_watch_user_dir,
+)
+from themes import ThemeRegistry
+from themes.icon_provider import IconProvider
+from themes.spec import ThemeSpec
+
+
+class ThemeController:
+    def __init__(
+        self,
+        parent: QWidget,
+        on_theme_changed: Callable[[ThemeSpec, IconProvider], None],
+    ) -> None:
+        self._parent = parent
+        self._on_theme_changed = on_theme_changed
+        self._theme_registry = ThemeRegistry()
+
+        self._theme_menu: QMenu | None = None
+        self._theme_light_menu: QMenu | None = None
+        self._theme_dark_menu: QMenu | None = None
+        self._theme_follow_action: QAction | None = None
+        self._theme_watch_action: QAction | None = None
+        self._theme_light_group: QActionGroup | None = None
+        self._theme_dark_group: QActionGroup | None = None
+        self._theme_actions: dict[str, QAction] = {}
+
+        self._theme_fs_watcher = QFileSystemWatcher(parent)
+        self._theme_reload_timer = QTimer(parent)
+        self._theme_reload_timer.setSingleShot(True)
+        self._theme_reload_timer.setInterval(250)
+        self._theme_reload_timer.timeout.connect(self.reload_themes)
+        self._theme_fs_watcher.directoryChanged.connect(self.on_theme_fs_event)
+        self._theme_fs_watcher.fileChanged.connect(self.on_theme_fs_event)
+
+        app = QGuiApplication.instance()
+        if isinstance(app, QGuiApplication):
+            self._theme = resolve_active_theme(self._theme_registry, app)
+            style_hints = app.styleHints()
+            if hasattr(style_hints, "colorSchemeChanged"):
+                style_hints.colorSchemeChanged.connect(self.on_system_color_scheme_changed)
+        else:
+            self._theme = self._theme_registry.default_for_mode("light")
+        self._icon_provider = self._theme_registry.build_icon_provider(self._theme)
+
+        if get_watch_user_dir():
+            self.refresh_theme_watcher_paths()
+
+    @property
+    def registry(self) -> ThemeRegistry:
+        return self._theme_registry
+
+    @property
+    def theme(self) -> ThemeSpec:
+        return self._theme
+
+    @property
+    def icon_provider(self) -> IconProvider:
+        return self._icon_provider
+
+    @property
+    def follow_action(self) -> QAction | None:
+        return self._theme_follow_action
+
+    def setup_theme_menu(self, view_menu: QMenu) -> None:
+        menu = QMenu("Theme", self._parent)
+        self._theme_menu = menu
+        follow_action = QAction("Follow system", self._parent)
+        follow_action.setCheckable(True)
+        follow_action.triggered.connect(self.on_follow_system_toggled)
+        self._theme_follow_action = follow_action
+        menu.addAction(follow_action)
+
+        watch_action = QAction("Watch user theme folder", self._parent)
+        watch_action.setCheckable(True)
+        watch_action.triggered.connect(self.on_watch_user_dir_toggled)
+        self._theme_watch_action = watch_action
+        menu.addAction(watch_action)
+        menu.addSeparator()
+
+        self._theme_light_menu = menu.addMenu("Light themes")
+        self._theme_dark_menu = menu.addMenu("Dark themes")
+        self._theme_light_group = QActionGroup(self._parent)
+        self._theme_light_group.setExclusive(True)
+        self._theme_dark_group = QActionGroup(self._parent)
+        self._theme_dark_group.setExclusive(True)
+
+        menu.addSeparator()
+        reload_action = QAction("Reload themes", self._parent)
+        reload_action.triggered.connect(self.reload_themes)
+        menu.addAction(reload_action)
+
+        open_folder_action = QAction("Open themes folder...", self._parent)
+        open_folder_action.triggered.connect(self.open_themes_folder)
+        menu.addAction(open_folder_action)
+
+        view_menu.addMenu(menu)
+        self.rebuild_theme_menu_entries()
+        self.refresh_theme_menu_checks()
+
+    def apply_theme(self, theme: ThemeSpec) -> None:
+        self._theme = theme
+        self._icon_provider = self._theme_registry.build_icon_provider(theme)
+        self._on_theme_changed(theme, self._icon_provider)
+        self.refresh_theme_menu_checks()
+
+    def rebuild_theme_menu_entries(self) -> None:
+        if self._theme_light_menu is None or self._theme_dark_menu is None:
+            return
+        if self._theme_light_group is not None:
+            for action in list(self._theme_light_group.actions()):
+                self._theme_light_group.removeAction(action)
+                action.deleteLater()
+        if self._theme_dark_group is not None:
+            for action in list(self._theme_dark_group.actions()):
+                self._theme_dark_group.removeAction(action)
+                action.deleteLater()
+        self._theme_light_menu.clear()
+        self._theme_dark_menu.clear()
+        self._theme_actions.clear()
+
+        for handle in self._theme_registry.list_themes():
+            action = QAction(handle.name, self._parent)
+            action.setCheckable(True)
+            action.triggered.connect(lambda _checked=False, n=handle.name: self.on_theme_selected(n))
+            self._theme_actions[handle.name] = action
+            if handle.mode == "light":
+                assert self._theme_light_group is not None
+                self._theme_light_group.addAction(action)
+                self._theme_light_menu.addAction(action)
+            else:
+                assert self._theme_dark_group is not None
+                self._theme_dark_group.addAction(action)
+                self._theme_dark_menu.addAction(action)
+
+    def refresh_theme_menu_checks(self) -> None:
+        follow = get_follow_system()
+        if self._theme_follow_action is not None:
+            self._theme_follow_action.setChecked(follow)
+        if self._theme_watch_action is not None:
+            self._theme_watch_action.setChecked(get_watch_user_dir())
+        for name, action in self._theme_actions.items():
+            action.setChecked(name == self._theme.name)
+
+    def on_theme_selected(self, name: str) -> None:
+        try:
+            selected = self._theme_registry.get(name)
+        except KeyError:
+            return
+
+        if get_follow_system():
+            set_preferred_theme_name(selected.mode, selected.name)
+        else:
+            set_manual_theme_name(selected.name)
+
+        self.apply_theme(selected)
+
+    def on_follow_system_toggled(self, checked: bool) -> None:
+        set_follow_system(checked)
+        if checked:
+            app = QGuiApplication.instance()
+            if isinstance(app, QGuiApplication):
+                self.apply_theme(resolve_active_theme(self._theme_registry, app))
+            return
+
+        set_manual_theme_name(self._theme.name)
+        self.refresh_theme_menu_checks()
+
+    def on_watch_user_dir_toggled(self, checked: bool) -> None:
+        set_watch_user_dir(checked)
+        if checked:
+            self.refresh_theme_watcher_paths()
+        else:
+            self.clear_theme_watcher_paths()
+        self.refresh_theme_menu_checks()
+
+    def open_themes_folder(self) -> None:
+        user_dir = self._theme_registry.user_dir
+        user_dir.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(user_dir)))
+
+    def clear_theme_watcher_paths(self) -> None:
+        current = self._theme_fs_watcher.directories() + self._theme_fs_watcher.files()
+        if current:
+            self._theme_fs_watcher.removePaths(current)
+
+    def refresh_theme_watcher_paths(self) -> None:
+        user_dir = self._theme_registry.user_dir
+        user_dir.mkdir(parents=True, exist_ok=True)
+        desired = {str(user_dir.resolve())}
+        desired.update(str(path.resolve()) for path in user_dir.glob("*.yaml"))
+        current = set(self._theme_fs_watcher.directories()) | set(self._theme_fs_watcher.files())
+
+        to_remove = [path for path in current if path not in desired]
+        if to_remove:
+            self._theme_fs_watcher.removePaths(to_remove)
+        to_add = [path for path in desired if path not in current]
+        if to_add:
+            self._theme_fs_watcher.addPaths(to_add)
+
+    def on_theme_fs_event(self, _path: str) -> None:
+        if not get_watch_user_dir():
+            return
+        self._theme_reload_timer.start()
+
+    def reload_themes(self) -> None:
+        self._theme_registry.reload()
+        self.rebuild_theme_menu_entries()
+
+        active_name = self._theme.name
+        try:
+            selected = self._theme_registry.get(active_name)
+        except KeyError:
+            app = QGuiApplication.instance()
+            if isinstance(app, QGuiApplication):
+                selected = resolve_active_theme(self._theme_registry, app)
+            else:
+                selected = self._theme_registry.default_for_mode("light")
+        self.apply_theme(selected)
+
+        if get_watch_user_dir():
+            self.refresh_theme_watcher_paths()
+
+    def on_system_color_scheme_changed(self, *_args) -> None:
+        if not get_follow_system():
+            return
+        app = QGuiApplication.instance()
+        if not isinstance(app, QGuiApplication):
+            return
+        self.apply_theme(resolve_active_theme(self._theme_registry, app))

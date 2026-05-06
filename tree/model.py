@@ -35,22 +35,10 @@ class JsonTreeModel(QAbstractItemModel):
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
 
     def set_icon_provider(self, provider: IconProvider | None) -> None:
-        self._icon_provider = provider or StubIconProvider()
-
-        def emit_col1_ranges(parent: QModelIndex) -> None:
-            rows = self.rowCount(parent)
-            if rows <= 0:
-                return
-
-            top_left = self.index(0, 1, parent)
-            bottom_right = self.index(rows - 1, 1, parent)
-            self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.DecorationRole])
-
-            for row in range(rows):
-                child_parent = self.index(row, 0, parent)
-                emit_col1_ranges(child_parent)
-
-        emit_col1_ranges(QModelIndex())
+        next_provider = provider or StubIconProvider()
+        if next_provider is self._icon_provider:
+            return
+        self._icon_provider = next_provider
 
     def _root_index(self) -> QModelIndex:
         if not self.show_root:

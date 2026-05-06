@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QGuiApplication
 
@@ -56,13 +58,13 @@ def set_watch_user_dir(enabled: bool) -> None:
     _settings().setValue(_WATCH_USER_DIR_KEY, bool(enabled))
 
 
-def get_preferred_theme_name(mode: str) -> str:
+def get_preferred_theme_name(mode: Literal["light", "dark"]) -> str:
     key = _DARK_THEME_KEY if mode == "dark" else _LIGHT_THEME_KEY
     default = _DEFAULT_DARK_NAME if mode == "dark" else _DEFAULT_LIGHT_NAME
     return _coerce_name(_settings().value(key), default=default)
 
 
-def set_preferred_theme_name(mode: str, name: str) -> None:
+def set_preferred_theme_name(mode: Literal["light", "dark"], name: str) -> None:
     if mode == "dark":
         _settings().setValue(_DARK_THEME_KEY, name)
     else:

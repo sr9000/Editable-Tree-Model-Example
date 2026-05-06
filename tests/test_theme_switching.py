@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, QSettings, Qt
+from PySide6.QtCore import QModelIndex, QSettings, QStandardPaths, Qt
 
 from app.main_window import MainWindow
 from settings import APPLICATION_ID
@@ -18,6 +18,7 @@ def _current_source_path(tab) -> tuple[int, ...]:
 
 
 def test_switching_theme_preserves_undo_expansion_and_selection(qtbot, tmp_path, monkeypatch):
+    QStandardPaths.setTestModeEnabled(True)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     _theme_settings().clear()
 
@@ -54,6 +55,7 @@ def test_switching_theme_preserves_undo_expansion_and_selection(qtbot, tmp_path,
 
 
 def test_follow_system_setting_persists_across_mainwindow_instances(qtbot, tmp_path, monkeypatch):
+    QStandardPaths.setTestModeEnabled(True)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     settings = _theme_settings()
     settings.clear()
@@ -78,6 +80,7 @@ def test_follow_system_setting_persists_across_mainwindow_instances(qtbot, tmp_p
 
 
 def test_hot_reload_picks_up_new_user_theme_via_watcher_event(qtbot, tmp_path, monkeypatch):
+    QStandardPaths.setTestModeEnabled(True)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     _theme_settings().clear()
     set_watch_user_dir(True)
@@ -112,6 +115,7 @@ def test_hot_reload_picks_up_new_user_theme_via_watcher_event(qtbot, tmp_path, m
 
 
 def test_apply_theme_emits_datachanged_across_tabs(qtbot, tmp_path, monkeypatch):
+    QStandardPaths.setTestModeEnabled(True)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     _theme_settings().clear()
 

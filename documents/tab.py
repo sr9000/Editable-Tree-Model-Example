@@ -148,7 +148,12 @@ class JsonTab(QWidget):
         self.type_delegate.set_icon_provider(self._icon_provider)
         self.model.set_icon_provider(self._icon_provider)
 
-        roles = [Qt.ItemDataRole.ForegroundRole, Qt.ItemDataRole.BackgroundRole, Qt.ItemDataRole.FontRole]
+        roles = [
+            Qt.ItemDataRole.ForegroundRole,
+            Qt.ItemDataRole.BackgroundRole,
+            Qt.ItemDataRole.FontRole,
+            Qt.ItemDataRole.DecorationRole,
+        ]
 
         def emit_ranges(parent: QModelIndex) -> None:
             rows = self.model.rowCount(parent)
