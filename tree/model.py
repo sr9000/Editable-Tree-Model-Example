@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
 
+from themes.icon_provider import IconProvider, StubIconProvider
 from tree.item import JsonTreeItem
 from tree.model_roles import (
     JSON_TYPE_ROLE,
@@ -26,10 +27,30 @@ class JsonTreeModel(QAbstractItemModel):
         parent: Optional[Any] = None,
         *,
         show_root: bool = False,
+        icon_provider: IconProvider | None = None,
     ) -> None:
         super().__init__(parent)
         self.root_item = JsonTreeItem(None, data)
         self.show_root = show_root
+        self._icon_provider: IconProvider = icon_provider or StubIconProvider()
+
+    def set_icon_provider(self, provider: IconProvider | None) -> None:
+        self._icon_provider = provider or StubIconProvider()
+
+        def emit_col1_ranges(parent: QModelIndex) -> None:
+            rows = self.rowCount(parent)
+            if rows <= 0:
+                return
+
+            top_left = self.index(0, 1, parent)
+            bottom_right = self.index(rows - 1, 1, parent)
+            self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.DecorationRole])
+
+            for row in range(rows):
+                child_parent = self.index(row, 0, parent)
+                emit_col1_ranges(child_parent)
+
+        emit_col1_ranges(QModelIndex())
 
     def _root_index(self) -> QModelIndex:
         if not self.show_root:
@@ -103,6 +124,9 @@ class JsonTreeModel(QAbstractItemModel):
 
         if role == Qt.ItemDataRole.FontRole and index.column() == 0:
             return font_role_for_name(item, is_root_item=(item is self.root_item))
+
+        if role == Qt.ItemDataRole.DecorationRole and index.column() == 1:
+            return self._icon_provider.for_type(item.json_type)
 
         if role == JSON_TYPE_ROLE and index.column() == 2:
             return item.json_type
@@ -198,7 +222,12 @@ class JsonTreeModel(QAbstractItemModel):
         if not item.set_data(1, target_type):
             return False
 
-        roles = [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole, Qt.ItemDataRole.FontRole]
+        roles = [
+            Qt.ItemDataRole.DisplayRole,
+            Qt.ItemDataRole.EditRole,
+            Qt.ItemDataRole.FontRole,
+            Qt.ItemDataRole.DecorationRole,
+        ]
         top = self.index(index.row(), 0, index.parent())
         bot = self.index(index.row(), 2, index.parent())
         self.dataChanged.emit(top, bot, roles)

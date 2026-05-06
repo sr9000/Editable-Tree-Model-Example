@@ -29,5 +29,23 @@ types:
   array: { fg: "#073642", bold: true }
 
 icons:
-  search_paths: []
-  map: {}
+  search_paths: ["./icons"]
+  map:
+    integer: integer
+    float: float
+    percent: percent
+    boolean: boolean
+    string: string
+    unicode: unicode
+    multiline: multiline
+    text: text
+    date: date
+    time: time
+    datetime: datetime
+    datetimezone: datetimezone
+    bytes: bytes
+    zlib: zlib
+    gzip: gzip
+    "null": "null"
+    object: object
+    array: array

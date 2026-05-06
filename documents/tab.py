@@ -22,7 +22,7 @@ from documents.tab_setup import (
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
 from themes import LIGHT_DEFAULT
-from themes.icon_provider import IconProvider
+from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.types import JsonType
@@ -114,7 +114,7 @@ class JsonTab(QWidget):
         self._status_message_callback = status_message_callback
         self._permanent_message_callback = permanent_message_callback
         self._theme = theme or LIGHT_DEFAULT
-        self._icon_provider = icon_provider
+        self._icon_provider: IconProvider = icon_provider or StubIconProvider()
 
         init_layout(self)
 
@@ -140,10 +140,13 @@ class JsonTab(QWidget):
         self.undo_stack.setClean()
         self._set_dirty(False)
 
-    def set_theme(self, theme: ThemeSpec) -> None:
+    def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
         self._theme = theme
+        self._icon_provider = icon_provider or self._icon_provider
         self.value_delegate.set_theme(theme)
         self.type_delegate.set_theme(theme)
+        self.type_delegate.set_icon_provider(self._icon_provider)
+        self.model.set_icon_provider(self._icon_provider)
 
         roles = [Qt.ItemDataRole.ForegroundRole, Qt.ItemDataRole.BackgroundRole, Qt.ItemDataRole.FontRole]
 

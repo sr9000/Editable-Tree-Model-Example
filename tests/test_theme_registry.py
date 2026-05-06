@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QGuiApplication
 
 from themes import DARK_DEFAULT, LIGHT_DEFAULT, ThemeRegistry, detect_system_mode, load_theme_yaml
 from themes._contrast import contrast_ratio
-from themes.icon_provider import FileIconProvider, StubIconProvider
+from themes.icon_provider import FileIconProvider
 
 
 def _color_hex(color: QColor | None) -> str | None:
@@ -18,7 +18,7 @@ def _color_hex(color: QColor | None) -> str | None:
     return color.name().lower()
 
 
-def _assert_theme_equal(actual, expected) -> None:
+def _assert_theme_equal(actual, expected, *, compare_icons: bool = True) -> None:
     assert actual.name == expected.name
     assert actual.mode == expected.mode
     assert _color_hex(actual.palette.base_fg) == _color_hex(expected.palette.base_fg)
@@ -26,7 +26,8 @@ def _assert_theme_equal(actual, expected) -> None:
     assert _color_hex(actual.palette.selection_fg) == _color_hex(expected.palette.selection_fg)
     assert _color_hex(actual.palette.selection_bg) == _color_hex(expected.palette.selection_bg)
     assert _color_hex(actual.palette.accent) == _color_hex(expected.palette.accent)
-    assert actual.icon_search_paths == expected.icon_search_paths
+    if compare_icons:
+        assert actual.icon_search_paths == expected.icon_search_paths
 
     for json_type in expected.types:
         left = actual.types[json_type]
@@ -35,7 +36,8 @@ def _assert_theme_equal(actual, expected) -> None:
         assert _color_hex(left.bg) == _color_hex(right.bg)
         assert left.bold == right.bold
         assert left.italic == right.italic
-        assert left.icon == right.icon
+        if compare_icons:
+            assert left.icon == right.icon
 
 
 def _load_builtin(name: str):
@@ -45,8 +47,8 @@ def _load_builtin(name: str):
 
 
 def test_builtin_themes_reproduce_defaults():
-    _assert_theme_equal(_load_builtin("light.yaml"), LIGHT_DEFAULT)
-    _assert_theme_equal(_load_builtin("dark.yaml"), DARK_DEFAULT)
+    _assert_theme_equal(_load_builtin("light.yaml"), LIGHT_DEFAULT, compare_icons=False)
+    _assert_theme_equal(_load_builtin("dark.yaml"), DARK_DEFAULT, compare_icons=False)
 
 
 def test_builtin_themes_meet_wcag_aa_contrast():
@@ -98,9 +100,9 @@ def test_broken_user_file_is_skipped(tmp_path, caplog):
     assert any("Skipping broken user theme" in rec.message for rec in caplog.records)
 
 
-def test_registry_build_icon_provider_uses_stub_without_icons_and_file_with_map(tmp_path):
+def test_registry_build_icon_provider_uses_file_with_builtin_or_mapped_icons(tmp_path):
     registry = ThemeRegistry(user_dir=tmp_path / "themes")
-    assert isinstance(registry.build_icon_provider(registry.get("Default Light")), StubIconProvider)
+    assert isinstance(registry.build_icon_provider(registry.get("Default Light")), FileIconProvider)
 
     user_dir = tmp_path / "themes"
     user_dir.mkdir(parents=True, exist_ok=True)

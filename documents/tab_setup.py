@@ -48,7 +48,7 @@ def init_layout(tab) -> None:
 def init_model(tab, model_data: Any, show_root: bool) -> None:
     tab.undo_stack = QUndoStack(tab)
 
-    tab.model = JsonTreeModel(model_data, tab.view, show_root=show_root)
+    tab.model = JsonTreeModel(model_data, tab.view, show_root=show_root, icon_provider=tab._icon_provider)
     tab.proxy = TreeFilterProxy(tab)
     tab.proxy.setSourceModel(tab.model)
 
@@ -58,7 +58,7 @@ def init_model(tab, model_data: Any, show_root: bool) -> None:
 
 def init_delegates_and_connections(tab, update_actions_callback) -> None:
     tab.name_delegate = NameDelegate(tab)
-    tab.type_delegate = JsonTypeDelegate(tab, theme=tab._theme)
+    tab.type_delegate = JsonTypeDelegate(tab, theme=tab._theme, icon_provider=tab._icon_provider)
     tab.value_delegate = ValueDelegate(tab, theme=tab._theme)
 
     tab.view.setItemDelegateForColumn(0, tab.name_delegate)

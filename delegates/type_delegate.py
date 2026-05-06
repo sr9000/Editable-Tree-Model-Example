@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOpti
 
 from delegates.value_formatting import _apply_type_style
 from themes import LIGHT_DEFAULT
+from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.types import JsonType
@@ -26,9 +27,16 @@ class JsonTypeDelegate(QStyledItemDelegate):
             cursor = cursor.parent() if hasattr(cursor, "parent") else None
         return None
 
-    def __init__(self, parent=None, *, theme: ThemeSpec | None = None):
+    def __init__(
+        self,
+        parent=None,
+        *,
+        theme: ThemeSpec | None = None,
+        icon_provider: IconProvider | None = None,
+    ):
         super().__init__(parent)
         self._theme = theme or LIGHT_DEFAULT
+        self._icon_provider: IconProvider = icon_provider or StubIconProvider()
         # ``_interactive`` is set to ``True`` for the duration of an
         # interactive (user-driven) commit out of the type combo. The
         # ``JsonTab._on_type_changed`` slot reads it to decide whether to
@@ -42,6 +50,9 @@ class JsonTypeDelegate(QStyledItemDelegate):
 
     def set_theme(self, theme: ThemeSpec) -> None:
         self._theme = theme
+
+    def set_icon_provider(self, provider: IconProvider | None) -> None:
+        self._icon_provider = provider or StubIconProvider()
 
     def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex) -> None:  # type: ignore[override]
         super().initStyleOption(option, index)
@@ -61,7 +72,7 @@ class JsonTypeDelegate(QStyledItemDelegate):
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         editor = QComboBox(parent)
         for tp in JsonType:
-            editor.addItem(tp.value, tp)
+            editor.addItem(self._icon_provider.for_type(tp), tp.value, tp)
         return editor
 
     def setEditorData(self, editor: QComboBox, index: QModelIndex):
