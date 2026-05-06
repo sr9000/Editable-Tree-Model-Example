@@ -1,19 +1,22 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: 2026-04-26. Phases 0–5 are shipped (all sub-phases of
-Phase 5 included). The package refactor (Phases 01–37) is complete: all
-former top-level "god modules" have been split into cohesive packages
-and the old compatibility shims (`json_tab.py`, `ui.py`, `tree_view.py`,
-`tree_model.py`, `tree_item.py`, `delegate.py`, `enums.py`, `file_io.py`,
-`view_state.py`) have been removed. **401 tests pass** under
-`QT_QPA_PLATFORM=offscreen pytest -q` in ~3 s; no teardown segfault.
-Phase 6 testing remains partial._
+_Last scanned: 2026-05-06. Phases 0–6 are shipped, including the full
+theming stack and the Phase-6 refactor that extracted
+`app/theme_controller.py`. The package refactor (Phases 01–37) remains
+complete: all former top-level "god modules" have been split into
+cohesive packages and the old compatibility shims (`json_tab.py`,
+`ui.py`, `tree_view.py`, `tree_model.py`, `tree_item.py`,
+`delegate.py`, `enums.py`, `file_io.py`, `view_state.py`) remain
+removed. The last recorded full-suite baseline in memory is **401
+passed** (`2026-04-26`); the current tree now **collects 451 tests**,
+and the dedicated theming surface (**50 tests**) passes under
+`QT_QPA_PLATFORM=offscreen pytest -q`._
 
 ## 1) What this repo is
 
 A PySide6 desktop app that started life as Qt's **Editable Tree Model**
 example and has been rewritten into a real **structured-data editor**.
-After Phases 0–5 plus the package refactor it provides:
+After Phases 0–6 plus the package refactor it provides:
 
 - a tabbed multi-document shell with file open / save / save-as / recent
   files / close-confirm / persisted view state
@@ -33,6 +36,11 @@ After Phases 0–5 plus the package refactor it provides:
 - presentational `ValueDelegate` formatting for PERCENT / mpq /
   bytes-typed cells, with `ToolTipRole` carrying full text for long
   values
+- an app-global theming system with immutable YAML-backed theme specs,
+  built-in light/dark defaults, type-aware delegate coloring, bundled
+  type icons, follow-system theme selection, and opt-in hot reload of
+  user theme files (`themes/`, `state/theme_settings.py`,
+  `app/theme_controller.py`)
 - reusable custom editor widgets (`qhexedit/`, `qmultiline_editor.py`,
   `datetime_editor/`, `qbigint_spinbox/`, `qmpq_spinbox/`) and helper
   packages (`mpq2py/`, `jsontream/`, `coalesce/`, `binary/`, `qt2py/`,
@@ -52,6 +60,8 @@ qmultiline_editor.py          # QPlainTextEdit subclass for the multiline dialog
 app/                          # application shell
   main_window.py              # MainWindow class
   main_window_actions.py      # action wiring + update_actions()
+  theme_controller.py         # ThemeController: menu, persistence,
+                              # watcher, hot reload, follow-system
   recent_files.py             # QSettings-backed recent-files list
   close_confirm.py            # Save / Discard / Cancel flow
   history.py                  # History menu + QUndoView dialog
@@ -100,7 +110,20 @@ io_formats/                   # file load/save
 
 state/                        # persisted view state
   view_state.py               # state_key / save / restore / discard
+  theme_settings.py           # theme/follow-system/manual/watch prefs
   qsettings_coercion.py       # cross-platform QSettings shape helpers
+
+themes/                       # theming subsystem
+  spec.py                     # ThemeSpec / Palette / TypeStyle
+  loader.py                   # YAML → ThemeSpec with total fallback
+  _defaults.py                # built-in default light/dark specs
+  auto.py                     # system light/dark detection
+  registry.py                 # discover built-in + user themes
+  icon_provider.py            # Stub/File icon providers
+  builtin/
+    light.yaml                # built-in light theme
+    dark.yaml                 # built-in dark theme
+    icons/                    # bundled SVG type icon set
 ```
 
 Canonical imports use these package paths, e.g.:
@@ -122,6 +145,8 @@ from io_formats.load import load_file_with_format
 from io_formats.dump import dump_text
 from io_formats.atomic import atomic_write, save_file
 from state.view_state import save, restore, discard, state_key
+from state.theme_settings import resolve_active_theme
+from themes import ThemeRegistry, ThemeSpec
 ```
 
 ## 3) Runtime entrypoint and main window
@@ -133,21 +158,40 @@ from state.view_state import save, restore, discard, state_key
 - Resizes the window to `settings.WINDOW_DEFAULT_SIZE`.
 
 ### `app/main_window.py`
-- `MainWindow(QMainWindow, Ui_MainWindow)` (~290 lines).
+- `MainWindow(QMainWindow, Ui_MainWindow)` (~345 lines).
 - `setup_model(filename)` opens the file via `_open_path`; no-op on
   empty string (so test fixtures can pass `""`).
 - `_add_tab(data, file_path)` creates a `JsonTab` with `show_root=True`,
-  expands all, calls `state.view_state.restore`, sets focus to the
-  synthetic root row.
+  passes the active `ThemeSpec` + `IconProvider`, expands all, calls
+  `state.view_state.restore`, and sets focus to the synthetic root row.
 - `close_tab(index)` and `closeEvent` route through
   `app.close_confirm._confirm_close` (Save / Discard / Cancel) and call
   `state.view_state.save` per tab.
 - `copy_action()` delegates to `tree_actions.clipboard.copy_selection`.
+- Keeps a small set of underscore compatibility wrappers
+  (`_apply_theme`, `_on_theme_selected`, `_on_theme_fs_event`, …)
+  that now forward to `ThemeController`; tests still use these entry
+  points.
+
+### `app/theme_controller.py`
+- Owns the app-global theme state: `ThemeRegistry`, current
+  `ThemeSpec`, current `IconProvider`, and the View → Theme submenu.
+- Handles:
+  - follow-system persistence and per-mode theme preferences,
+  - manual theme selection,
+  - the opt-in "Watch user theme folder" flag,
+  - `QFileSystemWatcher` + 250 ms debounce reload,
+  - opening the user theme directory,
+  - reacting to `QGuiApplication.styleHints().colorSchemeChanged`,
+  - rebuilding menu actions after registry reload.
+- Calls back into `MainWindow` via `on_theme_changed(theme,
+  icon_provider)` so tabs repaint without model/view rebuilds.
 
 ### `app/main_window_actions.py`
 - File menu: `New`, `Open`, `Save`, `Save As`, `Recent` submenu (cap 8),
   `Quit`.
-- View menu: `Expand All`, `Collapse All`, `Zoom In/Out/Reset`.
+- View menu: `Expand All`, `Collapse All`, `Zoom In/Out/Reset`, plus a
+  Theme submenu created by `ThemeController`.
 - Actions menu: insert before / insert after / remove row.
 - `update_actions()` enables Save/SaveAs/View when a tab exists;
   insert/remove require a valid current index.
@@ -182,6 +226,8 @@ truth for one document:
 - Holds the source `JsonTreeModel`, a `TreeFilterProxy`, three column
   delegates (`NameDelegate` col 0, `JsonTypeDelegate` col 1,
   `ValueDelegate` col 2), and a `QUndoStack`.
+- Also holds the currently active `ThemeSpec` and `IconProvider`, both
+  supplied by `MainWindow` / `ThemeController`.
 - Constructor: `data` / `file_path` / `show_root` /
   `update_actions_callback` / `status_message_callback` /
   `permanent_message_callback`. When `data is _DEFAULT_DATA`, falls
@@ -204,10 +250,16 @@ truth for one document:
 - Dirty state: tied to `undo_stack.cleanChanged`. `dirtyChanged(bool)`
   signal updates `MainWindow` tab title (`*` suffix). `is_dirty`
   property; `display_name()` formats the title.
+- `set_theme(theme, icon_provider=None)` updates both delegates and the
+  model icon provider, then emits recursive `dataChanged` spans with
+  `ForegroundRole`, `BackgroundRole`, `FontRole`, and
+  `DecorationRole`; undo stack, expansion and current selection survive.
 
 ### `documents/tab_setup.py`
 - Builds the QTreeView, attaches delegates, wires shortcuts, search
   proxy, font-zoom helpers.
+- Injects `tab._theme` into `ValueDelegate` / `JsonTypeDelegate` and
+  `tab._icon_provider` into `JsonTreeModel` / `JsonTypeDelegate`.
 
 ### `documents/tab_paths.py`
 - Pure-ish helpers operating on `(model, proxy)`:
@@ -236,6 +288,11 @@ truth for one document:
 - `setData` routes through `JsonTreeItem.set_data` (col 0/2) or
   `change_type` (col 1, with `typeChanged(QModelIndex, lossy:bool)`
   signal).
+- Accepts an optional `icon_provider`; `data(..., DecorationRole)` for
+  column 1 returns the type icon for the row.
+- `set_icon_provider(provider)` swaps the provider with an identity
+  short-circuit; repaint emission is handled one layer up by
+  `JsonTab.set_theme`.
 - Mutation helpers used by typed commands: `move_row`, `change_type`,
   `sort_keys` (recursive option), `insertRows` / `removeRows`
   (context-managed `beginInsert*` / `beginRemove*`).
@@ -253,6 +310,8 @@ truth for one document:
 - `ToolTipRole` for col 2 returns the full value capped at 4 KB +
   ellipsis when raw text > 80 chars.
 - `FontRole` italicizes col 0 names that contain non-ASCII.
+- Theme colors intentionally do **not** live in model roles; the model
+  stays theme-agnostic apart from column-1 `DecorationRole` icons.
 
 ### `tree/item.py` — `JsonTreeItem`
 - One JSON node. Stores `name`, `value`, `parent_item`, `child_items`,
@@ -301,12 +360,18 @@ Editors per JsonType:
 - BYTES / ZLIB / GZIP → modal `QHexDialog`; decode wrapped in
   `try/except (ValueError, OSError, zlib.error, binascii.Error)`,
   failures surface via `_notify_status` (status-bar callback)
+- `initStyleOption` is theme-aware: it reads `JSON_TYPE_ROLE`, formats
+  the text via `format_with_type`, and applies per-type foreground /
+  background / bold / italic styling while preserving platform
+  selection colors.
 
 ### `delegates/value_formatting.py`
 - `initStyleOption` reads `EditRole` + `JSON_TYPE_ROLE` and sets
   `option.text` to a type-aware formatted string (PERCENT → `"50%"`,
   BYTES-family → `"<24 byte>"`, mpq → decimal form, long strings
   elide to 80 chars).
+- `_apply_type_style(...)` centralizes theme styling so both value and
+  type delegates share the same selection-aware font/foreground logic.
 
 ### `delegates/base.py`
 - `_CapsLockSafeLineEdit` and `_TextEditorDelegateBase` swallow
@@ -318,6 +383,9 @@ Editors per JsonType:
   `findData`.
 - `_interactive` flag set during `setModelData`; commit routes through
   `JsonTab.commit_set_data` if a tab ancestor exists.
+- Also receives the active `ThemeSpec` + `IconProvider`: the display
+  cell text is theme-colored when not selected, and the editor combo is
+  populated with icons via `addItem(icon, text, data)`.
 
 ### `delegates/name_delegate.py` — `NameDelegate(_TextEditorDelegateBase)`
 - `_CapsLockSafeLineEdit` for col 0 rename. Commit routes through
@@ -387,6 +455,62 @@ both the context menu and the View menu.
 - `_coerce_int`, `_coerce_int_list`, `_coerce_path`, `_coerce_paths` —
   handle `QSettings`'s platform-dependent shapes (list of ints, string
   with `/` or `,` separators).
+
+### `state/theme_settings.py`
+- Stores theme-related `QSettings(APPLICATION_ID, "theme")` values:
+  `theme/follow_system`, `theme/light_name`, `theme/dark_name`,
+  `theme/manual_name`, and `theme/watch_user_dir`.
+- Exposes small coercing getters/setters plus
+  `resolve_active_theme(registry, app)`.
+- Manual mode falls back to the manual theme name first, then the
+  current mode's preferred theme, then the built-in default.
+
+## 9.5) Theming system — `themes/`
+
+### `themes/spec.py`
+- Frozen, hashable dataclasses:
+  - `TypeStyle(fg, bg, bold, italic, icon)`
+  - `Palette(base_fg, base_bg, selection_fg, selection_bg, accent)`
+  - `ThemeSpec(name, mode, palette, types, icon_search_paths)`
+- `ThemeSpec.types` is always complete across all `JsonType` members.
+
+### `themes/loader.py`
+- `load_theme_yaml(path, mode_default=...)` → YAML file to fully merged
+  `ThemeSpec`.
+- `parse_theme_mapping(...)` accepts partial mappings, validates
+  required top-level `name` / `mode`, parses colors with `QColor`,
+  warns-and-ignores malformed optional fields, and resolves icon search
+  paths relative to the YAML file.
+- Unknown type keys in `types:` / `icons.map:` are logged and ignored.
+
+### `themes/_defaults.py`
+- Hard-coded `LIGHT_DEFAULT` / `DARK_DEFAULT` specs remain the semantic
+  ground truth used for fallback merging and equality tests.
+
+### `themes/auto.py`
+- `detect_system_mode(app)` prefers `styleHints().colorScheme()` and
+  falls back to palette window lightness.
+
+### `themes/registry.py`
+- Discovers built-ins via `importlib.resources` and user overrides via
+  `QStandardPaths.AppConfigLocation/themes/*.yaml`.
+- `list_themes()` returns `ThemeHandle(name, mode, path)` sorted by
+  `(mode, casefolded name)`.
+- User themes with the same name as a built-in override that built-in
+  and log at INFO.
+- `build_icon_provider(theme)` returns `FileIconProvider` whenever any
+  type has an icon key, else `StubIconProvider`.
+
+### `themes/icon_provider.py`
+- `StubIconProvider` returns empty `QIcon()` for every type.
+- `FileIconProvider` resolves `<key>.svg`, then `.png`, then `.ico`
+  across configured search paths, caches per-`JsonType`, warns once per
+  missing asset, and supports `reload()`.
+
+### `themes/builtin/`
+- `light.yaml` / `dark.yaml` reproduce the shipped defaults and point
+  at `./icons`.
+- `icons/` contains one SVG per `JsonType` key used by the built-ins.
 
 ## 10) File I/O — `io_formats/`
 
@@ -463,7 +587,7 @@ Direct-mutation helpers used as fallbacks when the view has no
 - `HeaderViewEditorMixin` — currently unused by `JsonTab` (commented
   out). Kept for future column header editing.
 
-## 13) Tests (401 passing as of 2026-04-26)
+## 13) Tests
 
 Editor / phase suites:
 - `test_smoke_model.py`, `test_smoke_mainwindow.py`,
@@ -478,14 +602,27 @@ Editor / phase suites:
   `test_phase_5_5_search_filter.py`,
   `test_phase_5_6_misc_polish.py`.
 
+Theming / Phase-1–6 suites:
+- `test_theme_loader.py`, `test_theme_registry.py`,
+  `test_icon_provider.py`, `test_value_delegate_theme.py`,
+  `test_icons_in_view.py`, `test_theme_switching.py`.
+
 Pre-existing widget-stack suites: `test_better_datetime_buffer`,
 `test_datetime_editor`, `test_dialog_settings`, `test_jsontream`,
 `test_mpq2py`, `test_partial_float_re`, `test_partial_regex`,
 `test_pretty_jsontream`, `test_qhexedit_highlighting`, `test_units`,
 `test_validator`.
 
-`pytest -q` baseline (2026-04-26): **401 tests pass in ~3 s** under
-`QT_QPA_PLATFORM=offscreen`. No teardown segfault.
+Current inventory (`2026-05-06`): **451 tests collected** via
+`pytest --collect-only -q`.
+
+Last recorded whole-suite runtime baseline in memory remains the older
+`2026-04-26` run: **401 tests passed in ~3 s** under
+`QT_QPA_PLATFORM=offscreen`, with no teardown segfault.
+
+Targeted theming validation run (`2026-05-06`): **50 tests passed**
+under `QT_QPA_PLATFORM=offscreen pytest -q` across the six theming
+files above.
 
 ## 14) Sample data
 
@@ -502,17 +639,17 @@ Pre-existing widget-stack suites: `test_better_datetime_buffer`,
 - `gmpy2==2.3.0`
 - `pytest==9.0.3`
 - `tzdata==2026.2`
+- `simplejson==4.1.1`
 
-`simplejson` is imported by `io_formats/` and is not yet pinned in
-`requirements.txt`. `pytest-qt` is also not pinned; smoke tests roll
-their own `QApplication` fixture.
+`simplejson` is now pinned. `pytest-qt` is still not pinned even though
+theme-switching tests use `qtbot`; some older suites still roll their
+own `QApplication` fixture.
 
 ### `Makefile`
 - `autoflake .`
 - `isort . --extend-skip mainwindow.py`
 - `black . --line-length 120 --extend-exclude mainwindow.py`
-- A `make test` target running
-  `QT_QPA_PLATFORM=offscreen pytest -q` is still queued for Phase 6.
+- No `make test` or `themes-check` target yet.
 
 ### `pytest.ini`
 - `pythonpath = .`
@@ -563,8 +700,11 @@ their own `QApplication` fixture.
 - **Utilities / tests** — `jsontream/`, `units/`, `qt2py/`,
   `coalesce/`, `binary/`, `tests/`
 
-After Phase 5 plus the package refactor the editor is functionally
+After Phase 6 plus the package refactor the editor is functionally
 complete for daily use and structurally clean: no source file (other
-than the generated `mainwindow.py`) exceeds ~510 lines. The remaining
-surface area is the Phase 6 test matrix and a small set of stretch UX
-items (type icons, match highlight).
+than the generated `mainwindow.py`) exceeds ~540 lines, and the new
+theme logic now lives mostly in `app/theme_controller.py` instead of
+ballooning `MainWindow`. The remaining surface area is Phase-7-style
+polish: contributor docs for theme authors, theme snapshots /
+accessibility tests, broader delegate/round-trip QA, and optional UX
+work such as match highlighting and full-app palette application.
