@@ -1,67 +1,65 @@
-# Theming plan — colors now, icons later
+# UX & Behaviour Fix Plan — overview
 
-Goal: give every `JsonType` a distinct, user-customizable visual
-identity (color now, icon later) via human-friendly YAML theme files,
-with built-in light/dark schemes and auto-selection.
+_Created: 2026-05-06. Tracks the next batch of UX / correctness fixes
+on top of the post-Phase-6 tree (theming + package refactor shipped)._
 
-## Design pillars
+This plan groups 14 user-reported issues into **6 cohesive phases**.
+Phases are ordered by **profit / blast-radius**: small independent
+polish first to ship visible value, then the foundational coercion
+overhaul, then display polish that depends on coercion semantics, and
+finally the largest visual change (full-app theming).
 
-1. **Single choke-point.** All presentation flows through
-   `delegates/value_formatting.py` (`ValueDelegate.initStyleOption`),
-   `delegates/type_delegate.py` (combo box) and `tree/model_roles.py`
-   (`DecorationRole`). The theme is read there only.
-2. **Pure data theme object.** A `ThemeSpec` dataclass loaded from
-   YAML; immutable; injected into delegates at tab construction time
-   (`documents/tab_setup.py`).
-3. **Total fallback.** Any missing key in a user theme falls back to
-   the built-in default for that scheme (light or dark). Loader never
-   raises on a partial file.
-4. **Color and icons share the same theme file.** A single theme YAML
-   declares both `palette:` and `icons:` blocks. Phase 1–3 implement
-   the color path; the icons block is parsed but resolves to a
-   `_StubIconProvider` until Phase 4–5.
-5. **YAML is already a project dependency.** No new runtime deps.
+| #     | Phase                                                  | Risk   | Issues addressed |
+| ----- | ------------------------------------------------------ | ------ | ---------------- |
+| **1** | [Context-menu column awareness](phase-1-context-menu.md) | low    | disable on kind col; copy *name+value* on name col; copy value-only on value col |
+| **2** | [Zoom preserves column sizes](phase-2-zoom-columns.md) | low    | Ctrl+= / Ctrl+- / Ctrl+0 keep current widths when possible |
+| **3** | [Type-switch coercion overhaul](phase-3-coercion.md)   | medium | bytes/zlib/gzip *encode* on switch; bool→str case; date/time/dt placeholder = now; epoch sec/ms → date/time/dt; object↔array preserves children with `item1,item2,…` names |
+| **4** | [Display & preview](phase-4-display-preview.md)        | medium | object/array meta when expanded; partial preview when collapsed; `#i` array indices; percent always shown as percent; theme styling on value cells (not only kind) |
+| **5** | [Full-app theme application](phase-5-app-theme.md)     | high   | `QPalette` + stylesheet on QMainWindow / menus / toolbars / dialogs |
+| **6** | [Tests & memory refresh](phase-6-tests-memory.md)      | low    | targeted regressions for phases 1–5; refresh `ai-memory/*` |
 
-## File layout introduced
+## Re-ordering rationale
 
-```text
-themes/
-  __init__.py
-  spec.py                 # ThemeSpec dataclass + JsonType keys
-  loader.py               # YAML → ThemeSpec, with merge/fallback
-  registry.py             # discover built-in + user themes
-  icon_provider.py        # IconProvider protocol + stub impl
-  builtin/
-    light.yaml
-    dark.yaml
-    schema.md             # human-readable theme-file reference
+- **Phase 1 / 2** are tiny, isolated edits in `tree_actions/` and
+  `documents/tab*.py` respectively. They land first to give immediate
+  visible improvement and to unblock manual UX QA.
+- **Phase 3** rewrites kind-switching coercion (`tree/item_coercion.py`
+  + `tree/item.py.set_data` col 1). Several display issues in Phase 4
+  (preview text, percent normalization) want post-coercion shapes, so
+  this must precede them.
+- **Phase 4** updates `tree/model_roles.py`, `delegates/value_formatting.py`
+  and the `ValueDelegate` style path. With Phase 3 done, the previewer
+  can rely on coerced bool strings, normalized percent values, etc.
+- **Phase 5** is the highest-visual-impact item (and is already on the
+  long-term todo list under "apply theme to more chrome"). It is moved
+  late because it touches `app/main_window.py` + `app/theme_controller.py`
+  globally and benefits from the smaller, validated changes shipping
+  first.
+- **Phase 6** is housekeeping: regression tests for each phase plus a
+  refresh of `ai-memory/{repo-map,pros-n-cons,todo-n-fixme}.md`.
+
+## Cross-cutting principles
+
+- **No model-role coupling**: theming stays out of `tree/model_roles.py`.
+  Phase 4 routes the value-cell color via `ValueDelegate.initStyleOption`
+  (already done for type col); we extend it, not replicate it.
+- **Coercion is total**: every kind-switch must produce *some* value
+  (placeholder where parsing fails) and never raise. Phase 3 keeps
+  `coerce_value_for_type` total but adds *encode-on-switch* and
+  *now-fallback* branches.
+- **Undo-safe**: kind switching already routes through
+  `_ChangeTypeCmd`; the new behaviour must not bypass the typed undo
+  stack or break `DiffApplier` replay.
+- **Tests first where it's cheap**: each phase ships with at least one
+  unit test before code lands. The full suite must remain green.
+
+## Status legend (per phase doc)
+
+```
+[ ] not started
+[~] in progress
+[x] done
 ```
 
-User theme override directory:
-`QStandardPaths.AppConfigLocation / themes/*.yaml`.
-
-## Phase index
-
-1. [`phase-1-theme-spec-and-loader.md`](phase-1-theme-spec-and-loader.md)
-   — dataclass, YAML loader, total fallback, unit tests.
-2. [`phase-2-builtin-and-autoselect.md`](phase-2-builtin-and-autoselect.md)
-   — ship `light.yaml` / `dark.yaml`, system-mode detection,
-   `ThemeRegistry` discovery, `QSettings` persistence.
-3. [`phase-3-apply-colors-in-delegates.md`](phase-3-apply-colors-in-delegates.md)
-   — wire `ThemeSpec` into `ValueDelegate` and friends, respect
-   selection state, optional bold/italic per type.
-4. [`phase-4-icon-provider-stub.md`](phase-4-icon-provider-stub.md)
-   — `IconProvider` protocol, stub returning `QIcon()`, theme YAML
-   `icons:` block parsed and resolved against an asset search path.
-5. [`phase-5-icons-in-tree-and-combobox.md`](phase-5-icons-in-tree-and-combobox.md)
-   — `DecorationRole` on col 1, `JsonTypeDelegate` combobox icons,
-   bundle initial SVG set, hi-DPI handling.
-6. [`phase-6-theme-switching-ui.md`](phase-6-theme-switching-ui.md)
-   — View → Theme submenu, live switch via `dataChanged`, optional
-   file-watcher hot reload.
-7. [`phase-7-docs-and-tests.md`](phase-7-docs-and-tests.md)
-   — schema reference, README screenshots, round-trip + snapshot
-   tests, accessibility (WCAG-AA) check on built-ins.
-
-Each phase is independently shippable. Phases 1–3 are the minimum
-viable feature; phases 4–5 add icons; 6–7 polish.
+See `ai-memory/todo-n-fixme.md` for the canonical bug-tracking list;
+this directory is the shipping plan, not a duplicate of TODO.

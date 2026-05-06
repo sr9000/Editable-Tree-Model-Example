@@ -8,6 +8,13 @@ discovered while auditing the JSON editor codebase. Cross-reference with
 
 Format: `- [ ] [scope] description — file:symbol`
 
+> **Active shipping plan (2026-05-06):** `plans/README.md` lists six
+> phases (context-menu polish → zoom-column preservation → kind-switch
+> coercion → display & preview → full-app theming → cross-phase
+> tests/memory). New issues from the 2026-05-06 user request are
+> tracked there until the corresponding phase lands; resolved entries
+> migrate back into this file's Resolved section.
+
 > **Status (2026-05-06)** — Phases 0–6 are fully shipped, including the
 > full theming stack and the Phase-6 `ThemeController` refactor. The
 > package refactor (Phases 01–37) is complete:
@@ -23,6 +30,29 @@ Format: `- [ ] [scope] description — file:symbol`
 ---
 
 ## TODO — open items
+
+### Active UX/correctness batch (2026-05-06 — see `plans/`)
+- [ ] [ux] Disable all context-menu actions on the kind column;
+      column-aware Copy on name/value columns.
+      → `plans/phase-1-context-menu.md`
+- [ ] [ux] Zoom in/out/reset preserves user-resized column widths.
+      → `plans/phase-2-zoom-columns.md`
+- [ ] [bug] Kind-switch coercion overhaul: bool→str lowercase;
+      bytes/zlib/gzip encode-on-switch; date/time/datetime "now"
+      placeholder + epoch sec/ms parsing; object↔array preserves
+      children (`item1, item2, …`).
+      → `plans/phase-3-coercion.md`
+- [ ] [ux] Object/array meta + collapsed preview; `#i` array
+      indices; PERCENT always renders as `%`; theme styling visible
+      on value cells (not only kind column).
+      → `plans/phase-4-display-preview.md`
+- [ ] [ux] Apply theme palette + stylesheet to full app chrome
+      (menus, toolbars, dialogs, tooltips). Replaces the old
+      "Apply the active theme to more of the application chrome"
+      stretch item.
+      → `plans/phase-5-app-theme.md`
+- [ ] [tests] Cross-phase regression smoke + `ai-memory/` refresh.
+      → `plans/phase-6-tests-memory.md`
 
 ### Broader QA / tooling gaps
 - [ ] [tests] `tests/test_value_delegate.py`: full editor matrix.
@@ -73,6 +103,7 @@ Format: `- [ ] [scope] description — file:symbol`
 - [ ] [ux] Apply the active theme to more of the application chrome
       (menus/toolbars/dialog palette), not just tree content and icons.
       — `app/theme_controller.py`, `app/main_window.py`
+      _(superseded by `plans/phase-5-app-theme.md`)_
 - [ ] [ux] Watch user theme icon asset folders in addition to YAML
       files so custom SVG/PNG edits hot-reload without touching the YAML.
       — `app/theme_controller.py`

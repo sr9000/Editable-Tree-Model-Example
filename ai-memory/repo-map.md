@@ -2,7 +2,11 @@
 
 _Last scanned: 2026-05-06. Phases 0–6 are shipped, including the full
 theming stack and the Phase-6 refactor that extracted
-`app/theme_controller.py`. The package refactor (Phases 01–37) remains
+`app/theme_controller.py`. A new shipping plan landed on the same date
+under `plans/` (six phases covering context-menu polish, zoom column
+preservation, kind-switch coercion overhaul, display/preview, full-app
+theming, and cross-phase tests/memory refresh) — none of those phases
+have shipped yet. The package refactor (Phases 01–37) remains
 complete: all former top-level "god modules" have been split into
 cohesive packages and the old compatibility shims (`json_tab.py`,
 `ui.py`, `tree_view.py`, `tree_model.py`, `tree_item.py`,
