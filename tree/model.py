@@ -196,9 +196,36 @@ class JsonTreeModel(QAbstractItemModel):
             return False
 
         item = self.get_item(index)
+        value_parent_index = self.index(index.row(), 0, index.parent())
+
+        # 3.5: ARRAY↔OBJECT morph — skip child removal; children are renamed in-place.
+        if (
+            target_type in (JsonType.ARRAY, JsonType.OBJECT)
+            and item.json_type in (JsonType.ARRAY, JsonType.OBJECT)
+            and target_type is not item.json_type
+        ):
+            if not item.set_data(1, target_type):
+                return False
+            roles = [
+                Qt.ItemDataRole.DisplayRole,
+                Qt.ItemDataRole.EditRole,
+                Qt.ItemDataRole.FontRole,
+                Qt.ItemDataRole.DecorationRole,
+            ]
+            top = self.index(index.row(), 0, index.parent())
+            bot = self.index(index.row(), 2, index.parent())
+            self.dataChanged.emit(top, bot, roles)
+            # Children survived; their name column (col 0) has changed.
+            n = item.child_count()
+            if n > 0:
+                child_top = self.index(0, 0, value_parent_index)
+                child_bot = self.index(n - 1, 0, value_parent_index)
+                self.dataChanged.emit(child_top, child_bot, [Qt.ItemDataRole.DisplayRole])
+            self.typeChanged.emit(top, False)  # not lossy — children preserved
+            return True
+
         had_children = item.json_type in (JsonType.ARRAY, JsonType.OBJECT)
         old_child_count = item.child_count()
-        value_parent_index = self.index(index.row(), 0, index.parent())
         lossy = had_children and old_child_count > 0
 
         if had_children and old_child_count > 0:

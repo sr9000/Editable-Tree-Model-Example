@@ -109,8 +109,19 @@ class JsonTreeItem:
             except ValueError:
                 return False
 
+            # 3.5: ARRAY↔OBJECT morph — preserve children in-place.
+            # Must intercept here (before model.change_type clears children).
+            if (
+                new_type in (JsonType.ARRAY, JsonType.OBJECT)
+                and self.json_type in (JsonType.ARRAY, JsonType.OBJECT)
+                and new_type is not self.json_type
+            ):
+                return self._morph_container(new_type)
+
+            # Save old_type so coercion can re-encode bytes-family values correctly.
+            old_type = self.json_type
             old_value = self.to_json() if self.json_type in (JsonType.ARRAY, JsonType.OBJECT) else self.value
-            ok, coerced = self._coerce_value_for_type(new_type, old_value, strict=False)
+            ok, coerced = self._coerce_value_for_type(new_type, old_value, strict=False, old_type=old_type)
             if not ok:
                 return False
 
@@ -212,8 +223,31 @@ class JsonTreeItem:
         self.name = candidate
         return True
 
-    def _coerce_value_for_type(self, json_type: JsonType, value: Any, strict: bool) -> tuple[bool, Any]:
-        return coerce_value_for_type(json_type, value, strict)
+    def _morph_container(self, new_type: JsonType) -> bool:
+        """Mutate ARRAY→OBJECT or OBJECT→ARRAY in-place, preserving children.
+
+        ARRAY→OBJECT: assign deterministic names ``item1, item2, …`` to children
+        that currently have no name.
+        OBJECT→ARRAY: drop all child names (set to ``None``).
+        """
+        if new_type is JsonType.OBJECT:
+            for i, child in enumerate(self.child_items, 1):
+                if child.name is None:
+                    child.name = f"item{i}"
+        else:  # JsonType.ARRAY
+            for child in self.child_items:
+                child.name = None
+        self.json_type = new_type
+        self.explicit_type = True
+        self.value = [] if new_type is JsonType.ARRAY else {}
+        self.editable = False
+        self._children_dirty = True
+        return True
+
+    def _coerce_value_for_type(
+        self, json_type: JsonType, value: Any, strict: bool, old_type: JsonType | None = None
+    ) -> tuple[bool, Any]:
+        return coerce_value_for_type(json_type, value, strict, old_type=old_type)
 
     def _compute_editable(self) -> bool:
         return compute_editable(self.json_type, self.value, self.EDITABLE_BLOB_LIMIT)

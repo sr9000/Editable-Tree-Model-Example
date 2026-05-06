@@ -156,10 +156,12 @@ def test_json_tab_shows_special_root_and_allows_root_type_change(qapp):
 
         root_type = tab.model.index(0, 1, QModelIndex())
         assert tab.commit_set_data(root_type, JsonType.ARRAY)
-        assert tab.model.root_item.to_json() == []
+        # Phase-3: OBJECT→ARRAY preserves children (names dropped, values kept)
+        assert tab.model.root_item.to_json() == [1]
 
         assert tab.commit_set_data(root_type, JsonType.OBJECT)
-        assert tab.model.root_item.to_json() == {}
+        # Phase-3: ARRAY→OBJECT preserves children (names assigned item1, item2, …)
+        assert tab.model.root_item.to_json() == {"item1": 1}
     finally:
         tab.deleteLater()
 
