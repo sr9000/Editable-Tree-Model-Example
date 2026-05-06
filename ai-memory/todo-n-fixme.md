@@ -46,9 +46,10 @@ Format: `- [ ] [scope] description — file:symbol`
       indices; PERCENT always renders as `%`; theme styling visible
       on value cells (not only kind column).
       → `plans/phase-4-display-preview.md`
-- [ ] [ux] Apply theme palette + stylesheet to full app chrome
-      (menus, toolbars, dialogs, tooltips). Replaces the old
-      "Apply the active theme to more of the application chrome"
+- [ ] [ux] Flip Qt's bundled light/dark color scheme to match the
+      active theme's `mode` (no custom palette or stylesheet —
+      per-type cell colouring stays in the delegate). Replaces the
+      old "Apply the active theme to more of the application chrome"
       stretch item.
       → `plans/phase-5-app-theme.md`
 - [ ] [tests] Cross-phase regression smoke + `ai-memory/` refresh.

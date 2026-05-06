@@ -9,14 +9,14 @@ polish first to ship visible value, then the foundational coercion
 overhaul, then display polish that depends on coercion semantics, and
 finally the largest visual change (full-app theming).
 
-| #     | Phase                                                  | Risk   | Issues addressed |
-| ----- | ------------------------------------------------------ | ------ | ---------------- |
-| **1** | [Context-menu column awareness](phase-1-context-menu.md) | low    | disable on kind col; copy *name+value* on name col; copy value-only on value col |
-| **2** | [Zoom preserves column sizes](phase-2-zoom-columns.md) | low    | Ctrl+= / Ctrl+- / Ctrl+0 keep current widths when possible |
-| **3** | [Type-switch coercion overhaul](phase-3-coercion.md)   | medium | bytes/zlib/gzip *encode* on switch; bool→str case; date/time/dt placeholder = now; epoch sec/ms → date/time/dt; object↔array preserves children with `item1,item2,…` names |
-| **4** | [Display & preview](phase-4-display-preview.md)        | medium | object/array meta when expanded; partial preview when collapsed; `#i` array indices; percent always shown as percent; theme styling on value cells (not only kind) |
-| **5** | [Full-app theme application](phase-5-app-theme.md)     | high   | `QPalette` + stylesheet on QMainWindow / menus / toolbars / dialogs |
-| **6** | [Tests & memory refresh](phase-6-tests-memory.md)      | low    | targeted regressions for phases 1–5; refresh `ai-memory/*` |
+| #     | Phase                                                    | Risk    | Issues addressed                                                                                                                                                           |
+|-------|----------------------------------------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **1** | [Context-menu column awareness](phase-1-context-menu.md) | low     | disable on kind col; copy *name+value* on name col; copy value-only on value col                                                                                           |
+| **2** | [Zoom preserves column sizes](phase-2-zoom-columns.md)   | low     | Ctrl+= / Ctrl+- / Ctrl+0 keep current widths when possible                                                                                                                 |
+| **3** | [Type-switch coercion overhaul](phase-3-coercion.md)     | medium  | bytes/zlib/gzip *encode* on switch; bool→str case; date/time/dt placeholder = now; epoch sec/ms → date/time/dt; object↔array preserves children with `item1,item2,…` names |
+| **4** | [Display & preview](phase-4-display-preview.md)          | medium  | object/array meta when expanded; partial preview when collapsed; `#i` array indices; percent always shown as percent; theme styling on value cells (not only kind)         |
+| **5** | [Full-app theme application](phase-5-app-theme.md)       | low–med | flip Qt's stock light/dark color scheme based on active theme `mode`; no custom palette/stylesheet                                                                         |
+| **6** | [Tests & memory refresh](phase-6-tests-memory.md)        | low     | targeted regressions for phases 1–5; refresh `ai-memory/*`                                                                                                                 |
 
 ## Re-ordering rationale
 
@@ -30,11 +30,12 @@ finally the largest visual change (full-app theming).
 - **Phase 4** updates `tree/model_roles.py`, `delegates/value_formatting.py`
   and the `ValueDelegate` style path. With Phase 3 done, the previewer
   can rely on coerced bool strings, normalized percent values, etc.
-- **Phase 5** is the highest-visual-impact item (and is already on the
-  long-term todo list under "apply theme to more chrome"). It is moved
-  late because it touches `app/main_window.py` + `app/theme_controller.py`
-  globally and benefits from the smaller, validated changes shipping
-  first.
+- **Phase 5** flips Qt's bundled light/dark color scheme based on the
+  active theme's `mode`. It deliberately does **not** ship custom
+  palettes or stylesheets — per-type cell colouring stays in the
+  delegate, and the rest of the chrome inherits Qt defaults. Moved
+  late only because it touches the global `QStyleHints`; the change
+  itself is small.
 - **Phase 6** is housekeeping: regression tests for each phase plus a
   refresh of `ai-memory/{repo-map,pros-n-cons,todo-n-fixme}.md`.
 

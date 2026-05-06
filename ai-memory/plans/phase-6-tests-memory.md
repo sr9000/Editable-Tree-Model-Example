@@ -25,8 +25,9 @@
      names.
   8. Inspect a collapsed OBJECT row → assert preview text contains
      `{N keys}`.
-  9. Apply a dark theme → assert `QApplication.palette().window()`
-     darkens.
+  9. Apply a dark-mode theme → assert
+     `QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark`;
+     apply a light-mode theme → flips back to `Light`.
 
 - Re-run the full suite under
   `QT_QPA_PLATFORM=offscreen pytest -q`; record the new pass count
@@ -38,12 +39,12 @@ After each phase lands:
 
 - **`repo-map.md`** — bump "Last scanned" date; if any module added,
   list under §2; in particular note:
-  - `themes/qt_palette.py`, `themes/qt_stylesheet.py` (Phase 5).
   - new helpers in `tree/item_coercion.py` (`_now_for_type`,
     `_try_parse_temporal`).
   - new clipboard helpers in `tree_actions/clipboard.py`.
   - `_format_array_preview` / `_format_object_preview` in
     `delegates/value_formatting.py`.
+  - `_sync_app_color_scheme` on `ThemeController` (Phase 5).
 
 - **`pros-n-cons.md`** —
   - move "Theme switching is content-scoped, not full-app chrome
