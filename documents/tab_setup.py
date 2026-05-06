@@ -41,6 +41,12 @@ def init_layout(tab) -> None:
     tab._default_font_pt = initial_pt if initial_pt > 0 else 10
     tab._font_pt = tab._default_font_pt
 
+    # Tracks which columns the user has manually resized (drag or persisted state).
+    tab._user_sized_columns = set()  # set[int]
+    # Guard: True while code is programmatically resizing columns so the
+    # sectionResized handler does not mis-classify that as a user action.
+    tab._programmatic_column_resize = False
+
     tab.layout.addWidget(tab.search_edit)
     tab.layout.addWidget(tab.view)
 
@@ -70,6 +76,15 @@ def init_delegates_and_connections(tab, update_actions_callback) -> None:
     tab.model.typeChanged.connect(tab._on_type_changed)
     tab.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
     tab.view.customContextMenuRequested.connect(functools.partial(show_context_menu, tab.view))
+
+    # Track user-initiated column resizes.  The guard flag prevents
+    # programmatic resizes (resizeColumnToContents / setColumnWidth from
+    # zoom helpers) from being mis-classified as user actions.
+    def _on_section_resized(logical: int, _old: int, _new: int) -> None:
+        if not tab._programmatic_column_resize:
+            tab._user_sized_columns.add(logical)
+
+    tab.view.header().sectionResized.connect(_on_section_resized)
 
 
 def init_shortcuts(tab) -> None:

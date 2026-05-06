@@ -181,12 +181,44 @@ class JsonTab(QWidget):
         self.proxy.set_filter_text(self.search_edit.text())
 
     def _on_model_reset(self) -> None:
-        self.resize_key_columns()
+        # Force-resize so a brand-new model always gets snug initial widths,
+        # regardless of whether the user had previously hand-resized those cols.
+        self.resize_key_columns(force=True)
 
-    def resize_key_columns(self) -> None:
-        # Keep key/type columns snug while leaving value column flexible.
-        self.view.resizeColumnToContents(0)
-        self.view.resizeColumnToContents(1)
+    def resize_key_columns(self, force: bool = False) -> None:
+        """Snap name/type columns to content width.
+
+        When *force* is False (the default), columns that the user has
+        manually resized (tracked in ``_user_sized_columns``) are left alone.
+        Pass ``force=True`` (e.g. on model reset) to override.
+        """
+        self._programmatic_column_resize = True
+        try:
+            for col in (0, 1):
+                if force or col not in self._user_sized_columns:
+                    self.view.resizeColumnToContents(col)
+        finally:
+            self._programmatic_column_resize = False
+
+    def _scale_columns_for_font(self, old_pt: int, new_pt: int) -> None:
+        """Proportionally scale name/type column widths when the font changes.
+
+        Columns the user has hand-resized are left alone.  The value column
+        (col 2) is never touched because it is set to stretch.
+        """
+        if old_pt <= 0 or new_pt <= 0 or old_pt == new_pt:
+            return
+        scale = new_pt / old_pt
+        self._programmatic_column_resize = True
+        try:
+            for col in (0, 1):
+                if col in self._user_sized_columns:
+                    continue  # respect the user's manual choice
+                current = self.view.columnWidth(col)
+                new_w = max(20, min(2000, int(current * scale)))
+                self.view.setColumnWidth(col, new_w)
+        finally:
+            self._programmatic_column_resize = False
 
     def _set_font_pt(self, pt: int) -> None:
         clamped = max(6, min(48, int(pt)))
@@ -196,16 +228,19 @@ class JsonTab(QWidget):
         self.view.setFont(font)
 
     def zoom_in(self) -> None:
+        old_pt = self._font_pt
         self._set_font_pt(self._font_pt + 1)
-        self.resize_key_columns()
+        self._scale_columns_for_font(old_pt, self._font_pt)
 
     def zoom_out(self) -> None:
+        old_pt = self._font_pt
         self._set_font_pt(self._font_pt - 1)
-        self.resize_key_columns()
+        self._scale_columns_for_font(old_pt, self._font_pt)
 
     def zoom_reset(self) -> None:
+        old_pt = self._font_pt
         self._set_font_pt(self._default_font_pt)
-        self.resize_key_columns()
+        self._scale_columns_for_font(old_pt, self._font_pt)
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
         # ``change_type`` already emitted ``dataChanged`` for the row, which

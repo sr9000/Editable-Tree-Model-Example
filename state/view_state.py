@@ -67,6 +67,11 @@ def restore(tab) -> bool:
         for column, width in enumerate(widths[: tab.model.columnCount()]):
             if width > 0:
                 tab.view.setColumnWidth(column, width)
+        # The persisted widths represent the user's last explicit preference;
+        # treat name (0) and type (1) columns as user-sized so zoom helpers
+        # won't snap them back to content width.
+        if hasattr(tab, "_user_sized_columns"):
+            tab._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
 
     if expanded is not None:
         tab.view.collapseAll()

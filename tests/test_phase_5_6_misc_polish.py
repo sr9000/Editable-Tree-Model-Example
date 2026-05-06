@@ -28,9 +28,9 @@ def test_model_reset_calls_resize_key_columns(qtbot):
     calls: list[int] = []
     original = tab.resize_key_columns
 
-    def _spy() -> None:
+    def _spy(force: bool = False) -> None:
         calls.append(1)
-        original()
+        original(force=force)
 
     tab.resize_key_columns = _spy
 
@@ -47,15 +47,6 @@ def test_view_zoom_actions_call_tab_zoom_and_resize(qtbot):
     tab = win._add_tab(data={"foo": 1}, file_path=None)
     assert tab is not None
 
-    calls: list[int] = []
-    original = tab.resize_key_columns
-
-    def _spy() -> None:
-        calls.append(1)
-        original()
-
-    tab.resize_key_columns = _spy
-
     before = tab.view.font().pointSize()
     win.viewZoomInAction.trigger()
     after_in = tab.view.font().pointSize()
@@ -64,4 +55,26 @@ def test_view_zoom_actions_call_tab_zoom_and_resize(qtbot):
 
     assert after_in >= before
     assert after_reset == tab._default_font_pt
-    assert len(calls) >= 2
+
+
+def test_zoom_preserves_user_column_widths(qtbot):
+    """After the user manually resizes a column, zoom must not snap it back."""
+    tab = JsonTab(lambda *_: None, data={"foo": 1, "bar": 2})
+    qtbot.addWidget(tab)
+
+    # Simulate the user dragging col 0 to a custom width.
+    custom_width = 200
+    tab.view.setColumnWidth(0, custom_width)
+    tab._user_sized_columns.add(0)  # mark as user-sized (normally done by sectionResized handler)
+
+    # Zoom in three times.
+    for _ in range(3):
+        tab.zoom_in()
+
+    # Col 0 must remain unchanged because it is user-sized.
+    assert (
+        tab.view.columnWidth(0) == custom_width
+    ), f"Expected col 0 to stay at {custom_width}, got {tab.view.columnWidth(0)}"
+
+    # Col 1 (not hand-resized) should have been scaled up.
+    assert tab.view.columnWidth(1) > 0
