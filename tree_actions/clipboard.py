@@ -5,7 +5,6 @@ import simplejson
 from PySide6.QtCore import QMimeData
 from PySide6.QtWidgets import QApplication, QTreeView
 
-
 from mpq2py import mpq_json_default
 from tree.model import JsonTreeModel
 from tree.types import JsonType
