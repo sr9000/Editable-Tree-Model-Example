@@ -76,6 +76,57 @@ def _category_for_temporal_type(json_type: JsonType) -> DateTimeCategory | None:
     return None
 
 
+def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None) -> mpq | None:
+    """Convert temporal-like input to epoch seconds.
+
+    DATETIME/DATE are Unix epoch seconds (UTC for naive values).
+    TIME is seconds since day start.
+    """
+
+    def _seconds_since_midnight(t: datetime.time) -> mpq:
+        return mpq(t.hour * 3600 + t.minute * 60 + t.second) + mpq(t.microsecond, 1_000_000)
+
+    if isinstance(value, datetime.datetime):
+        dt = value if value.tzinfo is not None else value.replace(tzinfo=datetime.timezone.utc)
+        return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
+
+    if isinstance(value, datetime.date):
+        dt = datetime.datetime(value.year, value.month, value.day, tzinfo=datetime.timezone.utc)
+        return mpq(int(dt.timestamp()))
+
+    if isinstance(value, datetime.time):
+        return _seconds_since_midnight(value)
+
+    if isinstance(value, str) and value:
+        raw = value.strip()
+        categories: list[DateTimeCategory] = []
+        hinted = _category_for_temporal_type(hinted_type) if hinted_type is not None else None
+        if hinted is not None:
+            categories.append(hinted)
+        categories.extend(
+            [
+                DateTimeCategory.DateTimeWithTZ,
+                DateTimeCategory.DateTime,
+                DateTimeCategory.Date,
+                DateTimeCategory.Time,
+            ]
+        )
+
+        for category in categories:
+            parsed = parse_datetime_text(raw, category)
+            if parsed is None:
+                continue
+            if isinstance(parsed, datetime.datetime):
+                dt = parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=datetime.timezone.utc)
+                return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
+            if isinstance(parsed, datetime.date):
+                dt = datetime.datetime(parsed.year, parsed.month, parsed.day, tzinfo=datetime.timezone.utc)
+                return mpq(int(dt.timestamp()))
+            if isinstance(parsed, datetime.time):
+                return _seconds_since_midnight(parsed)
+    return None
+
+
 def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
     """Convert *value* to a canonical ISO string for *json_type*.
 
@@ -90,7 +141,9 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
                 return value.date().isoformat()
             case JsonType.TIME:
                 t = value.time()
-                return t.replace(microsecond=t.microsecond).isoformat(timespec=_timespec_for_clock(t.second, t.microsecond))
+                return t.replace(microsecond=t.microsecond).isoformat(
+                    timespec=_timespec_for_clock(t.second, t.microsecond)
+                )
             case JsonType.DATETIME:
                 naive = value.replace(tzinfo=None)
                 return naive.isoformat(timespec=_timespec_for_clock(naive.second, naive.microsecond))
@@ -205,12 +258,9 @@ def coerce_value_for_type(
             return True, bool(value)
 
         case JsonType.INTEGER:
-            # 3.3: datetime objects → epoch seconds for round-trip
-            if isinstance(value, datetime.datetime):
-                return True, int(value.timestamp())
-            if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
-                epoch = datetime.datetime(value.year, value.month, value.day, tzinfo=datetime.timezone.utc)
-                return True, int(epoch.timestamp())
+            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
+            if temporal_epoch is not None:
+                return True, int(temporal_epoch)
             # bytes-family → decoded length is a meaningful integer
             if isinstance(value, str) and old_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
                 from delegates.bytes_codec import decode_bytes
@@ -231,6 +281,9 @@ def coerce_value_for_type(
             return (False, None) if strict else (True, stub_integer())
 
         case JsonType.FLOAT:
+            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
+            if temporal_epoch is not None:
+                return True, temporal_epoch
             try:
                 return True, mpq(str(value))
             except (ValueError, TypeError):

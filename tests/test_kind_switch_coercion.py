@@ -15,7 +15,6 @@ import datetime
 import gzip
 import zlib
 
-import pytest
 from PySide6.QtCore import QModelIndex
 
 from delegates.bytes_codec import decode_bytes, encode_bytes
@@ -147,6 +146,44 @@ def test_datetime_to_integer_round_trip():
     assert rt_dt.year == 2024
     assert rt_dt.month == 3
     assert rt_dt.day == 10
+
+
+def test_datetime_string_to_integer_uses_unix_epoch():
+    value = "2024-03-10T08:30:00"
+    ok, result = coerce_value_for_type(JsonType.INTEGER, value, strict=False, old_type=JsonType.DATETIME)
+    assert ok
+    assert result == int(datetime.datetime(2024, 3, 10, 8, 30, 0, tzinfo=datetime.timezone.utc).timestamp())
+
+
+def test_date_string_to_integer_uses_unix_epoch_midnight_utc():
+    value = "2024-06-01"
+    ok, result = coerce_value_for_type(JsonType.INTEGER, value, strict=False, old_type=JsonType.DATE)
+    assert ok
+    assert result == int(datetime.datetime(2024, 6, 1, 0, 0, 0, tzinfo=datetime.timezone.utc).timestamp())
+
+
+def test_time_string_to_integer_uses_seconds_since_day_start():
+    value = "01:02:03"
+    ok, result = coerce_value_for_type(JsonType.INTEGER, value, strict=False, old_type=JsonType.TIME)
+    assert ok
+    assert result == 3723
+
+
+def test_temporal_to_float_keeps_subsecond_precision():
+    ok, result = coerce_value_for_type(JsonType.FLOAT, "12:34:56.5", strict=False, old_type=JsonType.TIME)
+    assert ok
+    assert (
+        result
+        == datetime.time(12, 34, 56, 500000).hour * 3600 + datetime.time(12, 34, 56, 500000).minute * 60 + 56 + 0.5
+    )
+
+
+def test_datetimezone_to_float_uses_unix_epoch_seconds():
+    value = "2024-01-01T00:00:00+01:00"
+    ok, result = coerce_value_for_type(JsonType.FLOAT, value, strict=False, old_type=JsonType.DATETIMEZONE)
+    assert ok
+    expected = datetime.datetime(2023, 12, 31, 23, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    assert float(result) == expected
 
 
 # ---------------------------------------------------------------------------
