@@ -149,6 +149,32 @@ def test_numeric_seconds_to_time_works_for_non_int():
     assert parsed == datetime.time(1, 2, 3, 250000)
 
 
+def test_time_to_integer_out_of_range_uses_default_fallback():
+    ok, result = coerce_value_for_type(JsonType.INTEGER, 90_000, strict=False, old_type=JsonType.TIME)
+    assert ok
+    assert isinstance(result, int)
+    assert result != 90_000
+
+
+def test_time_to_integer_out_of_range_strict_rejects():
+    ok, result = coerce_value_for_type(JsonType.INTEGER, 90_000, strict=True, old_type=JsonType.TIME)
+    assert ok is False
+    assert result is None
+
+
+def test_invalid_date_string_to_float_uses_default_fallback():
+    ok, result = coerce_value_for_type(JsonType.FLOAT, "not-a-date", strict=False, old_type=JsonType.DATE)
+    assert ok
+    assert result in {
+        mpq("3.14159265"),
+        mpq("2.71828182"),
+        mpq("1.61803398"),
+        mpq("1.41421356"),
+        mpq("6.62607015"),
+        mpq("9.80665"),
+    }
+
+
 def test_datetime_to_integer_round_trip():
     """DATETIME string → INTEGER yields epoch; that epoch re-coerces to same date."""
     dt_str = "2024-03-10T08:30"

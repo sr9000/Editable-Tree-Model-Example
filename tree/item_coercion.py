@@ -77,6 +77,10 @@ def _category_for_temporal_type(json_type: JsonType) -> DateTimeCategory | None:
     return None
 
 
+def _is_temporal_type(json_type: JsonType | None) -> bool:
+    return json_type in (JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE)
+
+
 def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None) -> mpq | None:
     """Convert temporal-like input to epoch seconds.
 
@@ -284,6 +288,10 @@ def coerce_value_for_type(
             temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
             if temporal_epoch is not None:
                 return True, int(temporal_epoch)
+            if _is_temporal_type(old_type):
+                # Keep temporal transitions safe: if temporal parsing fails,
+                # use the normal fallback path instead of reinterpreting raw digits.
+                return (False, None) if strict else (True, stub_integer())
             # bytes-family → decoded length is a meaningful integer
             if isinstance(value, str) and old_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
                 from delegates.bytes_codec import decode_bytes
@@ -307,6 +315,9 @@ def coerce_value_for_type(
             temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
             if temporal_epoch is not None:
                 return True, temporal_epoch
+            if _is_temporal_type(old_type):
+                # Same safety rule as INTEGER for non-applicable temporal transitions.
+                return (False, None) if strict else (True, stub_float())
             try:
                 return True, mpq(str(value))
             except (ValueError, TypeError):
