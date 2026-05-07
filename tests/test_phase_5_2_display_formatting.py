@@ -82,3 +82,16 @@ def test_value_delegate_elides_long_text_values():
 
     assert len(option.text) == 81
     assert option.text.endswith("…")
+
+
+def test_value_delegate_formats_multiline_as_single_line_preview():
+    model = JsonTreeModel({"text": "line1\nline2\nline3"})
+    type_index = model.index(0, 1, QModelIndex())
+    value_index = model.index(0, 2, QModelIndex())
+    assert model.setData(type_index, JsonType.MULTILINE, Qt.ItemDataRole.EditRole)
+
+    delegate = ValueDelegate()
+    option = QStyleOptionViewItem()
+    delegate.initStyleOption(option, value_index)
+
+    assert option.text == "line1 | line2 | line3"

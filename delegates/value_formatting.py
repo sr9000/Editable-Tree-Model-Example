@@ -13,6 +13,10 @@ _PREVIEW_CHILDREN = 5
 _MULTILINE_SEPARATOR = " | "
 
 
+def _single_line_preview_text(value: str) -> str:
+    return value.replace("\r\n", "\n").replace("\r", "\n").replace("\n", _MULTILINE_SEPARATOR)
+
+
 def format_default(value, *, max_text_len: int | None = 80) -> str:
     if value is None:
         return "null"
@@ -48,7 +52,7 @@ def _container_child_preview(child) -> str:
         return "{...}"
     value = child.value
     if isinstance(value, str):
-        value = value.replace("\r\n", "\n").replace("\r", "\n").replace("\n", _MULTILINE_SEPARATOR)
+        value = _single_line_preview_text(value)
     return format_default(value, max_text_len=None)
 
 
@@ -75,6 +79,9 @@ def _format_container_preview(item, json_type: JsonType, *, show_preview: bool) 
 def format_with_type(value, json_type: JsonType | None, *, item=None, show_preview: bool = True) -> str:
     if item is not None and json_type in (JsonType.ARRAY, JsonType.OBJECT):
         return _format_container_preview(item, json_type, show_preview=show_preview)
+
+    if json_type in (JsonType.MULTILINE, JsonType.TEXT) and isinstance(value, str):
+        return format_default(_single_line_preview_text(value))
 
     if json_type is JsonType.PERCENT:
         try:

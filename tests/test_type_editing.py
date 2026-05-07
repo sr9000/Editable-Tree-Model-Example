@@ -273,7 +273,7 @@ def test_bytes_to_zlib_undo_redo(qtbot):
     import base64
     import zlib as _zlib
 
-    raw = b"round-trip me"
+    raw = b"my lovely bytes!"
     bytes_b64 = encode_bytes(raw, JsonType.BYTES)
     tab = JsonTab(lambda *_: None, data={"blob": bytes_b64})
     qtbot.addWidget(tab)
