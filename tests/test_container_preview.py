@@ -1,7 +1,9 @@
+from gmpy2 import mpq
 from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QStyleOptionViewItem
 
 from delegates.value import ValueDelegate
+from documents.tab import JsonTab
 from tree.model import JsonTreeModel
 
 
@@ -37,3 +39,29 @@ def test_container_preview_is_elided_to_80_chars():
     text = _value_text(model, 0)
     assert len(text) == 80
     assert text.endswith("…")
+
+
+def test_container_preview_works_through_tab_proxy(qtbot):
+    tab = JsonTab(lambda *_: None, data={"obj": {"a": 1}, "arr": [1, 2]}, show_root=False)
+    qtbot.addWidget(tab)
+
+    obj_value = tab.proxy.index(0, 2, QModelIndex())
+    arr_value = tab.proxy.index(1, 2, QModelIndex())
+    option = QStyleOptionViewItem()
+
+    tab.value_delegate.initStyleOption(option, obj_value)
+    assert option.text == "{1 key}  a: 1"
+
+    tab.value_delegate.initStyleOption(option, arr_value)
+    assert option.text == "[2 items]  1, 2"
+
+
+def test_percent_formatting_works_through_tab_proxy(qtbot):
+    tab = JsonTab(lambda *_: None, data={"ratio": mpq("1/2")}, show_root=False)
+    qtbot.addWidget(tab)
+
+    ratio_value = tab.proxy.index(0, 2, QModelIndex())
+    option = QStyleOptionViewItem()
+    tab.value_delegate.initStyleOption(option, ratio_value)
+
+    assert option.text == "50%"
