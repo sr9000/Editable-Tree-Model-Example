@@ -90,7 +90,7 @@ class JsonTreeItem:
         match column:
             case 0:
                 if self.parent_item is not None and self.parent_item.json_type is JsonType.ARRAY:
-                    return str(self.row())
+                    return f"#{self.row() + 1}"
                 return self.name if self.name is not None else "<no name>"
             case 1:
                 return self.json_type or "<no type>"

@@ -42,8 +42,8 @@ class ValueDelegate(_TextEditorDelegateBase):
         return format_default(value)
 
     @staticmethod
-    def _format_with_type(value, json_type: JsonType | None) -> str:
-        return format_with_type(value, json_type)
+    def _format_with_type(value, json_type: JsonType | None, *, item: JsonTreeItem | None = None) -> str:
+        return format_with_type(value, json_type, item=item)
 
     def displayText(self, value, locale):  # type: ignore[override]
         return self._format_default(value)
@@ -54,7 +54,9 @@ class ValueDelegate(_TextEditorDelegateBase):
         raw = model.data(index, Qt.ItemDataRole.EditRole) if model is not None else index.data(Qt.ItemDataRole.EditRole)
         json_type = model.data(index, JSON_TYPE_ROLE) if model is not None else index.data(JSON_TYPE_ROLE)
         typed = json_type if isinstance(json_type, JsonType) else None
-        option.text = self._format_with_type(raw, typed)
+        source_index = self._source_index(index)
+        item = source_index.internalPointer() if source_index.isValid() else None
+        option.text = self._format_with_type(raw, typed, item=item if isinstance(item, JsonTreeItem) else None)
         if typed is not None:
             _apply_type_style(
                 option,

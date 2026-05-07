@@ -8,8 +8,11 @@ from themes.spec import TypeStyle
 from tree.types import JsonType
 from units import format_bytes
 
+_PREVIEW_LIMIT = 80
+_PREVIEW_CHILDREN = 5
 
-def format_default(value) -> str:
+
+def format_default(value, *, max_text_len: int | None = 80) -> str:
     if value is None:
         return "null"
     if isinstance(value, bool):
@@ -18,12 +21,57 @@ def format_default(value) -> str:
         return str(mpq_serialization(value)[0])
     if isinstance(value, bytes):
         return f"<{format_bytes(len(value))}>"
-    if isinstance(value, str) and len(value) > 80:
-        return value[:80] + "…"
+    if isinstance(value, str) and max_text_len is not None and len(value) > max_text_len:
+        return value[:max_text_len] + "…"
     return str(value)
 
 
-def format_with_type(value, json_type: JsonType | None) -> str:
+def _elide(text: str, limit: int = _PREVIEW_LIMIT) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
+
+
+def _container_meta(json_type: JsonType, count: int) -> str:
+    if json_type is JsonType.ARRAY:
+        noun = "item" if count == 1 else "items"
+        return f"[{count} {noun}]"
+    noun = "key" if count == 1 else "keys"
+    return f"{{{count} {noun}}}"
+
+
+def _container_child_preview(child) -> str:
+    if child.json_type is JsonType.ARRAY:
+        return "[...]"
+    if child.json_type is JsonType.OBJECT:
+        return "{...}"
+    return format_default(child.value, max_text_len=None)
+
+
+def _format_container_preview(item, json_type: JsonType) -> str:
+    count = item.child_count()
+    header = _container_meta(json_type, count)
+    if count == 0:
+        return header
+
+    children = item.child_items[:_PREVIEW_CHILDREN]
+    if json_type is JsonType.ARRAY:
+        preview = ", ".join(_container_child_preview(child) for child in children)
+    else:
+        preview = ", ".join(
+            f"{child.name if child.name is not None else '<no name>'}: {_container_child_preview(child)}"
+            for child in children
+        )
+
+    if not preview:
+        return header
+    return _elide(f"{header}  {preview}")
+
+
+def format_with_type(value, json_type: JsonType | None, *, item=None) -> str:
+    if item is not None and json_type in (JsonType.ARRAY, JsonType.OBJECT):
+        return _format_container_preview(item, json_type)
+
     if json_type is JsonType.PERCENT:
         try:
             q = value if isinstance(value, mpq) else mpq(str(value))
@@ -58,6 +106,7 @@ def _apply_type_style(
 
     if style.fg is not None:
         option.palette.setColor(QPalette.ColorRole.Text, style.fg)
+        option.palette.setColor(QPalette.ColorRole.WindowText, style.fg)
 
     if allow_background and style.bg is not None:
         option.backgroundBrush = QBrush(style.bg)

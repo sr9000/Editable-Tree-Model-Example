@@ -50,6 +50,13 @@ def test_value_delegate_formats_percent_with_suffix():
     assert option.text == "50%"
 
 
+def test_display_role_formats_percent_with_suffix_for_non_delegate_consumers():
+    model = JsonTreeModel({"ratio": mpq("1/2")})
+    value_index = model.index(0, 2, QModelIndex())
+
+    assert model.data(value_index, Qt.ItemDataRole.DisplayRole) == "50%"
+
+
 def test_value_delegate_formats_binary_cells_as_size():
     model = JsonTreeModel({"blob": "dGVzdA=="})
     type_index = model.index(0, 1, QModelIndex())

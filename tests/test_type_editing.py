@@ -26,7 +26,7 @@ def test_array_name_column_shows_index_and_is_read_only():
     arr_index = model.index(0, 0, QModelIndex())
     child_name = model.index(0, 0, arr_index)
 
-    assert model.data(child_name) == "0"
+    assert model.data(child_name) == "#1"
     assert not (model.flags(child_name) & Qt.ItemFlag.ItemIsEditable)
     assert not model.setData(child_name, "renamed")
 

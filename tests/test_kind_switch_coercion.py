@@ -154,10 +154,14 @@ def test_string_to_gzip_compresses_utf8():
     assert gzip.decompress(raw_b64) == b"hello world"
 
 
-def test_none_to_bytes_gives_empty():
-    assert _coerce(JsonType.BYTES, None) == ""
-    assert _coerce(JsonType.ZLIB, None) == ""
-    assert _coerce(JsonType.GZIP, None) == ""
+def test_none_to_bytes_gives_stub_payload():
+    """None → BYTES/ZLIB/GZIP yields a friendly placeholder payload (saint coercion)."""
+    for kind in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
+        result = _coerce(kind, None)
+        assert isinstance(result, str)
+        assert result, f"{kind} stub must not be empty"
+        # Must round-trip back to bytes through its own codec.
+        assert decode_bytes(result, kind)  # raises on failure
 
 
 def test_bytes_to_zlib_recompresses():
@@ -184,6 +188,133 @@ def test_bytes_already_valid_kept_unchanged():
     bytes_b64 = encode_bytes(raw, JsonType.BYTES)
     result = _coerce(JsonType.BYTES, bytes_b64)
     assert result == bytes_b64
+
+
+# ---------------------------------------------------------------------------
+# Bug fix: BYTES/ZLIB/GZIP → STRING surfaces underlying printable text
+# ---------------------------------------------------------------------------
+
+
+def test_bytes_to_string_decodes_printable_text():
+    """A BYTES value that holds UTF-8 text must surface as that text in STRING,
+    not as the base64 representation."""
+    raw = b"hello world"
+    bytes_b64 = encode_bytes(raw, JsonType.BYTES)
+    result = _coerce(JsonType.STRING, bytes_b64, old_type=JsonType.BYTES)
+    assert result == "hello world"
+
+
+def test_zlib_to_string_decodes_printable_text():
+    raw = "Привет, мир!".encode("utf-8")  # non-ASCII printable UTF-8
+    zlib_b64 = encode_bytes(raw, JsonType.ZLIB)
+    result = _coerce(JsonType.UNICODE, zlib_b64, old_type=JsonType.ZLIB)
+    assert result == "Привет, мир!"
+
+
+def test_gzip_to_string_decodes_printable_text():
+    raw = b"some readable text"
+    gzip_b64 = encode_bytes(raw, JsonType.GZIP)
+    result = _coerce(JsonType.STRING, gzip_b64, old_type=JsonType.GZIP)
+    assert result == "some readable text"
+
+
+def test_bytes_to_string_keeps_base64_when_non_printable():
+    """Non-printable bytes (e.g. PNG header) must NOT be silently mangled —
+    we keep the base64 encoded form so the user sees something useful."""
+    raw = b"\x89PNG\r\n\x1a\n\x00\x01\x02\x03"  # PNG magic + binary
+    bytes_b64 = encode_bytes(raw, JsonType.BYTES)
+    result = _coerce(JsonType.STRING, bytes_b64, old_type=JsonType.BYTES)
+    assert result == bytes_b64
+
+
+def test_bytes_to_string_full_round_trip_through_item(qtbot):
+    """End-to-end: switching BYTES→STRING in a tab surfaces decoded text."""
+    from documents.tab import JsonTab
+
+    raw = b"the answer is 42"
+    bytes_b64 = encode_bytes(raw, JsonType.BYTES)
+    tab = JsonTab(lambda *_: None, data={"blob": bytes_b64})
+    qtbot.addWidget(tab)
+
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.BYTES
+
+    type_idx = tab.model.index(0, 1, QModelIndex())
+    assert tab.push_change_type(type_idx, JsonType.STRING)
+
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.STRING
+    assert item.value == "the answer is 42"
+
+
+# ---------------------------------------------------------------------------
+# Saint coercion: friendly stubs for unrecoverable transitions
+# ---------------------------------------------------------------------------
+
+
+def test_unparseable_string_to_integer_yields_fun_stub():
+    """A plain English word can't become an int; instead of 0 we return a
+    famous integer."""
+    result = _coerce(JsonType.INTEGER, "not a number")
+    assert isinstance(result, int)
+    assert result != 0, "Phase-3 fallback must avoid the boring 0 placeholder"
+
+
+def test_unparseable_string_to_float_yields_fun_stub():
+    from gmpy2 import mpq
+
+    result = _coerce(JsonType.FLOAT, "definitely not a float")
+    assert isinstance(result, mpq)
+    assert result != mpq(0), "Float fallback must avoid mpq(0)"
+
+
+def test_unparseable_string_to_percent_yields_in_range_stub():
+    from gmpy2 import mpq
+
+    result = _coerce(JsonType.PERCENT, "150%")
+    assert isinstance(result, mpq)
+    assert 0 <= result <= 1
+    assert result != mpq(0)
+
+
+def test_none_to_string_yields_fun_stub():
+    result = _coerce(JsonType.STRING, None)
+    assert isinstance(result, str)
+    assert result, "None → STRING fallback must not be empty"
+
+
+def test_none_to_multiline_yields_lorem_ipsum():
+    result = _coerce(JsonType.MULTILINE, None)
+    assert isinstance(result, str)
+    assert "\n" in result, "MULTILINE stub should contain newlines"
+
+
+def test_int_via_float_string_truncates():
+    """'3.14' is not a valid int literal but is a sensible float we can truncate."""
+    result = _coerce(JsonType.INTEGER, "3.14")
+    assert result == 3
+
+
+def test_bytes_to_integer_returns_decoded_length():
+    """Switching from a bytes-family kind to INTEGER returns the underlying
+    byte length, which is meaningful (file/blob size)."""
+    raw = b"hello"  # 5 bytes
+    bytes_b64 = encode_bytes(raw, JsonType.BYTES)
+    result = _coerce(JsonType.INTEGER, bytes_b64, old_type=JsonType.BYTES)
+    assert result == 5
+
+
+def test_strict_mode_still_rejects_bad_input():
+    """Strict mode (column-2 value editing) must keep returning failure for
+    invalid input, even with stubs available."""
+    from tree.item_coercion import coerce_value_for_type
+
+    ok, _ = coerce_value_for_type(JsonType.INTEGER, "not a number", strict=True)
+    assert ok is False
+    ok, _ = coerce_value_for_type(JsonType.FLOAT, "abc", strict=True)
+    assert ok is False
+    ok, _ = coerce_value_for_type(JsonType.PERCENT, "200%", strict=True)
+    assert ok is False
 
 
 # ---------------------------------------------------------------------------
