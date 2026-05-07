@@ -15,6 +15,7 @@ import datetime
 import gzip
 import zlib
 
+from gmpy2 import mpq
 from PySide6.QtCore import QModelIndex
 
 from delegates.bytes_codec import decode_bytes, encode_bytes
@@ -127,6 +128,25 @@ def test_int_milliseconds_to_datetime():
     dt = datetime.datetime.fromisoformat(result)
     assert dt.year == 2024
     assert dt.month == 6
+
+
+def test_float_seconds_to_datetime_preserves_fractional_part():
+    epoch_s = 1704067200.5  # 2024-01-01 00:00:00.5 UTC
+    result = _coerce(JsonType.DATETIME, epoch_s)
+    dt = datetime.datetime.fromisoformat(result)
+    assert dt == datetime.datetime(2024, 1, 1, 0, 0, 0, 500000)
+
+
+def test_mpq_epoch_seconds_to_date_works():
+    epoch = mpq(1717200000)  # 2024-06-01 00:00:00 UTC
+    result = _coerce(JsonType.DATE, epoch)
+    assert result == "2024-06-01"
+
+
+def test_numeric_seconds_to_time_works_for_non_int():
+    result = _coerce(JsonType.TIME, mpq("3723.25"))
+    parsed = datetime.time.fromisoformat(result)
+    assert parsed == datetime.time(1, 2, 3, 250000)
 
 
 def test_datetime_to_integer_round_trip():

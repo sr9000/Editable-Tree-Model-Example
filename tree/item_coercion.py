@@ -5,6 +5,7 @@ import gzip
 import zlib
 from typing import Any
 
+import gmpy2
 from gmpy2 import mpq
 
 from datetime_editor.enums import DateTimeCategory
@@ -170,15 +171,37 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
             return value.isoformat(timespec=_timespec_for_clock(value.second, value.microsecond))
         return None
 
-    # int → epoch seconds (≥ 10^12 treated as milliseconds)
-    if isinstance(value, int) and not isinstance(value, bool):
+    # Number → Unix epoch seconds (DATE/DATETIME/DATETIMEZONE) or seconds since
+    # day start (TIME). Epoch numbers keep the historical milliseconds heuristic.
+    if isinstance(value, (int, float, gmpy2.mpq)) and not isinstance(value, bool):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError, OverflowError):
+            numeric = None
+
+        if numeric is None:
+            return None
+
         if json_type is JsonType.TIME:
-            return None  # no meaningful epoch-to-time mapping
-        ts = value / 1000.0 if abs(value) >= 10**12 else float(value)
+            if not (0.0 <= numeric < 24 * 60 * 60):
+                return None
+            whole_seconds = int(numeric)
+            micros = int(round((numeric - whole_seconds) * 1_000_000))
+            if micros >= 1_000_000:
+                whole_seconds += 1
+                micros -= 1_000_000
+            if whole_seconds >= 24 * 60 * 60:
+                return None
+            hour, rem = divmod(whole_seconds, 3600)
+            minute, second = divmod(rem, 60)
+            parsed_time = datetime.time(hour=hour, minute=minute, second=second, microsecond=micros)
+            return _try_parse_temporal(json_type, parsed_time)
+
+        ts = numeric / 1000.0 if isinstance(value, int) and abs(value) >= 10**12 else numeric
         try:
             dt = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
             return _try_parse_temporal(json_type, dt)
-        except (ValueError, OSError):
+        except (ValueError, OSError, OverflowError):
             pass
         return None
 
