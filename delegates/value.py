@@ -3,7 +3,7 @@ import zlib
 
 from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
-from PySide6.QtWidgets import QComboBox, QLineEdit, QStyle, QStyleOptionViewItem, QWidget
+from PySide6.QtWidgets import QComboBox, QLineEdit, QStyle, QStyleOptionViewItem, QTreeView, QWidget
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
@@ -42,8 +42,14 @@ class ValueDelegate(_TextEditorDelegateBase):
         return format_default(value)
 
     @staticmethod
-    def _format_with_type(value, json_type: JsonType | None, *, item: JsonTreeItem | None = None) -> str:
-        return format_with_type(value, json_type, item=item)
+    def _format_with_type(
+        value,
+        json_type: JsonType | None,
+        *,
+        item: JsonTreeItem | None = None,
+        show_preview: bool = True,
+    ) -> str:
+        return format_with_type(value, json_type, item=item, show_preview=show_preview)
 
     @staticmethod
     def _coerce_json_type(value) -> JsonType | None:
@@ -67,7 +73,16 @@ class ValueDelegate(_TextEditorDelegateBase):
         typed = self._coerce_json_type(json_type)
         source_index = self._source_index(index)
         item = source_index.internalPointer() if source_index.isValid() else None
-        option.text = self._format_with_type(raw, typed, item=item if isinstance(item, JsonTreeItem) else None)
+        show_preview = True
+        if typed in (JsonType.ARRAY, JsonType.OBJECT) and isinstance(option.widget, QTreeView):
+            tree_index = index.siblingAtColumn(0)
+            show_preview = not option.widget.isExpanded(tree_index)
+        option.text = self._format_with_type(
+            raw,
+            typed,
+            item=item if isinstance(item, JsonTreeItem) else None,
+            show_preview=show_preview,
+        )
         if typed is not None:
             _apply_type_style(
                 option,

@@ -10,6 +10,7 @@ from units import format_bytes
 
 _PREVIEW_LIMIT = 80
 _PREVIEW_CHILDREN = 5
+_MULTILINE_SEPARATOR = " | "
 
 
 def format_default(value, *, max_text_len: int | None = 80) -> str:
@@ -45,13 +46,16 @@ def _container_child_preview(child) -> str:
         return "[...]"
     if child.json_type is JsonType.OBJECT:
         return "{...}"
-    return format_default(child.value, max_text_len=None)
+    value = child.value
+    if isinstance(value, str):
+        value = value.replace("\r\n", "\n").replace("\r", "\n").replace("\n", _MULTILINE_SEPARATOR)
+    return format_default(value, max_text_len=None)
 
 
-def _format_container_preview(item, json_type: JsonType) -> str:
+def _format_container_preview(item, json_type: JsonType, *, show_preview: bool) -> str:
     count = item.child_count()
     header = _container_meta(json_type, count)
-    if count == 0:
+    if count == 0 or not show_preview:
         return header
 
     children = item.child_items[:_PREVIEW_CHILDREN]
@@ -68,9 +72,9 @@ def _format_container_preview(item, json_type: JsonType) -> str:
     return _elide(f"{header}  {preview}")
 
 
-def format_with_type(value, json_type: JsonType | None, *, item=None) -> str:
+def format_with_type(value, json_type: JsonType | None, *, item=None, show_preview: bool = True) -> str:
     if item is not None and json_type in (JsonType.ARRAY, JsonType.OBJECT):
-        return _format_container_preview(item, json_type)
+        return _format_container_preview(item, json_type, show_preview=show_preview)
 
     if json_type is JsonType.PERCENT:
         try:

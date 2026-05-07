@@ -41,6 +41,12 @@ def test_container_preview_is_elided_to_80_chars():
     assert text.endswith("…")
 
 
+def test_multiline_values_use_single_line_separator_in_container_preview():
+    model = JsonTreeModel({"arr": ["line1\nline2", "tail"]})
+
+    assert _value_text(model, 0) == "[2 items]  line1 | line2, tail"
+
+
 def test_container_preview_works_through_tab_proxy(qtbot):
     tab = JsonTab(lambda *_: None, data={"obj": {"a": 1}, "arr": [1, 2]}, show_root=False)
     qtbot.addWidget(tab)
@@ -54,6 +60,27 @@ def test_container_preview_works_through_tab_proxy(qtbot):
 
     tab.value_delegate.initStyleOption(option, arr_value)
     assert option.text == "[2 items]  1, 2"
+
+
+def test_container_preview_hidden_when_expanded_shows_meta_only(qtbot):
+    tab = JsonTab(lambda *_: None, data={"obj": {"a": 1}, "arr": [1, 2]}, show_root=False)
+    qtbot.addWidget(tab)
+
+    obj_name = tab.proxy.index(0, 0, QModelIndex())
+    arr_name = tab.proxy.index(1, 0, QModelIndex())
+    tab.view.expand(obj_name)
+    tab.view.expand(arr_name)
+
+    obj_value = tab.proxy.index(0, 2, QModelIndex())
+    arr_value = tab.proxy.index(1, 2, QModelIndex())
+    option = QStyleOptionViewItem()
+    option.widget = tab.view
+
+    tab.value_delegate.initStyleOption(option, obj_value)
+    assert option.text == "{1 key}"
+
+    tab.value_delegate.initStyleOption(option, arr_value)
+    assert option.text == "[2 items]"
 
 
 def test_percent_formatting_works_through_tab_proxy(qtbot):
