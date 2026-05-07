@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pytest
 from PySide6.QtCore import QModelIndex, QSettings, QStandardPaths, Qt
+from PySide6.QtGui import QGuiApplication
 
 from app.main_window import MainWindow
 from settings import APPLICATION_ID
@@ -9,6 +11,19 @@ from state.theme_settings import get_follow_system, set_watch_user_dir
 
 def _theme_settings() -> QSettings:
     return QSettings(APPLICATION_ID, "theme")
+
+
+@pytest.fixture()
+def _restore_color_scheme():
+    """Save and restore the Qt color scheme around each test."""
+    app = QGuiApplication.instance()
+    style_hints = app.styleHints() if isinstance(app, QGuiApplication) else None
+    original = style_hints.colorScheme() if style_hints is not None else None
+    yield
+    if style_hints is not None and original is not None:
+        setter = getattr(style_hints, "setColorScheme", None)
+        if setter is not None:
+            setter(original)
 
 
 def _current_source_path(tab) -> tuple[int, ...]:
@@ -145,3 +160,27 @@ def test_apply_theme_emits_datachanged_across_tabs(qtbot, tmp_path, monkeypatch)
 
         win.close()
         win.deleteLater()
+
+
+def test_color_scheme_follows_selected_theme(qtbot, tmp_path, monkeypatch, _restore_color_scheme):
+    QStandardPaths.setTestModeEnabled(True)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    _theme_settings().clear()
+
+    app = QGuiApplication.instance()
+    assert isinstance(app, QGuiApplication)
+    style_hints = app.styleHints()
+    setter = getattr(style_hints, "setColorScheme", None)
+    if setter is None:
+        pytest.skip("Qt version does not support setColorScheme")
+
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+
+    dark_theme = win._theme_registry.default_for_mode("dark")
+    win._apply_theme(dark_theme)
+    assert style_hints.colorScheme() == Qt.ColorScheme.Dark
+
+    light_theme = win._theme_registry.default_for_mode("light")
+    win._apply_theme(light_theme)
+    assert style_hints.colorScheme() == Qt.ColorScheme.Light
