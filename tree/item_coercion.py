@@ -7,6 +7,8 @@ from typing import Any
 
 from gmpy2 import mpq
 
+from datetime_editor.enums import DateTimeCategory
+from datetime_editor.regex import parse_datetime_text
 from tree.stubs import stub_bytes_raw, stub_float, stub_integer, stub_multiline, stub_percent, stub_string
 from tree.types import JsonType
 
@@ -50,6 +52,28 @@ def _now_for_type(json_type: JsonType) -> str:
             return now.replace(microsecond=0, tzinfo=None).isoformat(timespec="minutes")
         case JsonType.DATETIMEZONE:
             return now.replace(microsecond=0).isoformat(timespec="seconds")
+    raise ValueError(f"Unsupported temporal JsonType: {json_type}")
+
+
+def _timespec_for_clock(second: int, microsecond: int) -> str:
+    if microsecond:
+        return "microseconds"
+    if second:
+        return "seconds"
+    return "minutes"
+
+
+def _category_for_temporal_type(json_type: JsonType) -> DateTimeCategory | None:
+    match json_type:
+        case JsonType.DATE:
+            return DateTimeCategory.Date
+        case JsonType.TIME:
+            return DateTimeCategory.Time
+        case JsonType.DATETIME:
+            return DateTimeCategory.DateTime
+        case JsonType.DATETIMEZONE:
+            return DateTimeCategory.DateTimeWithTZ
+    return None
 
 
 def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
@@ -65,13 +89,15 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
             case JsonType.DATE:
                 return value.date().isoformat()
             case JsonType.TIME:
-                return value.time().replace(microsecond=0).isoformat(timespec="minutes")
+                t = value.time()
+                return t.replace(microsecond=t.microsecond).isoformat(timespec=_timespec_for_clock(t.second, t.microsecond))
             case JsonType.DATETIME:
-                return value.replace(microsecond=0, tzinfo=None).isoformat(timespec="minutes")
+                naive = value.replace(tzinfo=None)
+                return naive.isoformat(timespec=_timespec_for_clock(naive.second, naive.microsecond))
             case JsonType.DATETIMEZONE:
                 if value.tzinfo is None:
                     value = value.replace(tzinfo=datetime.timezone.utc)
-                return value.replace(microsecond=0).isoformat(timespec="seconds")
+                return value.isoformat(timespec=_timespec_for_clock(value.second, value.microsecond))
         return None
 
     if isinstance(value, datetime.date):
@@ -88,7 +114,7 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
 
     if isinstance(value, datetime.time):
         if json_type is JsonType.TIME:
-            return value.replace(microsecond=0).isoformat(timespec="minutes")
+            return value.isoformat(timespec=_timespec_for_clock(value.second, value.microsecond))
         return None
 
     # int → epoch seconds (≥ 10^12 treated as milliseconds)
@@ -105,16 +131,23 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
 
     # str round-trip
     if isinstance(value, str) and value:
+        raw = value.strip()
+        category = _category_for_temporal_type(json_type)
+        if category is not None and parse_datetime_text(raw, category) is not None:
+            # Keep exactly what user entered so optional parts (seconds/microseconds)
+            # can be added/removed dynamically without being rewritten away.
+            return raw
+
         # Try time first (time strings are not valid datetime strings)
         try:
-            return _try_parse_temporal(json_type, datetime.time.fromisoformat(value))
+            return _try_parse_temporal(json_type, datetime.time.fromisoformat(raw))
         except ValueError:
             pass
         # dateutil handles full datetime/date/tz strings
         try:
             from dateutil.parser import isoparse
 
-            return _try_parse_temporal(json_type, isoparse(value))
+            return _try_parse_temporal(json_type, isoparse(raw))
         except Exception:
             pass
 

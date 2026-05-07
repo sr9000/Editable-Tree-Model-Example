@@ -87,6 +87,24 @@ def test_none_to_datetimezone_falls_back_to_now_not_epoch():
     assert not result.startswith("1970"), f"Expected 'now', got epoch: {result!r}"
 
 
+def test_strict_datetime_keeps_entered_seconds_and_fractional_part():
+    ok, result = coerce_value_for_type(JsonType.DATETIME, "2025-11-02T12:34:56.1234", strict=True)
+    assert ok
+    assert result == "2025-11-02T12:34:56.1234"
+
+
+def test_strict_datetime_can_remove_seconds_back_to_minutes():
+    ok, result = coerce_value_for_type(JsonType.DATETIME, "2025-11-02T12:34", strict=True)
+    assert ok
+    assert result == "2025-11-02T12:34"
+
+
+def test_strict_time_keeps_entered_fractional_precision():
+    ok, result = coerce_value_for_type(JsonType.TIME, "12:34:56.1", strict=True)
+    assert ok
+    assert result == "12:34:56.1"
+
+
 # ---------------------------------------------------------------------------
 # 3.3  int epoch seconds / milliseconds ↔ DATETIME round-trip
 # ---------------------------------------------------------------------------
