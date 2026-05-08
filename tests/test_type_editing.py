@@ -185,7 +185,7 @@ def test_enter_starts_editing_name_or_value(qtbot):
 
 
 @pytest.mark.parametrize("enter_key", [Qt.Key.Key_Return, Qt.Key.Key_Enter])
-def test_enter_from_type_column_opens_value_editor(qtbot, enter_key):
+def test_enter_from_type_column_opens_type_combobox(qtbot, enter_key):
     tab = JsonTab(lambda *_: None, data={"alpha": "bravo"})
     qtbot.addWidget(tab)
     tab.show()
@@ -198,7 +198,25 @@ def test_enter_from_type_column_opens_value_editor(qtbot, enter_key):
     qtbot.keyClick(tab.view.viewport(), enter_key)
 
     qtbot.waitUntil(lambda: tab.view.state() == QAbstractItemView.State.EditingState)
-    assert tab.view.currentIndex().column() == 2
+    assert tab.view.currentIndex().column() == 1
+    qtbot.waitUntil(lambda: tab.view.findChild(QComboBox) is not None)
+
+
+def test_type_cell_icon_hidden_while_type_combobox_active(qtbot):
+    tab = JsonTab(lambda *_: None, data={"alpha": "bravo"})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_type = tab.model.index(0, 1, QModelIndex())
+    view_type = tab._source_to_view(source_type)
+    tab.view.setCurrentIndex(view_type)
+    tab.view.edit(view_type)
+
+    qtbot.waitUntil(lambda: tab.view.findChild(QComboBox) is not None)
+
+    option = QStyleOptionViewItem()
+    tab.type_delegate.initStyleOption(option, view_type)
+    assert option.icon.isNull()
 
 
 def test_arrow_left_right_moves_between_columns(qtbot):

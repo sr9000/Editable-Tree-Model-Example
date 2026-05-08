@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 import gmpy2
 from PySide6.QtCore import QEvent, QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
-from PySide6.QtWidgets import QAbstractItemView, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
@@ -337,11 +337,21 @@ class JsonTab(QWidget):
         self.view.edit(view_index)
 
     def edit_name_or_value_from_enter(self) -> None:
-        """Start editing from Enter: current cell if name/value, otherwise value then name."""
+        """Start editing from Enter with type-column support.
+
+        - Name/Value columns: edit the current editable cell.
+        - Type column: open the inline type combobox editor.
+        """
         if self.view.state() == QAbstractItemView.State.EditingState:
             return
         current = self.view.currentIndex()
         if not current.isValid():
+            return
+
+        if current.column() == 1:
+            if self.view.model().flags(current) & Qt.ItemFlag.ItemIsEditable:
+                self.view.edit(current)
+                QTimer.singleShot(0, self._open_active_type_combo_popup)
             return
 
         candidates: list[QModelIndex] = []
@@ -358,6 +368,12 @@ class JsonTab(QWidget):
             self.view.setCurrentIndex(idx)
             self.view.edit(idx)
             return
+
+    def _open_active_type_combo_popup(self) -> None:
+        for combo in self.view.findChildren(QComboBox):
+            if combo.parent() is self.view.viewport() and combo.isVisible():
+                combo.showPopup()
+                return
 
     @property
     def is_dirty(self) -> bool:

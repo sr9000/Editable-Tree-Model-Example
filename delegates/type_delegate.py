@@ -1,4 +1,5 @@
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
 from delegates.value_formatting import _apply_type_style
@@ -47,6 +48,36 @@ class JsonTypeDelegate(QStyledItemDelegate):
         # ``tests/test_smoke_mainwindow.py`` from logging
         # ``edit: editing failed``.
         self._interactive: bool = False
+        self._active_type_edit_index: QPersistentModelIndex | None = None
+
+    @staticmethod
+    def _emit_icon_changed(index: QModelIndex | QPersistentModelIndex | None) -> None:
+        if index is None:
+            return
+        idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+        if not idx.isValid():
+            return
+        model = idx.model()
+        if model is None:
+            return
+        type_idx = model.index(idx.row(), 1, idx.parent())
+        if not type_idx.isValid():
+            return
+        model.dataChanged.emit(type_idx, type_idx, [Qt.ItemDataRole.DecorationRole])
+
+    def _set_active_type_edit_index(self, source_index: QModelIndex) -> None:
+        next_index = QPersistentModelIndex(source_index) if source_index.isValid() else None
+        current_index = self._active_type_edit_index
+        if current_index == next_index:
+            return
+        self._active_type_edit_index = next_index
+        self._emit_icon_changed(current_index)
+        self._emit_icon_changed(next_index)
+
+    def _is_active_type_edit_index(self, source_index: QModelIndex) -> bool:
+        if self._active_type_edit_index is None or not self._active_type_edit_index.isValid():
+            return False
+        return self._active_type_edit_index == QPersistentModelIndex(source_index)
 
     def set_theme(self, theme: ThemeSpec) -> None:
         self._theme = theme
@@ -62,6 +93,9 @@ class JsonTypeDelegate(QStyledItemDelegate):
         item = source_index.internalPointer()
         if not isinstance(item, JsonTreeItem):
             return
+        if self._is_active_type_edit_index(source_index):
+            # Keep only the combobox's icon visible while the type cell is in edit mode.
+            option.icon = QIcon()
         _apply_type_style(
             option,
             self._theme.types[item.json_type],
@@ -73,7 +107,16 @@ class JsonTypeDelegate(QStyledItemDelegate):
         editor = QComboBox(parent)
         for tp in JsonType:
             editor.addItem(self._icon_provider.for_type(tp), tp.value, tp)
+        self._set_active_type_edit_index(self._source_index(index))
         return editor
+
+    def destroyEditor(self, editor: QWidget, index: QModelIndex) -> None:  # type: ignore[override]
+        try:
+            super().destroyEditor(editor, index)
+        finally:
+            source_index = self._source_index(index)
+            if self._is_active_type_edit_index(source_index):
+                self._set_active_type_edit_index(QModelIndex())
 
     def setEditorData(self, editor: QComboBox, index: QModelIndex):
         source_index = self._source_index(index)
