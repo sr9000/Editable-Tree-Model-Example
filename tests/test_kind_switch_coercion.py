@@ -15,9 +15,12 @@ import datetime
 import gzip
 import zlib
 
+import pytest
 from gmpy2 import mpq
 from PySide6.QtCore import QModelIndex
 
+from datetime_editor.enums import DateTimeCategory
+from datetime_editor.regex import parse_datetime_text
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from tree.item_coercion import coerce_value_for_type
 from tree.model import JsonTreeModel
@@ -230,6 +233,183 @@ def test_datetimezone_to_float_uses_unix_epoch_seconds():
     assert ok
     expected = datetime.datetime(2023, 12, 31, 23, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
     assert float(result) == expected
+
+
+def _temporal_category(json_type: JsonType) -> DateTimeCategory:
+    mapping = {
+        JsonType.DATE: DateTimeCategory.Date,
+        JsonType.TIME: DateTimeCategory.Time,
+        JsonType.DATETIME: DateTimeCategory.DateTime,
+        JsonType.DATETIMEZONE: DateTimeCategory.DateTimeWithTZ,
+    }
+    return mapping[json_type]
+
+
+def _assert_number_result(number_type: JsonType, result, expected_seconds: mpq) -> None:
+    if number_type is JsonType.INTEGER:
+        assert isinstance(result, int)
+        assert result == int(expected_seconds)
+    else:
+        assert isinstance(result, mpq)
+        assert result == expected_seconds
+
+
+def _temporal_epoch_seconds(temporal_type: JsonType) -> mpq:
+    match temporal_type:
+        case JsonType.DATE:
+            dt = datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc)
+            return mpq(int(dt.timestamp()))
+        case JsonType.TIME:
+            return mpq("3723.5")
+        case JsonType.DATETIME:
+            dt = datetime.datetime(2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone.utc)
+            return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
+        case JsonType.DATETIMEZONE:
+            dt = datetime.datetime(2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone(datetime.timedelta(hours=1)))
+            return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
+    raise AssertionError(f"unsupported temporal type: {temporal_type}")
+
+
+def _temporal_text_and_object(temporal_type: JsonType):
+    match temporal_type:
+        case JsonType.DATE:
+            return "2024-01-02", datetime.date(2024, 1, 2)
+        case JsonType.TIME:
+            return "01:02:03.5", datetime.time(1, 2, 3, 500000)
+        case JsonType.DATETIME:
+            return "2024-01-02T03:04:05.5", datetime.datetime(2024, 1, 2, 3, 4, 5, 500000)
+        case JsonType.DATETIMEZONE:
+            return "2024-01-02T03:04:05.5+01:00", datetime.datetime(
+                2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone(datetime.timedelta(hours=1))
+            )
+    raise AssertionError(f"unsupported temporal type: {temporal_type}")
+
+
+_FALLBACK_FLOATS = {
+    mpq("3.14159265"),
+    mpq("2.71828182"),
+    mpq("1.61803398"),
+    mpq("1.41421356"),
+    mpq("6.62607015"),
+    mpq("9.80665"),
+}
+_FALLBACK_INTS = {42, 1337, 65535, 8086, 420, 9001, 73, 777, 299792458}
+
+
+@pytest.mark.parametrize("number_type", [JsonType.INTEGER, JsonType.FLOAT], ids=["integer", "float"])
+@pytest.mark.parametrize(
+    "temporal_type",
+    [JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE],
+    ids=["date", "time", "datetime", "dtz"],
+)
+@pytest.mark.parametrize(
+    "case_kind",
+    [
+        "text_to_number",
+        "object_to_number",
+        "number_to_temporal_int",
+        "number_to_temporal_fraction",
+        "invalid_temporal_to_number",
+    ],
+)
+def test_number_time_matrix(number_type: JsonType, temporal_type: JsonType, case_kind: str):
+    temporal_text, temporal_obj = _temporal_text_and_object(temporal_type)
+    expected_seconds = _temporal_epoch_seconds(temporal_type)
+
+    if case_kind == "text_to_number":
+        ok, result = coerce_value_for_type(number_type, temporal_text, strict=False, old_type=temporal_type)
+        assert ok
+        _assert_number_result(number_type, result, expected_seconds)
+        return
+
+    if case_kind == "object_to_number":
+        ok, result = coerce_value_for_type(number_type, temporal_obj, strict=False, old_type=temporal_type)
+        assert ok
+        _assert_number_result(number_type, result, expected_seconds)
+        return
+
+    if case_kind == "number_to_temporal_int":
+        epoch = int(expected_seconds)
+        ok, result = coerce_value_for_type(temporal_type, epoch, strict=False, old_type=number_type)
+        assert ok
+        parsed = parse_datetime_text(result, _temporal_category(temporal_type))
+        assert parsed is not None
+        return
+
+    if case_kind == "number_to_temporal_fraction":
+        if temporal_type is JsonType.TIME:
+            numeric = float(expected_seconds)
+        else:
+            numeric = float(expected_seconds) + 0.25
+        ok, result = coerce_value_for_type(temporal_type, numeric, strict=False, old_type=number_type)
+        assert ok
+        parsed = parse_datetime_text(result, _temporal_category(temporal_type))
+        assert parsed is not None
+        return
+
+    ok, result = coerce_value_for_type(number_type, "not-a-temporal", strict=False, old_type=temporal_type)
+    assert ok
+    if number_type is JsonType.INTEGER:
+        assert result in _FALLBACK_INTS
+    else:
+        assert result in _FALLBACK_FLOATS
+
+
+@pytest.mark.parametrize("number_type", [JsonType.INTEGER, JsonType.FLOAT], ids=["integer", "float"])
+@pytest.mark.parametrize("case_kind", ["string_to_number", "number_to_string", "invalid_string_to_number"])
+def test_string_number_matrix(number_type: JsonType, case_kind: str):
+    if case_kind == "string_to_number":
+        value = "12345" if number_type is JsonType.INTEGER else "12345.25"
+        ok, result = coerce_value_for_type(number_type, value, strict=False, old_type=JsonType.STRING)
+        assert ok
+        if number_type is JsonType.INTEGER:
+            assert result == 12345
+        else:
+            assert result == mpq("12345.25")
+        return
+
+    if case_kind == "number_to_string":
+        value = 12345 if number_type is JsonType.INTEGER else mpq("12345.25")
+        ok, result = coerce_value_for_type(JsonType.STRING, value, strict=False, old_type=number_type)
+        assert ok
+        assert isinstance(result, str)
+        assert result
+        return
+
+    ok, result = coerce_value_for_type(number_type, "not-a-number", strict=False, old_type=JsonType.STRING)
+    assert ok
+    if number_type is JsonType.INTEGER:
+        assert result in _FALLBACK_INTS
+    else:
+        assert result in _FALLBACK_FLOATS
+
+
+@pytest.mark.parametrize(
+    "temporal_type,value_text,value_obj",
+    [
+        (JsonType.DATE, "2024-01-02", datetime.date(2024, 1, 2)),
+        (JsonType.TIME, "01:02:03", datetime.time(1, 2, 3)),
+        (JsonType.DATETIME, "2024-01-02T03:04", datetime.datetime(2024, 1, 2, 3, 4)),
+        (JsonType.DATETIME, "2024-01-02T03:04:05", datetime.datetime(2024, 1, 2, 3, 4, 5)),
+        (
+            JsonType.DATETIMEZONE,
+            "2024-01-02T03:04:05+01:00",
+            datetime.datetime(2024, 1, 2, 3, 4, 5, tzinfo=datetime.timezone(datetime.timedelta(hours=1))),
+        ),
+    ],
+)
+@pytest.mark.parametrize("direction", ["string_to_temporal", "temporal_to_string"])
+def test_string_time_matrix(temporal_type: JsonType, value_text: str, value_obj, direction: str):
+    if direction == "string_to_temporal":
+        ok, result = coerce_value_for_type(temporal_type, value_text, strict=False, old_type=JsonType.STRING)
+        assert ok
+        parsed = parse_datetime_text(result, _temporal_category(temporal_type))
+        assert parsed is not None
+        return
+
+    ok, result = coerce_value_for_type(JsonType.STRING, value_obj, strict=False, old_type=temporal_type)
+    assert ok
+    assert result == str(value_obj)
 
 
 # ---------------------------------------------------------------------------
