@@ -168,6 +168,39 @@ def test_caps_lock_does_not_close_name_editor(qtbot):
     assert tab.view.state() == QAbstractItemView.State.EditingState
 
 
+def test_enter_starts_editing_name_or_value(qtbot):
+    tab = JsonTab(lambda *_: None, data={"alpha": "bravo"})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_name = tab.model.index(0, 0, QModelIndex())
+    view_name = tab._source_to_view(source_name)
+    tab.view.setCurrentIndex(view_name)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Return)
+
+    qtbot.waitUntil(lambda: tab.view.state() == QAbstractItemView.State.EditingState)
+    assert tab.view.currentIndex().column() == 0
+
+
+@pytest.mark.parametrize("enter_key", [Qt.Key.Key_Return, Qt.Key.Key_Enter])
+def test_enter_from_type_column_opens_value_editor(qtbot, enter_key):
+    tab = JsonTab(lambda *_: None, data={"alpha": "bravo"})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_type = tab.model.index(0, 1, QModelIndex())
+    view_type = tab._source_to_view(source_type)
+    tab.view.setCurrentIndex(view_type)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), enter_key)
+
+    qtbot.waitUntil(lambda: tab.view.state() == QAbstractItemView.State.EditingState)
+    assert tab.view.currentIndex().column() == 2
+
+
 # All 16 text-family transitions: only STRING<->UNICODE and MULTILINE<->TEXT
 # are allowed; cross-axis transitions must preserve the field's kind.
 _FAM = (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT)

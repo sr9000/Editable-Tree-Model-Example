@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QEvent, QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
+from PySide6.QtWidgets import QAbstractItemView, QWidget
 
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
@@ -96,6 +96,14 @@ def _demo_data() -> dict[str, Any]:
 
 class JsonTab(QWidget):
     dirtyChanged = Signal(bool)
+
+    def eventFilter(self, watched, event):  # type: ignore[override]
+        view = getattr(self, "view", None)
+        if view is not None and watched in (view, view.viewport()):
+            if event.type() == QEvent.Type.KeyPress and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                self.edit_name_or_value_from_enter()
+                return True
+        return super().eventFilter(watched, event)
 
     def __init__(
         self,
@@ -283,6 +291,29 @@ class JsonTab(QWidget):
             return
         self.view.setCurrentIndex(view_index)
         self.view.edit(view_index)
+
+    def edit_name_or_value_from_enter(self) -> None:
+        """Start editing from Enter: current cell if name/value, otherwise value then name."""
+        if self.view.state() == QAbstractItemView.State.EditingState:
+            return
+        current = self.view.currentIndex()
+        if not current.isValid():
+            return
+
+        candidates: list[QModelIndex] = []
+        if current.column() in (0, 2):
+            candidates.append(current)
+        candidates.extend((current.siblingAtColumn(2), current.siblingAtColumn(0)))
+
+        model = self.view.model()
+        for idx in candidates:
+            if not idx.isValid():
+                continue
+            if not (model.flags(idx) & Qt.ItemFlag.ItemIsEditable):
+                continue
+            self.view.setCurrentIndex(idx)
+            self.view.edit(idx)
+            return
 
     @property
     def is_dirty(self) -> bool:
