@@ -262,6 +262,28 @@ def test_arrow_left_right_do_not_expand_or_collapse_rows(qtbot):
     assert not tab.view.isExpanded(view_obj_name)
 
 
+def test_space_toggles_expand_and_collapse_current_row(qtbot):
+    tab = JsonTab(lambda *_: None, data={"obj": {"nested": 1}, "x": 2})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_obj_type = tab.model.index(0, 1, QModelIndex())
+    view_obj_type = tab._source_to_view(source_obj_type)
+    view_obj_name = view_obj_type.siblingAtColumn(0)
+
+    tab.view.collapse(view_obj_name)
+    assert not tab.view.isExpanded(view_obj_name)
+
+    tab.view.setCurrentIndex(view_obj_type)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Space)
+    assert tab.view.isExpanded(view_obj_name)
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Space)
+    assert not tab.view.isExpanded(view_obj_name)
+
+
 # All 16 text-family transitions: only STRING<->UNICODE and MULTILINE<->TEXT
 # are allowed; cross-axis transitions must preserve the field's kind.
 _FAM = (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT)

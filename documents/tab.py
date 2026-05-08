@@ -104,9 +104,21 @@ class JsonTab(QWidget):
                 if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                     self.edit_name_or_value_from_enter()
                     return True
+                if event.key() == Qt.Key.Key_Space and event.modifiers() == Qt.KeyboardModifier.NoModifier:
+                    self._toggle_current_row_expansion_with_space()
+                    return True
                 if self._handle_arrow_navigation(event.key(), event.modifiers()):
                     return True
         return super().eventFilter(watched, event)
+
+    def _toggle_current_row_expansion_with_space(self) -> None:
+        current = self.view.currentIndex()
+        if not current.isValid():
+            return
+        row_anchor = current.siblingAtColumn(0)
+        if not row_anchor.isValid():
+            return
+        self.view.setExpanded(row_anchor, not self.view.isExpanded(row_anchor))
 
     def _handle_arrow_navigation(self, key: Qt.Key, modifiers: Qt.KeyboardModifier) -> bool:
         """Use arrows for cell navigation; never expand/collapse rows."""
