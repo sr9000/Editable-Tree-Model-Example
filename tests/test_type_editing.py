@@ -201,6 +201,67 @@ def test_enter_from_type_column_opens_value_editor(qtbot, enter_key):
     assert tab.view.currentIndex().column() == 2
 
 
+def test_arrow_left_right_moves_between_columns(qtbot):
+    tab = JsonTab(lambda *_: None, data={"alpha": "bravo"})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_name = tab.model.index(0, 0, QModelIndex())
+    view_name = tab._source_to_view(source_name)
+    tab.view.setCurrentIndex(view_name)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Right)
+    assert tab.view.currentIndex().column() == 1
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Right)
+    assert tab.view.currentIndex().column() == 2
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Left)
+    assert tab.view.currentIndex().column() == 1
+
+
+def test_arrow_up_down_moves_between_rows(qtbot):
+    tab = JsonTab(lambda *_: None, data={"a": 1, "b": 2, "c": 3})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_mid_value = tab.model.index(1, 2, QModelIndex())
+    view_mid_value = tab._source_to_view(source_mid_value)
+    tab.view.setCurrentIndex(view_mid_value)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Down)
+    assert tab.view.currentIndex().row() == 2
+    assert tab.view.currentIndex().column() == 2
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Up)
+    assert tab.view.currentIndex().row() == 1
+    assert tab.view.currentIndex().column() == 2
+
+
+def test_arrow_left_right_do_not_expand_or_collapse_rows(qtbot):
+    tab = JsonTab(lambda *_: None, data={"obj": {"nested": 1}, "x": 2})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_obj_name = tab.model.index(0, 0, QModelIndex())
+    view_obj_name = tab._source_to_view(source_obj_name)
+    tab.view.collapse(view_obj_name)
+    assert not tab.view.isExpanded(view_obj_name)
+
+    tab.view.setCurrentIndex(view_obj_name)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Right)
+    assert tab.view.currentIndex().column() == 1
+    assert not tab.view.isExpanded(view_obj_name)
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Left)
+    assert tab.view.currentIndex().column() == 0
+    assert not tab.view.isExpanded(view_obj_name)
+
+
 # All 16 text-family transitions: only STRING<->UNICODE and MULTILINE<->TEXT
 # are allowed; cross-axis transitions must preserve the field's kind.
 _FAM = (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT)

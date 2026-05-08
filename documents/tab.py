@@ -100,10 +100,42 @@ class JsonTab(QWidget):
     def eventFilter(self, watched, event):  # type: ignore[override]
         view = getattr(self, "view", None)
         if view is not None and watched in (view, view.viewport()):
-            if event.type() == QEvent.Type.KeyPress and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                self.edit_name_or_value_from_enter()
-                return True
+            if event.type() == QEvent.Type.KeyPress:
+                if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                    self.edit_name_or_value_from_enter()
+                    return True
+                if self._handle_arrow_navigation(event.key(), event.modifiers()):
+                    return True
         return super().eventFilter(watched, event)
+
+    def _handle_arrow_navigation(self, key: Qt.Key, modifiers: Qt.KeyboardModifier) -> bool:
+        """Use arrows for cell navigation; never expand/collapse rows."""
+        if modifiers != Qt.KeyboardModifier.NoModifier:
+            return False
+        if key not in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
+            return False
+
+        current = self.view.currentIndex()
+        if not current.isValid():
+            return True
+
+        target = QModelIndex(current)
+        if key == Qt.Key.Key_Left:
+            target = current.siblingAtColumn(max(0, current.column() - 1))
+        elif key == Qt.Key.Key_Right:
+            last_col = max(0, self.view.model().columnCount(current.parent()) - 1)
+            target = current.siblingAtColumn(min(last_col, current.column() + 1))
+        elif key == Qt.Key.Key_Up:
+            above = self.view.indexAbove(current)
+            if above.isValid():
+                target = above
+        elif key == Qt.Key.Key_Down:
+            below = self.view.indexBelow(current)
+            if below.isValid():
+                target = below
+
+        self.view.setCurrentIndex(target)
+        return True
 
     def __init__(
         self,
