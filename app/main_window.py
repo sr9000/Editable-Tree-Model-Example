@@ -334,6 +334,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.statusBar.showMessage("Nothing to copy", 1500)
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
+        self._theme_controller.shutdown()
         for i in range(self.tabWidget.count() - 1, -1, -1):
             widget = self.tabWidget.widget(i)
             if isinstance(widget, JsonTab) and not self._confirm_close(widget):

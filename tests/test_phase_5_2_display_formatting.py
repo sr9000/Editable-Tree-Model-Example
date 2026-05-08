@@ -50,6 +50,13 @@ def test_value_delegate_formats_percent_with_suffix():
     assert option.text == "50%"
 
 
+def test_display_role_formats_percent_with_suffix_for_non_delegate_consumers():
+    model = JsonTreeModel({"ratio": mpq("1/2")})
+    value_index = model.index(0, 2, QModelIndex())
+
+    assert model.data(value_index, Qt.ItemDataRole.DisplayRole) == "50%"
+
+
 def test_value_delegate_formats_binary_cells_as_size():
     model = JsonTreeModel({"blob": "dGVzdA=="})
     type_index = model.index(0, 1, QModelIndex())
@@ -75,3 +82,16 @@ def test_value_delegate_elides_long_text_values():
 
     assert len(option.text) == 81
     assert option.text.endswith("…")
+
+
+def test_value_delegate_formats_multiline_as_single_line_preview():
+    model = JsonTreeModel({"text": "line1\nline2\nline3"})
+    type_index = model.index(0, 1, QModelIndex())
+    value_index = model.index(0, 2, QModelIndex())
+    assert model.setData(type_index, JsonType.MULTILINE, Qt.ItemDataRole.EditRole)
+
+    delegate = ValueDelegate()
+    option = QStyleOptionViewItem()
+    delegate.initStyleOption(option, value_index)
+
+    assert option.text == "line1 | line2 | line3"

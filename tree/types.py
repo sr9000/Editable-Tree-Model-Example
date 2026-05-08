@@ -12,7 +12,7 @@ import gmpy2
 from datetime_editor import parse_datetime_text
 
 LOGGER = logging.getLogger(__name__)
-_B64_RE = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
+_B64_RE = re.compile(r"^[A-Za-z0-9+/]{20,}={0,2}$")
 
 
 def _looks_like_base64(s: str) -> bool:

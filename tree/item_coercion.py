@@ -1,12 +1,258 @@
 import base64
 import binascii
+import datetime
 import gzip
 import zlib
 from typing import Any
 
+import gmpy2
 from gmpy2 import mpq
 
+from datetime_editor.enums import DateTimeCategory
+from datetime_editor.regex import parse_datetime_text
+from tree.stubs import stub_bytes_raw, stub_float, stub_integer, stub_multiline, stub_percent, stub_string
 from tree.types import JsonType
+
+# ---------------------------------------------------------------------------
+# Bytes / text helpers
+# ---------------------------------------------------------------------------
+
+
+def _is_printable_text(s: str) -> bool:
+    """True iff *s* contains no control chars except \\t, \\n, \\r."""
+    if not s:
+        return True
+    return all(ch in "\t\n\r" or ch.isprintable() for ch in s)
+
+
+def _bytes_to_printable_string(raw: bytes) -> str | None:
+    """Decode *raw* as UTF-8 and return it if printable; otherwise None."""
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    if _is_printable_text(text):
+        return text
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Temporal helpers (3.2, 3.3)
+# ---------------------------------------------------------------------------
+
+
+def _now_for_type(json_type: JsonType) -> str:
+    """Return a sensible 'now' ISO string for the given temporal type."""
+    now = datetime.datetime.now(tz=datetime.timezone.utc).astimezone()
+    match json_type:
+        case JsonType.DATE:
+            return now.date().isoformat()
+        case JsonType.TIME:
+            return now.time().replace(microsecond=0).isoformat(timespec="minutes")
+        case JsonType.DATETIME:
+            return now.replace(microsecond=0, tzinfo=None).isoformat(timespec="minutes")
+        case JsonType.DATETIMEZONE:
+            return now.replace(microsecond=0).isoformat(timespec="seconds")
+    raise ValueError(f"Unsupported temporal JsonType: {json_type}")
+
+
+def _timespec_for_clock(second: int, microsecond: int) -> str:
+    if microsecond:
+        return "microseconds"
+    if second:
+        return "seconds"
+    return "minutes"
+
+
+def _category_for_temporal_type(json_type: JsonType) -> DateTimeCategory | None:
+    match json_type:
+        case JsonType.DATE:
+            return DateTimeCategory.Date
+        case JsonType.TIME:
+            return DateTimeCategory.Time
+        case JsonType.DATETIME:
+            return DateTimeCategory.DateTime
+        case JsonType.DATETIMEZONE:
+            return DateTimeCategory.DateTimeWithTZ
+    return None
+
+
+def _is_temporal_type(json_type: JsonType | None) -> bool:
+    return json_type in (JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE)
+
+
+def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None) -> mpq | None:
+    """Convert temporal-like input to epoch seconds.
+
+    DATETIME/DATE are Unix epoch seconds (UTC for naive values).
+    TIME is seconds since day start.
+    """
+
+    def _seconds_since_midnight(t: datetime.time) -> mpq:
+        return mpq(t.hour * 3600 + t.minute * 60 + t.second) + mpq(t.microsecond, 1_000_000)
+
+    if isinstance(value, datetime.datetime):
+        dt = value if value.tzinfo is not None else value.replace(tzinfo=datetime.timezone.utc)
+        return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
+
+    if isinstance(value, datetime.date):
+        dt = datetime.datetime(value.year, value.month, value.day, tzinfo=datetime.timezone.utc)
+        return mpq(int(dt.timestamp()))
+
+    if isinstance(value, datetime.time):
+        return _seconds_since_midnight(value)
+
+    if isinstance(value, str) and value:
+        raw = value.strip()
+        categories: list[DateTimeCategory] = []
+        hinted = _category_for_temporal_type(hinted_type) if hinted_type is not None else None
+        if hinted is not None:
+            categories.append(hinted)
+        categories.extend(
+            [
+                DateTimeCategory.DateTimeWithTZ,
+                DateTimeCategory.DateTime,
+                DateTimeCategory.Date,
+                DateTimeCategory.Time,
+            ]
+        )
+
+        for category in categories:
+            parsed = parse_datetime_text(raw, category)
+            if parsed is None:
+                continue
+            if isinstance(parsed, datetime.datetime):
+                dt = parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=datetime.timezone.utc)
+                return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
+            if isinstance(parsed, datetime.date):
+                dt = datetime.datetime(parsed.year, parsed.month, parsed.day, tzinfo=datetime.timezone.utc)
+                return mpq(int(dt.timestamp()))
+            if isinstance(parsed, datetime.time):
+                return _seconds_since_midnight(parsed)
+    return None
+
+
+def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
+    """Convert *value* to a canonical ISO string for *json_type*.
+
+    Handles Python date/time/datetime objects, int epoch seconds (≥ 10^12 →
+    milliseconds), and ISO strings.  Returns ``None`` when the value cannot
+    be sensibly mapped to *json_type*.
+    """
+    # datetime must be tested before date (bool ⊂ int but fine here)
+    if isinstance(value, datetime.datetime):
+        match json_type:
+            case JsonType.DATE:
+                return value.date().isoformat()
+            case JsonType.TIME:
+                t = value.time()
+                return t.replace(microsecond=t.microsecond).isoformat(
+                    timespec=_timespec_for_clock(t.second, t.microsecond)
+                )
+            case JsonType.DATETIME:
+                naive = value.replace(tzinfo=None)
+                return naive.isoformat(timespec=_timespec_for_clock(naive.second, naive.microsecond))
+            case JsonType.DATETIMEZONE:
+                if value.tzinfo is None:
+                    value = value.replace(tzinfo=datetime.timezone.utc)
+                return value.isoformat(timespec=_timespec_for_clock(value.second, value.microsecond))
+        return None
+
+    if isinstance(value, datetime.date):
+        match json_type:
+            case JsonType.DATE:
+                return value.isoformat()
+            case JsonType.DATETIME:
+                return datetime.datetime(value.year, value.month, value.day).isoformat(timespec="minutes")
+            case JsonType.DATETIMEZONE:
+                return datetime.datetime(value.year, value.month, value.day, tzinfo=datetime.timezone.utc).isoformat(
+                    timespec="seconds"
+                )
+        return None
+
+    if isinstance(value, datetime.time):
+        if json_type is JsonType.TIME:
+            return value.isoformat(timespec=_timespec_for_clock(value.second, value.microsecond))
+        return None
+
+    # Number → Unix epoch seconds (DATE/DATETIME/DATETIMEZONE) or seconds since
+    # day start (TIME). Epoch numbers keep the historical milliseconds heuristic.
+    if isinstance(value, (int, float, gmpy2.mpq)) and not isinstance(value, bool):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError, OverflowError):
+            numeric = None
+
+        if numeric is None:
+            return None
+
+        if json_type is JsonType.TIME:
+            if not (0.0 <= numeric < 24 * 60 * 60):
+                return None
+            whole_seconds = int(numeric)
+            micros = int(round((numeric - whole_seconds) * 1_000_000))
+            if micros >= 1_000_000:
+                whole_seconds += 1
+                micros -= 1_000_000
+            if whole_seconds >= 24 * 60 * 60:
+                return None
+            hour, rem = divmod(whole_seconds, 3600)
+            minute, second = divmod(rem, 60)
+            parsed_time = datetime.time(hour=hour, minute=minute, second=second, microsecond=micros)
+            return _try_parse_temporal(json_type, parsed_time)
+
+        ts = numeric / 1000.0 if isinstance(value, int) and abs(value) >= 10**12 else numeric
+        try:
+            dt = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
+            return _try_parse_temporal(json_type, dt)
+        except (ValueError, OSError, OverflowError):
+            pass
+        return None
+
+    # str round-trip
+    if isinstance(value, str) and value:
+        raw = value.strip()
+        category = _category_for_temporal_type(json_type)
+        if category is not None and parse_datetime_text(raw, category) is not None:
+            # Keep exactly what user entered so optional parts (seconds/microseconds)
+            # can be added/removed dynamically without being rewritten away.
+            return raw
+
+        # Try time first (time strings are not valid datetime strings)
+        try:
+            return _try_parse_temporal(json_type, datetime.time.fromisoformat(raw))
+        except ValueError:
+            pass
+        # dateutil handles full datetime/date/tz strings
+        try:
+            from dateutil.parser import isoparse
+
+            return _try_parse_temporal(json_type, isoparse(raw))
+        except Exception:
+            pass
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Bytes helpers (3.4)
+# ---------------------------------------------------------------------------
+
+
+def _looks_valid_for(json_type: JsonType, value: str) -> bool:
+    """Return True iff *value* is a valid encoded representation for *json_type*."""
+    from delegates.bytes_codec import decode_bytes
+
+    try:
+        decode_bytes(value, json_type)
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 
 def normalize_value_for_type(json_type: JsonType, value: Any) -> Any:
@@ -15,10 +261,16 @@ def normalize_value_for_type(json_type: JsonType, value: Any) -> Any:
     return value
 
 
-def coerce_value_for_type(json_type: JsonType, value: Any, strict: bool) -> tuple[bool, Any]:
+def coerce_value_for_type(
+    json_type: JsonType,
+    value: Any,
+    strict: bool,
+    old_type: JsonType | None = None,
+) -> tuple[bool, Any]:
     match json_type:
         case JsonType.NULL:
             return True, None
+
         case JsonType.BOOLEAN:
             if isinstance(value, str):
                 normalized = value.strip().lower()
@@ -26,62 +278,130 @@ def coerce_value_for_type(json_type: JsonType, value: Any, strict: bool) -> tupl
                     return True, True
                 if normalized in ("false", "0", "no", "n"):
                     return True, False
+                # Saint coercion: arbitrary strings → truthiness of the string.
+                return (False, None) if strict else (True, bool(value))
+            if value is None:
                 return (False, None) if strict else (True, False)
             return True, bool(value)
+
         case JsonType.INTEGER:
+            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
+            if temporal_epoch is not None:
+                return True, int(temporal_epoch)
+            if _is_temporal_type(old_type):
+                # Keep temporal transitions safe: if temporal parsing fails,
+                # use the normal fallback path instead of reinterpreting raw digits.
+                return (False, None) if strict else (True, stub_integer())
+            # bytes-family → decoded length is a meaningful integer
+            if isinstance(value, str) and old_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
+                from delegates.bytes_codec import decode_bytes
+
+                try:
+                    return True, len(decode_bytes(value, old_type))
+                except Exception:
+                    pass
             try:
                 return True, int(value)
-            except Exception:
-                return (False, None) if strict else (True, 0)
+            except (ValueError, TypeError):
+                pass
+            # Float-as-string ("3.14") → truncate to int
+            try:
+                return True, int(float(value))
+            except (ValueError, TypeError):
+                pass
+            return (False, None) if strict else (True, stub_integer())
+
         case JsonType.FLOAT:
+            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
+            if temporal_epoch is not None:
+                return True, temporal_epoch
+            if _is_temporal_type(old_type):
+                # Same safety rule as INTEGER for non-applicable temporal transitions.
+                return (False, None) if strict else (True, stub_float())
             try:
                 return True, mpq(str(value))
-            except Exception:
-                return (False, None) if strict else (True, mpq(0))
+            except (ValueError, TypeError):
+                pass
+            return (False, None) if strict else (True, stub_float())
+
         case JsonType.PERCENT:
             try:
                 v = mpq(str(value))
-            except Exception:
-                return (False, None) if strict else (True, mpq(0))
-            if 0 <= v <= 1:
-                return True, v
-            return (False, None) if strict else (True, mpq(0))
-        case JsonType.STRING:
-            return True, "" if value is None else str(value)
-        case JsonType.UNICODE:
-            return True, "" if value is None else str(value)
-        case JsonType.MULTILINE:
-            return True, "" if value is None else str(value)
-        case JsonType.TEXT:
-            return True, "" if value is None else str(value)
-        case JsonType.DATE:
-            return True, "1970-01-01" if value is None else str(value)
-        case JsonType.TIME:
-            return True, "00:00" if value is None else str(value)
-        case JsonType.DATETIME:
-            return True, "1970-01-01T00:00" if value is None else str(value)
-        case JsonType.DATETIMEZONE:
-            return True, "1970-01-01T00:00:00+00:00" if value is None else str(value)
-        case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
+                if 0 <= v <= 1:
+                    return True, v
+            except (ValueError, TypeError):
+                pass
+            return (False, None) if strict else (True, stub_percent())
+
+        # 3.1: bool → lowercase "true"/"false" instead of Python's "True"/"False"
+        case JsonType.STRING | JsonType.UNICODE | JsonType.MULTILINE | JsonType.TEXT:
             if value is None:
-                return True, ""
-            if not isinstance(value, str):
-                return (False, None) if strict else (True, "")
-            if not value:
-                return True, ""
-            try:
-                raw = base64.b64decode(value, validate=True)
-                if json_type is JsonType.ZLIB:
-                    zlib.decompress(raw)
-                elif json_type is JsonType.GZIP:
-                    gzip.decompress(raw)
+                # Saint coercion: empty box of nothing → friendly placeholder.
+                if strict:
+                    return True, ""
+                return True, stub_multiline() if json_type in (JsonType.MULTILINE, JsonType.TEXT) else stub_string()
+            if isinstance(value, bool):
+                return True, "true" if value else "false"
+            # Bytes-family → decode and surface the underlying text when printable.
+            if isinstance(value, str) and old_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
+                from delegates.bytes_codec import decode_bytes
+
+                try:
+                    raw = decode_bytes(value, old_type)
+                except Exception:
+                    raw = None
+                if raw is not None:
+                    text = _bytes_to_printable_string(raw)
+                    if text is not None:
+                        return True, text
+                    # Non-printable: keep the base64 representation (better than nothing).
+                    return True, value
+            if isinstance(value, (bytes, bytearray, memoryview)):
+                text = _bytes_to_printable_string(bytes(value))
+                if text is not None:
+                    return True, text
+                # Fallback: base64-encode raw bytes so the user can still see/edit them.
+                return True, base64.b64encode(bytes(value)).decode("ascii")
+            return True, str(value)
+
+        # 3.2: fall back to "now" instead of epoch-zero when value is unparseable
+        case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
+            parsed = _try_parse_temporal(json_type, value)
+            if parsed is not None:
+                return True, parsed
+            return True, _now_for_type(json_type)
+
+        # 3.4: encode-on-switch; use old_type for lossless cross-format re-encoding
+        case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
+            from delegates.bytes_codec import decode_bytes, encode_bytes
+
+            if value is None:
+                return (True, "") if strict else (True, encode_bytes(stub_bytes_raw(), json_type))
+            # 1) already a valid encoded string for the requested kind → keep
+            if isinstance(value, str) and _looks_valid_for(json_type, value):
                 return True, value
-            except Exception:
-                return (False, None) if strict else (True, "")
+            # 2) re-encode from the known old bytes-like kind (cross-format switch)
+            if isinstance(value, str) and value and old_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
+                try:
+                    raw = decode_bytes(value, old_type)
+                    return True, encode_bytes(raw, json_type)
+                except Exception:
+                    pass
+            # 3) raw bytes → encode
+            if isinstance(value, (bytes, bytearray, memoryview)):
+                return True, encode_bytes(bytes(value), json_type)
+            # 4) fallback: encode text representation as UTF-8
+            if isinstance(value, str):
+                if not value:
+                    return (True, "") if strict else (True, encode_bytes(stub_bytes_raw(), json_type))
+                return True, encode_bytes(value.encode("utf-8"), json_type)
+            return True, encode_bytes(str(value).encode("utf-8"), json_type)
+
         case JsonType.ARRAY:
             if isinstance(value, list):
                 return True, value
             return (False, None) if strict else (True, [])
+
         case JsonType.OBJECT:
             if isinstance(value, dict):
                 return True, value

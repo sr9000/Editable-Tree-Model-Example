@@ -1,51 +1,75 @@
 name: Default Dark
 mode: dark
-
 palette:
-  base_fg: "#c0caf5"
-  base_bg: "#1a1b26"
-  selection_fg: "#1a1b26"
-  selection_bg: "#7aa2f7"
-  accent: "#e0af68"
-
+  base_fg: '#c0caf5'
+  base_bg: '#1a1b26'
+  selection_fg: '#1a1b26'
+  selection_bg: '#7aa2f7'
+  accent: '#e0af68'
 types:
-  integer: { fg: "#7aa2f7" }
-  float: { fg: "#73daca" }
-  percent: { fg: "#73daca", italic: true }
-  boolean: { fg: "#f7768e" }
-  string: { fg: "#c0caf5" }
-  unicode: { fg: "#9ece6a" }
-  multiline: { fg: "#9ece6a", italic: true }
-  text: { fg: "#9ece6a", italic: true }
-  date: { fg: "#e0af68" }
-  time: { fg: "#e0af68" }
-  datetime: { fg: "#e0af68" }
-  datetimezone: { fg: "#e0af68" }
-  bytes: { fg: "#ff9e64" }
-  zlib: { fg: "#ff9e64", italic: true }
-  gzip: { fg: "#ff9e64", italic: true }
-  "null": { fg: "#6b739f", italic: true }
-  object: { fg: "#7dcfff", bold: true }
-  array: { fg: "#7dcfff", bold: true }
-
+  integer:
+    fg: '#7aa2f7'
+  float:
+    fg: '#73daca'
+  percent:
+    fg: '#73daca'
+    italic: true
+  boolean:
+    fg: '#f7768e'
+  string:
+    fg: '#c0caf5'
+  unicode:
+    fg: '#9ece6a'
+  multiline:
+    fg: '#9ece6a'
+    italic: true
+  text:
+    fg: '#9ece6a'
+    italic: true
+  date:
+    fg: '#e0af68'
+  time:
+    fg: '#e0af68'
+  datetime:
+    fg: '#e0af68'
+  datetimezone:
+    fg: '#e0af68'
+  bytes:
+    fg: '#ff9e64'
+  zlib:
+    fg: '#ff9e64'
+    italic: true
+  gzip:
+    fg: '#ff9e64'
+    italic: true
+  'null':
+    fg: '#6b739f'
+    italic: true
+  object:
+    fg: '#7dcfff'
+    bold: true
+  array:
+    fg: '#7dcfff'
+    bold: true
 icons:
-  search_paths: ["./icons"]
+  search_paths:
+  - ./mingcute
   map:
-    integer: integer
-    float: float
-    percent: percent
-    boolean: boolean
-    string: string
-    unicode: unicode
-    multiline: multiline
-    text: text
-    date: date
-    time: time
-    datetime: datetime
-    datetimezone: datetimezone
-    bytes: bytes
-    zlib: zlib
-    gzip: gzip
-    "null": "null"
-    object: object
-    array: array
+    integer: hashtag_line
+    float: asterisk_2_line
+    percent: percentage_line
+    boolean: choice_line
+    string: font_line
+    unicode: text_2_line
+    multiline: font_size_line
+    text: translate_2_line
+    date: calendar_2_line
+    time: hours_line
+    datetime: calendar_time_add_line
+    datetimezone: calendar_add_line
+    bytes: attachment_line
+    zlib: file_zip_line
+    gzip: file_zip_line
+    'null': dot_circle_line
+    object: braces_fill
+    array: brackets_fill

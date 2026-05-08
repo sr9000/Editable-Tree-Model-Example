@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from mpq2py import mpq_serialization
+from tree.types import JsonType
 
 JSON_TYPE_ROLE = Qt.ItemDataRole.UserRole + 1
 
@@ -38,6 +39,13 @@ def display_role_value(item, column: int, is_root_item: bool) -> str:
         return "<root>"
 
     data = item.data(column)
+    if column == 2 and item.json_type is JsonType.PERCENT:
+        try:
+            q = data if isinstance(data, gmpy2.mpq) else gmpy2.mpq(str(data))
+            return f"{float(q * 100):g}%"
+        except (TypeError, ValueError):
+            pass
+
     match data:
         case bool():
             return "true" if data else "false"

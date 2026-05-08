@@ -1,714 +1,776 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: 2026-05-06. Phases 0–6 are shipped, including the full
-theming stack and the Phase-6 refactor that extracted
-`app/theme_controller.py`. A new shipping plan landed on the same date
-under `plans/` (six phases covering context-menu polish, zoom column
-preservation, kind-switch coercion overhaul, display/preview, full-app
-theming, and cross-phase tests/memory refresh) — none of those phases
-have shipped yet. The package refactor (Phases 01–37) remains
-complete: all former top-level "god modules" have been split into
-cohesive packages and the old compatibility shims (`json_tab.py`,
-`ui.py`, `tree_view.py`, `tree_model.py`, `tree_item.py`,
-`delegate.py`, `enums.py`, `file_io.py`, `view_state.py`) remain
-removed. The last recorded full-suite baseline in memory is **401
-passed** (`2026-04-26`); the current tree now **collects 451 tests**,
-and the dedicated theming surface (**50 tests**) passes under
-`QT_QPA_PLATFORM=offscreen pytest -q`._
+_Last scanned: **2026-05-08**. PySide6 desktop **structured-data
+editor** (originated from Qt's "Editable Tree Model" example). All
+historical phases (0–6 + package refactor + the six `plans/` phases
+on context-menu polish, zoom-column preservation, kind-switch
+coercion, container preview, app-level color-scheme theming, and
+tests/memory) have shipped; the `plans/` folder is gone. Tests:
+**576 collected, 573 passing**; 3 fail under
+`QT_QPA_PLATFORM=offscreen` because `QStyleHints.setColorScheme` is a
+no-op on the offscreen platform — these pass on real platforms
+(`tests/test_app_color_scheme.py::*`,
+`test_theme_switching.py::test_color_scheme_follows_selected_theme`)._
+
+---
+
+## 0) LLM quick-orientation table
+
+| If you need to…                                       | Look at                                                              |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| App entry / window setup                              | `main.py`, `app/main_window.py`, `mainwindow.ui`                     |
+| Menu wiring + enable/disable                          | `app/main_window_actions.py`                                         |
+| Per-document tab (model/view/undo/search)             | `documents/tab.py` + `documents/tab_*.py`                            |
+| Tree data model & node                                | `tree/model.py`, `tree/item.py`, `tree/model_roles.py`               |
+| Type system / inference                               | `tree/types.py` (`JsonType`, `parse_json_type`)                      |
+| Cross-type coercion (kind switch)                     | `tree/item_coercion.py` (+ `tree/stubs.py`)                          |
+| Editors per type / display formatting                 | `delegates/value.py`, `delegates/value_formatting.py`                |
+| Type-column combobox                                  | `delegates/type_delegate.py`                                         |
+| Name column rename                                    | `delegates/name_delegate.py`                                         |
+| Modal editors (multiline / hex)                       | `dialogs/qmultiline_dlg.py`, `dialogs/qhexedit_dlg.py`               |
+| Context menu / clipboard / paste / structural ops     | `tree_actions/`                                                      |
+| Filter / search                                       | `tree_filter_proxy.py`, `documents/tab_setup.py::init_search_filter` |
+| Typed undo commands + diff replay                     | `undo/commands.py`, `undo/diff.py`                                   |
+| File I/O (JSON / JSONL / YAML / YAML-multi)           | `io_formats/`                                                        |
+| Persisted view state (column widths, expansion, zoom) | `state/view_state.py`                                                |
+| Theme system (specs/loader/registry/icons)            | `themes/`                                                            |
+| Theme menu + follow-system + hot reload + scheme sync | `app/theme_controller.py`                                            |
+| Per-tab status / breadcrumb                           | `documents/tab_status.py`                                            |
+| Custom widgets                                        | `qhexedit/`, `qmultiline_editor.py`, `datetime_editor/`, `qbigint_spinbox/`, `qmpq_spinbox/` |
+
+---
 
 ## 1) What this repo is
 
-A PySide6 desktop app that started life as Qt's **Editable Tree Model**
-example and has been rewritten into a real **structured-data editor**.
-After Phases 0–6 plus the package refactor it provides:
+A PySide6 desktop **structured-data editor** with:
 
-- a tabbed multi-document shell with file open / save / save-as / recent
-  files / close-confirm / persisted view state
-  (`app/`, `documents/`, `state/`, `io_formats/`, `settings.py`)
-- a JSON-centric tree model/view stack with type-aware editing
-  (`tree/`, `delegates/`)
-- typed `QUndoCommand`-based undo/redo with `mergeWith` on consecutive
-  same-path edits, plus a `QUndoView` history dialog (`undo/`,
-  `app/history.py`)
-- a clipboard / cut / copy / paste / duplicate / move / sort tree
-  action layer routed through the typed undo stack (`tree_actions/`)
-- a debounced recursive name+value filter proxy
-  (`tree_filter_proxy.py`) with Ctrl+F focus binding
-- font zoom (Ctrl+= / Ctrl+- / Ctrl+0) persisted per file
-- a permanent status-bar breadcrumb (`$.foo.bar[2].baz (string, 24 chars)`)
-  plus transient action messages
-- presentational `ValueDelegate` formatting for PERCENT / mpq /
-  bytes-typed cells, with `ToolTipRole` carrying full text for long
-  values
-- an app-global theming system with immutable YAML-backed theme specs,
-  built-in light/dark defaults, type-aware delegate coloring, bundled
-  type icons, follow-system theme selection, and opt-in hot reload of
-  user theme files (`themes/`, `state/theme_settings.py`,
-  `app/theme_controller.py`)
-- reusable custom editor widgets (`qhexedit/`, `qmultiline_editor.py`,
-  `datetime_editor/`, `qbigint_spinbox/`, `qmpq_spinbox/`) and helper
-  packages (`mpq2py/`, `jsontream/`, `coalesce/`, `binary/`, `qt2py/`,
-  `units/`)
+- Tabbed multi-document shell (`app/`, `documents/`).
+- Three-column JSON tree (`Name | Type | Value`) with type-aware
+  delegates and live container previews.
+- Typed `QUndoCommand`-based undo/redo with `mergeWith` collapsing of
+  consecutive same-path edits, and a `QUndoView` history dialog.
+- Context menu / clipboard / cut / copy / paste / duplicate / move /
+  sort, all routed through the typed undo stack.
+- Recursive name+value filter proxy (`Ctrl+F`, debounced 150 ms).
+- Per-file persisted view state (column widths, expansion, current
+  selection, font zoom) under `QSettings`.
+- File I/O across JSON / JSON Lines / YAML / YAML multi-document, with
+  atomic writes and `mpq2py` round-trip for exact rationals.
+- Theme system: immutable YAML-backed `ThemeSpec`, built-in
+  light/dark, per-`JsonType` colors+fonts, bundled SVG icons,
+  follow-system, opt-in user-folder hot reload, **app-level
+  `Qt.ColorScheme` sync** with the active theme's mode.
+- Smart kind-switch coercion (lowercase bool→str, "now" temporal
+  fallback, int↔datetime epoch s/ms, bytes encode-on-switch,
+  array↔object child preservation, friendly `tree/stubs.py`
+  placeholders for unrecoverable cases).
+- Reusable widget stack: hex editor, multiline editor, segmented
+  datetime editor, big-int and exact-rational spin boxes.
 
-## 2) Top-level module / package layout
+---
+
+## 2) Top-level layout (file inventory)
 
 ```text
-main.py                       # CLI entry → app.main_window.MainWindow
+main.py                       # CLI entry → MainWindow
 mainwindow.py / mainwindow.ui # generated; never hand-edit
 settings.py                   # APPLICATION_ID, default sizes, info enums
 model_actions.py              # direct-mutation fallbacks for headless tests
-tree_filter_proxy.py          # TreeFilterProxy (debounced recursive filter)
-header_view_editor.py         # dormant mixin, kept for future use
-qmultiline_editor.py          # QPlainTextEdit subclass for the multiline dialog
+tree_filter_proxy.py          # TreeFilterProxy (recursive name+value)
+header_view_editor.py         # dormant mixin, not wired
+qmultiline_editor.py          # QPlainTextEdit subclass for multiline dialog
+plan.txt                      # long-term wishlist (no active phase status)
 
-app/                          # application shell
-  main_window.py              # MainWindow class
-  main_window_actions.py      # action wiring + update_actions()
-  theme_controller.py         # ThemeController: menu, persistence,
-                              # watcher, hot reload, follow-system
-  recent_files.py             # QSettings-backed recent-files list
-  close_confirm.py            # Save / Discard / Cancel flow
+app/                          (≈800 LOC)
+  main_window.py              # MainWindow (~345 lines)
+  main_window_actions.py      # setup_connections + update_actions
+  theme_controller.py         # menu, persistence, watcher, color-scheme sync
+  recent_files.py             # 8-entry recent-files list (QSettings)
+  close_confirm.py            # Save/Discard/Cancel modal
   history.py                  # History menu + QUndoView dialog
 
-documents/                    # per-tab document widget
-  tab.py                      # JsonTab class (~500 lines)
-  tab_setup.py                # layout/delegate/search/shortcut wiring
-  tab_paths.py                # proxy/source mapping, $.path helpers
-  tab_status.py               # breadcrumb + size hints
-  tab_io.py                   # save / save-as wrappers
+documents/                    (≈880 LOC)
+  tab.py                      # JsonTab (~580 lines): undo, search, zoom, push API
+  tab_setup.py                # layout, delegates, shortcuts, filter, column-resize tracking
+  tab_paths.py                # proxy↔source, $.path helpers
+  tab_status.py               # breadcrumb + size hint per JsonType
+  tab_io.py                   # save / save-as / snapshot
 
-undo/                         # typed undo system
-  commands.py                 # _MoveRowCmd, _RenameCmd, _EditValueCmd,
-                              # _ChangeTypeCmd, _InsertRowsCmd,
-                              # _RemoveRowsCmd, _SortKeysCmd
-  diff.py                     # DiffApplier — surgical undo/redo replay
-
-tree/                         # data + model layer
-  types.py                    # JsonType enum + parse/infer helpers
+tree/                         (≈1380 LOC)
+  types.py                    # JsonType + parse_json_type / infer_text_json_type
   item.py                     # JsonTreeItem
-  item_coercion.py            # cross-type value coercion table
-  item_names.py               # unique-name + object-key validation
+  item_coercion.py            # coerce_value_for_type (Phase-3 overhaul)
+  item_names.py               # validate_object_child_name / unique_child_name
+  stubs.py                    # friendly placeholder values for unrecoverable coercions
   model.py                    # JsonTreeModel
-  model_roles.py              # JSON_TYPE_ROLE + display/font helpers
+  model_roles.py              # JSON_TYPE_ROLE + display/font/tooltip helpers
 
-delegates/                    # editing layer
+delegates/                    (≈620 LOC)
   base.py                     # _CapsLockSafeLineEdit, _TextEditorDelegateBase
-  value.py                    # ValueDelegate
-  value_formatting.py         # initStyleOption/displayText helpers
-  bytes_codec.py              # decode_bytes / encode_bytes
-  type_delegate.py            # JsonTypeDelegate
+  value.py                    # ValueDelegate (per-JsonType editors + theme-aware paint)
+  value_formatting.py         # format_default / format_with_type / container preview / _apply_type_style
+  bytes_codec.py              # decode_bytes / encode_bytes (BYTES/ZLIB/GZIP)
+  type_delegate.py            # JsonTypeDelegate (combobox with icons)
   name_delegate.py            # NameDelegate
 
-tree_actions/                 # context menu + clipboard + structural ops
-  selection.py                # proxy/source mapping, ancestor checks
-  clipboard.py                # MIME format, copy/cut payloads
+tree_actions/                 (≈730 LOC)
+  selection.py                # _resolve_model, proxy/source mapping, ancestor checks
+  clipboard.py                # MIME format, copy / copy-with-name / copy-value-only
   paste.py                    # paste_from_clipboard + collision avoidance
-  structure.py                # insert/delete/duplicate/move/sort/expand
-  context_menu.py             # show_context_menu
+  structure.py                # insert/cut/delete/duplicate/move/sort/expand/collapse
+  context_menu.py             # column-aware show_context_menu
 
-io_formats/                   # file load/save
-  detect.py                   # extension dispatch + format constants
-  load.py                     # JSON / JSONL / YAML / YAML-multi load paths
+undo/                         (≈370 LOC)
+  commands.py                 # _MoveRowCmd, _RenameCmd, _EditValueCmd, _ChangeTypeCmd,
+                              # _InsertRowsCmd, _RemoveRowsCmd, _SortKeysCmd
+  diff.py                     # DiffApplier — surgical Qt-signal undo/redo replay
+
+io_formats/                   (≈110 LOC)
+  detect.py                   # SAVE_FORMAT_* constants + extension dispatch
+  load.py                     # load_file / load_file_with_format
   dump.py                     # dump_text + mpq-safe serialization
-  atomic.py                   # atomic_write / save_file
+  atomic.py                   # atomic_write / save_file (os.replace)
 
-state/                        # persisted view state
+state/                        (≈245 LOC)
   view_state.py               # state_key / save / restore / discard
-  theme_settings.py           # theme/follow-system/manual/watch prefs
+  theme_settings.py           # theme/* QSettings + resolve_active_theme
   qsettings_coercion.py       # cross-platform QSettings shape helpers
 
-themes/                       # theming subsystem
-  spec.py                     # ThemeSpec / Palette / TypeStyle
+themes/                       (≈660 LOC)
+  spec.py                     # ThemeSpec / Palette / TypeStyle (frozen, hashable)
   loader.py                   # YAML → ThemeSpec with total fallback
-  _defaults.py                # built-in default light/dark specs
-  auto.py                     # system light/dark detection
+  _defaults.py                # built-in LIGHT_DEFAULT / DARK_DEFAULT
+  _contrast.py                # WCAG relative_luminance / contrast_ratio
+  auto.py                     # detect_system_mode (styleHints + palette fallback)
   registry.py                 # discover built-in + user themes
-  icon_provider.py            # Stub/File icon providers
+  icon_provider.py            # StubIconProvider / FileIconProvider
   builtin/
     light.yaml                # built-in light theme
     dark.yaml                 # built-in dark theme
-    icons/                    # bundled SVG type icon set
+    icons/                    # 18 SVGs, one per JsonType key
+
+dialogs/                      # QHexDialog, QMultilineDialog (modal, persisted)
+datetime_editor/              # BetterDateTimeEditor (segments, partial regex, TZ)
+qhexedit/                     # QHexEdit + ColorManager + chunks/commands
+qbigint_spinbox/              # arbitrary-precision integer spin
+qmpq_spinbox/                 # exact-rational spin (gmpy2.mpq)
+mpq2py/                       # mpq_serialization, mpq_json_default, MpqSafeLoader/Dumper
+jsontream/                    # streaming JSON encoder (iterables)
+units/                        # bits, format_bytes
+coalesce/, binary/, qt2py/    # small utility packages
+tests/                        # 576 collected
+ai-memory/                    # this folder
 ```
 
-Canonical imports use these package paths, e.g.:
+Canonical imports:
 
 ```python
 from app.main_window import MainWindow
+from app.theme_controller import ThemeController
 from documents.tab import JsonTab
 from tree.model import JsonTreeModel
 from tree.model_roles import JSON_TYPE_ROLE
 from tree.item import JsonTreeItem
-from tree.types import JsonType, parse_json_type
+from tree.item_coercion import coerce_value_for_type
+from tree.types import JsonType, parse_json_type, infer_text_json_type, TEXT_FAMILY
+from tree.stubs import stub_integer, stub_float, stub_percent, stub_string, stub_multiline, stub_bytes_raw
 from delegates.value import ValueDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.name_delegate import NameDelegate
 from tree_actions.context_menu import show_context_menu
-from tree_actions.clipboard import copy_selection
+from tree_actions.clipboard import copy_selection, copy_selection_with_name, copy_selection_value_only
 from tree_actions.paste import paste_from_clipboard
 from io_formats.load import load_file_with_format
 from io_formats.dump import dump_text
+from io_formats.detect import SAVE_FORMAT_JSON, SAVE_FORMAT_JSONL, SAVE_FORMAT_YAML, SAVE_FORMAT_YAML_MULTI
 from io_formats.atomic import atomic_write, save_file
 from state.view_state import save, restore, discard, state_key
 from state.theme_settings import resolve_active_theme
-from themes import ThemeRegistry, ThemeSpec
+from themes import ThemeRegistry, ThemeSpec, LIGHT_DEFAULT, DARK_DEFAULT
 ```
 
-## 3) Runtime entrypoint and main window
+---
 
-### `main.py`
-- Creates a `QApplication`.
-- Instantiates `app.main_window.MainWindow` with the optional CLI
-  filename (defaulting to `data.yaml`).
-- Resizes the window to `settings.WINDOW_DEFAULT_SIZE`.
+## 3) Field formats — `JsonType` matrix
 
-### `app/main_window.py`
-- `MainWindow(QMainWindow, Ui_MainWindow)` (~345 lines).
-- `setup_model(filename)` opens the file via `_open_path`; no-op on
-  empty string (so test fixtures can pass `""`).
-- `_add_tab(data, file_path)` creates a `JsonTab` with `show_root=True`,
-  passes the active `ThemeSpec` + `IconProvider`, expands all, calls
-  `state.view_state.restore`, and sets focus to the synthetic root row.
-- `close_tab(index)` and `closeEvent` route through
-  `app.close_confirm._confirm_close` (Save / Discard / Cancel) and call
-  `state.view_state.save` per tab.
-- `copy_action()` delegates to `tree_actions.clipboard.copy_selection`.
-- Keeps a small set of underscore compatibility wrappers
-  (`_apply_theme`, `_on_theme_selected`, `_on_theme_fs_event`, …)
-  that now forward to `ThemeController`; tests still use these entry
-  points.
+`JsonType` (StrEnum, `tree/types.py`); editors in `delegates/value.py`;
+display in `delegates/value_formatting.py`; coercion in
+`tree/item_coercion.py`.
 
-### `app/theme_controller.py`
-- Owns the app-global theme state: `ThemeRegistry`, current
-  `ThemeSpec`, current `IconProvider`, and the View → Theme submenu.
-- Handles:
-  - follow-system persistence and per-mode theme preferences,
-  - manual theme selection,
-  - the opt-in "Watch user theme folder" flag,
-  - `QFileSystemWatcher` + 250 ms debounce reload,
-  - opening the user theme directory,
-  - reacting to `QGuiApplication.styleHints().colorSchemeChanged`,
-  - rebuilding menu actions after registry reload.
-- Calls back into `MainWindow` via `on_theme_changed(theme,
-  icon_provider)` so tabs repaint without model/view rebuilds.
+| JsonType       | enum value      | Inline editor                | Display formatting                       | Coercion notes                                                   |
+| -------------- | --------------- | ---------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
+| `INTEGER`      | `"integer"`     | `QBigIntSpinBox`             | `str(int)`                               | int↔float/percent rounding; int sec/ms ↔ datetime parse          |
+| `FLOAT`        | `"float"`       | `QMpqSpinBox`                | `mpq_serialization` decimal              | stored as `gmpy2.mpq`                                            |
+| `PERCENT`      | `"percent"`     | `QMpqSpinBox` (`0..100 %`)   | `"50%"`, `"33.33%"`                      | UI is 0–100, storage is 0–1 mpq; auto-inferred when value ∈ [0,1] |
+| `BOOLEAN`      | `"boolean"`     | `QComboBox` (true/false)     | `"true"` / `"false"`                     | bool → str produces lowercase `"true"`/`"false"`                 |
+| `STRING`       | `"string"`      | `_CapsLockSafeLineEdit`      | elide at 80 chars                        | ASCII single-line                                                |
+| `UNICODE`      | `"utf-8 line"`  | `_CapsLockSafeLineEdit`      | elide at 80 chars                        | non-ASCII single-line                                            |
+| `MULTILINE`    | `"multiline"`   | `QMultilineDialog` (modal)   | `"line1 \| line2 \| ..."` joined preview | ASCII, has `\n` and (>1 newline OR >80 chars)                    |
+| `TEXT`         | `"utf-8 text"`  | `QMultilineDialog` (modal)   | joined preview                           | non-ASCII multiline                                              |
+| `DATE`         | `"date"`        | `BetterDateTimeEditor`       | ISO date string                          | "now" placeholder if unparseable                                 |
+| `TIME`         | `"time"`        | `BetterDateTimeEditor`       | ISO time string                          | "now" placeholder                                                |
+| `DATETIME`     | `"datetime"`    | `BetterDateTimeEditor`       | ISO no-tz                                | int sec/ms parsing supported; "now" fallback                     |
+| `DATETIMEZONE` | `"dt+timezone"` | `BetterDateTimeEditor`       | ISO with offset                          | "now" fallback in local tz                                       |
+| `BYTES`        | `"bytes"`       | `QHexDialog` (modal)         | `"<24 byte>"` via `units.format_bytes`   | base64 wire format; encode-on-switch from string/int             |
+| `ZLIB`         | `"zlib"`        | `QHexDialog` (modal)         | `"<…>"`                                  | base64+zlib; cross-format re-encode lossless when `old_type` known |
+| `GZIP`         | `"gzip"`        | `QHexDialog` (modal)         | `"<…>"`                                  | base64+gzip                                                      |
+| `OBJECT`       | `"object"`      | n/a (children edited inline) | `"{N keys}  k: v, k2: v2, …"` (collapsed) | array→object preserves children with `item1, item2, …` keys     |
+| `ARRAY`        | `"array"`       | n/a                          | `"[N items]  v1, v2, v3"` (collapsed)    | object→array preserves children, drops keys                      |
+| `NULL`         | `"null"`        | n/a (col 2 not editable)     | `"null"`                                 | always editable type; never serialised as a string               |
 
-### `app/main_window_actions.py`
-- File menu: `New`, `Open`, `Save`, `Save As`, `Recent` submenu (cap 8),
-  `Quit`.
-- View menu: `Expand All`, `Collapse All`, `Zoom In/Out/Reset`, plus a
-  Theme submenu created by `ThemeController`.
-- Actions menu: insert before / insert after / remove row.
-- `update_actions()` enables Save/SaveAs/View when a tab exists;
-  insert/remove require a valid current index.
+Inference (`parse_json_type`):
+- floats / mpq in `[0, 1]` → `PERCENT`; else → `FLOAT`.
+- strings: multiline→`MULTILINE`/`TEXT`; else datetime parse first
+  (`DATETIME`/`DATETIMEZONE`/`TIME`/`DATE`); else strict base64 →
+  `ZLIB`/`GZIP`/`BYTES`; else `STRING`/`UNICODE`.
+- `parse_json_type` is **total**: returns `STRING` + logger warning
+  for unknown types.
+- `JsonTreeItem.explicit_type` pins user choices so re-inference cannot
+  flip them.
+- `TEXT_FAMILY = {STRING, UNICODE, MULTILINE, TEXT}`. Within the family,
+  `text_pseudotype_for` switches only along the ASCII axis (preserves
+  single-line vs multiline shape).
 
-### `app/recent_files.py`
-- Loads/persists/prunes the recent-files list under
-  `QSettings(APPLICATION_ID, "app")`. Caps at 8, drops missing paths.
+Container preview (`delegates/value_formatting.py`):
+- `_format_container_preview` shows `[N items]` / `{N keys}` plus the
+  first 5 children, but **only when the row is collapsed**
+  (`option.widget.isExpanded(siblingAtColumn(0))` is False).
 
-### `app/close_confirm.py`
-- Save / Discard / Cancel modal helper for dirty tabs.
+---
 
-### `app/history.py`
-- Adds a `History` menu with Undo / Redo / `Show History…` (a
-  `QUndoView` dialog bound to the active tab's `QUndoStack`).
-- `_bind_undo_signals(tab)` wires `canUndoChanged` / `canRedoChanged`.
+## 4) Keyboard shortcuts
 
-### `mainwindow.ui` / `mainwindow.py`
-- Designer XML / generated. Declares the standard action set
-  (`fileOpenAction`, `fileSaveAction`, `rowInsertAction`, etc.).
-  Never hand-edit `mainwindow.py`.
+Defined in `mainwindow.ui` (window-level QActions) and
+`documents/tab_setup.py::init_shortcuts` (per-tab `QShortcut`s).
 
-### `settings.py`
-- `APPLICATION_ID` (UUID-namespaced for `QSettings`).
-- `WINDOW_DEFAULT_SIZE`, `MODAL_WINDOW_SIZE`.
-- `IntegerInfo / FloatInfo / MultiLineInfo / SingleLineInfo` `StrEnum`s.
+| Shortcut       | Scope  | Action                                       |
+| -------------- | ------ | -------------------------------------------- |
+| `Ctrl+N`       | window | New (empty) tab                              |
+| `Ctrl+O`       | window | Open file dialog                             |
+| `Ctrl+S`       | window | Save                                         |
+| `Ctrl+Shift+S` | window | Save As                                      |
+| `Ctrl+Q`       | window | Exit                                         |
+| `Ctrl+I`       | window | Insert sibling **before**                    |
+| `Ctrl+Shift+I` | window | Insert sibling **after**                     |
+| `Del`          | window | Remove row                                   |
+| `Ctrl++`       | window | Zoom In                                      |
+| `Ctrl+-`       | window | Zoom Out                                     |
+| `Ctrl+0`       | window | Reset zoom                                   |
+| `Ctrl+F`       | tab    | Focus filter line edit                       |
+| `Ctrl+C`       | tab    | Copy selection                               |
+| `Ctrl+X`       | tab    | Cut selection                                |
+| `Ctrl+V`       | tab    | Paste                                        |
+| `Ctrl+D`       | tab    | Duplicate selection                          |
+| `Alt+Up`       | tab    | Move row up                                  |
+| `Alt+Down`     | tab    | Move row down                                |
+| `Ctrl+Alt+S`   | tab    | Sort keys (under selected OBJECT)            |
+| `F2` / Enter   | tree   | Edit current cell (Qt default)               |
 
-## 4) Per-tab editor — `documents/`
+Undo/redo have no explicit shortcuts wired — the **History** menu owns
+Undo, Redo and "Show History…" via `app/history.py` (Qt's built-in
+Ctrl+Z / Ctrl+Shift+Z still work on focused widgets but not on the
+tree itself).
 
-`documents.tab.JsonTab(QWidget)` (~500 lines) is the single source of
-truth for one document:
+---
 
-- Holds the source `JsonTreeModel`, a `TreeFilterProxy`, three column
-  delegates (`NameDelegate` col 0, `JsonTypeDelegate` col 1,
-  `ValueDelegate` col 2), and a `QUndoStack`.
-- Also holds the currently active `ThemeSpec` and `IconProvider`, both
-  supplied by `MainWindow` / `ThemeController`.
-- Constructor: `data` / `file_path` / `show_root` /
-  `update_actions_callback` / `status_message_callback` /
-  `permanent_message_callback`. When `data is _DEFAULT_DATA`, falls
-  back to a built-in demo dictionary (legacy compatibility for tests
-  that call bare `JsonTab(...)`); explicit `data={}` gives an empty
-  document.
-- Owns the `search_edit` `QLineEdit` (debounced 150 ms via `QTimer`),
-  bound shortcuts: `Ctrl+F`, `Ctrl+C/X/V`, `Del`, `Ctrl+D`, `Alt+↑/↓`,
-  `Ctrl+Alt+S`, `Ctrl+= / Ctrl+- / Ctrl+0`.
+## 5) Menus
+
+### Menu bar (from `mainwindow.ui` + runtime additions)
+
+- **File**: New, Open, *Recent* (submenu, ≤ 8, runtime), Save, Save As,
+  Exit.
+- **Actions**: Insert Row (before), Insert Row after, Remove Row.
+  `aboutToShow` triggers `update_actions`.
+- **View**: Expand All, Collapse All, Zoom In/Out/Reset, **Theme**
+  submenu (runtime via `ThemeController.setup_theme_menu`).
+- **History** (runtime via `app/history.py`): Undo, Redo, Show
+  History….
+
+### Theme submenu (built by `ThemeController`)
+
+- **Follow system** (checkable)
+- **Watch user theme folder** (checkable, opt-in `QFileSystemWatcher`
+  with 250 ms debounce)
+- **Light themes** / **Dark themes** submenus, exclusive `QActionGroup`s
+- **Reload themes**
+- **Open themes folder…**
+
+### Tree context menu (`tree_actions/context_menu.py::show_context_menu`)
+
+Column-aware:
+- **Type column (col 1)** → only `Expand All` / `Collapse All`.
+- **Name (col 0) / Value (col 2)** → full menu:
+  - Item submenu (labelled with the row's display data):
+    - **Copy** — column-aware: name col uses `copy_selection_with_name`,
+      value col uses `copy_selection_value_only`, otherwise the full
+      `copy_selection`.
+    - Cut, Paste, Delete
+    - Duplicate
+    - Move Up / Move Down (disabled at the boundary)
+    - Sort Keys / Sort Keys (Recursive) (only enabled under OBJECT)
+  - Insert Sibling Before, Insert Sibling After, Insert Child (only
+    enabled when current row is OBJECT/ARRAY)
+  - Expand All / Collapse All
+
+Clipboard MIME type is `application/x-json-tree`; payload preserves
+names so paste keeps full type info. Name-collision avoidance under
+OBJECT parents uses `_copy_name` / `unique_child_name` to generate
+`_copy`, `_copy_2`, … suffixes.
+
+---
+
+## 6) File I/O matrix
+
+Defined in `io_formats/`. `detect_format(path)` dispatches by
+extension.
+
+| Format     | Extensions          | Constant                 | Load                                              | Dump                                                                         |
+| ---------- | ------------------- | ------------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| JSON       | `.json`             | `SAVE_FORMAT_JSON`       | `simplejson.load(parse_float=mpq)`                | `simplejson.dumps(..., use_decimal=True, default=mpq_json_default, indent=2)` |
+| JSON Lines | `.jsonl`, `.ndjson` | `SAVE_FORMAT_JSONL`      | line-by-line `simplejson.loads(parse_float=mpq)`  | one `dumps` per row                                                          |
+| YAML       | `.yaml`, `.yml`     | `SAVE_FORMAT_YAML`       | `yaml.load_all(MpqSafeLoader)` (single doc)       | `yaml.dump(MpqSafeDumper)`                                                   |
+| YAML multi | `.yaml`, `.yml`     | `SAVE_FORMAT_YAML_MULTI` | `yaml.load_all` returns list                      | `yaml.dump_all(MpqSafeDumper)`                                               |
+
+Atomic writes via `os.replace` in `atomic_write(path, text)` →
+`save_file(path, data, save_format)`.
+
+The detected format is stashed on the tab as `tab.save_format` so a
+subsequent `Save` keeps the original shape (notably YAML-multi).
+`Save As` opens `QFileDialog.getSaveFileName` with four format
+filters. On a successful Save-As to a new path,
+`state.view_state.discard(old_path)` is called.
+
+`simplejson` cannot combine `parse_float=mpq` with `use_decimal=True`
+on the pinned version; load uses `parse_float=mpq` only, save uses
+`use_decimal=True`. Documented incompatibility, not a bug.
+
+---
+
+## 7) Status bar / breadcrumb
+
+`documents/tab_status.py`:
+- `_on_current_changed` writes a permanent message of the form
+  `$.foo.bar[2].baz  (string, 24 chars)` via
+  `permanent_message_callback`.
+- `size_hint_for_item` per JsonType:
+  - text family → `… chars`
+  - OBJECT → `… keys`
+  - ARRAY → `… items`
+  - bytes family → `format_bytes(len(decoded))`
+- Transient action messages (Open/Save/copy/cut/paste/etc.) go through
+  `status_message_callback(text, timeout_ms)`.
+
+`tree/model_roles.py::ToolTipRole` returns the full value capped at
+4 KB + ellipsis when raw text > 80 chars.
+
+---
+
+## 8) Tree model — `tree/`
+
+### `tree/model.py` — `JsonTreeModel`
+
+- `QAbstractItemModel` over a single `root_item: JsonTreeItem`.
+- Three fixed columns: `Name | Type | Value`.
+- `show_root: bool` exposes the synthetic root row (tabs use
+  `show_root=True`; legacy tests use `False`).
+- `flags()` is data-aware (col 0 editable only under OBJECT parents;
+  col 1 always editable; col 2 keyed off cached
+  `JsonTreeItem.editable`).
+- `setData` routes through `JsonTreeItem.set_data` (col 0/2) or
+  `change_type` (col 1, with `typeChanged(QModelIndex, lossy:bool)`).
+- Optional `icon_provider`; `data(..., DecorationRole)` for col 1
+  returns the type icon. `set_icon_provider` swaps with identity
+  short-circuit.
+- Mutation helpers: `move_row`, `change_type`, `sort_keys`
+  (recursive option), `insertRows` / `removeRows` via context-managed
+  `beginInsert*` / `beginRemove*`.
+
+### `tree/model_roles.py`
+
+- `JSON_TYPE_ROLE = UserRole + 1` for col 2 — consumed by
+  `ValueDelegate.initStyleOption`.
+- `EditRole`: raw value (`mpq`, `int`, `bool`, `None`, base64-`str`).
+- `DisplayRole`: stringified path for non-delegate clients
+  (`"true"/"false"`, `"null"`, `mpq_serialization` for mpq).
+- `ToolTipRole`: full value capped at 4 KB.
+- `FontRole`: italicizes col-0 names with non-ASCII characters.
+- Theme colors are **not** in model roles; only col-1 icons are.
+
+### `tree/item.py` — `JsonTreeItem`
+
+- One JSON node. Stores `name`, `value`, `parent_item`,
+  `child_items`, cached `editable` / lazy `row()`, and
+  `explicit_type` (user-pinned).
+- Recursively expands `dict` → OBJECT, `list` → ARRAY.
+- `set_data(column, value)` is total across cols 0/1/2.
+- `to_json()` rebuilds Python primitives; raises `ValueError` for any
+  remaining unnamed OBJECT child.
+
+### `tree/item_coercion.py` — Phase-3 overhaul
+
+`coerce_value_for_type(new_type, value, *, strict, old_type=None)`:
+- bool → str produces lowercase `"true"`/`"false"`.
+- DATE/TIME/DATETIME/DATETIMEZONE: when value is unparseable, fall
+  back to `_now_for_type` (current time at minute/second precision)
+  instead of the 1970 epoch zero.
+- Integer ↔ DATETIME round-trip: integers in seconds and milliseconds
+  parse to a datetime; reverse path emits seconds-since-epoch.
+- BYTES/ZLIB/GZIP: encoding-on-switch from text/int; cross-format
+  re-encode is lossless when `old_type` is provided.
+- ARRAY ↔ OBJECT: morph preserves children. Object→array drops keys
+  in insertion order; array→object names children `item1`, `item2`, …
+- Unrecoverable cases (with `strict=False`) substitute `tree/stubs.py`
+  placeholders (`stub_integer`, `stub_float`, `stub_percent`,
+  `stub_string`, `stub_multiline`, `stub_bytes_raw`) — random picks
+  from a curated "famous values" pool so the user notices it's a
+  placeholder rather than blank `0` / `""`.
+
+### `tree/item_names.py`
+
+- `validate_object_child_name` — duplicate/empty rejection.
+- `unique_child_name(base="new_key", used_names=None)` — `new_key`,
+  `new_key_2`, … fallback chain.
+
+---
+
+## 9) Editing layer — `delegates/`
+
+### `delegates/value.py` — `ValueDelegate(_TextEditorDelegateBase)`
+
+Editors per JsonType: see § 3. Routing rules:
+- Inline numeric / boolean / string / datetime editors commit via
+  `_commit(...)` → ascends parent chain to find a `JsonTab` host and
+  calls `tab.commit_set_data(idx, value, role)`. Falls back to
+  `model.setData` when no tab ancestor exists (headless tests).
+- Modal editors (`QMultilineDialog`, `QHexDialog`) capture
+  `QPersistentModelIndex` on open and commit via the same `_commit`
+  path on close, surviving row mutations during the modal session.
+- BYTES decode wrapped in
+  `try/except (ValueError, OSError, zlib.error, binascii.Error)`;
+  failures surface via `_notify_status` (status-bar callback) and
+  return `None` instead of raising.
+- `initStyleOption`: reads `JSON_TYPE_ROLE` + `EditRole`, sets
+  `option.text` via `format_with_type(...)`, applies the theme's
+  `TypeStyle` foreground/background/bold/italic, suppresses container
+  preview when the row is expanded, and preserves platform selection
+  highlight.
+
+### `delegates/value_formatting.py`
+
+- `format_default(value, max_text_len=80)` — null/bool/mpq/bytes/long
+  string formatting.
+- `format_with_type(value, json_type, *, item, show_preview)` —
+  PERCENT %, BYTES family `<…>`, MULTILINE/TEXT joined with
+  `_MULTILINE_SEPARATOR = " | "`, container preview when
+  `show_preview=True` and item supplied.
+- `_apply_type_style(option, style, *, selected, allow_background)` —
+  shared by both ValueDelegate and JsonTypeDelegate.
+
+### `delegates/type_delegate.py` — `JsonTypeDelegate`
+
+- Combobox of all `JsonType` entries; preselect via `findData`.
+- Theme-aware: paints the cell with the row's `TypeStyle` foreground
+  when not selected; combo items show the `IconProvider`'s type icon.
+- Commits route through `JsonTab.commit_set_data` if a tab ancestor
+  exists.
+
+### `delegates/name_delegate.py` — `NameDelegate`
+
+- `_CapsLockSafeLineEdit` for col-0 rename; commits via the same
+  `_commit` path.
+
+### `delegates/base.py`
+
+- `_CapsLockSafeLineEdit` and `_TextEditorDelegateBase` swallow
+  lock-key `KeyPress` and layout-switch `FocusOut` events so xkb
+  layout switches don't collapse the editor mid-typing.
+
+---
+
+## 10) Per-tab editor — `documents/`
+
+`documents.tab.JsonTab(QWidget)` (~580 lines) is the single source of
+truth for one document.
+
+- Holds `JsonTreeModel`, `TreeFilterProxy`, three column delegates
+  (`NameDelegate` col 0, `JsonTypeDelegate` col 1, `ValueDelegate`
+  col 2), a `QUndoStack`, and the current `ThemeSpec` + `IconProvider`.
+- Constructor: `update_actions_callback`, `status_message_callback`,
+  `data` (default `_DEFAULT_DATA` legacy demo, explicit `data={}`
+  empty), `file_path`, `show_root`, `permanent_message_callback`,
+  `theme`, `icon_provider`.
+- Owns the search line edit (debounced 150 ms via `QTimer`, Ctrl+F).
 - Typed-command push API: `push_move_row`, `push_rename`,
   `push_edit_value`, `push_change_type`, `push_insert_rows`,
   `push_remove_rows`, `push_sort_keys`. `commit_set_data(index, value,
-  role)` is the single delegate-side mutation entry point and dispatches
-  by column. The typed `QUndoCommand` subclasses live in
-  `undo/commands.py`; `mergeWith` collapses consecutive same-path edits
-  within a 500 ms window for `_RenameCmd` / `_EditValueCmd`.
-- Undo/redo replay uses `undo.diff.DiffApplier` (`apply(parent_path,
-  old, new)`) which emits surgical Qt model signals so expansion and
-  selection survive.
-- Dirty state: tied to `undo_stack.cleanChanged`. `dirtyChanged(bool)`
-  signal updates `MainWindow` tab title (`*` suffix). `is_dirty`
-  property; `display_name()` formats the title.
-- `set_theme(theme, icon_provider=None)` updates both delegates and the
-  model icon provider, then emits recursive `dataChanged` spans with
-  `ForegroundRole`, `BackgroundRole`, `FontRole`, and
-  `DecorationRole`; undo stack, expansion and current selection survive.
+  role)` is the single delegate-side mutation entry point and
+  dispatches by column.
+- `mergeWith` collapses consecutive same-path edits within a 500 ms
+  window for `_RenameCmd` / `_EditValueCmd` (ids `0x0E710001` /
+  `0x0E710002`).
+- Undo/redo replay via `undo.diff.DiffApplier` — emits surgical Qt
+  model signals so expansion and selection survive.
+- Dirty state tied to `undo_stack.cleanChanged`; `dirtyChanged(bool)`
+  signal updates the tab title (`*` suffix) via `display_name()`.
+- `set_theme(theme, icon_provider=None)` updates both theme-aware
+  delegates and the model icon provider, then emits recursive
+  `dataChanged` spans with `Foreground/Background/Font/DecorationRole`;
+  undo stack, expansion and selection all survive.
+- Font zoom: `Ctrl++`, `Ctrl+-`, `Ctrl+0`. Persisted as `_font_pt` in
+  view state.
+- **Column-resize tracking** (Phase 2): `_user_sized_columns: set[int]`
+  + `_programmatic_column_resize` guard flag. The `sectionResized`
+  handler records user-driven resizes only; zoom helpers and
+  `resize_key_columns` set the guard so they never poison the set.
 
 ### `documents/tab_setup.py`
-- Builds the QTreeView, attaches delegates, wires shortcuts, search
-  proxy, font-zoom helpers.
-- Injects `tab._theme` into `ValueDelegate` / `JsonTypeDelegate` and
-  `tab._icon_provider` into `JsonTreeModel` / `JsonTypeDelegate`.
+
+- Builds the `QTreeView` (`UniformRowHeights`, `AlternatingRowColors`,
+  `ExtendedSelection`, `SelectItems`, `ScrollPerPixel`).
+- Attaches delegates, wires shortcuts, search proxy, font-zoom helpers,
+  column-resize tracking.
 
 ### `documents/tab_paths.py`
-- Pure-ish helpers operating on `(model, proxy)`:
-  `_proxy_to_source`, `_source_to_view`, `_index_path`,
-  `_index_from_path`, `_qualified_name` (returns JSON-style
-  `$.foo.bar[2]` paths).
 
-### `documents/tab_status.py`
-- `_size_hint_for_item` per JsonType (text/object/array/bytes-family).
-- `_on_current_changed` writes the breadcrumb status message.
+- Pure helpers on `(model, proxy)`: `proxy_to_source`, `source_to_view`,
+  `index_path`, `index_from_path`, `qualified_name` (returns
+  JSON-style `$.foo.bar[2]`).
 
 ### `documents/tab_io.py`
+
 - `save()` (uses stored `save_format` if set, else detects from
   extension) and `save_as(path=None)` opens
   `QFileDialog.getSaveFileName` with four format filters.
 
-## 5) Tree data layer — `tree/`
+---
 
-### `tree/model.py` — `JsonTreeModel`
-- `QAbstractItemModel` over a single `root_item: JsonTreeItem`.
-- Three fixed columns: `Name`, `Type`, `Value`.
-- `show_root: bool` exposes the synthetic root row in the view.
-- `flags()` is data-aware (column 0 editable only under OBJECT parents;
-  column 1 always editable; column 2 keyed off cached
-  `JsonTreeItem.editable`).
-- `setData` routes through `JsonTreeItem.set_data` (col 0/2) or
-  `change_type` (col 1, with `typeChanged(QModelIndex, lossy:bool)`
-  signal).
-- Accepts an optional `icon_provider`; `data(..., DecorationRole)` for
-  column 1 returns the type icon for the row.
-- `set_icon_provider(provider)` swaps the provider with an identity
-  short-circuit; repaint emission is handled one layer up by
-  `JsonTab.set_theme`.
-- Mutation helpers used by typed commands: `move_row`, `change_type`,
-  `sort_keys` (recursive option), `insertRows` / `removeRows`
-  (context-managed `beginInsert*` / `beginRemove*`).
+## 11) Tree actions / clipboard — `tree_actions/`
 
-### `tree/model_roles.py`
-- `JSON_TYPE_ROLE = UserRole + 1`.
-- Display-text / tooltip / font-role helpers.
-- `EditRole` returns the raw value (`mpq`, `int`, `bool`, `None`,
-  bytes-as-base64-str, …) for round-trip with editors.
-- `DisplayRole` keeps a stringified path for non-delegate clients
-  (lowercase `true/false`, `null`, `mpq_serialization` for mpq).
-- `JSON_TYPE_ROLE` returns `item.json_type` for col 2; consumed by
-  `ValueDelegate.initStyleOption` to format PERCENT / BYTES / ZLIB /
-  GZIP without re-parsing.
-- `ToolTipRole` for col 2 returns the full value capped at 4 KB +
-  ellipsis when raw text > 80 chars.
-- `FontRole` italicizes col 0 names that contain non-ASCII.
-- Theme colors intentionally do **not** live in model roles; the model
-  stays theme-agnostic apart from column-1 `DecorationRole` icons.
+- `selection.py`: `_resolve_model`, `_to_source_index`, `_to_view_index`,
+  `_index_path`, `_is_ancestor`, `_top_level_selected_rows`.
+- `clipboard.py`: `copy_selection`, `copy_selection_with_name`,
+  `copy_selection_value_only`. MIME type `application/x-json-tree`
+  with text fallback for cross-app paste.
+- `paste.py`: `paste_from_clipboard` with collision avoidance.
+- `structure.py`: `insert_sibling_before/after`, `insert_child_current`,
+  `delete_selection`, `cut_selection`, `duplicate_selection`,
+  `move_selection_up/down`, `sort_selection_keys(recursive)`,
+  `expand_all`, `collapse_all`.
+- `context_menu.py`: column-aware menu (see § 5).
 
-### `tree/item.py` — `JsonTreeItem`
-- One JSON node. Stores `name`, `value`, `parent_item`, `child_items`,
-  cached `editable`, lazy cached `row()` index, and `explicit_type`
-  flag for user-pinned types.
-- Recursively expands `dict` → OBJECT, `list` → ARRAY.
-- `set_data(column, value)` is total across columns 0/1/2.
-- `to_json()` rebuilds Python primitives; raises `ValueError` for any
-  remaining unnamed OBJECT child.
+Each action routes through `JsonTab.push_*` typed helpers when the
+view's ancestor is a `JsonTab`, else falls back to `model_actions.py`
+direct mutators (headless tests).
 
-### `tree/item_coercion.py`
-- `_coerce_value_for_type`, `_normalize_value_for_type`,
-  `_apply_typed_value`, `_compute_editable` — pure(-ish) coercion table
-  used by `JsonTreeItem` and `DiffApplier`.
+---
 
-### `tree/item_names.py`
-- `validate_object_child_name` — duplicate/empty rejection.
-- `unique_child_name(base="new_key", used_names=None)` generates
-  `new_key`, `new_key_2`, … suffixes.
-
-### `tree/types.py` — `JsonType` + type detection
-- `JsonType`: integer, float, percent, boolean, string, unicode,
-  multiline, text, date, time, datetime, datetime-with-timezone,
-  bytes, zlib, gzip, object, array, null.
-- `parse_json_type(value)` is **total**: returns `STRING` with a logger
-  warning for unknown types (no exception).
-- Heuristics: floats / mpq in `[0,1]` → PERCENT; other floats / mpq →
-  FLOAT.
-- `_looks_like_base64` requires syntactic validity; datetime is
-  checked before bytes.
-- Text-axis helpers: `infer_text_json_type`, `text_pseudotype_for`,
-  `TEXT_FAMILY` (single-line vs multiline x ascii-only vs unicode).
-
-## 6) Editing/delegate layer — `delegates/`
-
-### `delegates/value.py` — `ValueDelegate(_TextEditorDelegateBase)`
-Editors per JsonType:
-- INTEGER → `QBigIntSpinBox`
-- FLOAT / PERCENT → `QMpqSpinBox` (PERCENT gets `0..100 %` UI but
-  stores `0..1` mpq)
-- BOOLEAN → `QComboBox`
-- STRING / UNICODE → `_CapsLockSafeLineEdit`
-- DATE / TIME / DATETIME / DATETIMEZONE → `BetterDateTimeEditor`
-- MULTILINE / TEXT → modal `QMultilineDialog`, commit via
-  `QPersistentModelIndex` → `JsonTab.commit_set_data`
-- BYTES / ZLIB / GZIP → modal `QHexDialog`; decode wrapped in
-  `try/except (ValueError, OSError, zlib.error, binascii.Error)`,
-  failures surface via `_notify_status` (status-bar callback)
-- `initStyleOption` is theme-aware: it reads `JSON_TYPE_ROLE`, formats
-  the text via `format_with_type`, and applies per-type foreground /
-  background / bold / italic styling while preserving platform
-  selection colors.
-
-### `delegates/value_formatting.py`
-- `initStyleOption` reads `EditRole` + `JSON_TYPE_ROLE` and sets
-  `option.text` to a type-aware formatted string (PERCENT → `"50%"`,
-  BYTES-family → `"<24 byte>"`, mpq → decimal form, long strings
-  elide to 80 chars).
-- `_apply_type_style(...)` centralizes theme styling so both value and
-  type delegates share the same selection-aware font/foreground logic.
-
-### `delegates/base.py`
-- `_CapsLockSafeLineEdit` and `_TextEditorDelegateBase` swallow
-  lock-key `KeyPress` and layout-switch `FocusOut` events to keep the
-  editor open under xkb layout-switch keybinds.
-
-### `delegates/type_delegate.py` — `JsonTypeDelegate(QStyledItemDelegate)`
-- Combo box of all `JsonType` entries; preselects the current type via
-  `findData`.
-- `_interactive` flag set during `setModelData`; commit routes through
-  `JsonTab.commit_set_data` if a tab ancestor exists.
-- Also receives the active `ThemeSpec` + `IconProvider`: the display
-  cell text is theme-colored when not selected, and the editor combo is
-  populated with icons via `addItem(icon, text, data)`.
-
-### `delegates/name_delegate.py` — `NameDelegate(_TextEditorDelegateBase)`
-- `_CapsLockSafeLineEdit` for col 0 rename. Commit routes through
-  `ValueDelegate._commit` so renames land on the typed undo stack.
-
-### `delegates/bytes_codec.py`
-- `decode_bytes(b64string, json_type)` / `encode_bytes(data, json_type)`
-  round-trip BYTES/ZLIB/GZIP payloads.
-
-## 7) Tree view actions / clipboard — `tree_actions/`
-
-`tree_actions.context_menu.show_context_menu(tree_view, position)`
-builds an outliner-style menu:
-
-- Copy (Ctrl+C), Cut (Ctrl+X), Paste (Ctrl+V), Delete (Del)
-- Duplicate (Ctrl+D)
-- Move Up (Alt+↑) / Move Down (Alt+↓)
-- Sort Keys / Sort Keys (Recursive)
-- Insert Sibling Before / After
-- Insert Child (only when current row is OBJECT/ARRAY)
-- Expand All / Collapse All
-
-Each action is proxy-aware via `tree_actions.selection`
-(`_resolve_model`, `_to_source_index`, `_to_view_index`,
-`_index_path`, `_is_ancestor`, `_top_level_selected_rows`), then
-either:
-- routes through `JsonTab.push_*` typed helpers when the view's parent
-  is a `JsonTab`, or
-- falls back to `model_actions.py` direct helpers for headless tests.
-
-Clipboard MIME format is `application/x-json-tree`; the JSON-tree
-metadata payload preserves names so paste keeps full type info.
-Name-collision avoidance under OBJECT parents during paste/duplicate
-uses `_copy_name` / `unique_child_name`, generating `_copy`,
-`_copy_2`, … suffixes.
-
-`tree_actions.structure.expand_all(view)` /
-`tree_actions.structure.collapse_all(view)` are thin wrappers used by
-both the context menu and the View menu.
-
-## 8) Filter proxy — `tree_filter_proxy.py`
+## 12) Filter proxy — `tree_filter_proxy.py`
 
 `TreeFilterProxy(QSortFilterProxyModel)`:
 - `setRecursiveFilteringEnabled(True)` keeps ancestors of matches
   visible.
-- `set_filter_text(text)` normalizes (strip + casefold) and calls
+- `set_filter_text(text)` normalises (strip + casefold) and calls
   `invalidate()`.
-- `filterAcceptsRow` matches the needle against `name` for every row;
-  for leaves, also against the value text. Container nodes pass when
-  any descendant passes.
+- `filterAcceptsRow` matches the needle against `name`; for leaves,
+  also against the value text. Containers pass when any descendant
+  passes.
 
-## 9) View state — `state/`
+---
+
+## 13) View state — `state/`
 
 ### `state/view_state.py`
+
 - `state_key(path)` → `"view_state/<sha1[:16]>"` keyed off the resolved
   absolute path.
-- `save(tab)` persists column widths, expanded paths,
-  current-selection path, and `_font_pt` under
-  `QSettings(APPLICATION_ID, "view_state")`.
-- `restore(tab)` returns `True` when any state was found and applied;
+- `save(tab)` persists column widths, expanded paths, current-selection
+  path, and `_font_pt` under `QSettings(APPLICATION_ID, "view_state")`.
+- `restore(tab)` returns `True` when state was found and applied;
   callers fall back to defaults (`expandAll` +
   `resizeColumnToContents`) on `False`.
 - `discard(path)` removes the group on `Save As` to a new path.
 - Hard cap `MAX_EXPANDED_PATHS = 5000`.
 
 ### `state/qsettings_coercion.py`
+
 - `_coerce_int`, `_coerce_int_list`, `_coerce_path`, `_coerce_paths` —
-  handle `QSettings`'s platform-dependent shapes (list of ints, string
-  with `/` or `,` separators).
+  cross-platform `QSettings` shape helpers.
 
 ### `state/theme_settings.py`
-- Stores theme-related `QSettings(APPLICATION_ID, "theme")` values:
-  `theme/follow_system`, `theme/light_name`, `theme/dark_name`,
-  `theme/manual_name`, and `theme/watch_user_dir`.
-- Exposes small coercing getters/setters plus
-  `resolve_active_theme(registry, app)`.
-- Manual mode falls back to the manual theme name first, then the
-  current mode's preferred theme, then the built-in default.
 
-## 9.5) Theming system — `themes/`
+- `QSettings(APPLICATION_ID, "theme")` keys: `theme/follow_system`,
+  `theme/light_name`, `theme/dark_name`, `theme/manual_name`,
+  `theme/watch_user_dir`.
+- `resolve_active_theme(registry, app)` — manual mode falls back to
+  manual name → mode-preferred name → built-in default.
 
-### `themes/spec.py`
-- Frozen, hashable dataclasses:
-  - `TypeStyle(fg, bg, bold, italic, icon)`
-  - `Palette(base_fg, base_bg, selection_fg, selection_bg, accent)`
-  - `ThemeSpec(name, mode, palette, types, icon_search_paths)`
-- `ThemeSpec.types` is always complete across all `JsonType` members.
+---
 
-### `themes/loader.py`
-- `load_theme_yaml(path, mode_default=...)` → YAML file to fully merged
-  `ThemeSpec`.
-- `parse_theme_mapping(...)` accepts partial mappings, validates
-  required top-level `name` / `mode`, parses colors with `QColor`,
-  warns-and-ignores malformed optional fields, and resolves icon search
-  paths relative to the YAML file.
-- Unknown type keys in `types:` / `icons.map:` are logged and ignored.
+## 14) Theming — `themes/` + `app/theme_controller.py`
 
-### `themes/_defaults.py`
-- Hard-coded `LIGHT_DEFAULT` / `DARK_DEFAULT` specs remain the semantic
-  ground truth used for fallback merging and equality tests.
-
-### `themes/auto.py`
-- `detect_system_mode(app)` prefers `styleHints().colorScheme()` and
-  falls back to palette window lightness.
-
-### `themes/registry.py`
-- Discovers built-ins via `importlib.resources` and user overrides via
-  `QStandardPaths.AppConfigLocation/themes/*.yaml`.
-- `list_themes()` returns `ThemeHandle(name, mode, path)` sorted by
-  `(mode, casefolded name)`.
-- User themes with the same name as a built-in override that built-in
-  and log at INFO.
-- `build_icon_provider(theme)` returns `FileIconProvider` whenever any
+- `themes/spec.py`: frozen `TypeStyle(fg, bg, bold, italic, icon)`,
+  `Palette`, `ThemeSpec(name, mode, palette, types, icon_search_paths)`.
+  `ThemeSpec.types` is always complete across all `JsonType`.
+- `themes/loader.py`: `load_theme_yaml`, `parse_theme_mapping`. Total
+  fallback semantics; required `name`/`mode`; warns-and-ignores
+  malformed optional fields. Unknown keys logged.
+- `themes/_defaults.py`: `LIGHT_DEFAULT` / `DARK_DEFAULT`.
+- `themes/_contrast.py`: WCAG `relative_luminance`, `contrast_ratio`.
+- `themes/auto.py`: `detect_system_mode(app)` prefers
+  `styleHints().colorScheme()`, falls back to palette window lightness.
+- `themes/registry.py`: built-ins via `importlib.resources`, user
+  overrides via `QStandardPaths.AppConfigLocation/themes/*.yaml`.
+  `list_themes()` sorted by `(mode, casefolded name)`. User themes
+  with the same name as a built-in override that built-in.
+  `build_icon_provider(theme)` returns `FileIconProvider` when any
   type has an icon key, else `StubIconProvider`.
+- `themes/icon_provider.py`: `StubIconProvider` returns empty
+  `QIcon()`; `FileIconProvider` resolves `<key>.svg/.png/.ico` across
+  configured search paths, caches per-`JsonType`, warns once per
+  missing asset, supports `reload()`.
+- `themes/builtin/light.yaml` / `dark.yaml` reproduce the shipped
+  defaults; `themes/builtin/icons/` carries 18 SVGs (one per
+  JsonType key).
 
-### `themes/icon_provider.py`
-- `StubIconProvider` returns empty `QIcon()` for every type.
-- `FileIconProvider` resolves `<key>.svg`, then `.png`, then `.ico`
-  across configured search paths, caches per-`JsonType`, warns once per
-  missing asset, and supports `reload()`.
+`app/theme_controller.py::ThemeController`:
+- Owns the View → Theme submenu (see § 5).
+- Persists follow-system, per-mode preferred names, manual override,
+  watch flag.
+- 250 ms debounce on `QFileSystemWatcher` events.
+- Reacts to `QGuiApplication.styleHints().colorSchemeChanged`.
+- **`_sync_app_color_scheme(theme)`** (Phase-5 app theming): when a
+  theme is applied, calls
+  `styleHints().setColorScheme(Qt.ColorScheme.{Light,Dark})` to flip
+  Qt's bundled chrome (menus, dialogs, toolbars) to match the theme's
+  `mode`. Suppresses the resulting `colorSchemeChanged` signal via
+  `_suppress_scheme_signal`. No custom palette/stylesheet is
+  installed; per-type cell colouring stays in delegates.
+- `shutdown()` disconnects `colorSchemeChanged` so a closed window
+  stops responding to stale signals.
 
-### `themes/builtin/`
-- `light.yaml` / `dark.yaml` reproduce the shipped defaults and point
-  at `./icons`.
-- `icons/` contains one SVG per `JsonType` key used by the built-ins.
+---
 
-## 10) File I/O — `io_formats/`
+## 15) Undo system — `undo/`
 
-### `io_formats/detect.py`
-- Format constants: `SAVE_FORMAT_JSON / JSONL / YAML / YAML_MULTI`.
-- `detect_format(path)` dispatches by extension (`.json`, `.jsonl`,
-  `.ndjson`, `.yaml`, `.yml`).
+Typed `QUndoCommand` subclasses (`undo/commands.py`):
+`_MoveRowCmd`, `_RenameCmd`, `_EditValueCmd`, `_ChangeTypeCmd`,
+`_InsertRowsCmd`, `_RemoveRowsCmd`, `_SortKeysCmd`. Path-based
+addressing avoids `QModelIndex` invalidation across mutations.
 
-### `io_formats/load.py`
-- `load_file(path)` / `load_file_with_format(path)`:
-  - JSON / JSONL → `simplejson.load(parse_float=mpq)` /
-    line-by-line `loads`.
-  - YAML → `yaml.load_all(MpqSafeLoader)`; returns a list with the
-    `YAML_MULTI` marker when there is more than one document.
+`undo/diff.py::DiffApplier.apply(parent_path, old, new)` performs
+surgical insert/remove/move/setData calls so view expansion and
+current selection survive replay.
 
-### `io_formats/dump.py`
-- `dump_text(path, data, save_format)`:
-  - JSON → `simplejson.dumps(default=mpq_json_default, indent=2,
-    use_decimal=True)`.
-  - JSONL → one `dumps` per row.
-  - YAML / YAML_MULTI → `yaml.dump` / `yaml.dump_all` with
-    `MpqSafeDumper`.
+History UI: `app/history.py::setup_history_menu` adds the **History**
+menu (`Undo`, `Redo`, `Show History…`); the modal dialog is a
+`QUndoView` bound to the active tab's `QUndoStack` via
+`bind_undo_signals(tab)`.
 
-### `io_formats/atomic.py`
-- `atomic_write(path, text)` uses `os.replace` for cross-platform
-  atomic rename. `save_file(path, data, save_format)` is the
-  convenience wrapper used by `documents/tab_io.py`.
+`MainWindow.update_actions` enables `Save`/`Save As`/`Expand`/
+`Collapse`/`Zoom*` whenever a tab exists; insert/remove require a
+valid current index.
 
-## 11) Toolbar / menu insert helpers — `model_actions.py`
+---
 
-Direct-mutation helpers used as fallbacks when the view has no
-`JsonTab` parent:
-- `_copy_name(base, used)` for paste/duplicate name suffixes.
-- `action_insert_row_before / _after`, `action_insert_child`,
-  `action_duplicate`, `action_move_up / _down`, `action_sort_keys`.
-- The toolbar/menu paths in `MainWindow` go through `JsonTab` typed
-  commands; `model_actions.py` is mostly dormant in app flow but kept
-  as a stable API for headless tests.
+## 16) Tests
 
-## 12) Custom widgets and support packages
+`tests/` collects **576 tests** as of 2026-05-08; **573 pass, 3 fail**
+under `QT_QPA_PLATFORM=offscreen`. The failing ones —
+`test_app_color_scheme.py::test_light_theme_sets_light_color_scheme`,
+`test_app_color_scheme.py::test_dark_theme_sets_dark_color_scheme`,
+`test_theme_switching.py::test_color_scheme_follows_selected_theme` —
+fail because Qt's offscreen QPA platform reports
+`Qt.ColorScheme.Unknown` after `setColorScheme`. Not a code bug; runs
+green on real platforms.
 
-### `datetime_editor/`
-- `BetterDateTimeEditor` (segment stepping, partial regex / partial
-  input support, timezone editing). `regex.py` / `validator.py` /
-  `enums.py` back the parser.
-
-### `qhexedit/`
-- `QHexEdit` over `QIODevice` chunks; selection / overwrite / insert
-  modes; ASCII zone; clipboard; undo; modified-byte highlighting;
-  theming via `ColorManager`.
-
-### `dialogs/`
-- `qhexedit_dlg.QHexDialog` — modal hex editor with `QSettings`
-  persistence.
-- `qmultiline_dlg.QMultilineDialog` — modal multiline editor with
-  word-wrap / line-numbers / monospaced toggles.
-
-### `qmultiline_editor.py`
-- `QPlainTextEdit` derivative used by the multiline dialog.
-
-### Numeric editors
-- `qbigint_spinbox.QBigIntSpinBox` — arbitrary-precision integer.
-- `qmpq_spinbox.QMpqSpinBox` — exact rational using `gmpy2.mpq` and
-  `mpq2py.mpq_serialization` for stable display.
-
-### Helpers
-- `mpq2py/` — `mpq_serialization`, `mpq_json_default`,
-  `MpqSafeLoader`, `MpqSafeDumper`.
-- `jsontream/` — streaming JSON encoder wrapper supporting iterables.
-- `units/` — `bits` / `format_bytes` size formatting.
-- `coalesce/`, `binary/`, `qt2py/` — small utility packages.
-
-### `header_view_editor.py`
-- `HeaderViewEditorMixin` — currently unused by `JsonTab` (commented
-  out). Kept for future column header editing.
-
-## 13) Tests
-
-Editor / phase suites:
-- `test_smoke_model.py`, `test_smoke_mainwindow.py`,
-  `test_tree_correctness.py`, `test_type_editing.py`,
-  `test_tree_actions_clipboard.py`, `test_tree_actions_structure.py`,
-  `test_undo_redo.py`, `test_undo_redo_scenario.py`,
-  `test_typed_undo_commands.py`, `test_typed_undo_perf.py`,
-  `test_perf_smoke.py`, `test_file_io_phase4.py`,
-  `test_phase_5_1_carryover.py`, `test_phase_5_2_display_formatting.py`,
-  `test_phase_5_3_status_bar_breadcrumb.py`,
-  `test_phase_5_4_persisted_view_state.py`,
-  `test_phase_5_5_search_filter.py`,
-  `test_phase_5_6_misc_polish.py`.
-
-Theming / Phase-1–6 suites:
-- `test_theme_loader.py`, `test_theme_registry.py`,
+Notable suites:
+- Phase-3 coercion: `test_kind_switch_coercion.py` (bool→str
+  lowercase, "now" temporal fallback, int sec/ms ↔ datetime,
+  bytes encode-on-switch, array↔object morph).
+- Phase-4 preview: `test_container_preview.py` (`[N items]` /
+  `{N keys}` + first 5 children, expand suppresses preview).
+- Phase-5 app color scheme: `test_app_color_scheme.py` +
+  `test_theme_switching::test_color_scheme_follows_selected_theme`.
+- Theme stack: `test_theme_loader.py`, `test_theme_registry.py`,
   `test_icon_provider.py`, `test_value_delegate_theme.py`,
   `test_icons_in_view.py`, `test_theme_switching.py`.
+- Editor / phase suites: `test_smoke_model.py`,
+  `test_smoke_mainwindow.py`, `test_tree_correctness.py`,
+  `test_type_editing.py`, `test_tree_actions_clipboard.py`,
+  `test_tree_actions_structure.py`, `test_undo_redo.py`,
+  `test_undo_redo_scenario.py`, `test_typed_undo_commands.py`,
+  `test_typed_undo_perf.py`, `test_perf_smoke.py`,
+  `test_file_io_phase4.py`, `test_phase_5_*.py`.
+- Widget-stack: `test_better_datetime_buffer`,
+  `test_datetime_editor`, `test_dialog_settings`, `test_jsontream`,
+  `test_mpq2py`, `test_partial_float_re`, `test_partial_regex`,
+  `test_pretty_jsontream`, `test_qhexedit_highlighting`,
+  `test_units`, `test_validator`.
 
-Pre-existing widget-stack suites: `test_better_datetime_buffer`,
-`test_datetime_editor`, `test_dialog_settings`, `test_jsontream`,
-`test_mpq2py`, `test_partial_float_re`, `test_partial_regex`,
-`test_pretty_jsontream`, `test_qhexedit_highlighting`, `test_units`,
-`test_validator`.
+---
 
-Current inventory (`2026-05-06`): **451 tests collected** via
-`pytest --collect-only -q`.
+## 17) Sample data & dependencies
 
-Last recorded whole-suite runtime baseline in memory remains the older
-`2026-04-26` run: **401 tests passed in ~3 s** under
-`QT_QPA_PLATFORM=offscreen`, with no teardown segfault.
+Sample fixtures: `data.yaml`, `data.json`, `data.jsonl`,
+`data-multidoc.yaml`, `john-doe.yaml`, `nginx-hpa.yaml`.
 
-Targeted theming validation run (`2026-05-06`): **50 tests passed**
-under `QT_QPA_PLATFORM=offscreen pytest -q` across the six theming
-files above.
+`requirements.txt`:
+```
+PySide6==6.11.0
+PyYAML==6.0.3
+python-dateutil==2.9.0.post0
+gmpy2==2.3.0
+pytest==9.0.3
+tzdata==2026.2
+simplejson==4.1.1
+```
+`pytest-qt` is **not pinned** even though `qtbot` is used by theme
+tests.
 
-## 14) Sample data
+`Makefile`: `lint:` runs `autoflake .`, `isort . --extend-skip
+mainwindow.py`, `black . --line-length 120 --extend-exclude
+mainwindow.py`. No `make test` / `themes-check` target.
 
-- `data.yaml` / `data.json` / `data.jsonl` / `data-multidoc.yaml` /
-  `john-doe.yaml` — multi-format fixtures for manual smoke + future
-  Phase 6 round-trip tests.
+`pytest.ini`: `pythonpath = .`.
 
-## 15) Dependencies / tooling
+---
 
-### Python (`requirements.txt`)
-- `PySide6==6.11.0`
-- `PyYAML==6.0.3`
-- `python-dateutil==2.9.0.post0`
-- `gmpy2==2.3.0`
-- `pytest==9.0.3`
-- `tzdata==2026.2`
-- `simplejson==4.1.1`
+## 18) Suggested reading order
 
-`simplejson` is now pinned. `pytest-qt` is still not pinned even though
-theme-switching tests use `qtbot`; some older suites still roll their
-own `QApplication` fixture.
+1. `main.py` → `app/main_window.py` → `app/main_window_actions.py`
+2. `documents/tab.py` (push API, dirty state, zoom) +
+   `documents/tab_setup.py` (delegate + shortcut wiring)
+3. `tree/types.py` → `tree/model.py` + `tree/model_roles.py` →
+   `tree/item.py` → `tree/item_coercion.py` + `tree/stubs.py`
+4. `delegates/value.py` + `delegates/value_formatting.py` →
+   `delegates/type_delegate.py` + `delegates/name_delegate.py`
+5. `undo/commands.py` + `undo/diff.py`
+6. `tree_actions/context_menu.py` + the rest of `tree_actions/`
+7. `tree_filter_proxy.py`, `state/view_state.py`
+8. `io_formats/{detect,load,dump,atomic}.py`
+9. `themes/` + `app/theme_controller.py`
+10. `model_actions.py` (headless fallback)
+11. `datetime_editor/`, `qhexedit/`, `qbigint_spinbox/`, `qmpq_spinbox/`
 
-### `Makefile`
-- `autoflake .`
-- `isort . --extend-skip mainwindow.py`
-- `black . --line-length 120 --extend-exclude mainwindow.py`
-- No `make test` or `themes-check` target yet.
+---
 
-### `pytest.ini`
-- `pythonpath = .`
-
-## 16) Suggested reading order for future work
-
-1. `main.py`
-2. `app/main_window.py` + `app/main_window_actions.py`
-3. `documents/tab.py` — typed commands, push API, dirty state, font
-   zoom.
-4. `undo/commands.py` + `undo/diff.py` — typed `QUndoCommand`s and
-   surgical replay.
-5. `tree/model.py` + `tree/model_roles.py` — `data` / `setData` /
-   `change_type` / `move_row` / `sort_keys` / `JSON_TYPE_ROLE`.
-6. `tree/item.py` + `tree/item_coercion.py` + `tree/item_names.py`.
-7. `tree/types.py` — `parse_json_type`, text family heuristics.
-8. `delegates/value.py` + `delegates/value_formatting.py` — editors
-   per type, `initStyleOption` formatting, `_commit` routing.
-9. `tree_actions/context_menu.py` + `tree_actions/{selection,
-   clipboard, paste, structure}.py`.
-10. `tree_filter_proxy.py` — recursive filter.
-11. `state/view_state.py` — persisted column widths / expansion /
-    current / font zoom.
-12. `io_formats/{detect,load,dump,atomic}.py` — JSON / JSONL / YAML /
-    YAML-multi load + save + atomic write.
-13. `model_actions.py` — fallback direct mutations for headless tests.
-14. `datetime_editor/better_dt_editor.py`
-15. `qhexedit/__init__.py`
-
-## 17) Practical mental model
+## 19) Practical mental model
 
 - **Shell layer** — `main.py` → `app/` → `state/` / `io_formats/` /
   `settings.py`
 - **Tab layer** — `documents/` (owns `QUndoStack`, typed-command push
-  API, search proxy hookup, breadcrumb plumbing)
+  API, search, breadcrumb, column-resize tracking)
 - **Undo** — `undo/commands.py` + `undo/diff.py`
-- **Tree data** — `tree/`
+- **Tree data** — `tree/` (types, item, model, coercion, stubs)
 - **Filter** — `tree_filter_proxy.py`
 - **Editing** — `delegates/` (+ `dialogs/`, `qmultiline_editor.py`)
 - **Actions / clipboard** — `tree_actions/` + `model_actions.py`
 - **Advanced editor widgets**:
   - datetime → `datetime_editor/`
   - binary → `qhexedit/` + `dialogs/qhexedit_dlg.py`
-  - multiline text → `qmultiline_editor.py` +
-    `dialogs/qmultiline_dlg.py`
-  - exact numerics → `qbigint_spinbox/`, `qmpq_spinbox/`,
-    `mpq2py/`
+  - multiline → `qmultiline_editor.py` + `dialogs/qmultiline_dlg.py`
+  - exact numerics → `qbigint_spinbox/`, `qmpq_spinbox/`, `mpq2py/`
+- **Theming** — `themes/` + `app/theme_controller.py` (delegate
+  styling + app-level `Qt.ColorScheme` sync)
 - **Utilities / tests** — `jsontream/`, `units/`, `qt2py/`,
   `coalesce/`, `binary/`, `tests/`
-
-After Phase 6 plus the package refactor the editor is functionally
-complete for daily use and structurally clean: no source file (other
-than the generated `mainwindow.py`) exceeds ~540 lines, and the new
-theme logic now lives mostly in `app/theme_controller.py` instead of
-ballooning `MainWindow`. The remaining surface area is Phase-7-style
-polish: contributor docs for theme authors, theme snapshots /
-accessibility tests, broader delegate/round-trip QA, and optional UX
-work such as match highlighting and full-app palette application.

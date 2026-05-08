@@ -3,6 +3,7 @@ from PySide6.QtCore import QEvent, QModelIndex, Qt
 from PySide6.QtGui import QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
+from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.type_delegate import JsonTypeDelegate
 from documents.tab import JsonTab
 from tree.model import JsonTreeModel
@@ -25,7 +26,7 @@ def test_array_name_column_shows_index_and_is_read_only():
     arr_index = model.index(0, 0, QModelIndex())
     child_name = model.index(0, 0, arr_index)
 
-    assert model.data(child_name) == "0"
+    assert model.data(child_name) == "#1"
     assert not (model.flags(child_name) & Qt.ItemFlag.ItemIsEditable)
     assert not model.setData(child_name, "renamed")
 
@@ -242,3 +243,84 @@ def test_json_type_delegate_preselects_and_commits(qtbot):
 
     item = model.get_item(model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.BOOLEAN
+
+
+# ---------------------------------------------------------------------------
+# Phase-3 undo/redo regression tests
+# ---------------------------------------------------------------------------
+
+
+def test_bool_to_string_undo_redo(qtbot):
+    tab = JsonTab(lambda *_: None, data={"flag": True})
+    qtbot.addWidget(tab)
+    type_idx = tab.model.index(0, 1, QModelIndex())
+
+    tab.push_change_type(type_idx, JsonType.STRING)
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.value == "true"
+
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.BOOLEAN
+    assert item.value is True
+
+    tab.undo_stack.redo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.value == "true"
+
+
+def test_bytes_to_zlib_undo_redo(qtbot):
+    import base64
+    import zlib as _zlib
+
+    raw = b"my lovely bytes!"
+    bytes_b64 = encode_bytes(raw, JsonType.BYTES)
+    tab = JsonTab(lambda *_: None, data={"blob": bytes_b64})
+    qtbot.addWidget(tab)
+
+    # The model infers BYTES type from the b64 string on load.
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.BYTES
+
+    type_idx = tab.model.index(0, 1, QModelIndex())
+    tab.push_change_type(type_idx, JsonType.ZLIB)
+
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.ZLIB
+    assert decode_bytes(item.value, JsonType.ZLIB) == raw
+
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.BYTES
+    assert decode_bytes(item.value, JsonType.BYTES) == raw
+
+    tab.undo_stack.redo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.ZLIB
+    assert decode_bytes(item.value, JsonType.ZLIB) == raw
+
+
+def test_array_to_object_undo_redo(qtbot):
+    tab = JsonTab(lambda *_: None, data={"arr": [1, 2, 3]})
+    qtbot.addWidget(tab)
+
+    arr_idx = tab.model.index(0, 0, QModelIndex())
+    type_idx = tab.model.index(0, 1, QModelIndex())
+
+    tab.push_change_type(type_idx, JsonType.OBJECT)
+    item = tab.model.get_item(arr_idx)
+    assert item.json_type is JsonType.OBJECT
+    assert item.child_count() == 3
+    assert [c.name for c in item.child_items] == ["item1", "item2", "item3"]
+
+    tab.undo_stack.undo()
+    item = tab.model.get_item(arr_idx)
+    assert item.json_type is JsonType.ARRAY
+    assert item.child_count() == 3
+    assert all(c.name is None for c in item.child_items)
+    assert [c.value for c in item.child_items] == [1, 2, 3]
+
+    tab.undo_stack.redo()
+    item = tab.model.get_item(arr_idx)
+    assert item.json_type is JsonType.OBJECT
+    assert [c.name for c in item.child_items] == ["item1", "item2", "item3"]

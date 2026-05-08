@@ -2,7 +2,7 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QMenu, QTreeView
 
 from tree.types import JsonType
-from tree_actions.clipboard import copy_selection
+from tree_actions.clipboard import copy_selection, copy_selection_value_only, copy_selection_with_name
 from tree_actions.paste import paste_from_clipboard
 from tree_actions.selection import _resolve_model, _to_source_index
 from tree_actions.structure import (
@@ -28,6 +28,17 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     if index.isValid():
         tree_view.setCurrentIndex(index)
 
+    col = index.column()
+    if col == 1:
+        expand_all_action = context_menu.addAction("Expand All")
+        expand_all_action.triggered.connect(lambda: expand_all(tree_view))
+
+        collapse_all_action = context_menu.addAction("Collapse All")
+        collapse_all_action.triggered.connect(lambda: collapse_all(tree_view))
+
+        context_menu.exec(tree_view.mapToGlobal(position))
+        return
+
     can_insert_child = False
     can_sort_keys = False
     can_move_up = False
@@ -45,7 +56,12 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
         item_menu = context_menu.addMenu(str(data) if data is not None else "Item")
 
         copy_action = item_menu.addAction("Copy")
-        copy_action.triggered.connect(lambda: copy_selection(tree_view))
+        if col == 0:
+            copy_action.triggered.connect(lambda: copy_selection_with_name(tree_view))
+        elif col == 2:
+            copy_action.triggered.connect(lambda: copy_selection_value_only(tree_view))
+        else:
+            copy_action.triggered.connect(lambda: copy_selection(tree_view))
 
         cut_action = item_menu.addAction("Cut")
         cut_action.triggered.connect(lambda: cut_selection(tree_view))

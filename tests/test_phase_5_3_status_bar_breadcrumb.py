@@ -30,7 +30,7 @@ def test_breadcrumb_size_hints_for_container_and_binary(qtbot):
 
     tab = JsonTab(
         lambda *_: None,
-        data={"obj": {"k": "v"}, "blob": "dGVzdA=="},
+        data={"obj": {"k": "v"}, "blob": "bXkgbG92ZWx5IGJ5dGVzIQ=="},
         permanent_message_callback=captured.append,
     )
     qtbot.addWidget(tab)
@@ -41,4 +41,4 @@ def test_breadcrumb_size_hints_for_container_and_binary(qtbot):
 
     blob_name_index = tab.model.index(1, 0, QModelIndex())
     tab.view.setCurrentIndex(tab._source_to_view(blob_name_index))
-    assert captured[-1] == "$.blob  (bytes, 4 byte)"
+    assert captured[-1] == "$.blob  (bytes, 16 byte)"

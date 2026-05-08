@@ -22,7 +22,7 @@ def test_tree_filter_proxy_keeps_ancestors_of_matching_leaf():
 
     assert proxy.rowCount(bar) == 1
     match_leaf = proxy.index(0, 0, bar)
-    assert proxy.data(match_leaf) == "1"
+    assert proxy.data(match_leaf) == "#2"
 
 
 def test_json_tab_filter_is_debounced(qtbot):

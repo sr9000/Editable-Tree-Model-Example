@@ -69,7 +69,7 @@ def test_parse_json_type_is_total_and_has_narrower_heuristics():
     assert parse_json_type(gmpy2.mpq("3/2")) is JsonType.FLOAT
 
     # A pure base64 string (regex + padding + clean decode) is BYTES.
-    assert parse_json_type("abcd") is JsonType.BYTES
+    assert parse_json_type("bXkgbG92ZWx5IGJ5dGVzIQ==") is JsonType.BYTES
     # Strings that aren't valid base64 stay STRING.
     assert parse_json_type("hi\n") is JsonType.STRING
     assert parse_json_type("hello") is JsonType.STRING

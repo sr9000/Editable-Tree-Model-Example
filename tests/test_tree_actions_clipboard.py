@@ -5,7 +5,8 @@ from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QApplication, QTreeView
 
 from tree.model import JsonTreeModel
-from tree_actions.clipboard import MIME_JSON_TREE, copy_selection
+from tree_actions.clipboard import MIME_JSON_TREE, copy_selection, copy_selection_value_only, copy_selection_with_name
+from tree_actions.context_menu import show_context_menu
 from tree_actions.paste import paste_from_clipboard
 from tree_actions.structure import cut_selection, delete_selection
 
@@ -129,3 +130,118 @@ def test_copy_paste_preserves_object_key_name_when_possible(qtbot):
     assert paste_from_clipboard(view)
 
     assert model.get_item(dst).to_json() == {"keep": 7}
+
+
+def test_copy_selection_with_name_and_value_only(qtbot):
+    from tree_actions.clipboard import copy_selection_value_only, copy_selection_with_name
+
+    model = JsonTreeModel({"foo": 42})
+    view = QTreeView()
+    qtbot.addWidget(view)
+    view.setModel(model)
+    foo = model.index(0, 0, QModelIndex())
+    _select_rows(view, foo)
+    assert copy_selection_with_name(view)
+    md = QApplication.clipboard().mimeData()
+    assert md.text() == '"foo": 42'
+    assert md.hasFormat(MIME_JSON_TREE)
+    assert copy_selection_value_only(view)
+    md = QApplication.clipboard().mimeData()
+    assert md.text() == "42"
+    assert not md.hasFormat(MIME_JSON_TREE)
+
+
+def test_copy_selection_string_value_is_json_quoted(qtbot):
+    model = JsonTreeModel({"greeting": "hello world"})
+    view = QTreeView()
+    qtbot.addWidget(view)
+    view.setModel(model)
+
+    greet = model.index(0, 0, QModelIndex())
+    _select_rows(view, greet)
+
+    assert copy_selection_with_name(view)
+    md = QApplication.clipboard().mimeData()
+    assert md.text() == '"greeting": "hello world"'
+
+    assert copy_selection_value_only(view)
+    md = QApplication.clipboard().mimeData()
+    assert md.text() == '"hello world"'
+
+
+def test_copy_selection_object_array_includes_internal_values(qtbot):
+    from tree_actions.clipboard import copy_selection_value_only, copy_selection_with_name
+
+    model = JsonTreeModel({"foo": {"bar": [1, 2]}})
+    view = QTreeView()
+    qtbot.addWidget(view)
+    view.setModel(model)
+
+    foo = model.index(0, 0, QModelIndex())
+    _select_rows(view, foo)
+
+    assert copy_selection_with_name(view)
+    md = QApplication.clipboard().mimeData()
+    import json
+
+    parsed = json.loads("{" + md.text() + "}")
+    assert parsed == {"foo": {"bar": [1, 2]}}
+
+    assert copy_selection_value_only(view)
+    md = QApplication.clipboard().mimeData()
+    parsed = json.loads(md.text())
+    assert parsed == {"bar": [1, 2]}
+
+
+def test_context_menu_column1_mutating_actions_disabled(qtbot, monkeypatch):
+    from tree_actions.context_menu import show_context_menu
+
+    model = JsonTreeModel({"foo": 42})
+    view = QTreeView()
+    qtbot.addWidget(view)
+    view.setModel(model)
+
+    added_actions = []
+
+    class MockAction:
+        def __init__(self, text):
+            pass
+
+        class Triggered:
+            def connect(self, fn):
+                pass
+
+        triggered = Triggered()
+
+    class MockMenu:
+        def __init__(self, *args):
+            pass
+
+        def addAction(self, text):
+            added_actions.append(text)
+            return MockAction(text)
+
+        def addMenu(self, text):
+            return MockMenu()
+
+        def addSeparator(self):
+            pass
+
+        def exec(self, pos):
+            pass
+
+    import tree_actions.context_menu
+
+    monkeypatch.setattr(tree_actions.context_menu, "QMenu", MockMenu)
+
+    mock_index = model.index(0, 1, QModelIndex())
+    monkeypatch.setattr(view, "indexAt", lambda pos: mock_index)
+
+    from PySide6.QtCore import QPoint
+
+    show_context_menu(view, QPoint(0, 0))
+
+    assert "Expand All" in added_actions
+    assert "Collapse All" in added_actions
+    assert "Copy" not in added_actions
+    assert "Delete" not in added_actions

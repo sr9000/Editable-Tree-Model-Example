@@ -2,9 +2,21 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QFileSystemWatcher, QTimer, QUrl
+from PySide6.QtCore import QFileSystemWatcher, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import QMenu, QWidget
+
+try:
+    from PySide6.QtCore import Shiboken as _shiboken
+
+    _is_valid = _shiboken.isValid
+except (ImportError, AttributeError):
+    try:
+        import shiboken6 as _shiboken
+
+        _is_valid = _shiboken.isValid
+    except ImportError:
+        _is_valid = None
 
 from state.theme_settings import (
     get_follow_system,
@@ -46,6 +58,8 @@ class ThemeController:
         self._theme_reload_timer.timeout.connect(self.reload_themes)
         self._theme_fs_watcher.directoryChanged.connect(self.on_theme_fs_event)
         self._theme_fs_watcher.fileChanged.connect(self.on_theme_fs_event)
+
+        self._suppress_scheme_signal: bool = False
 
         app = QGuiApplication.instance()
         if isinstance(app, QGuiApplication):
@@ -115,8 +129,25 @@ class ThemeController:
     def apply_theme(self, theme: ThemeSpec) -> None:
         self._theme = theme
         self._icon_provider = self._theme_registry.build_icon_provider(theme)
+        self._sync_app_color_scheme(theme)
         self._on_theme_changed(theme, self._icon_provider)
         self.refresh_theme_menu_checks()
+
+    def _sync_app_color_scheme(self, theme: ThemeSpec) -> None:
+        app = QGuiApplication.instance()
+        if not isinstance(app, QGuiApplication):
+            return
+        style_hints = app.styleHints()
+        setter = getattr(style_hints, "setColorScheme", None)
+        if setter is None:
+            return  # older Qt — nothing to do, leave system default
+        target = Qt.ColorScheme.Dark if theme.mode == "dark" else Qt.ColorScheme.Light
+        if style_hints.colorScheme() != target:
+            self._suppress_scheme_signal = True
+            try:
+                setter(target)
+            finally:
+                self._suppress_scheme_signal = False
 
     def rebuild_theme_menu_entries(self) -> None:
         if self._theme_light_menu is None or self._theme_dark_menu is None:
@@ -236,9 +267,24 @@ class ThemeController:
             self.refresh_theme_watcher_paths()
 
     def on_system_color_scheme_changed(self, *_args) -> None:
+        if self._suppress_scheme_signal:
+            return
+        if _is_valid is not None and not _is_valid(self._parent):
+            return  # parent widget already deleted — ignore stale signal
         if not get_follow_system():
             return
         app = QGuiApplication.instance()
         if not isinstance(app, QGuiApplication):
             return
         self.apply_theme(resolve_active_theme(self._theme_registry, app))
+
+    def shutdown(self) -> None:
+        """Disconnect app-level signals so this controller stops responding after window close."""
+        app = QGuiApplication.instance()
+        if isinstance(app, QGuiApplication):
+            style_hints = app.styleHints()
+            if hasattr(style_hints, "colorSchemeChanged"):
+                try:
+                    style_hints.colorSchemeChanged.disconnect(self.on_system_color_scheme_changed)
+                except (RuntimeError, TypeError):
+                    pass
