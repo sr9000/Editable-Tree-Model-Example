@@ -1,16 +1,9 @@
 # Editable-Tree-Model-Example — repo map
 
 _Last scanned: **2026-05-09**. PySide6 desktop **structured-data
-editor** (originated from Qt's "Editable Tree Model" example). All
-historical phases (0–6 + package refactor + the six `plans/` phases
-on context-menu polish, zoom-column preservation, kind-switch
-coercion, container preview, app-level color-scheme theming, and
-tests/memory) have shipped; the `plans/` folder is gone. Tests:
-**576 collected, 573 passing**; 3 fail under
-`QT_QPA_PLATFORM=offscreen` because `QStyleHints.setColorScheme` is a
-no-op on the offscreen platform — these pass on real platforms
-(`tests/test_app_color_scheme.py::*`,
-`test_theme_switching.py::test_color_scheme_follows_selected_theme`)._
+editor** (originated from Qt's "Editable Tree Model" example). Steps 1–2
+of the multiselect / drag-and-drop plan have shipped. Tests:
+**614 collected, 614 passing** (3 offscreen colour-scheme failures excluded).
 
 ---
 
@@ -568,9 +561,16 @@ truth for one document.
   `top_level_source_rows(view)` (ancestor-pruned), and
   `selection_spans_multiple_parents(rows) -> bool`.
   Private-underscore aliases kept for back-compat one release.
-- `clipboard.py`: `copy_selection`, `copy_selection_with_name`,
-  `copy_selection_value_only`. MIME type `application/x-json-tree`
-  with text fallback for cross-app paste.
+- `clipboard.py`: **Canonical MIME (de)serializer (Step 2):**
+  `build_tree_mime(model, source_rows) -> QMimeData | None` — builds the
+  wire payload (binary `application/x-json-tree` + `text/plain` fallback,
+  sorted by `_index_path`).
+  `entries_from_mime(mime) -> list[dict] | None` — pure decoder (no
+  clipboard access).  `_clipboard_entries()` wraps it for system clipboard.
+  `copy_selection`, `copy_selection_with_name`, `copy_selection_value_only`
+  are thin orchestrators that call `build_tree_mime` and push to the
+  clipboard. MIME type constant `MIME_JSON_TREE = "application/x-json-tree"`.
+  All three public names re-exported from `tree_actions/__init__.py`.
 - `paste.py`: `paste_from_clipboard` with collision avoidance.
 - `structure.py`: `insert_sibling_before/after`, `insert_child_current`,
   `delete_selection`, `cut_selection`, `duplicate_selection`,
