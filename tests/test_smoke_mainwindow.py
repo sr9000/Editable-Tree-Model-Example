@@ -169,6 +169,24 @@ def test_setting_font_families_updates_active_tab(main_window):
     assert tab.value_delegate._mono_family == "Monospace"
 
 
+def test_zoom_updates_global_editor_font_size_for_all_tabs(main_window):
+    main_window.create_new_file()
+    first = main_window.tabWidget.currentWidget()
+    assert isinstance(first, JsonTab)
+
+    main_window.create_new_file()
+    second = main_window.tabWidget.currentWidget()
+    assert isinstance(second, JsonTab)
+
+    before_first = first.view.font().pointSize()
+    before_second = second.view.font().pointSize()
+
+    main_window.zoom_in()
+
+    assert first.view.font().pointSize() == before_first + 1
+    assert second.view.font().pointSize() == before_second + 1
+
+
 def test_select_regular_font_accepts_bool_font_tuple_order(main_window, monkeypatch):
     main_window.create_new_file()
     tab = main_window.tabWidget.currentWidget()

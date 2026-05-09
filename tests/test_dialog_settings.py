@@ -62,3 +62,21 @@ def test_hex_settings(qtbot):
     assert dialog2.asciiCheckBox.isChecked() is False
     assert dialog2.highlightingCheckBox.isChecked() is False
     dialog2.accept()
+
+
+def test_global_font_settings_apply_to_multiline_and_hex_dialogs(qtbot):
+    app_settings = QSettings(APPLICATION_ID, "app")
+    app_settings.setValue("view/regular_font_family", "Serif")
+    app_settings.setValue("view/monospace_font_family", "Monospace")
+    app_settings.setValue("view/editor_font_point_size", 13)
+
+    multiline = QMultilineDialog()
+    qtbot.addWidget(multiline)
+    assert multiline.editor.font().pointSize() == 13
+
+    multiline.monospacedCheckBox.setChecked(True)
+    assert multiline.editor.font().pointSize() == 13
+
+    hexdlg = QHexDialog()
+    qtbot.addWidget(hexdlg)
+    assert hexdlg.editor.font().pointSize() == 13

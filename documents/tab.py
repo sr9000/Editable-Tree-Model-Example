@@ -259,6 +259,11 @@ class JsonTab(QWidget):
         self.value_delegate.set_monospace_font_family(family)
         self.view.viewport().update()
 
+    def set_editor_font_point_size(self, point_size: int) -> None:
+        old_pt = self._font_pt
+        self._set_font_pt(point_size)
+        self._scale_columns_for_font(old_pt, self._font_pt)
+
     @staticmethod
     def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
         return proxy_to_source(index)
