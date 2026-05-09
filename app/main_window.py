@@ -3,8 +3,8 @@
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QSettings
-from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
+from PySide6.QtGui import QAction, QFontDatabase, QKeySequence
+from PySide6.QtWidgets import QDialog, QFileDialog, QFontDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
 
 import state.view_state as view_state
 from app.close_confirm import confirm_close
@@ -30,6 +30,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._bound_undo_tab: JsonTab | None = None
         self._settings = QSettings(APPLICATION_ID, "app")
         self._monospace_fields_enabled = bool(self._settings.value("view/monospace_fields", False, type=bool))
+        self._regular_font_family = str(self._settings.value("view/regular_font_family", "", type=str) or "")
+        self._monospace_font_family = str(
+            self._settings.value(
+                "view/monospace_font_family",
+                QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family(),
+                type=str,
+            )
+            or QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
+        )
         self._theme_controller = ThemeController(self, self._on_theme_applied)
         self._theme_registry = self._theme_controller.registry
         self._theme = self._theme_controller.theme
@@ -39,6 +48,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
         refresh_recent_menu(self)
+        self._setup_font_actions()
         self._setup_monospace_action()
         setup_history_menu(self)
         self.setup_model(yaml_filename)
@@ -52,6 +62,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.viewMonospaceFieldsAction)
+
+    def _setup_font_actions(self) -> None:
+        self.viewSelectRegularFontAction = QAction("Select Regular Font...", self)
+        self.viewSelectMonospaceFontAction = QAction("Select Monospace Font...", self)
+
+        self.viewMenu.addSeparator()
+        self.viewMenu.addAction(self.viewSelectRegularFontAction)
+        self.viewMenu.addAction(self.viewSelectMonospaceFontAction)
+
+    def _apply_view_font_preferences(self, tab: JsonTab) -> None:
+        if self._regular_font_family:
+            tab.set_regular_font_family(self._regular_font_family)
+        if self._monospace_font_family:
+            tab.set_monospace_font_family(self._monospace_font_family)
+        tab.set_monospace_fields_enabled(self._monospace_fields_enabled)
 
     def setup_model(self, yaml_filename: str):
         if not yaml_filename:
@@ -124,7 +149,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab = self._current_tab()
         self._bind_undo_signals(tab)
         if tab is not None:
-            tab.set_monospace_fields_enabled(self._monospace_fields_enabled)
+            self._apply_view_font_preferences(tab)
             tab.resize_key_columns()
         if self._history_dialog is not None and self._history_dialog.isVisible():
             if tab is not None and self._history_view is not None:
@@ -150,7 +175,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         tab_index = self.tabWidget.addTab(tab, tab.display_name())
         self.tabWidget.setCurrentIndex(tab_index)
-        tab.set_monospace_fields_enabled(self._monospace_fields_enabled)
+        self._apply_view_font_preferences(tab)
         tab.dirtyChanged.connect(lambda _dirty, t=tab: self._on_tab_dirty(t))
 
         tab.view.expandAll()
@@ -339,6 +364,43 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._settings.setValue("view/monospace_fields", self._monospace_fields_enabled)
         for tab in self._theme_tabs():
             tab.set_monospace_fields_enabled(self._monospace_fields_enabled)
+
+    def set_regular_font_family(self, family: str) -> None:
+        family = str(family or "").strip()
+        if not family or self._regular_font_family == family:
+            return
+        self._regular_font_family = family
+        self._settings.setValue("view/regular_font_family", family)
+        for tab in self._theme_tabs():
+            tab.set_regular_font_family(family)
+
+    def set_monospace_font_family(self, family: str) -> None:
+        family = str(family or "").strip()
+        if not family or self._monospace_font_family == family:
+            return
+        self._monospace_font_family = family
+        self._settings.setValue("view/monospace_font_family", family)
+        for tab in self._theme_tabs():
+            tab.set_monospace_font_family(family)
+
+    def select_regular_font(self) -> None:
+        tab = self._current_tab()
+        seed = tab.view.font() if tab is not None else self.font()
+        if self._regular_font_family:
+            seed.setFamily(self._regular_font_family)
+        chosen, ok = QFontDialog.getFont(seed, self, "Select Regular Font")
+        if not ok:
+            return
+        self.set_regular_font_family(chosen.family())
+
+    def select_monospace_font(self) -> None:
+        seed = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        if self._monospace_font_family:
+            seed.setFamily(self._monospace_font_family)
+        chosen, ok = QFontDialog.getFont(seed, self, "Select Monospace Font")
+        if not ok:
+            return
+        self.set_monospace_font_family(chosen.family())
 
     def update_actions(self):
         update_main_window_actions(self)

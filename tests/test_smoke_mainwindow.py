@@ -131,6 +131,13 @@ def test_view_monospace_toggle_action_and_shortcut(main_window):
     assert action.shortcut().toString() == "Ctrl+Shift+M"
 
 
+def test_view_font_selector_actions_exist(main_window):
+    assert hasattr(main_window, "viewSelectRegularFontAction")
+    assert hasattr(main_window, "viewSelectMonospaceFontAction")
+    assert main_window.viewSelectRegularFontAction.text() == "Select Regular Font..."
+    assert main_window.viewSelectMonospaceFontAction.text() == "Select Monospace Font..."
+
+
 def test_view_monospace_toggle_updates_tab_delegates(main_window):
     main_window.create_new_file()
     tab = main_window.tabWidget.currentWidget()
@@ -145,6 +152,19 @@ def test_view_monospace_toggle_updates_tab_delegates(main_window):
     assert tab._monospace_fields_enabled is False
     assert tab.name_delegate._monospace_fields_enabled is False
     assert tab.value_delegate._monospace_fields_enabled is False
+
+
+def test_setting_font_families_updates_active_tab(main_window):
+    main_window.create_new_file()
+    tab = main_window.tabWidget.currentWidget()
+    assert isinstance(tab, JsonTab)
+
+    main_window.set_regular_font_family("Serif")
+    assert tab.view.font().family() == "Serif"
+
+    main_window.set_monospace_font_family("Monospace")
+    assert tab.name_delegate._mono_family == "Monospace"
+    assert tab.value_delegate._mono_family == "Monospace"
 
 
 @pytest.mark.parametrize(

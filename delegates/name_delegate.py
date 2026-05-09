@@ -34,6 +34,10 @@ class NameDelegate(_TextEditorDelegateBase):
     def set_monospace_fields_enabled(self, enabled: bool) -> None:
         self._monospace_fields_enabled = bool(enabled)
 
+    def set_monospace_font_family(self, family: str) -> None:
+        if family:
+            self._mono_family = str(family)
+
     def _apply_monospace_font(self, font: QFont) -> QFont:
         if not self._monospace_fields_enabled:
             return font

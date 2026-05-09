@@ -168,6 +168,8 @@ class JsonTab(QWidget):
         self._theme = theme or LIGHT_DEFAULT
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
         self._monospace_fields_enabled = False
+        self._regular_font_family: str | None = None
+        self._monospace_font_family: str | None = None
 
         init_layout(self)
 
@@ -231,6 +233,28 @@ class JsonTab(QWidget):
         self._monospace_fields_enabled = enabled
         self.name_delegate.set_monospace_fields_enabled(enabled)
         self.value_delegate.set_monospace_fields_enabled(enabled)
+        self.view.viewport().update()
+
+    def set_regular_font_family(self, family: str) -> None:
+        if not family:
+            return
+        family = str(family)
+        if self._regular_font_family == family:
+            return
+        self._regular_font_family = family
+        font = self.view.font()
+        font.setFamily(family)
+        self.view.setFont(font)
+
+    def set_monospace_font_family(self, family: str) -> None:
+        if not family:
+            return
+        family = str(family)
+        if self._monospace_font_family == family:
+            return
+        self._monospace_font_family = family
+        self.name_delegate.set_monospace_font_family(family)
+        self.value_delegate.set_monospace_font_family(family)
         self.view.viewport().update()
 
     @staticmethod
