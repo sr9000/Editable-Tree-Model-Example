@@ -213,6 +213,12 @@ def test_context_menu_column1_mutating_actions_disabled(qtbot, monkeypatch):
 
         triggered = Triggered()
 
+        def setEnabled(self, _enabled):
+            pass
+
+        def setShortcut(self, _shortcut):
+            pass
+
     class MockMenu:
         def __init__(self, *args):
             pass
@@ -223,6 +229,9 @@ def test_context_menu_column1_mutating_actions_disabled(qtbot, monkeypatch):
 
         def addMenu(self, text):
             return MockMenu()
+
+        def setEnabled(self, _enabled):
+            pass
 
         def addSeparator(self):
             pass
