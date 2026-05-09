@@ -70,6 +70,25 @@ def _top_level_selected_rows(tree_view: QTreeView) -> list:
     return [idx for idx in rows if not any(_is_ancestor(other, idx) for other in rows if other != idx)]
 
 
+# Public API (promoted from private names)
+def selected_source_rows(tree_view: QTreeView) -> list:
+    """Return source-model indexes for every selected row (or the current row)."""
+    return _selected_rows(tree_view)
+
+
+def top_level_source_rows(tree_view: QTreeView) -> list:
+    """Return source-model indexes pruned so no index is a descendant of another."""
+    return _top_level_selected_rows(tree_view)
+
+
+def selection_spans_multiple_parents(rows: list) -> bool:
+    """Return True when *rows* contains indexes with more than one distinct parent."""
+    if not rows:
+        return False
+    first_parent = rows[0].parent()
+    return any(idx.parent() != first_parent for idx in rows[1:])
+
+
 def _row0(model: JsonTreeModel, index: QModelIndex) -> QModelIndex:
     if not index.isValid():
         return QModelIndex()

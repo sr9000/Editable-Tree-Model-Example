@@ -1,6 +1,6 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-08**. PySide6 desktop **structured-data
+_Last scanned: **2026-05-09**. PySide6 desktop **structured-data
 editor** (originated from Qt's "Editable Tree Model" example). All
 historical phases (0–6 + package refactor + the six `plans/` phases
 on context-menu polish, zoom-column preservation, kind-switch
@@ -563,7 +563,11 @@ truth for one document.
 ## 11) Tree actions / clipboard — `tree_actions/`
 
 - `selection.py`: `_resolve_model`, `_to_source_index`, `_to_view_index`,
-  `_index_path`, `_is_ancestor`, `_top_level_selected_rows`.
+  `_index_path`, `_is_ancestor`.
+  **Public helpers (Step 1):** `selected_source_rows(view)`,
+  `top_level_source_rows(view)` (ancestor-pruned), and
+  `selection_spans_multiple_parents(rows) -> bool`.
+  Private-underscore aliases kept for back-compat one release.
 - `clipboard.py`: `copy_selection`, `copy_selection_with_name`,
   `copy_selection_value_only`. MIME type `application/x-json-tree`
   with text fallback for cross-app paste.

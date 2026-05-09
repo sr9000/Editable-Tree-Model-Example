@@ -20,7 +20,7 @@ from tree_actions.selection import (
     _row0,
     _to_source_index,
     _to_view_index,
-    _top_level_selected_rows,
+    top_level_source_rows as _top_level_selected_rows,
 )
 
 
