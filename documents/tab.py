@@ -244,6 +244,8 @@ class JsonTab(QWidget):
         self._regular_font_family = family
         font = self.view.font()
         font.setFamily(family)
+        if font.pointSizeF() <= 0:
+            font.setPointSize(max(6, int(getattr(self, "_font_pt", 10) or 10)))
         self.view.setFont(font)
 
     def set_monospace_font_family(self, family: str) -> None:

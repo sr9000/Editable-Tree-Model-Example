@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QSettings
-from PySide6.QtGui import QAction, QFontDatabase, QKeySequence
+from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import QDialog, QFileDialog, QFontDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
 
 import state.view_state as view_state
@@ -22,6 +22,25 @@ from tree_actions.structure import collapse_all, delete_selection, expand_all
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
+    @staticmethod
+    def _normalize_font_for_dialog(seed: QFont) -> QFont:
+        font = QFont(seed)
+        if font.pointSizeF() <= 0:
+            font.setPointSize(10)
+        return font
+
+    @staticmethod
+    def _unpack_font_dialog_result(result) -> tuple[QFont | None, bool]:
+        # PySide can expose getFont() tuple order as (QFont, bool) or (bool, QFont)
+        # depending on binding/runtime details.
+        if isinstance(result, tuple) and len(result) == 2:
+            first, second = result
+            if isinstance(first, QFont) and isinstance(second, bool):
+                return first, second
+            if isinstance(first, bool) and isinstance(second, QFont):
+                return second, first
+        return None, False
+
     def __init__(self, yaml_filename: str, parent=None):
         super().__init__(parent)
         self.setupUi(self)
@@ -388,8 +407,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         seed = tab.view.font() if tab is not None else self.font()
         if self._regular_font_family:
             seed.setFamily(self._regular_font_family)
-        chosen, ok = QFontDialog.getFont(seed, self, "Select Regular Font")
+        seed = self._normalize_font_for_dialog(seed)
+        chosen, ok = self._unpack_font_dialog_result(QFontDialog.getFont(seed, self, "Select Regular Font"))
         if not ok:
+            return
+        if chosen is None:
             return
         self.set_regular_font_family(chosen.family())
 
@@ -397,8 +419,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         seed = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
         if self._monospace_font_family:
             seed.setFamily(self._monospace_font_family)
-        chosen, ok = QFontDialog.getFont(seed, self, "Select Monospace Font")
+        seed = self._normalize_font_for_dialog(seed)
+        chosen, ok = self._unpack_font_dialog_result(QFontDialog.getFont(seed, self, "Select Monospace Font"))
         if not ok:
+            return
+        if chosen is None:
             return
         self.set_monospace_font_family(chosen.family())
 
