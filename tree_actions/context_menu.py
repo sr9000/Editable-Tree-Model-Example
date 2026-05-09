@@ -1,6 +1,6 @@
-from PySide6.QtCore import QPoint
+from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QMenu, QTreeView
+from PySide6.QtWidgets import QComboBox, QMenu, QTreeView
 
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection, copy_selection_value_only, copy_selection_with_name
@@ -37,6 +37,49 @@ def _add(menu: QMenu, text: str, slot, *, enabled: bool = True, shortcut: str | 
     return act
 
 
+def _find_enter_edit_target(host) -> object | None:
+    cursor = host
+    while cursor is not None:
+        if hasattr(cursor, "edit_name_or_value_from_enter"):
+            return cursor
+        cursor = cursor.parent() if hasattr(cursor, "parent") else None
+    return None
+
+
+def _open_active_type_combo_popup(tree_view: QTreeView) -> bool:
+    for combo in tree_view.findChildren(QComboBox):
+        if combo.parent() is tree_view.viewport() and combo.isVisible():
+            combo.showPopup()
+            return True
+    return False
+
+
+def _trigger_type_combo_from_context_menu(tree_view: QTreeView, index) -> bool:
+    if not index.isValid():
+        return False
+    type_index = index.siblingAtColumn(1)
+    if not type_index.isValid():
+        return False
+    model = tree_view.model()
+    if model is None:
+        return False
+    if not (model.flags(type_index) & Qt.ItemFlag.ItemIsEditable):
+        return False
+
+    tree_view.setCurrentIndex(type_index)
+
+    tab = _find_enter_edit_target(tree_view)
+    if tab is not None:
+        trigger = getattr(tab, "edit_name_or_value_from_enter", None)
+        if callable(trigger):
+            trigger()
+            return True
+
+    tree_view.edit(type_index)
+    QTimer.singleShot(0, lambda: _open_active_type_combo_popup(tree_view))
+    return True
+
+
 def show_context_menu(tree_view: QTreeView, position: QPoint):
     context_menu = QMenu(tree_view)
 
@@ -47,9 +90,10 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
 
     col = index.column()
 
-    # Column 1 (type column) hosts only view-level actions; mutations stay disabled
-    # to avoid accidental edits while clicking on the type cell.
+    # Column 1 (type): behave like Enter on the type cell and pop the combobox.
     if col == 1:
+        if _trigger_type_combo_from_context_menu(tree_view, index):
+            return
         _add(context_menu, "Expand All", lambda: expand_all(tree_view))
         _add(context_menu, "Collapse All", lambda: collapse_all(tree_view))
         context_menu.exec(tree_view.mapToGlobal(position))
