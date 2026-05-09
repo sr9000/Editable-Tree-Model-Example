@@ -264,6 +264,21 @@ class JsonTab(QWidget):
         self._set_font_pt(point_size)
         self._scale_columns_for_font(old_pt, self._font_pt)
 
+    def apply_font_profile(self, profile) -> None:
+        """Aspect entry point called by ``FontController``.
+
+        Order matters: family must be set before point size so the column
+        scaler sees the final font width, and the monospace toggle must
+        come last because it triggers a viewport repaint that picks up
+        the freshly-installed delegate fonts.
+        """
+        if profile.regular_family:
+            self.set_regular_font_family(profile.regular_family)
+        self.set_editor_font_point_size(profile.editor_point_size)
+        if profile.monospace_family:
+            self.set_monospace_font_family(profile.monospace_family)
+        self.set_monospace_fields_enabled(profile.monospace_fields_enabled)
+
     @staticmethod
     def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
         return proxy_to_source(index)
