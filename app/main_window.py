@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QSettings
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
 
 import state.view_state as view_state
@@ -28,6 +29,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._history_view: QUndoView | None = None
         self._bound_undo_tab: JsonTab | None = None
         self._settings = QSettings(APPLICATION_ID, "app")
+        self._monospace_fields_enabled = bool(self._settings.value("view/monospace_fields", False, type=bool))
         self._theme_controller = ThemeController(self, self._on_theme_applied)
         self._theme_registry = self._theme_controller.registry
         self._theme = self._theme_controller.theme
@@ -37,9 +39,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
         refresh_recent_menu(self)
+        self._setup_monospace_action()
         setup_history_menu(self)
         self.setup_model(yaml_filename)
         self.setup_connections()
+
+    def _setup_monospace_action(self) -> None:
+        self.viewMonospaceFieldsAction = QAction("Monospace Names && Values", self)
+        self.viewMonospaceFieldsAction.setCheckable(True)
+        self.viewMonospaceFieldsAction.setShortcut(QKeySequence("Ctrl+Shift+M"))
+        self.viewMonospaceFieldsAction.setChecked(self._monospace_fields_enabled)
+
+        self.viewMenu.addSeparator()
+        self.viewMenu.addAction(self.viewMonospaceFieldsAction)
 
     def setup_model(self, yaml_filename: str):
         if not yaml_filename:
@@ -112,6 +124,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab = self._current_tab()
         self._bind_undo_signals(tab)
         if tab is not None:
+            tab.set_monospace_fields_enabled(self._monospace_fields_enabled)
             tab.resize_key_columns()
         if self._history_dialog is not None and self._history_dialog.isVisible():
             if tab is not None and self._history_view is not None:
@@ -137,6 +150,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         tab_index = self.tabWidget.addTab(tab, tab.display_name())
         self.tabWidget.setCurrentIndex(tab_index)
+        tab.set_monospace_fields_enabled(self._monospace_fields_enabled)
         tab.dirtyChanged.connect(lambda _dirty, t=tab: self._on_tab_dirty(t))
 
         tab.view.expandAll()
@@ -319,6 +333,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if tab is None:
             return
         tab.zoom_reset()
+
+    def toggle_monospace_fields(self, enabled: bool) -> None:
+        self._monospace_fields_enabled = bool(enabled)
+        self._settings.setValue("view/monospace_fields", self._monospace_fields_enabled)
+        for tab in self._theme_tabs():
+            tab.set_monospace_fields_enabled(self._monospace_fields_enabled)
 
     def update_actions(self):
         update_main_window_actions(self)

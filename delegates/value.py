@@ -3,6 +3,7 @@ import zlib
 
 from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
+from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyle, QStyleOptionViewItem, QTreeView, QWidget
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
@@ -25,9 +26,23 @@ class ValueDelegate(_TextEditorDelegateBase):
     def __init__(self, parent=None, *, theme: ThemeSpec | None = None):
         super().__init__(parent)
         self._theme = theme or LIGHT_DEFAULT
+        self._monospace_fields_enabled = False
+        self._mono_family = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
 
     def set_theme(self, theme: ThemeSpec) -> None:
         self._theme = theme
+
+    def set_monospace_fields_enabled(self, enabled: bool) -> None:
+        self._monospace_fields_enabled = bool(enabled)
+
+    def _apply_monospace_font(self, font: QFont) -> QFont:
+        if not self._monospace_fields_enabled:
+            return font
+        f = QFont(font)
+        f.setFamily(self._mono_family)
+        f.setStyleHint(QFont.StyleHint.Monospace)
+        f.setFixedPitch(True)
+        return f
 
     @staticmethod
     def _source_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
@@ -90,6 +105,7 @@ class ValueDelegate(_TextEditorDelegateBase):
                 selected=bool(option.state & QStyle.StateFlag.State_Selected),
                 allow_background=True,
             )
+        option.font = self._apply_monospace_font(option.font)
 
     @staticmethod
     def _to_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
@@ -191,6 +207,8 @@ class ValueDelegate(_TextEditorDelegateBase):
             case _:
                 raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.createEditor()`: {item.json_type=}")
 
+        if editor is not None:
+            editor.setFont(self._apply_monospace_font(editor.font()))
         return editor
 
     def setEditorData(self, editor: QWidget, index: QModelIndex):

@@ -124,6 +124,29 @@ def test_create_multiple_new_file_tabs(main_window):
     assert main_window.tabWidget.count() == 1
 
 
+def test_view_monospace_toggle_action_and_shortcut(main_window):
+    assert hasattr(main_window, "viewMonospaceFieldsAction")
+    action = main_window.viewMonospaceFieldsAction
+    assert action.isCheckable()
+    assert action.shortcut().toString() == "Ctrl+Shift+M"
+
+
+def test_view_monospace_toggle_updates_tab_delegates(main_window):
+    main_window.create_new_file()
+    tab = main_window.tabWidget.currentWidget()
+    assert isinstance(tab, JsonTab)
+
+    main_window.toggle_monospace_fields(True)
+    assert tab._monospace_fields_enabled is True
+    assert tab.name_delegate._monospace_fields_enabled is True
+    assert tab.value_delegate._monospace_fields_enabled is True
+
+    main_window.toggle_monospace_fields(False)
+    assert tab._monospace_fields_enabled is False
+    assert tab.name_delegate._monospace_fields_enabled is False
+    assert tab.value_delegate._monospace_fields_enabled is False
+
+
 @pytest.mark.parametrize(
     "json_type",
     [JsonType.NULL, JsonType.ARRAY, JsonType.OBJECT, JsonType.MULTILINE, JsonType.BYTES],

@@ -16,6 +16,7 @@ def setup_connections(window):
     window.viewZoomInAction.triggered.connect(window.zoom_in)
     window.viewZoomOutAction.triggered.connect(window.zoom_out)
     window.viewResetZoomAction.triggered.connect(window.reset_zoom)
+    window.viewMonospaceFieldsAction.toggled.connect(window.toggle_monospace_fields)
 
     window._setup_theme_menu()
 

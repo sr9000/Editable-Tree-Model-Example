@@ -167,6 +167,7 @@ class JsonTab(QWidget):
         self._permanent_message_callback = permanent_message_callback
         self._theme = theme or LIGHT_DEFAULT
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
+        self._monospace_fields_enabled = False
 
         init_layout(self)
 
@@ -184,6 +185,7 @@ class JsonTab(QWidget):
 
         init_model(self, model_data, show_root=show_root)
         init_delegates_and_connections(self, update_actions_callback)
+        self.set_monospace_fields_enabled(self._monospace_fields_enabled)
         init_shortcuts(self)
         init_search_filter(self)
         self._diff_applier = DiffApplier(self)
@@ -221,6 +223,15 @@ class JsonTab(QWidget):
                 emit_ranges(child_parent)
 
         emit_ranges(QModelIndex())
+
+    def set_monospace_fields_enabled(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if self._monospace_fields_enabled == enabled:
+            return
+        self._monospace_fields_enabled = enabled
+        self.name_delegate.set_monospace_fields_enabled(enabled)
+        self.value_delegate.set_monospace_fields_enabled(enabled)
+        self.view.viewport().update()
 
     @staticmethod
     def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
