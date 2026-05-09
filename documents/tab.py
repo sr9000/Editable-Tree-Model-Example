@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QEvent, QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.tab_io import save as tab_save
@@ -174,6 +174,7 @@ class JsonTab(QWidget):
         self._monospace_font_family: str | None = None
 
         init_layout(self)
+        self._sync_icon_size_with_font()
 
         # option to edit headers is not needed
         # self.header_editor = HeaderViewEditorMixin(self.view.header())
@@ -249,6 +250,7 @@ class JsonTab(QWidget):
         if font.pointSizeF() <= 0:
             font.setPointSize(max(6, int(getattr(self, "_font_pt", 10) or 10)))
         self.view.setFont(font)
+        self._sync_icon_size_with_font()
 
     def set_monospace_font_family(self, family: str) -> None:
         if not family:
@@ -337,6 +339,12 @@ class JsonTab(QWidget):
         font = self.view.font()
         font.setPointSize(clamped)
         self.view.setFont(font)
+        self._sync_icon_size_with_font()
+
+    def _sync_icon_size_with_font(self) -> None:
+        # Keep type-column icons visually in step with the active tree font.
+        px = max(12, min(64, int(round(self.view.fontMetrics().height() * 1.1))))
+        self.view.setIconSize(QSize(px, px))
 
     def zoom_in(self) -> None:
         old_pt = self._font_pt

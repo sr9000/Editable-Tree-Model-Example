@@ -1,4 +1,4 @@
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSize, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
@@ -105,6 +105,14 @@ class JsonTypeDelegate(QStyledItemDelegate):
 
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         editor = QComboBox(parent)
+        icon_size = QSize(max(12, option.fontMetrics.height()), max(12, option.fontMetrics.height()))
+        host_view = option.widget
+        if host_view is not None and hasattr(host_view, "iconSize"):
+            host_size = host_view.iconSize()
+            if host_size.isValid():
+                icon_size = host_size
+        editor.setIconSize(icon_size)
+        editor.view().setIconSize(icon_size)
         for tp in JsonType:
             editor.addItem(self._icon_provider.for_type(tp), tp.value, tp)
         self._set_active_type_edit_index(self._source_index(index))

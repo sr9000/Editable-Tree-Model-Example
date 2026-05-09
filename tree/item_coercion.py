@@ -10,8 +10,16 @@ from gmpy2 import mpq
 
 from datetime_editor.enums import DateTimeCategory
 from datetime_editor.regex import parse_datetime_text
-from tree.stubs import stub_bytes_raw, stub_float, stub_integer, stub_multiline, stub_percent, stub_string
-from tree.stubs import stub_color_rgb, stub_color_rgba
+from tree.stubs import (
+    stub_bytes_raw,
+    stub_color_rgb,
+    stub_color_rgba,
+    stub_float,
+    stub_integer,
+    stub_multiline,
+    stub_percent,
+    stub_string,
+)
 from tree.types import JsonType
 
 # ---------------------------------------------------------------------------
