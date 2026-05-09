@@ -1,60 +1,59 @@
-name: Default Light
-mode: light
+name: Monokai JSON
+mode: dark
 palette:
-  base_fg: '#657b83'
-  base_bg: '#fdf6e3'
-  selection_fg: '#fdf6e3'
-  selection_bg: '#268bd2'
-  accent: '#b58900'
+  base_fg: '#F8F8F2'
+  base_bg: '#272822'
+  selection_fg: '#272822'
+  selection_bg: '#FD971F'
+  accent: '#A6E22E'
 types:
   integer:
-    fg: '#268bd2'
+    fg: '#FD971F'
   float:
-    fg: '#1f8f89'
+    fg: '#f6d32d'
   percent:
-    fg: '#1f8f89'
+    fg: '#f6d32d'
     italic: true
   boolean:
-    fg: '#d33682'
+    fg: '#F92672'
   string:
-    fg: '#657b83'
+    fg: '#A6E22E'
   unicode:
-    fg: '#6f8100'
+    fg: '#A6E22E'
   multiline:
-    fg: '#6f8100'
+    fg: '#A6E22E'
     italic: true
   text:
-    fg: '#6f8100'
-    italic: true
+    fg: '#A6E22E'
   date:
-    fg: '#946f00'
+    fg: '#E6DB74'
   time:
-    fg: '#946f00'
+    fg: '#E6DB74'
   datetime:
-    fg: '#946f00'
+    fg: '#E6DB74'
   datetimezone:
-    fg: '#946f00'
+    fg: '#E6DB74'
   bytes:
-    fg: '#cb4b16'
+    fg: '#AE81FF'
   zlib:
-    fg: '#cb4b16'
+    fg: '#AE81FF'
     italic: true
   gzip:
-    fg: '#cb4b16'
+    fg: '#AE81FF'
     italic: true
   rgb:
-    fg: '#6c71c4'
+    fg: '#66D9EF'
   rgba:
-    fg: '#6c71c4'
+    fg: '#66D9EF'
     italic: true
   'null':
-    fg: '#7f8c8d'
+    fg: '#75715E'
     italic: true
   object:
-    fg: '#073642'
+    fg: '#66D9EF'
     bold: true
   array:
-    fg: '#073642'
+    fg: '#66D9EF'
     bold: true
 icons:
   search_paths:

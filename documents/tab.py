@@ -91,6 +91,8 @@ def _demo_data() -> dict[str, Any]:
         "object": {"key": "value"},
         "array": [1, 2, 3],
         "null": None,
+        "color rgb": "#3498db",
+        "color rgba": "#3498db80",
     }
 
 

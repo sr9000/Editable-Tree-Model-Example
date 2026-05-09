@@ -3,13 +3,14 @@ import zlib
 
 from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
-from PySide6.QtGui import QFont, QFontDatabase
-from PySide6.QtWidgets import QComboBox, QLineEdit, QStyle, QStyleOptionViewItem, QTreeView, QWidget
+from PySide6.QtGui import QFont, QFontDatabase, QIcon, QPainter, QPixmap
+from PySide6.QtWidgets import QColorDialog, QComboBox, QLineEdit, QStyle, QStyleOptionViewItem, QTreeView, QWidget
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
 from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase
 from delegates.bytes_codec import decode_bytes, encode_bytes
+from delegates.color_codec import color_to_html, parse_color
 from delegates.value_formatting import _apply_type_style, format_default, format_with_type
 from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
@@ -102,6 +103,11 @@ class ValueDelegate(_TextEditorDelegateBase):
             item=item if isinstance(item, JsonTreeItem) else None,
             show_preview=show_preview,
         )
+        if typed in (JsonType.COLOR_RGB, JsonType.COLOR_RGBA) and isinstance(raw, str):
+            swatch = self._color_swatch_icon(raw, option)
+            if swatch is not None:
+                option.icon = swatch
+                option.features |= QStyleOptionViewItem.ViewItemFeature.HasDecoration
         if typed is not None:
             _apply_type_style(
                 option,
@@ -110,6 +116,31 @@ class ValueDelegate(_TextEditorDelegateBase):
                 allow_background=True,
             )
         option.font = self._apply_monospace_font(option.font)
+
+    @staticmethod
+    def _color_swatch_icon(value: str, option: QStyleOptionViewItem) -> QIcon | None:
+        color = parse_color(value)
+        if color is None:
+            return None
+        size = max(8, min(option.decorationSize.height() or 16, 32))
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        try:
+            # Checkerboard for transparency awareness
+            if color.alpha() < 255:
+                step = max(2, size // 4)
+                light = Qt.GlobalColor.white
+                dark = Qt.GlobalColor.lightGray
+                for y in range(0, size, step):
+                    for x in range(0, size, step):
+                        painter.fillRect(x, y, step, step, light if ((x // step + y // step) % 2 == 0) else dark)
+            painter.fillRect(0, 0, size, size, color)
+            painter.setPen(Qt.GlobalColor.black)
+            painter.drawRect(0, 0, size - 1, size - 1)
+        finally:
+            painter.end()
+        return QIcon(pixmap)
 
     @staticmethod
     def _to_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
@@ -188,6 +219,29 @@ class ValueDelegate(_TextEditorDelegateBase):
                         self._commit(pidx, text, Qt.ItemDataRole.EditRole, host=parent)
 
                 QMultilineDialog(parent=parent, text=str(item.value or ""), callback=_save_multiline).open()
+                return None
+
+            case JsonType.COLOR_RGB | JsonType.COLOR_RGBA:
+                pidx = QPersistentModelIndex(index)
+                initial = parse_color(item.value if isinstance(item.value, str) else "") or parse_color("#000000")
+
+                dialog = QColorDialog(initial, parent)
+                if item.json_type is JsonType.COLOR_RGBA:
+                    dialog.setOption(QColorDialog.ColorDialogOption.ShowAlphaChannel, True)
+                dialog.setWindowTitle(
+                    "Pick color (RGBA)" if item.json_type is JsonType.COLOR_RGBA else "Pick color (RGB)"
+                )
+
+                target_type = item.json_type
+
+                def _on_color_selected(selected) -> None:
+                    if not pidx.isValid():
+                        return
+                    text = color_to_html(selected, target_type)
+                    self._commit(pidx, text, Qt.ItemDataRole.EditRole, host=parent)
+
+                dialog.colorSelected.connect(_on_color_selected)
+                dialog.open()
                 return None
 
             case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:

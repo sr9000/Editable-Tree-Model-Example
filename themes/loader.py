@@ -30,6 +30,8 @@ _TYPE_KEYS: dict[str, JsonType] = {
     "bytes": JsonType.BYTES,
     "zlib": JsonType.ZLIB,
     "gzip": JsonType.GZIP,
+    "rgb": JsonType.COLOR_RGB,
+    "rgba": JsonType.COLOR_RGBA,
     "null": JsonType.NULL,
     "object": JsonType.OBJECT,
     "array": JsonType.ARRAY,

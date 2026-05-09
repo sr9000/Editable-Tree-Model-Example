@@ -42,6 +42,11 @@ types:
   gzip:
     fg: '#ff9e64'
     italic: true
+  rgb:
+    fg: '#bb9af7'
+  rgba:
+    fg: '#bb9af7'
+    italic: true
   'null':
     fg: '#6b739f'
     italic: true
@@ -70,6 +75,8 @@ icons:
     bytes: attachment_line
     zlib: file_zip_line
     gzip: file_zip_line
+    rgb: paint_brush_line
+    rgba: paint_brush_ai_line
     'null': dot_circle_line
     object: braces_fill
     array: brackets_fill
