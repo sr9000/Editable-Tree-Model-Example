@@ -57,7 +57,7 @@ types:
     bold: true
 icons:
   search_paths:
-  - ./mingcute
+  - ./mingcute-light
   map:
     integer: hashtag_line
     float: asterisk_2_line
