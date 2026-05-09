@@ -42,6 +42,11 @@ types:
   gzip:
     fg: '#cb4b16'
     italic: true
+  rgb:
+    fg: '#6c71c4'
+  rgba:
+    fg: '#6c71c4'
+    italic: true
   'null':
     fg: '#7f8c8d'
     italic: true
@@ -53,7 +58,7 @@ types:
     bold: true
 icons:
   search_paths:
-  - ./mingcute
+  - ./mingcute-light
   map:
     integer: hashtag_line
     float: asterisk_2_line
@@ -70,6 +75,8 @@ icons:
     bytes: attachment_line
     zlib: file_zip_line
     gzip: file_zip_line
+    rgb: paint_brush_line
+    rgba: paint_brush_ai_line
     'null': dot_circle_line
     object: braces_fill
     array: brackets_fill

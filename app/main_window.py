@@ -3,10 +3,12 @@
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QSettings
-from PySide6.QtWidgets import QDialog, QFileDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
+from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
+from PySide6.QtWidgets import QDialog, QFileDialog, QFontDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
 
 import state.view_state as view_state
 from app.close_confirm import confirm_close
+from app.font_controller import FontController
 from app.history import bind_undo_signals, setup_history_menu
 from app.main_window_actions import setup_connections as setup_main_window_connections
 from app.main_window_actions import update_actions as update_main_window_actions
@@ -21,6 +23,25 @@ from tree_actions.structure import collapse_all, delete_selection, expand_all
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
+    @staticmethod
+    def _normalize_font_for_dialog(seed: QFont) -> QFont:
+        font = QFont(seed)
+        if font.pointSizeF() <= 0:
+            font.setPointSize(10)
+        return font
+
+    @staticmethod
+    def _unpack_font_dialog_result(result) -> tuple[QFont | None, bool]:
+        # PySide can expose getFont() tuple order as (QFont, bool) or (bool, QFont)
+        # depending on binding/runtime details.
+        if isinstance(result, tuple) and len(result) == 2:
+            first, second = result
+            if isinstance(first, QFont) and isinstance(second, bool):
+                return first, second
+            if isinstance(first, bool) and isinstance(second, QFont):
+                return second, first
+        return None, False
+
     def __init__(self, yaml_filename: str, parent=None):
         super().__init__(parent)
         self.setupUi(self)
@@ -28,6 +49,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._history_view: QUndoView | None = None
         self._bound_undo_tab: JsonTab | None = None
         self._settings = QSettings(APPLICATION_ID, "app")
+        # All font preferences (regular family, monospace family, editor
+        # point size, monospace-fields toggle) live in a single controller
+        # that persists itself and broadcasts to subscribed tabs. See
+        # ``app/font_controller.py``.
+        self.fonts = FontController(self._settings, self)
         self._theme_controller = ThemeController(self, self._on_theme_applied)
         self._theme_registry = self._theme_controller.registry
         self._theme = self._theme_controller.theme
@@ -37,9 +63,28 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
         refresh_recent_menu(self)
+        self._setup_font_actions()
+        self._setup_monospace_action()
         setup_history_menu(self)
         self.setup_model(yaml_filename)
         self.setup_connections()
+
+    def _setup_monospace_action(self) -> None:
+        self.viewMonospaceFieldsAction = QAction("Monospace Names && Values", self)
+        self.viewMonospaceFieldsAction.setCheckable(True)
+        self.viewMonospaceFieldsAction.setShortcut(QKeySequence("Ctrl+Shift+M"))
+        self.viewMonospaceFieldsAction.setChecked(self.fonts.profile.monospace_fields_enabled)
+
+        self.viewMenu.addSeparator()
+        self.viewMenu.addAction(self.viewMonospaceFieldsAction)
+
+    def _setup_font_actions(self) -> None:
+        self.viewSelectRegularFontAction = QAction("Select Regular Font...", self)
+        self.viewSelectMonospaceFontAction = QAction("Select Monospace Font...", self)
+
+        self.viewMenu.addSeparator()
+        self.viewMenu.addAction(self.viewSelectRegularFontAction)
+        self.viewMenu.addAction(self.viewSelectMonospaceFontAction)
 
     def setup_model(self, yaml_filename: str):
         if not yaml_filename:
@@ -137,6 +182,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         tab_index = self.tabWidget.addTab(tab, tab.display_name())
         self.tabWidget.setCurrentIndex(tab_index)
+        self.fonts.subscribe(tab)
         tab.dirtyChanged.connect(lambda _dirty, t=tab: self._on_tab_dirty(t))
 
         tab.view.expandAll()
@@ -145,6 +191,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             source_index = tab.model.index(0, 0, QModelIndex())
             tab.view.setCurrentIndex(tab._source_to_view(source_index))
         view_state.restore(tab)
+        # Re-broadcast: ``view_state.restore`` may have rewritten ``_font_pt``
+        # from a previously-saved per-tab value; the global controller wins.
+        self.fonts.subscribe(tab)
 
         self._bind_undo_signals(tab)
         self.update_actions()
@@ -303,22 +352,46 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         collapse_all(view)
 
     def zoom_in(self) -> None:
-        tab = self._current_tab()
-        if tab is None:
-            return
-        tab.zoom_in()
+        self.fonts.zoom_in()
 
     def zoom_out(self) -> None:
-        tab = self._current_tab()
-        if tab is None:
-            return
-        tab.zoom_out()
+        self.fonts.zoom_out()
 
     def reset_zoom(self) -> None:
+        self.fonts.reset_zoom()
+
+    def set_editor_font_point_size(self, point_size: int) -> None:
+        self.fonts.set_point_size(point_size)
+
+    def toggle_monospace_fields(self, enabled: bool) -> None:
+        self.fonts.set_monospace_fields_enabled(enabled)
+
+    def set_regular_font_family(self, family: str) -> None:
+        self.fonts.set_regular_family(family)
+
+    def set_monospace_font_family(self, family: str) -> None:
+        self.fonts.set_monospace_family(family)
+
+    def select_regular_font(self) -> None:
         tab = self._current_tab()
-        if tab is None:
+        seed = QFont(tab.view.font()) if tab is not None else QFont(self.font())
+        if self.fonts.profile.regular_family:
+            seed.setFamily(self.fonts.profile.regular_family)
+        seed = self._normalize_font_for_dialog(seed)
+        chosen, ok = self._unpack_font_dialog_result(QFontDialog.getFont(seed, self, "Select Regular Font"))
+        if not ok or chosen is None:
             return
-        tab.zoom_reset()
+        self.fonts.set_regular_family(chosen.family())
+
+    def select_monospace_font(self) -> None:
+        seed = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        if self.fonts.profile.monospace_family:
+            seed.setFamily(self.fonts.profile.monospace_family)
+        seed = self._normalize_font_for_dialog(seed)
+        chosen, ok = self._unpack_font_dialog_result(QFontDialog.getFont(seed, self, "Select Monospace Font"))
+        if not ok or chosen is None:
+            return
+        self.fonts.set_monospace_family(chosen.family())
 
     def update_actions(self):
         update_main_window_actions(self)

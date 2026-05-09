@@ -10,7 +10,16 @@ from gmpy2 import mpq
 
 from datetime_editor.enums import DateTimeCategory
 from datetime_editor.regex import parse_datetime_text
-from tree.stubs import stub_bytes_raw, stub_float, stub_integer, stub_multiline, stub_percent, stub_string
+from tree.stubs import (
+    stub_bytes_raw,
+    stub_color_rgb,
+    stub_color_rgba,
+    stub_float,
+    stub_integer,
+    stub_multiline,
+    stub_percent,
+    stub_string,
+)
 from tree.types import JsonType
 
 # ---------------------------------------------------------------------------
@@ -406,6 +415,16 @@ def coerce_value_for_type(
             if isinstance(value, dict):
                 return True, value
             return (False, None) if strict else (True, {})
+
+        case JsonType.COLOR_RGB | JsonType.COLOR_RGBA:
+            from delegates.color_codec import normalize_color_string
+
+            if isinstance(value, str):
+                normalized = normalize_color_string(value, json_type)
+                if normalized is not None:
+                    return True, normalized
+            stub = stub_color_rgba() if json_type is JsonType.COLOR_RGBA else stub_color_rgb()
+            return (False, None) if strict else (True, stub)
 
 
 def compute_editable(json_type: JsonType, value: Any, editable_blob_limit: int) -> bool:

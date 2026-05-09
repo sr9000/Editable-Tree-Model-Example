@@ -1,6 +1,7 @@
 from typing import Callable
 
 from PySide6.QtCore import QSettings
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QStatusBar, QVBoxLayout, QWidget
 
 from qhexedit import QHexEdit
@@ -22,6 +23,7 @@ class QHexDialog(QDialog):
 
         self.editor = QHexEdit(self)
         self.editor.setData(data or b"")
+        self._applyGlobalEditorFontSettings()
 
         # Status bar
         self.statusBar = QStatusBar(self)
@@ -71,6 +73,18 @@ class QHexDialog(QDialog):
 
         # Restore settings after UI is fully initialized
         self._restoreSettings()
+
+    def _applyGlobalEditorFontSettings(self) -> None:
+        settings = QSettings(APPLICATION_ID, "app")
+        mono_family = str(settings.value("view/monospace_font_family", "", type=str) or "")
+        point_size = int(settings.value("view/editor_font_point_size", 10, type=int) or 10)
+
+        font = QFont(self.editor.font())
+        if mono_family:
+            font.setFamily(mono_family)
+        if point_size > 0:
+            font.setPointSize(max(6, point_size))
+        self.editor.setFont(font)
 
     def data(self) -> bytes:
         return bytes(self.editor.data())

@@ -53,6 +53,31 @@ class QMultilineEditor(QPlainTextEdit):
         self.setFont(self._monospacedFont if enabled else self._defaultFont)
         self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance("9"))
 
+    def setRegularFontFamily(self, family: str) -> None:
+        if not family:
+            return
+        self._defaultFont.setFamily(str(family))
+        if not self._isMonospaced:
+            self.setFont(self._defaultFont)
+            self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance("9"))
+
+    def setMonospaceFontFamily(self, family: str) -> None:
+        if not family:
+            return
+        self._monospacedFont.setFamily(str(family))
+        self._monospacedFont.setStyleHint(QFont.StyleHint.Monospace)
+        self._monospacedFont.setFixedPitch(True)
+        if self._isMonospaced:
+            self.setFont(self._monospacedFont)
+            self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance("9"))
+
+    def setEditorPointSize(self, point_size: int) -> None:
+        size = max(6, int(point_size))
+        self._defaultFont.setPointSize(size)
+        self._monospacedFont.setPointSize(size)
+        self.setFont(self._monospacedFont if self._isMonospaced else self._defaultFont)
+        self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance("9"))
+
     def isMonospaced(self) -> bool:
         return self._isMonospaced
 

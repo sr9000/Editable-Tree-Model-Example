@@ -297,25 +297,41 @@ tree itself).
 
 ### Tree context menu (`tree_actions/context_menu.py::show_context_menu`)
 
-Column-aware:
-- **Type column (col 1)** → only `Expand All` / `Collapse All`.
-- **Name (col 0) / Value (col 2)** → full menu:
-  - Item submenu (labelled with the row's display data):
-    - **Copy** — column-aware: name col uses `copy_selection_with_name`,
-      value col uses `copy_selection_value_only`, otherwise the full
-      `copy_selection`.
-    - Cut, Paste, Delete
-    - Duplicate
-    - Move Up / Move Down (disabled at the boundary)
-    - Sort Keys / Sort Keys (Recursive) (only enabled under OBJECT)
-  - Insert Sibling Before, Insert Sibling After, Insert Child (only
-    enabled when current row is OBJECT/ARRAY)
-  - Expand All / Collapse All
+Column-aware. Top-level layout (when col 0 / col 2 has a selection):
 
-Clipboard MIME type is `application/x-json-tree`; payload preserves
-names so paste keeps full type info. Name-collision avoidance under
-OBJECT parents uses `_copy_name` / `unique_child_name` to generate
-`_copy`, `_copy_2`, … suffixes.
+- **Copy** — column-aware: name col → `copy_selection_with_name`,
+  value col → `copy_selection_value_only`, otherwise full `copy_selection`.
+- **Cut**
+- **Paste ▸** (whole submenu disabled when clipboard has no tree-paste-able
+  content; per-item enable also gated by selection / container constraints)
+  - **Paste (auto)** — smart placement (container ⇒ child append,
+    primitive ⇒ sibling after); calls `paste_from_clipboard`
+  - **Paste Before** — `paste_before`
+  - **Paste After** — `paste_after`
+  - **Paste as Child** — `paste_as_child` (enabled iff current is
+    OBJECT/ARRAY)
+  - **Paste — Replace Value** — `paste_replace_value`; replaces the
+    current node's entire subtree with the clipboard value via
+    `tab.push_edit_value`. Requires exactly one clipboard entry.
+- **Insert ▸** (fresh empty/null node)
+  - **Insert Before** — `insert_sibling_before`
+  - **Insert After**  — `insert_sibling_after`
+  - **Insert as Child** — `insert_child_current` (enabled iff current is
+    OBJECT/ARRAY)
+- **Duplicate**, **Delete** (disabled on root)
+- **Move Up / Move Down** (boundary-aware)
+- **Sort Keys / Sort Keys (Recursive)** (only enabled under OBJECT)
+- **Expand All / Collapse All**
+
+Column 1 (type column) shows only `Expand All` / `Collapse All` to avoid
+accidental edits while clicking the type cell.
+
+Clipboard MIME type is `application/x-json-tree`; payload preserves names
+so paste keeps full type info. Name-collision avoidance under OBJECT
+parents uses `_copy_name` / `unique_child_name` to generate `_copy`,
+`_copy_2`, … suffixes. The placement-aware paste functions all share
+`_paste_entries_at` and `_resolve_paste_target` in
+`tree_actions/paste.py`.
 
 ---
 

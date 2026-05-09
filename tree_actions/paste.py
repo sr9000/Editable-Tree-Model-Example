@@ -1,11 +1,11 @@
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QTreeView
 
 from tree.types import JsonType
 from tree_actions.clipboard import _clipboard_entries
-from tree_actions.selection import _resolve_model, _to_source_index, _to_view_index
+from tree_actions.selection import _resolve_model, _row0, _to_source_index, _to_view_index
 
 
 def _tab_of(tree_view: QTreeView):
@@ -15,7 +15,50 @@ def _tab_of(tree_view: QTreeView):
     return None
 
 
-def paste_from_clipboard(tree_view: QTreeView) -> bool:
+def has_clipboard_entries() -> bool:
+    """Return True if the clipboard currently contains paste-able tree entries."""
+    return bool(_clipboard_entries())
+
+
+def _resolve_paste_target(model, current: QModelIndex, mode: str):
+    """Return (parent_index, insert_pos) for the requested placement mode, or
+    ``None`` if the placement is not valid for the current selection.
+
+    mode:
+      - "auto":   container current → child append; primitive → sibling after; invalid → root append
+      - "before": before current sibling
+      - "after":  after current sibling
+      - "child":  append as last child (current must be a container)
+    """
+    if mode == "auto":
+        if current.isValid():
+            row0 = current.siblingAtColumn(0)
+            current_item = model.get_item(row0)
+            if current_item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+                return row0, model.rowCount(row0)
+            return row0.parent(), row0.row() + 1
+        return QModelIndex(), model.rowCount(QModelIndex())
+
+    if not current.isValid():
+        # No selection: before/after/child all degrade to root append.
+        return QModelIndex(), model.rowCount(QModelIndex())
+
+    row0 = _row0(model, current)
+
+    if mode == "child":
+        item = model.get_item(row0)
+        if item.json_type not in (JsonType.OBJECT, JsonType.ARRAY):
+            return None
+        return row0, model.rowCount(row0)
+
+    if mode == "before":
+        return row0.parent(), row0.row()
+    if mode == "after":
+        return row0.parent(), row0.row() + 1
+    return None
+
+
+def _paste_entries_at(tree_view: QTreeView, parent_index: QModelIndex, insert_pos: int, *, label: str) -> bool:
     model, _proxy = _resolve_model(tree_view)
     if model is None:
         return False
@@ -23,21 +66,6 @@ def paste_from_clipboard(tree_view: QTreeView) -> bool:
     entries = _clipboard_entries()
     if not entries:
         return False
-
-    current = _to_source_index(tree_view.currentIndex())
-    if current.isValid():
-        current_row0 = current.siblingAtColumn(0)
-        current_item = model.get_item(current_row0)
-
-        if current_item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
-            parent_index = current_row0
-            insert_pos = model.rowCount(parent_index)
-        else:
-            parent_index = current_row0.parent()
-            insert_pos = current_row0.row() + 1
-    else:
-        parent_index = current
-        insert_pos = model.rowCount(parent_index)
 
     parent_item = model.get_item(parent_index)
     parent_is_object = parent_item.json_type is JsonType.OBJECT
@@ -67,7 +95,10 @@ def paste_from_clipboard(tree_view: QTreeView) -> bool:
                     "name": name,
                 }
             )
-        return tab.push_insert_rows(inserts, label="paste")
+        ok = tab.push_insert_rows(inserts, label=label)
+        if ok and parent_index.isValid():
+            tree_view.expand(_to_view_index(tree_view, parent_index))
+        return ok
 
     inserted = 0
     for entry in entries:
@@ -92,3 +123,83 @@ def paste_from_clipboard(tree_view: QTreeView) -> bool:
 
     tree_view.setCurrentIndex(_to_view_index(tree_view, model.index(insert_pos, 0, parent_index)))
     return True
+
+
+def paste_from_clipboard(tree_view: QTreeView) -> bool:
+    """Smart paste: container current → child append, primitive → sibling after."""
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    current = _to_source_index(tree_view.currentIndex())
+    target = _resolve_paste_target(model, current, "auto")
+    if target is None:
+        return False
+    parent_index, insert_pos = target
+    return _paste_entries_at(tree_view, parent_index, insert_pos, label="paste")
+
+
+def paste_before(tree_view: QTreeView) -> bool:
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    current = _to_source_index(tree_view.currentIndex())
+    target = _resolve_paste_target(model, current, "before")
+    if target is None:
+        return False
+    parent_index, insert_pos = target
+    return _paste_entries_at(tree_view, parent_index, insert_pos, label="paste before")
+
+
+def paste_after(tree_view: QTreeView) -> bool:
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    current = _to_source_index(tree_view.currentIndex())
+    target = _resolve_paste_target(model, current, "after")
+    if target is None:
+        return False
+    parent_index, insert_pos = target
+    return _paste_entries_at(tree_view, parent_index, insert_pos, label="paste after")
+
+
+def paste_as_child(tree_view: QTreeView) -> bool:
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    current = _to_source_index(tree_view.currentIndex())
+    target = _resolve_paste_target(model, current, "child")
+    if target is None:
+        return False
+    parent_index, insert_pos = target
+    return _paste_entries_at(tree_view, parent_index, insert_pos, label="paste as child")
+
+
+def paste_replace_value(tree_view: QTreeView) -> bool:
+    """Replace the value (entire subtree) of the current node with the
+    clipboard value. Requires a single clipboard entry and a non-root
+    selection."""
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+
+    entries = _clipboard_entries()
+    if not entries or len(entries) != 1:
+        return False
+
+    current = _to_source_index(tree_view.currentIndex())
+    if not current.isValid():
+        return False
+
+    row0 = _row0(model, current)
+    item = model.get_item(row0)
+    if item is model.root_item:
+        return False
+
+    new_value = entries[0]["value"]
+    value_index = model.index(row0.row(), 2, row0.parent())
+
+    tab = _tab_of(tree_view)
+    if tab is not None:
+        return tab.push_edit_value(value_index, new_value, label="paste replace")
+
+    return bool(model.setData(value_index, new_value, Qt.ItemDataRole.EditRole))

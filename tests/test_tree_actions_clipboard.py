@@ -6,7 +6,6 @@ from PySide6.QtWidgets import QApplication, QTreeView
 
 from tree.model import JsonTreeModel
 from tree_actions.clipboard import MIME_JSON_TREE, copy_selection, copy_selection_value_only, copy_selection_with_name
-from tree_actions.context_menu import show_context_menu
 from tree_actions.paste import paste_from_clipboard
 from tree_actions.structure import cut_selection, delete_selection
 
@@ -193,7 +192,7 @@ def test_copy_selection_object_array_includes_internal_values(qtbot):
     assert parsed == {"bar": [1, 2]}
 
 
-def test_context_menu_column1_mutating_actions_disabled(qtbot, monkeypatch):
+def test_context_menu_column1_opens_type_editor_popup(qtbot, monkeypatch):
     from tree_actions.context_menu import show_context_menu
 
     model = JsonTreeModel({"foo": 42})
@@ -201,47 +200,32 @@ def test_context_menu_column1_mutating_actions_disabled(qtbot, monkeypatch):
     qtbot.addWidget(view)
     view.setModel(model)
 
-    added_actions = []
-
-    class MockAction:
-        def __init__(self, text):
-            pass
-
-        class Triggered:
-            def connect(self, fn):
-                pass
-
-        triggered = Triggered()
-
-    class MockMenu:
-        def __init__(self, *args):
-            pass
-
-        def addAction(self, text):
-            added_actions.append(text)
-            return MockAction(text)
-
-        def addMenu(self, text):
-            return MockMenu()
-
-        def addSeparator(self):
-            pass
-
-        def exec(self, pos):
-            pass
-
     import tree_actions.context_menu
-
-    monkeypatch.setattr(tree_actions.context_menu, "QMenu", MockMenu)
 
     mock_index = model.index(0, 1, QModelIndex())
     monkeypatch.setattr(view, "indexAt", lambda pos: mock_index)
+
+    edit_calls: list = []
+    popup_called = {"value": False}
+
+    monkeypatch.setattr(view, "edit", lambda idx: edit_calls.append(idx) or True)
+    monkeypatch.setattr(
+        tree_actions.context_menu,
+        "_open_active_type_combo_popup",
+        lambda _view: popup_called.__setitem__("value", True) or True,
+    )
+
+    class _ImmediateTimer:
+        @staticmethod
+        def singleShot(_ms, fn):
+            fn()
+
+    monkeypatch.setattr(tree_actions.context_menu, "QTimer", _ImmediateTimer)
 
     from PySide6.QtCore import QPoint
 
     show_context_menu(view, QPoint(0, 0))
 
-    assert "Expand All" in added_actions
-    assert "Collapse All" in added_actions
-    assert "Copy" not in added_actions
-    assert "Delete" not in added_actions
+    assert edit_calls
+    assert edit_calls[0] == mock_index
+    assert popup_called["value"]

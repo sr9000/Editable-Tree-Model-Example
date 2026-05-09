@@ -13,6 +13,16 @@ from datetime_editor import parse_datetime_text
 
 LOGGER = logging.getLogger(__name__)
 _B64_RE = re.compile(r"^[A-Za-z0-9+/]{20,}={0,2}$")
+_COLOR_RGB_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+_COLOR_RGBA_RE = re.compile(r"^#(?:[0-9a-fA-F]{4}|[0-9a-fA-F]{8})$")
+
+
+def looks_like_color_rgb(s: str) -> bool:
+    return bool(_COLOR_RGB_RE.fullmatch(s))
+
+
+def looks_like_color_rgba(s: str) -> bool:
+    return bool(_COLOR_RGBA_RE.fullmatch(s))
 
 
 def _looks_like_base64(s: str) -> bool:
@@ -101,6 +111,11 @@ def parse_json_type(value: Any) -> "JsonType":
             if _looks_like_multiline_text(s):
                 return JsonType.TEXT if _contains_non_ascii(s) else JsonType.MULTILINE
 
+            if looks_like_color_rgba(s):
+                return JsonType.COLOR_RGBA
+            if looks_like_color_rgb(s):
+                return JsonType.COLOR_RGB
+
             try:
                 val = parse_datetime_text(s)
                 match val:
@@ -173,5 +188,10 @@ class JsonType(StrEnum):
     ZLIB = "zlib"  # base64+zlib
     GZIP = "gzip"  # base64+gzip
 
+    # Color (HTML hex format with leading #)
+    COLOR_RGB = "rgb"  # #rgb / #rrggbb
+    COLOR_RGBA = "rgba"  # #rgba / #rrggbbaa
+
 
 TEXT_FAMILY: frozenset[JsonType] = frozenset({JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT})
+COLOR_FAMILY: frozenset[JsonType] = frozenset({JsonType.COLOR_RGB, JsonType.COLOR_RGBA})

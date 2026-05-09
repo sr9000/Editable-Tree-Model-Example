@@ -51,6 +51,8 @@ def _index_for_type(json_type: JsonType):
         JsonType.NULL: None,
         JsonType.OBJECT: {},
         JsonType.ARRAY: [],
+        JsonType.COLOR_RGB: "#3498db",
+        JsonType.COLOR_RGBA: "#3498db80",
     }
     assert model.setData(value_index, sample_values[json_type], Qt.ItemDataRole.EditRole)
     return model, value_index

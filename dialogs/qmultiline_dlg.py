@@ -24,6 +24,7 @@ class QMultilineDialog(QDialog):
 
         self.editor = QMultilineEditor(self)
         self.editor.setPlainText(text or "")
+        self._applyGlobalEditorFontSettings()
 
         # Controls row
         self.wrapCheckBox = QCheckBox("Word wrap")
@@ -62,6 +63,18 @@ class QMultilineDialog(QDialog):
 
         # Restore settings after UI is fully initialized
         self._restoreSettings()
+
+    def _applyGlobalEditorFontSettings(self) -> None:
+        settings = QSettings(APPLICATION_ID, "app")
+        regular_family = str(settings.value("view/regular_font_family", "", type=str) or "")
+        mono_family = str(settings.value("view/monospace_font_family", "", type=str) or "")
+        point_size = int(settings.value("view/editor_font_point_size", 10, type=int) or 10)
+
+        if regular_family:
+            self.editor.setRegularFontFamily(regular_family)
+        if mono_family:
+            self.editor.setMonospaceFontFamily(mono_family)
+        self.editor.setEditorPointSize(point_size)
 
     def text(self) -> str:
         return self.editor.toPlainText()

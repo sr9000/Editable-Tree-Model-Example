@@ -1,0 +1,81 @@
+name: Monokai JSON
+mode: dark
+palette:
+  base_fg: '#F8F8F2'
+  base_bg: '#272822'
+  selection_fg: '#272822'
+  selection_bg: '#FD971F'
+  accent: '#A6E22E'
+types:
+  integer:
+    fg: '#FD971F'
+  float:
+    fg: '#f6d32d'
+  percent:
+    fg: '#f6d32d'
+    italic: true
+  boolean:
+    fg: '#F92672'
+  string:
+    fg: '#A6E22E'
+  unicode:
+    fg: '#A6E22E'
+  multiline:
+    fg: '#A6E22E'
+    italic: true
+  text:
+    fg: '#A6E22E'
+  date:
+    fg: '#E6DB74'
+  time:
+    fg: '#E6DB74'
+  datetime:
+    fg: '#E6DB74'
+  datetimezone:
+    fg: '#E6DB74'
+  bytes:
+    fg: '#AE81FF'
+  zlib:
+    fg: '#AE81FF'
+    italic: true
+  gzip:
+    fg: '#AE81FF'
+    italic: true
+  rgb:
+    fg: '#66D9EF'
+  rgba:
+    fg: '#66D9EF'
+    italic: true
+  'null':
+    fg: '#75715E'
+    italic: true
+  object:
+    fg: '#66D9EF'
+    bold: true
+  array:
+    fg: '#66D9EF'
+    bold: true
+icons:
+  search_paths:
+  - ./mingcute-dark
+  map:
+    integer: hashtag_line
+    float: asterisk_2_line
+    percent: percentage_line
+    boolean: choice_line
+    string: font_line
+    unicode: text_2_line
+    multiline: font_size_line
+    text: translate_2_line
+    date: calendar_2_line
+    time: hours_line
+    datetime: calendar_time_add_line
+    datetimezone: calendar_add_line
+    bytes: attachment_line
+    zlib: file_zip_line
+    gzip: file_zip_line
+    rgb: paint_brush_line
+    rgba: paint_brush_ai_line
+    'null': dot_circle_line
+    object: braces_fill
+    array: brackets_fill

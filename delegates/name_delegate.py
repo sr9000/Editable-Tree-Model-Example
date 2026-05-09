@@ -1,4 +1,5 @@
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
+from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QLineEdit, QStyleOptionViewItem, QWidget
 
 from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase
@@ -25,8 +26,35 @@ def _commit(index: QModelIndex, value, role: Qt.ItemDataRole, host=None) -> bool
 
 
 class NameDelegate(_TextEditorDelegateBase):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._monospace_fields_enabled = False
+        self._mono_family = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
+
+    def set_monospace_fields_enabled(self, enabled: bool) -> None:
+        self._monospace_fields_enabled = bool(enabled)
+
+    def set_monospace_font_family(self, family: str) -> None:
+        if family:
+            self._mono_family = str(family)
+
+    def _apply_monospace_font(self, font: QFont) -> QFont:
+        if not self._monospace_fields_enabled:
+            return font
+        f = QFont(font)
+        f.setFamily(self._mono_family)
+        f.setStyleHint(QFont.StyleHint.Monospace)
+        f.setFixedPitch(True)
+        return f
+
+    def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex) -> None:  # type: ignore[override]
+        super().initStyleOption(option, index)
+        option.font = self._apply_monospace_font(option.font)
+
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
-        return _CapsLockSafeLineEdit(parent)
+        editor = _CapsLockSafeLineEdit(parent)
+        editor.setFont(self._apply_monospace_font(editor.font()))
+        return editor
 
     def setEditorData(self, editor: QLineEdit, index: QModelIndex):
         editor.setText(str(index.data(Qt.ItemDataRole.EditRole) or ""))

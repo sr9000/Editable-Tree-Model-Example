@@ -1,0 +1,81 @@
+name: Monokai Light JSON
+mode: light
+palette:
+  base_fg: '#272822'
+  base_bg: '#F8F8F2'
+  selection_fg: '#FFFFFF'
+  selection_bg: '#FD971F'
+  accent: '#A6E22E'
+types:
+  integer:
+    fg: '#865e3c'
+  float:
+    fg: '#c64600'
+  percent:
+    fg: '#c64600'
+    italic: true
+  boolean:
+    fg: '#F92672'
+  string:
+    fg: '#2E8B57'
+  unicode:
+    fg: '#2E8B57'
+  multiline:
+    fg: '#2E8B57'
+    italic: true
+  text:
+    fg: '#2E8B57'
+  date:
+    fg: '#B58900'
+  time:
+    fg: '#B58900'
+  datetime:
+    fg: '#B58900'
+  datetimezone:
+    fg: '#B58900'
+  bytes:
+    fg: '#6C3FBF'
+  zlib:
+    fg: '#6C3FBF'
+    italic: true
+  gzip:
+    fg: '#6C3FBF'
+    italic: true
+  rgb:
+    fg: '#1a5fb4'
+  rgba:
+    fg: '#1a5fb4'
+    italic: true
+  'null':
+    fg: '#999988'
+    italic: true
+  object:
+    fg: '#1a5fb4'
+    bold: true
+  array:
+    fg: '#1a5fb4'
+    bold: true
+icons:
+  search_paths:
+  - ./mingcute-light
+  map:
+    integer: hashtag_line
+    float: asterisk_2_line
+    percent: percentage_line
+    boolean: choice_line
+    string: font_line
+    unicode: text_2_line
+    multiline: font_size_line
+    text: translate_2_line
+    date: calendar_2_line
+    time: hours_line
+    datetime: calendar_time_add_line
+    datetimezone: calendar_add_line
+    bytes: attachment_line
+    zlib: file_zip_line
+    gzip: file_zip_line
+    rgb: paint_brush_line
+    rgba: paint_brush_ai_line
+    'null': dot_circle_line
+    object: braces_fill
+    array: brackets_fill

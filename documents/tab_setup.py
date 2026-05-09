@@ -37,6 +37,8 @@ def init_layout(tab) -> None:
     tab.view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
     tab.view.setAnimated(False)
     tab.view.setAllColumnsShowFocus(True)
+    tab.view.installEventFilter(tab)
+    tab.view.viewport().installEventFilter(tab)
     initial_pt = tab.view.font().pointSize()
     tab._default_font_pt = initial_pt if initial_pt > 0 else 10
     tab._font_pt = tab._default_font_pt

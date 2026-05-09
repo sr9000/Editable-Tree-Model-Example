@@ -7,8 +7,10 @@ QMainWindow.statusBar() method that broke "Create new file").
 
 import pytest
 from PySide6.QtCore import QModelIndex, Qt, qInstallMessageHandler
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QStatusBar
 
+import app.main_window as main_window_module
 from app.main_window import MainWindow
 from documents.tab import JsonTab
 from tree.types import JsonType
@@ -122,6 +124,84 @@ def test_create_multiple_new_file_tabs(main_window):
 
     main_window.close_tab(0)
     assert main_window.tabWidget.count() == 1
+
+
+def test_view_monospace_toggle_action_and_shortcut(main_window):
+    assert hasattr(main_window, "viewMonospaceFieldsAction")
+    action = main_window.viewMonospaceFieldsAction
+    assert action.isCheckable()
+    assert action.shortcut().toString() == "Ctrl+Shift+M"
+
+
+def test_view_font_selector_actions_exist(main_window):
+    assert hasattr(main_window, "viewSelectRegularFontAction")
+    assert hasattr(main_window, "viewSelectMonospaceFontAction")
+    assert main_window.viewSelectRegularFontAction.text() == "Select Regular Font..."
+    assert main_window.viewSelectMonospaceFontAction.text() == "Select Monospace Font..."
+
+
+def test_view_monospace_toggle_updates_tab_delegates(main_window):
+    main_window.create_new_file()
+    tab = main_window.tabWidget.currentWidget()
+    assert isinstance(tab, JsonTab)
+
+    main_window.toggle_monospace_fields(True)
+    assert tab._monospace_fields_enabled is True
+    assert tab.name_delegate._monospace_fields_enabled is True
+    assert tab.value_delegate._monospace_fields_enabled is True
+
+    main_window.toggle_monospace_fields(False)
+    assert tab._monospace_fields_enabled is False
+    assert tab.name_delegate._monospace_fields_enabled is False
+    assert tab.value_delegate._monospace_fields_enabled is False
+
+
+def test_setting_font_families_updates_active_tab(main_window):
+    main_window.create_new_file()
+    tab = main_window.tabWidget.currentWidget()
+    assert isinstance(tab, JsonTab)
+
+    main_window.set_regular_font_family("Serif")
+    assert tab.view.font().family() == "Serif"
+
+    main_window.set_monospace_font_family("Monospace")
+    assert tab.name_delegate._mono_family == "Monospace"
+    assert tab.value_delegate._mono_family == "Monospace"
+
+
+def test_zoom_updates_global_editor_font_size_for_all_tabs(main_window):
+    main_window.create_new_file()
+    first = main_window.tabWidget.currentWidget()
+    assert isinstance(first, JsonTab)
+
+    main_window.create_new_file()
+    second = main_window.tabWidget.currentWidget()
+    assert isinstance(second, JsonTab)
+
+    before_first = first.view.font().pointSize()
+    before_second = second.view.font().pointSize()
+
+    main_window.zoom_in()
+
+    assert first.view.font().pointSize() == before_first + 1
+    assert second.view.font().pointSize() == before_second + 1
+
+
+def test_select_regular_font_accepts_bool_font_tuple_order(main_window, monkeypatch):
+    main_window.create_new_file()
+    tab = main_window.tabWidget.currentWidget()
+    assert isinstance(tab, JsonTab)
+
+    chosen = QFont(tab.view.font())
+    chosen.setFamily("Serif")
+
+    def _fake_get_font(*_args, **_kwargs):
+        # Simulate runtime variant that returns (ok, font).
+        return True, chosen
+
+    monkeypatch.setattr(main_window_module.QFontDialog, "getFont", _fake_get_font)
+    main_window.select_regular_font()
+    assert tab.view.font().family() == "Serif"
 
 
 @pytest.mark.parametrize(

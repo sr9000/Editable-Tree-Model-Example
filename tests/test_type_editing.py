@@ -168,6 +168,140 @@ def test_caps_lock_does_not_close_name_editor(qtbot):
     assert tab.view.state() == QAbstractItemView.State.EditingState
 
 
+def test_enter_starts_editing_name_or_value(qtbot):
+    tab = JsonTab(lambda *_: None, data={"alpha": "bravo"})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_name = tab.model.index(0, 0, QModelIndex())
+    view_name = tab._source_to_view(source_name)
+    tab.view.setCurrentIndex(view_name)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Return)
+
+    qtbot.waitUntil(lambda: tab.view.state() == QAbstractItemView.State.EditingState)
+    assert tab.view.currentIndex().column() == 0
+
+
+@pytest.mark.parametrize("enter_key", [Qt.Key.Key_Return, Qt.Key.Key_Enter])
+def test_enter_from_type_column_opens_type_combobox(qtbot, enter_key):
+    tab = JsonTab(lambda *_: None, data={"alpha": "bravo"})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_type = tab.model.index(0, 1, QModelIndex())
+    view_type = tab._source_to_view(source_type)
+    tab.view.setCurrentIndex(view_type)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), enter_key)
+
+    qtbot.waitUntil(lambda: tab.view.state() == QAbstractItemView.State.EditingState)
+    assert tab.view.currentIndex().column() == 1
+    qtbot.waitUntil(lambda: tab.view.findChild(QComboBox) is not None)
+
+
+def test_type_cell_icon_hidden_while_type_combobox_active(qtbot):
+    tab = JsonTab(lambda *_: None, data={"alpha": "bravo"})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_type = tab.model.index(0, 1, QModelIndex())
+    view_type = tab._source_to_view(source_type)
+    tab.view.setCurrentIndex(view_type)
+    tab.view.edit(view_type)
+
+    qtbot.waitUntil(lambda: tab.view.findChild(QComboBox) is not None)
+
+    option = QStyleOptionViewItem()
+    tab.type_delegate.initStyleOption(option, view_type)
+    assert option.icon.isNull()
+
+
+def test_arrow_left_right_moves_between_columns(qtbot):
+    tab = JsonTab(lambda *_: None, data={"alpha": "bravo"})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_name = tab.model.index(0, 0, QModelIndex())
+    view_name = tab._source_to_view(source_name)
+    tab.view.setCurrentIndex(view_name)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Right)
+    assert tab.view.currentIndex().column() == 1
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Right)
+    assert tab.view.currentIndex().column() == 2
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Left)
+    assert tab.view.currentIndex().column() == 1
+
+
+def test_arrow_up_down_moves_between_rows(qtbot):
+    tab = JsonTab(lambda *_: None, data={"a": 1, "b": 2, "c": 3})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_mid_value = tab.model.index(1, 2, QModelIndex())
+    view_mid_value = tab._source_to_view(source_mid_value)
+    tab.view.setCurrentIndex(view_mid_value)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Down)
+    assert tab.view.currentIndex().row() == 2
+    assert tab.view.currentIndex().column() == 2
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Up)
+    assert tab.view.currentIndex().row() == 1
+    assert tab.view.currentIndex().column() == 2
+
+
+def test_arrow_left_right_do_not_expand_or_collapse_rows(qtbot):
+    tab = JsonTab(lambda *_: None, data={"obj": {"nested": 1}, "x": 2})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_obj_name = tab.model.index(0, 0, QModelIndex())
+    view_obj_name = tab._source_to_view(source_obj_name)
+    tab.view.collapse(view_obj_name)
+    assert not tab.view.isExpanded(view_obj_name)
+
+    tab.view.setCurrentIndex(view_obj_name)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Right)
+    assert tab.view.currentIndex().column() == 1
+    assert not tab.view.isExpanded(view_obj_name)
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Left)
+    assert tab.view.currentIndex().column() == 0
+    assert not tab.view.isExpanded(view_obj_name)
+
+
+def test_space_toggles_expand_and_collapse_current_row(qtbot):
+    tab = JsonTab(lambda *_: None, data={"obj": {"nested": 1}, "x": 2})
+    qtbot.addWidget(tab)
+    tab.show()
+
+    source_obj_type = tab.model.index(0, 1, QModelIndex())
+    view_obj_type = tab._source_to_view(source_obj_type)
+    view_obj_name = view_obj_type.siblingAtColumn(0)
+
+    tab.view.collapse(view_obj_name)
+    assert not tab.view.isExpanded(view_obj_name)
+
+    tab.view.setCurrentIndex(view_obj_type)
+    tab.view.setFocus()
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Space)
+    assert tab.view.isExpanded(view_obj_name)
+
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Space)
+    assert not tab.view.isExpanded(view_obj_name)
+
+
 # All 16 text-family transitions: only STRING<->UNICODE and MULTILINE<->TEXT
 # are allowed; cross-axis transitions must preserve the field's kind.
 _FAM = (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT)

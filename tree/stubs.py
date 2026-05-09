@@ -89,6 +89,32 @@ _FUN_BYTES = (
     b"cafebabe",
 )
 
+# ----- Colors -------------------------------------------------------------
+
+_FAMOUS_COLORS_RGB = (
+    "#e74c3c",  # alizarin
+    "#3498db",  # peter river
+    "#2ecc71",  # emerald
+    "#f1c40f",  # sun flower
+    "#9b59b6",  # amethyst
+    "#1abc9c",  # turquoise
+    "#e67e22",  # carrot
+    "#34495e",  # wet asphalt
+    "#000000",  # black
+    "#ffffff",  # white
+)
+
+_FAMOUS_COLORS_RGBA = (
+    "#e74c3c80",
+    "#3498dbcc",
+    "#2ecc7140",
+    "#f1c40fbf",
+    "#9b59b6a0",
+    "#1abc9c80",
+    "#00000080",
+    "#ffffff80",
+)
+
 
 # ----- Picker -------------------------------------------------------------
 
@@ -115,3 +141,11 @@ def stub_multiline() -> str:
 
 def stub_bytes_raw() -> bytes:
     return random.choice(_FUN_BYTES)
+
+
+def stub_color_rgb() -> str:
+    return random.choice(_FAMOUS_COLORS_RGB)
+
+
+def stub_color_rgba() -> str:
+    return random.choice(_FAMOUS_COLORS_RGBA)

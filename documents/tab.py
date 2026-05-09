@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QEvent, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
+from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
@@ -91,11 +91,65 @@ def _demo_data() -> dict[str, Any]:
         "object": {"key": "value"},
         "array": [1, 2, 3],
         "null": None,
+        "color rgb": "#3498db",
+        "color rgba": "#3498db80",
     }
 
 
 class JsonTab(QWidget):
     dirtyChanged = Signal(bool)
+
+    def eventFilter(self, watched, event):  # type: ignore[override]
+        view = getattr(self, "view", None)
+        if view is not None and watched in (view, view.viewport()):
+            if event.type() == QEvent.Type.KeyPress:
+                if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                    self.edit_name_or_value_from_enter()
+                    return True
+                if event.key() == Qt.Key.Key_Space and event.modifiers() == Qt.KeyboardModifier.NoModifier:
+                    self._toggle_current_row_expansion_with_space()
+                    return True
+                if self._handle_arrow_navigation(event.key(), event.modifiers()):
+                    return True
+        return super().eventFilter(watched, event)
+
+    def _toggle_current_row_expansion_with_space(self) -> None:
+        current = self.view.currentIndex()
+        if not current.isValid():
+            return
+        row_anchor = current.siblingAtColumn(0)
+        if not row_anchor.isValid():
+            return
+        self.view.setExpanded(row_anchor, not self.view.isExpanded(row_anchor))
+
+    def _handle_arrow_navigation(self, key: Qt.Key, modifiers: Qt.KeyboardModifier) -> bool:
+        """Use arrows for cell navigation; never expand/collapse rows."""
+        if modifiers != Qt.KeyboardModifier.NoModifier:
+            return False
+        if key not in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
+            return False
+
+        current = self.view.currentIndex()
+        if not current.isValid():
+            return True
+
+        target = QModelIndex(current)
+        if key == Qt.Key.Key_Left:
+            target = current.siblingAtColumn(max(0, current.column() - 1))
+        elif key == Qt.Key.Key_Right:
+            last_col = max(0, self.view.model().columnCount(current.parent()) - 1)
+            target = current.siblingAtColumn(min(last_col, current.column() + 1))
+        elif key == Qt.Key.Key_Up:
+            above = self.view.indexAbove(current)
+            if above.isValid():
+                target = above
+        elif key == Qt.Key.Key_Down:
+            below = self.view.indexBelow(current)
+            if below.isValid():
+                target = below
+
+        self.view.setCurrentIndex(target)
+        return True
 
     def __init__(
         self,
@@ -115,8 +169,12 @@ class JsonTab(QWidget):
         self._permanent_message_callback = permanent_message_callback
         self._theme = theme or LIGHT_DEFAULT
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
+        self._monospace_fields_enabled = False
+        self._regular_font_family: str | None = None
+        self._monospace_font_family: str | None = None
 
         init_layout(self)
+        self._sync_icon_size_with_font()
 
         # option to edit headers is not needed
         # self.header_editor = HeaderViewEditorMixin(self.view.header())
@@ -132,6 +190,7 @@ class JsonTab(QWidget):
 
         init_model(self, model_data, show_root=show_root)
         init_delegates_and_connections(self, update_actions_callback)
+        self.set_monospace_fields_enabled(self._monospace_fields_enabled)
         init_shortcuts(self)
         init_search_filter(self)
         self._diff_applier = DiffApplier(self)
@@ -169,6 +228,60 @@ class JsonTab(QWidget):
                 emit_ranges(child_parent)
 
         emit_ranges(QModelIndex())
+
+    def set_monospace_fields_enabled(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if self._monospace_fields_enabled == enabled:
+            return
+        self._monospace_fields_enabled = enabled
+        self.name_delegate.set_monospace_fields_enabled(enabled)
+        self.value_delegate.set_monospace_fields_enabled(enabled)
+        self.view.viewport().update()
+
+    def set_regular_font_family(self, family: str) -> None:
+        if not family:
+            return
+        family = str(family)
+        if self._regular_font_family == family:
+            return
+        self._regular_font_family = family
+        font = self.view.font()
+        font.setFamily(family)
+        if font.pointSizeF() <= 0:
+            font.setPointSize(max(6, int(getattr(self, "_font_pt", 10) or 10)))
+        self.view.setFont(font)
+        self._sync_icon_size_with_font()
+
+    def set_monospace_font_family(self, family: str) -> None:
+        if not family:
+            return
+        family = str(family)
+        if self._monospace_font_family == family:
+            return
+        self._monospace_font_family = family
+        self.name_delegate.set_monospace_font_family(family)
+        self.value_delegate.set_monospace_font_family(family)
+        self.view.viewport().update()
+
+    def set_editor_font_point_size(self, point_size: int) -> None:
+        old_pt = self._font_pt
+        self._set_font_pt(point_size)
+        self._scale_columns_for_font(old_pt, self._font_pt)
+
+    def apply_font_profile(self, profile) -> None:
+        """Aspect entry point called by ``FontController``.
+
+        Order matters: family must be set before point size so the column
+        scaler sees the final font width, and the monospace toggle must
+        come last because it triggers a viewport repaint that picks up
+        the freshly-installed delegate fonts.
+        """
+        if profile.regular_family:
+            self.set_regular_font_family(profile.regular_family)
+        self.set_editor_font_point_size(profile.editor_point_size)
+        if profile.monospace_family:
+            self.set_monospace_font_family(profile.monospace_family)
+        self.set_monospace_fields_enabled(profile.monospace_fields_enabled)
 
     @staticmethod
     def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
@@ -226,6 +339,12 @@ class JsonTab(QWidget):
         font = self.view.font()
         font.setPointSize(clamped)
         self.view.setFont(font)
+        self._sync_icon_size_with_font()
+
+    def _sync_icon_size_with_font(self) -> None:
+        # Keep type-column icons visually in step with the active tree font.
+        px = max(12, min(64, int(round(self.view.fontMetrics().height() * 1.1))))
+        self.view.setIconSize(QSize(px, px))
 
     def zoom_in(self) -> None:
         old_pt = self._font_pt
@@ -283,6 +402,45 @@ class JsonTab(QWidget):
             return
         self.view.setCurrentIndex(view_index)
         self.view.edit(view_index)
+
+    def edit_name_or_value_from_enter(self) -> None:
+        """Start editing from Enter with type-column support.
+
+        - Name/Value columns: edit the current editable cell.
+        - Type column: open the inline type combobox editor.
+        """
+        if self.view.state() == QAbstractItemView.State.EditingState:
+            return
+        current = self.view.currentIndex()
+        if not current.isValid():
+            return
+
+        if current.column() == 1:
+            if self.view.model().flags(current) & Qt.ItemFlag.ItemIsEditable:
+                self.view.edit(current)
+                QTimer.singleShot(0, self._open_active_type_combo_popup)
+            return
+
+        candidates: list[QModelIndex] = []
+        if current.column() in (0, 2):
+            candidates.append(current)
+        candidates.extend((current.siblingAtColumn(2), current.siblingAtColumn(0)))
+
+        model = self.view.model()
+        for idx in candidates:
+            if not idx.isValid():
+                continue
+            if not (model.flags(idx) & Qt.ItemFlag.ItemIsEditable):
+                continue
+            self.view.setCurrentIndex(idx)
+            self.view.edit(idx)
+            return
+
+    def _open_active_type_combo_popup(self) -> None:
+        for combo in self.view.findChildren(QComboBox):
+            if combo.parent() is self.view.viewport() and combo.isVisible():
+                combo.showPopup()
+                return
 
     @property
     def is_dirty(self) -> bool:

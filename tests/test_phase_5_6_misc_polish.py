@@ -78,3 +78,17 @@ def test_zoom_preserves_user_column_widths(qtbot):
 
     # Col 1 (not hand-resized) should have been scaled up.
     assert tab.view.columnWidth(1) > 0
+
+
+def test_zoom_updates_tree_icon_size(qtbot):
+    tab = JsonTab(lambda *_: None, data={"foo": 1}, show_root=True)
+    qtbot.addWidget(tab)
+
+    before = tab.view.iconSize().height()
+    tab.zoom_in()
+    after_in = tab.view.iconSize().height()
+    tab.zoom_out()
+    after_out = tab.view.iconSize().height()
+
+    assert after_in >= before
+    assert after_out <= after_in
