@@ -10,6 +10,26 @@ def _row0_index(index: QModelIndex, model) -> QModelIndex:
     return model.index(index.row(), 0, index.parent()) if index.isValid() else QModelIndex()
 
 
+def _move_row_between_parents(model, src_parent: QModelIndex, src_row: int, dst_parent: QModelIndex, dst_row: int) -> bool:
+    if not hasattr(model, "get_item"):
+        return False
+    src_item = model.get_item(src_parent)
+    dst_item = model.get_item(dst_parent)
+    if not (0 <= src_row < src_item.child_count()):
+        return False
+    if not (0 <= dst_row <= dst_item.child_count()):
+        return False
+    if not model.beginMoveRows(src_parent, src_row, src_row, dst_parent, dst_row):
+        return False
+    moved = src_item.child_items.pop(src_row)
+    dst_item.child_items.insert(dst_row, moved)
+    moved.parent_item = dst_item
+    src_item.mark_children_dirty()
+    dst_item.mark_children_dirty()
+    model.endMoveRows()
+    return True
+
+
 def action_insert_row_before(index: QModelIndex, model) -> bool:
     if not index.isValid():
         return model.insertRow(0, QModelIndex())
@@ -90,15 +110,28 @@ def action_duplicate(view: QTreeView, index: QModelIndex, model) -> bool:
 
 def action_move_up(view: QTreeView, index: QModelIndex, model) -> bool:
     row0 = _row0_index(index, model)
-    if not row0.isValid() or row0.row() <= 0 or not hasattr(model, "move_row"):
+    if not row0.isValid() or not hasattr(model, "move_row"):
         return False
 
-    dst = row0.row() - 1
-    if not model.move_row(row0.parent(), row0.row(), dst):
-        return False
+    parent = row0.parent()
+    dst_parent = parent
+    if row0.row() > 0:
+        dst = row0.row() - 1
+        if not model.move_row(parent, row0.row(), dst):
+            return False
+    else:
+        parent_row0 = _row0_index(parent, model)
+        if not parent_row0.isValid():
+            return False
+        if hasattr(model, "root_item") and model.get_item(parent_row0) is model.root_item:
+            return False
+        dst_parent = parent_row0.parent()
+        dst = parent_row0.row()
+        if not _move_row_between_parents(model, parent, row0.row(), dst_parent, dst):
+            return False
 
     view.selectionModel().setCurrentIndex(
-        model.index(dst, 0, row0.parent()),
+        model.index(dst, 0, dst_parent),
         QItemSelectionModel.SelectionFlag.ClearAndSelect,
     )
     return True
@@ -110,15 +143,24 @@ def action_move_down(view: QTreeView, index: QModelIndex, model) -> bool:
         return False
 
     parent = row0.parent()
-    if row0.row() >= model.rowCount(parent) - 1:
-        return False
-
-    dst = row0.row() + 1
-    if not model.move_row(parent, row0.row(), dst):
-        return False
+    if row0.row() < model.rowCount(parent) - 1:
+        dst = row0.row() + 1
+        dst_parent = parent
+        if not model.move_row(parent, row0.row(), dst):
+            return False
+    else:
+        parent_row0 = _row0_index(parent, model)
+        if not parent_row0.isValid():
+            return False
+        if hasattr(model, "root_item") and model.get_item(parent_row0) is model.root_item:
+            return False
+        dst_parent = parent_row0.parent()
+        dst = parent_row0.row() + 1
+        if not _move_row_between_parents(model, parent, row0.row(), dst_parent, dst):
+            return False
 
     view.selectionModel().setCurrentIndex(
-        model.index(dst, 0, parent),
+        model.index(dst, 0, dst_parent),
         QItemSelectionModel.SelectionFlag.ClearAndSelect,
     )
     return True

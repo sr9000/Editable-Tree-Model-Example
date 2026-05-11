@@ -18,6 +18,7 @@ from tree_actions.selection import (
     _is_root_index,
     _resolve_model,
     _row0,
+    selection_spans_multiple_parents,
     _to_source_index,
     _to_view_index,
     top_level_source_rows as _top_level_selected_rows,
@@ -203,7 +204,138 @@ def duplicate_selection(tree_view: QTreeView) -> bool:
     return changed
 
 
+def _ordered_non_root_rows(tree_view: QTreeView):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return None, []
+    rows = [idx for idx in _top_level_selected_rows(tree_view) if idx.isValid() and not _is_root_index(model, idx)]
+    return model, sorted(rows, key=_index_path)
+
+
+def _status_partial_move(tab) -> None:
+    callback = getattr(tab, "_status_message_callback", None)
+    if callback is not None:
+        callback("Moved part of the selection", 2000)
+
+
+def _move_same_parent(tab, model, rows: list, *, up: bool) -> bool:
+    parent = rows[0].parent()
+    ordered = sorted((_row0(model, idx) for idx in rows), key=lambda i: i.row())
+    min_row = ordered[0].row()
+    max_row = ordered[-1].row()
+    parent_count = model.rowCount(parent)
+
+    target_parent = parent
+    if up:
+        if min_row > 0:
+            target_row = min_row - 1
+        else:
+            parent_row0 = _row0(model, parent)
+            if not parent_row0.isValid() or _is_root_index(model, parent_row0):
+                return False
+            target_parent = parent_row0.parent()
+            target_row = parent_row0.row()
+    else:
+        if max_row < parent_count - 1:
+            # pre-pop index (+2) for a one-row downward move of a selected block
+            target_row = max_row + 2
+        else:
+            parent_row0 = _row0(model, parent)
+            if not parent_row0.isValid() or _is_root_index(model, parent_row0):
+                return False
+            target_parent = parent_row0.parent()
+            target_row = parent_row0.row() + 1
+
+    return tab.push_move_rows(ordered, target_parent, target_row, label="move up" if up else "move down")
+
+
+def _multi_parent_common_grandparent_move(tab, model, rows: list, *, up: bool) -> bool:
+    parent_rows = [_row0(model, idx.parent()) for idx in rows]
+    if any(not p.isValid() or _is_root_index(model, p) for p in parent_rows):
+        return False
+
+    grandparent_paths = {_index_path(p.parent()) for p in parent_rows}
+    if len(grandparent_paths) != 1:
+        return False
+
+    for idx in rows:
+        parent = idx.parent()
+        if up and idx.row() != 0:
+            return False
+        if not up and idx.row() != model.rowCount(parent) - 1:
+            return False
+
+    unique_parents = sorted({_index_path(p): p for p in parent_rows}.values(), key=_index_path)
+    target_parent = unique_parents[0].parent()
+    if up:
+        target_row = min(p.row() for p in unique_parents)
+    else:
+        target_row = max(p.row() for p in unique_parents) + 1
+
+    ordered = sorted((_row0(model, idx) for idx in rows), key=_index_path)
+    return tab.push_move_rows(ordered, target_parent, target_row, label="move up" if up else "move down")
+
+
+def _move_multi_parent_fallback(tab, model, rows: list, *, up: bool) -> bool:
+    ordered = list(rows if up else reversed(rows))
+    operations: list[tuple[tuple[int, ...], int, int]] = []
+
+    for idx in ordered:
+        parent = idx.parent()
+        source_row = idx.row()
+        if up:
+            if source_row <= 0:
+                continue
+            target_row = source_row - 1
+        else:
+            if source_row >= model.rowCount(parent) - 1:
+                continue
+            target_row = source_row + 2
+        operations.append((_index_path(parent), source_row, target_row))
+
+    if not operations:
+        return False
+
+    moved = 0
+    tab.undo_stack.beginMacro("move up" if up else "move down")
+    try:
+        for parent_path, source_row, target_row in operations:
+            parent = tab._index_from_path(parent_path)
+            source_idx = model.index(source_row, 0, parent)
+            if not source_idx.isValid():
+                continue
+            if tab.push_move_rows([source_idx], parent, target_row, label="move up" if up else "move down"):
+                moved += 1
+    finally:
+        tab.undo_stack.endMacro()
+
+    if 0 < moved < len(rows):
+        _status_partial_move(tab)
+    return moved > 0
+
+
+def _move_selection_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
+    model, rows = _ordered_non_root_rows(tree_view)
+    if model is None or not rows:
+        return False
+
+    tab = _tab_of(tree_view)
+    if tab is None:
+        return False
+
+    if not selection_spans_multiple_parents(rows):
+        return _move_same_parent(tab, model, rows, up=up)
+
+    if _multi_parent_common_grandparent_move(tab, model, rows, up=up):
+        return True
+    return _move_multi_parent_fallback(tab, model, rows, up=up)
+
+
 def move_selection_up(tree_view: QTreeView) -> bool:
+    tab = _tab_of(tree_view)
+    if tab is not None:
+        return _move_selection_with_tab(tree_view, up=True)
+
     model, _proxy = _resolve_model(tree_view)
     if model is None:
         return False
@@ -211,21 +343,15 @@ def move_selection_up(tree_view: QTreeView) -> bool:
     current = _to_source_index(tree_view.currentIndex())
     if not current.isValid():
         return False
-
-    row0 = _row0(model, current)
-    if _is_root_index(model, row0):
-        return False
-    if row0.row() <= 0:
-        return False
-
-    tab = _tab_of(tree_view)
-    if tab is not None:
-        return tab.push_move_row(row0.parent(), row0.row(), row0.row() - 1, label="move up")
 
     return action_move_up(tree_view, current, model)
 
 
 def move_selection_down(tree_view: QTreeView) -> bool:
+    tab = _tab_of(tree_view)
+    if tab is not None:
+        return _move_selection_with_tab(tree_view, up=False)
+
     model, _proxy = _resolve_model(tree_view)
     if model is None:
         return False
@@ -233,17 +359,6 @@ def move_selection_down(tree_view: QTreeView) -> bool:
     current = _to_source_index(tree_view.currentIndex())
     if not current.isValid():
         return False
-
-    row0 = _row0(model, current)
-    if _is_root_index(model, row0):
-        return False
-    parent = row0.parent()
-    if row0.row() >= model.rowCount(parent) - 1:
-        return False
-
-    tab = _tab_of(tree_view)
-    if tab is not None:
-        return tab.push_move_row(parent, row0.row(), row0.row() + 1, label="move down")
 
     return action_move_down(tree_view, current, model)
 

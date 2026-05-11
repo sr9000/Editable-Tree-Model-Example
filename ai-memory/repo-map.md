@@ -254,8 +254,8 @@ Defined in `mainwindow.ui` (window-level QActions) and
 | `Ctrl+X`       | tab    | Cut selection                                |
 | `Ctrl+V`       | tab    | Paste                                        |
 | `Ctrl+D`       | tab    | Duplicate selection                          |
-| `Alt+Up`       | tab    | Move row up                                  |
-| `Alt+Down`     | tab    | Move row down                                |
+| `Alt+Up`       | tab    | Move selected row(s) up; at row 0 bubble out before parent |
+| `Alt+Down`     | tab    | Move selected row(s) down; at last row bubble out after parent |
 | `Ctrl+Alt+S`   | tab    | Sort keys (under selected OBJECT)            |
 | `F2` / Enter   | tree   | Edit current cell (Qt default)               |
 
