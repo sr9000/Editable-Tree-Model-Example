@@ -1,4 +1,4 @@
-from PySide6.QtCore import QModelIndex
+from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QTreeView
 
 from model_actions import (
@@ -297,6 +297,9 @@ def _move_multi_parent_fallback(tab, model, rows: list, *, up: bool) -> bool:
         return False
 
     moved = 0
+    # Track final positions (parent_path → dest_row) so we can re-select after.
+    final_positions: list[tuple[tuple[int, ...], int]] = []
+
     tab.undo_stack.beginMacro("move up" if up else "move down")
     try:
         for parent_path, source_row, target_row in operations:
@@ -305,12 +308,34 @@ def _move_multi_parent_fallback(tab, model, rows: list, *, up: bool) -> bool:
             if not source_idx.isValid():
                 continue
             if tab.push_move_rows([source_idx], parent, target_row, label="move up" if up else "move down"):
+                # For a same-parent move, pre-pop target_row adjusts:
+                # up: source > target so no adjustment → lands at target_row (= source_row - 1)
+                # down: source < target so adjustment subtracts 1 → lands at target_row - 1 (= source_row + 1)
+                dest = target_row if up else target_row - 1
+                final_positions.append((parent_path, dest))
                 moved += 1
     finally:
         tab.undo_stack.endMacro()
 
     if 0 < moved < len(rows):
         _status_partial_move(tab)
+
+    # Restore the full multi-selection for all moved rows.
+    if final_positions:
+        sm = tab.view.selectionModel()
+        selection = QItemSelection()
+        first_view_idx = None
+        for parent_path, row in final_positions:
+            src_idx = model.index(row, 0, tab._index_from_path(parent_path))
+            view_idx = tab._source_to_view(src_idx)
+            if view_idx.isValid():
+                selection.select(view_idx, view_idx)
+                if first_view_idx is None:
+                    first_view_idx = view_idx
+        sm.select(selection, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows)
+        if first_view_idx is not None:
+            sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
+
     return moved > 0
 
 

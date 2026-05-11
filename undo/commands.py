@@ -1,7 +1,7 @@
 import time
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QItemSelection, QItemSelectionModel, Qt
 from PySide6.QtGui import QUndoCommand
 
 from tree.types import JsonType
@@ -9,6 +9,28 @@ from tree.types import JsonType
 _CMD_ID_RENAME = 0x0E71_0001
 _CMD_ID_EDIT_VALUE = 0x0E71_0002
 _MERGE_WINDOW_SECONDS = 0.5
+
+
+def _select_placed_rows(tab, placed: list[tuple[tuple, int]]) -> None:
+    """Select every (parent_path, row) entry in the view after a move."""
+    if not placed:
+        return
+    model = tab.model
+    sm = tab.view.selectionModel()
+    selection = QItemSelection()
+    first_view_idx = None
+    for parent_path, row in placed:
+        p = tab._index_from_path(parent_path)
+        src_idx = model.index(row, 0, p)
+        view_idx = tab._source_to_view(src_idx)
+        if view_idx.isValid():
+            selection.select(view_idx, view_idx)
+            if first_view_idx is None:
+                first_view_idx = view_idx
+    sm.select(selection, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows)
+    # Update current index WITHOUT touching the selection (NoUpdate keeps it intact).
+    if first_view_idx is not None:
+        sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
 
 class _MoveRowCmd(QUndoCommand):
@@ -281,11 +303,8 @@ class _MoveRowsCmd(QUndoCommand):
                 t_parent_item.mark_children_dirty()
             self._placed.append((self._target_parent_path, ins_row))
 
-        # Update current index to first placed item.
-        if self._placed:
-            first_path, first_row = self._placed[0]
-            p = tab._index_from_path(first_path)
-            tab.view.setCurrentIndex(tab._source_to_view(model.index(first_row, 0, p)))
+        # Select all placed rows (restores multi-selection after the move).
+        _select_placed_rows(tab, self._placed)
 
     def undo(self) -> None:
         tab = self._tab
@@ -322,10 +341,9 @@ class _MoveRowsCmd(QUndoCommand):
             if first_restored is None:
                 first_restored = (parent_path, row)
 
-        if first_restored is not None:
-            fp, fr = first_restored
-            p = tab._index_from_path(fp)
-            tab.view.setCurrentIndex(tab._source_to_view(model.index(fr, 0, p)))
+        # Select all restored rows (restores multi-selection after undo).
+        restored = sorted(self._sources, key=lambda p: (p[0], p[1]))
+        _select_placed_rows(tab, restored)
 
 
 class _SortKeysCmd(QUndoCommand):
