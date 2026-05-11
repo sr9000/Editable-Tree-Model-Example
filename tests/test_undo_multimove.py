@@ -6,12 +6,11 @@ Tests for _MoveRowsCmd and JsonTab.push_move_rows.
 from PySide6.QtCore import QModelIndex
 
 from documents.tab import JsonTab
-from undo.commands import _MoveRowsCmd
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_tab(qtbot, data) -> JsonTab:
     tab = JsonTab(lambda *_: None, data=data)
@@ -35,6 +34,7 @@ def _values(tab: JsonTab) -> list:
 # ---------------------------------------------------------------------------
 # Test 1 — Same-parent forward block move keeps relative order; single undo
 # ---------------------------------------------------------------------------
+
 
 def test_same_parent_forward_block_move_and_undo(qtbot):
     """Move rows [2,3] forward to position 5 (after e): order preserved; undo restores."""
@@ -64,6 +64,7 @@ def test_same_parent_forward_block_move_and_undo(qtbot):
 # Test 2 — Same-parent backward block move; undo restores
 # ---------------------------------------------------------------------------
 
+
 def test_same_parent_backward_block_move_and_undo(qtbot):
     """Move rows [5,7] backward to position 2: target stays 2."""
     # keys: a=0, b=1, c=2, d=3, e=4, f=5, g=6, h=7
@@ -92,19 +93,23 @@ def test_same_parent_backward_block_move_and_undo(qtbot):
 # Test 3 — Cross-parent multi-row move; undo restores both parents
 # ---------------------------------------------------------------------------
 
+
 def test_cross_parent_multimove_and_undo(qtbot):
     """Lift a.x and b.y into c (array); undo restores both."'"""
-    tab = _make_tab(qtbot, {
-        "a": {"x": 10, "a2": 20},
-        "b": {"y": 30, "b2": 40},
-        "c": [],
-    })
+    tab = _make_tab(
+        qtbot,
+        {
+            "a": {"x": 10, "a2": 20},
+            "b": {"y": 30, "b2": 40},
+            "c": [],
+        },
+    )
 
-    a_idx = _idx(tab, 0)        # "a" object
-    b_idx = _idx(tab, 1)        # "b" object
-    c_idx = _idx(tab, 2)        # "c" array
-    ax = tab.model.index(0, 0, a_idx)   # a.x
-    by = tab.model.index(0, 0, b_idx)   # b.y
+    a_idx = _idx(tab, 0)  # "a" object
+    b_idx = _idx(tab, 1)  # "b" object
+    c_idx = _idx(tab, 2)  # "c" array
+    ax = tab.model.index(0, 0, a_idx)  # a.x
+    by = tab.model.index(0, 0, b_idx)  # b.y
 
     assert tab.push_move_rows([ax, by], c_idx, 0)
 
@@ -131,13 +136,14 @@ def test_cross_parent_multimove_and_undo(qtbot):
 # Test 4 — Cycle guard: parent into its own descendant → False, no command
 # ---------------------------------------------------------------------------
 
+
 def test_cycle_guard_returns_false_no_command_pushed(qtbot):
     """Moving a into a.child must be rejected; undo_stack count must stay 0."""
     tab = _make_tab(qtbot, {"top": {"nest": {"deep": 1}}})
 
-    top_idx = _idx(tab, 0)          # "top"
-    nest_idx = _idx(tab, 0, 0)      # "top.nest"
-    deep_idx = _idx(tab, 0, 0, 0)   # "top.nest.deep"
+    top_idx = _idx(tab, 0)  # "top"
+    nest_idx = _idx(tab, 0, 0)  # "top.nest"
+    deep_idx = _idx(tab, 0, 0, 0)  # "top.nest.deep"
 
     original_count = tab.undo_stack.count()
 
@@ -157,17 +163,18 @@ def test_cycle_guard_returns_false_no_command_pushed(qtbot):
 # Test 5 — mergeWith always returns False (each move is its own step)
 # ---------------------------------------------------------------------------
 
+
 def test_merge_with_returns_false(qtbot):
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3})
 
     a = tab.model.index(0, 0, QModelIndex())
-    b = tab.model.index(1, 0, QModelIndex())
-    c_idx = tab.model.index(2, 0, QModelIndex())
 
-    tab.push_move_rows([a], QModelIndex(), 2)   # move a → after b
-    # After first move: b, a, c  →  a is now at index 1
-    a2 = tab.model.index(1, 0, QModelIndex())
-    tab.push_move_rows([a2], QModelIndex(), 2)  # move a → after c
+    # Move a → end of root: [b, c, a]
+    tab.push_move_rows([a], QModelIndex(), 3)
+    # After first move: [b, c, a]  →  a is now at index 2
+    # Move a → row 0: [a, b, c]
+    a2 = tab.model.index(2, 0, QModelIndex())
+    tab.push_move_rows([a2], QModelIndex(), 0)
 
     # Two separate undo steps
     assert tab.undo_stack.count() == 2
@@ -181,10 +188,11 @@ def test_merge_with_returns_false(qtbot):
 # Test 6 — push_move_row still works (delegates to push_move_rows)
 # ---------------------------------------------------------------------------
 
+
 def test_push_move_row_still_works(qtbot):
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3})
 
-    assert tab.push_move_row(QModelIndex(), 0, 2)   # move row 0 ("a") to row 2
+    assert tab.push_move_row(QModelIndex(), 0, 2)  # move row 0 ("a") to row 2
     assert _keys(tab) == ["b", "c", "a"]
 
     assert tab.undo_stack.count() == 1
@@ -195,6 +203,7 @@ def test_push_move_row_still_works(qtbot):
 # ---------------------------------------------------------------------------
 # Test 7 — Order-translation invariant: forward block [2,3] → 5 adjusts by 2
 # ---------------------------------------------------------------------------
+
 
 def test_forward_block_move_index_adjustment(qtbot):
     """Forward move [2,3] → row 5: after popping 2 rows before target,
@@ -215,6 +224,7 @@ def test_forward_block_move_index_adjustment(qtbot):
 # ---------------------------------------------------------------------------
 # Test 8 — Backward block move [5,7] → 2: target stays 2
 # ---------------------------------------------------------------------------
+
 
 def test_backward_block_move_index_invariant(qtbot):
     """Backward move [5,7] → row 2: no adjustment needed (sources after target)."""

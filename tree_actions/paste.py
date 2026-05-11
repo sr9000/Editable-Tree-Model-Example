@@ -5,7 +5,15 @@ from PySide6.QtWidgets import QTreeView
 
 from tree.types import JsonType
 from tree_actions.clipboard import _clipboard_entries
-from tree_actions.selection import _resolve_model, _row0, _to_source_index, _to_view_index
+from tree_actions.selection import (
+    _index_path,
+    _resolve_model,
+    _row0,
+    _selected_rows,
+    _to_source_index,
+    _to_view_index,
+    top_level_source_rows,
+)
 
 
 def _tab_of(tree_view: QTreeView):
@@ -203,3 +211,106 @@ def paste_replace_value(tree_view: QTreeView) -> bool:
         return tab.push_edit_value(value_index, new_value, label="paste replace")
 
     return bool(model.setData(value_index, new_value, Qt.ItemDataRole.EditRole))
+
+
+# ---------------------------------------------------------------------------
+# Step 9 — Multi-action paste helpers
+# ---------------------------------------------------------------------------
+
+
+def paste_clones_at_targets(tree_view: QTreeView) -> bool:
+    """**Multi-paste.** Paste a clone of every clipboard entry at every
+    currently-selected row.
+
+    For container targets (OBJECT / ARRAY) the entries land as last
+    children. For leaf targets the entries land as siblings immediately
+    after the target. All inserts run inside a single ``QUndoStack``
+    macro so undo restores the original tree in one step.
+
+    Falls back to ``paste_from_clipboard`` when no row is selected.
+    """
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    entries = _clipboard_entries()
+    if not entries:
+        return False
+
+    selected = [_row0(model, idx) for idx in _selected_rows(tree_view) if idx.isValid()]
+    if not selected:
+        return paste_from_clipboard(tree_view)
+
+    tab = _tab_of(tree_view)
+    if tab is None:
+        changed = False
+        for target in selected:
+            target_item = model.get_item(target)
+            if target_item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+                parent_index = target
+                insert_pos = model.rowCount(target)
+            else:
+                parent_index = target.parent()
+                insert_pos = target.row() + 1
+            changed = _paste_entries_at(tree_view, parent_index, insert_pos, label="paste") or changed
+        return changed
+
+    targets: list[tuple[tuple, int]] = []
+    for target in selected:
+        target_item = model.get_item(target)
+        if target_item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+            targets.append((tab._index_path(target), model.rowCount(target)))
+        else:
+            targets.append((tab._index_path(target.parent()), target.row() + 1))
+
+    tab.undo_stack.beginMacro("paste at selection")
+    try:
+        # Descending so earlier inserts in the same parent don't shift later positions.
+        for parent_path, insert_pos in sorted(targets, key=lambda t: (t[0], t[1]), reverse=True):
+            parent_index = tab._index_from_path(parent_path)
+            _paste_entries_at(tree_view, parent_index, insert_pos, label="paste")
+    finally:
+        tab.undo_stack.endMacro()
+    return True
+
+
+def paste_insert_zip(tree_view: QTreeView) -> bool:
+    """**Multi-insert** (``Ctrl+Shift+V``). Zip-pair clipboard top-level
+    entries with top-level selected targets and replace each target's
+    value with its paired entry.
+
+    Policy on count mismatch: ``zip``-to-shortest. Uses
+    :func:`top_level_source_rows` — no deep scan.
+    """
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    entries = _clipboard_entries()
+    if not entries:
+        return False
+
+    targets = sorted(
+        [_row0(model, t) for t in top_level_source_rows(tree_view) if t.isValid()],
+        key=_index_path,
+    )
+    if not targets:
+        return False
+
+    tab = _tab_of(tree_view)
+    if tab is None:
+        changed = False
+        for target, entry in zip(targets, entries):
+            value_index = model.index(target.row(), 2, target.parent())
+            if model.setData(value_index, entry["value"], Qt.ItemDataRole.EditRole):
+                changed = True
+        return changed
+
+    tab.undo_stack.beginMacro("paste at each (zip)")
+    moved = 0
+    try:
+        for target, entry in zip(targets, entries):
+            value_index = model.index(target.row(), 2, target.parent())
+            if tab.push_edit_value(value_index, entry["value"], label="paste at each"):
+                moved += 1
+    finally:
+        tab.undo_stack.endMacro()
+    return moved > 0

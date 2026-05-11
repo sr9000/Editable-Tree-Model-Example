@@ -21,10 +21,10 @@ from tree_actions.selection import (
     top_level_source_rows,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_view(qtbot, data) -> tuple[QTreeView, JsonTreeModel]:
     model = JsonTreeModel(data)
@@ -60,6 +60,7 @@ def _select_tab(tab: JsonTab, *source_indexes) -> None:
 # Test 1 – ExtendedSelection is set on a fresh JsonTab
 # ---------------------------------------------------------------------------
 
+
 def test_extended_selection_mode_on_json_tab(qtbot):
     tab = JsonTab(lambda *_: None, data={"a": 1})
     qtbot.addWidget(tab)
@@ -69,6 +70,7 @@ def test_extended_selection_mode_on_json_tab(qtbot):
 # ---------------------------------------------------------------------------
 # Test 2 – Contiguous (Shift-style) selection returns N ordered rows
 # ---------------------------------------------------------------------------
+
 
 def test_contiguous_selection_returns_ordered_rows(qtbot):
     data = {"a": 1, "b": 2, "c": 3, "d": 4}
@@ -90,6 +92,7 @@ def test_contiguous_selection_returns_ordered_rows(qtbot):
 # ---------------------------------------------------------------------------
 # Test 3 – Disjoint selection → correct top-level indexes, spans_multiple_parents
 # ---------------------------------------------------------------------------
+
 
 def test_disjoint_selection_and_spans_multiple_parents(qtbot):
     """Select items from two different sub-trees; selection_spans_multiple_parents → True."""
@@ -127,6 +130,7 @@ def test_disjoint_selection_and_spans_multiple_parents(qtbot):
 # Test 4 – Ancestor pruning: selecting parent + child returns parent only
 # ---------------------------------------------------------------------------
 
+
 def test_ancestor_pruning_parent_and_child(qtbot):
     data = {"parent": {"child": 42}}
     view, model = _make_view(qtbot, data)
@@ -145,6 +149,7 @@ def test_ancestor_pruning_parent_and_child(qtbot):
 # ---------------------------------------------------------------------------
 # Test 5 – copy → paste round-trip preserves 3-row disjoint selection
 # ---------------------------------------------------------------------------
+
 
 def test_copy_paste_roundtrip_disjoint_selection(qtbot):
     tab = JsonTab(lambda *_: None, data={"a": 1, "b": 2, "c": 3, "target": []})
@@ -174,6 +179,7 @@ def test_copy_paste_roundtrip_disjoint_selection(qtbot):
 # ---------------------------------------------------------------------------
 # Test 6 – Public names are true aliases for private names
 # ---------------------------------------------------------------------------
+
 
 def test_public_names_are_aliases(qtbot):
     view, model = _make_view(qtbot, {"x": 10, "y": 20})

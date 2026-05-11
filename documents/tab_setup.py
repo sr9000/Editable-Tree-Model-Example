@@ -9,17 +9,7 @@ from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from tree.model import JsonTreeModel
-from tree_actions.clipboard import copy_selection
 from tree_actions.context_menu import show_context_menu
-from tree_actions.paste import paste_from_clipboard
-from tree_actions.structure import (
-    cut_selection,
-    delete_selection,
-    duplicate_selection,
-    move_selection_down,
-    move_selection_up,
-    sort_selection_keys,
-)
 from tree_filter_proxy import TreeFilterProxy
 
 
@@ -98,6 +88,11 @@ def init_shortcuts(tab) -> None:
 
     tab._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, tab.view)
     tab._paste_shortcut.activated.connect(lambda: tab._run_tree_action("Pasted JSON", paste=True))
+
+    # Step 9: Ctrl+Shift+V = multi-insert (1:1 zip-pair clipboard entries with
+    # top-level selected rows; replaces each target's value).
+    tab._paste_zip_shortcut = QShortcut(QKeySequence("Ctrl+Shift+V"), tab.view)
+    tab._paste_zip_shortcut.activated.connect(lambda: tab._run_tree_action("Inserted at selection", paste_zip=True))
 
     tab._delete_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), tab.view)
     tab._delete_shortcut.activated.connect(lambda: tab._run_tree_action("Deleted selection", delete=True))

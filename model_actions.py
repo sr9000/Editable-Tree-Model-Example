@@ -10,7 +10,9 @@ def _row0_index(index: QModelIndex, model) -> QModelIndex:
     return model.index(index.row(), 0, index.parent()) if index.isValid() else QModelIndex()
 
 
-def _move_row_between_parents(model, src_parent: QModelIndex, src_row: int, dst_parent: QModelIndex, dst_row: int) -> bool:
+def _move_row_between_parents(
+    model, src_parent: QModelIndex, src_row: int, dst_parent: QModelIndex, dst_row: int
+) -> bool:
     if not hasattr(model, "get_item"):
         return False
     src_item = model.get_item(src_parent)

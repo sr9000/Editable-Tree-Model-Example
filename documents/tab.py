@@ -1,6 +1,5 @@
 import base64
 import gzip
-import time
 import zlib
 from datetime import datetime
 from typing import Any, Callable
@@ -27,7 +26,7 @@ from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
-from tree_actions.paste import paste_from_clipboard
+from tree_actions.paste import paste_from_clipboard, paste_insert_zip
 from tree_actions.structure import (
     cut_selection,
     delete_selection,
@@ -43,7 +42,6 @@ from undo.commands import (
     _ChangeTypeCmd,
     _EditValueCmd,
     _InsertRowsCmd,
-    _MoveRowCmd,
     _MoveRowsCmd,
     _RemoveRowsCmd,
     _RenameCmd,
@@ -586,6 +584,66 @@ class JsonTab(QWidget):
             label=label,
         )
 
+    def push_move_rows_anchor(
+        self,
+        sources: list,
+        anchor: "MoveAnchor",  # noqa: F821 — imported lazily below
+        *,
+        label: str = "move rows",
+    ) -> bool:
+        """Move *sources* (list of source ``QModelIndex``) to the gap
+        described by ``anchor`` as a single undo command.
+
+        Returns ``False`` when:
+        - *sources* is empty,
+        - any source would become an ancestor of ``anchor.parent_path``
+          (cycle guard), or
+        - the move is a no-op (block already lands at the anchor).
+        """
+        from tree_actions.anchors import anchor_is_cycle, anchor_is_no_op, resolve_anchor_insert_row
+
+        if not sources:
+            return False
+
+        # Snapshot every source's (parent_path, row) BEFORE any mutation.
+        source_paths: list[tuple[tuple, int]] = []
+        for idx in sources:
+            row0 = self.model.index(idx.row(), 0, idx.parent())
+            source_paths.append((self._index_path(row0.parent()), row0.row()))
+
+        # Cycle guard.
+        if anchor_is_cycle(anchor, source_paths):
+            if self._status_message_callback is not None:
+                self._status_message_callback("Cannot move a parent into its own descendant", 3000)
+            return False
+
+        # No-op guard (path-only). For at_end, resolve to a concrete row first
+        # and compare against the would-be insert position.
+        if anchor_is_no_op(anchor, source_paths):
+            return False
+        if anchor.is_at_end:
+            insert_row = resolve_anchor_insert_row(self.model, self, anchor, source_paths)
+            same_parent_sources = sorted(r for p, r in source_paths if p == anchor.parent_path)
+            if same_parent_sources:
+                parent_index = self._index_from_path(anchor.parent_path)
+                parent_count = self.model.rowCount(parent_index)
+                last_src = same_parent_sources[-1]
+                is_contiguous = all(b - a == 1 for a, b in zip(same_parent_sources, same_parent_sources[1:]))
+                # If the block is contiguous and already sits as the suffix,
+                # at_end is a no-op.
+                if is_contiguous and last_src == parent_count - 1 and len(same_parent_sources) == len(source_paths):
+                    return False
+
+        # Build the command.
+        target_qname = self._qualified_name(self.model.index(sources[0].row(), 0, sources[0].parent()))
+        cmd = _MoveRowsCmd(self, _make_label(label, target_qname), source_paths, anchor)
+        self.undo_stack.push(cmd)
+        # Expose placed paths for action-layer post-hooks (esp. macros).
+        self._last_move_placed = cmd.placed_paths
+        # Action-layer post-hook: re-select the placed rows in the view.
+        self._restore_selection_at_paths(cmd.placed_paths)
+        return True
+
     def push_move_rows(
         self,
         sources: list,
@@ -594,45 +652,45 @@ class JsonTab(QWidget):
         *,
         label: str = "move rows",
     ) -> bool:
-        """Move *sources* (list of source ``QModelIndex``) to
-        ``(target_parent, target_row)`` as a single undo command.
+        """Legacy pre-Step-9 API. Translates ``(target_parent, target_row)``
+        (pre-pop convention) into a ``MoveAnchor`` and delegates."""
+        from tree_actions.anchors import pre_pop_target_row_to_anchor
 
-        Returns ``False`` when:
-        - *sources* is empty,
-        - any source's ancestor path equals ``target_parent``'s path
-          (cycle guard), or
-        - ``target_row`` is out of range after removing the sources.
-        """
         if not sources:
             return False
+        anchor = pre_pop_target_row_to_anchor(self, target_parent, target_row)
+        return self.push_move_rows_anchor(sources, anchor, label=label)
 
-        target_parent_path = self._index_path(target_parent)
+    def _restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
+        """Drive the view's selectionModel so the rows at the given
+        ``(parent_path, row)`` tuples are all selected after a move.
 
-        # Cycle guard: reject if any source would become an ancestor of target.
-        source_paths = []
-        for idx in sources:
-            row0 = self.model.index(idx.row(), 0, idx.parent())
-            sp = self._index_path(row0)
-            # sp is an ancestor of target_parent_path when target starts with sp
-            if target_parent_path[: len(sp)] == sp:
-                if self._status_message_callback is not None:
-                    self._status_message_callback("Cannot move a parent into its own descendant", 3000)
-                return False
-            source_paths.append((self._index_path(row0.parent()), row0.row()))
+        Lifted out of ``_MoveRowsCmd`` so that the undo command stays
+        decoupled from the view.
+        """
+        if not placed:
+            return
+        from PySide6.QtCore import QItemSelection, QItemSelectionModel
 
-        target_qname = self._qualified_name(
-            self.model.index(sources[0].row(), 0, sources[0].parent())
+        sm = self.view.selectionModel()
+        if sm is None:
+            return
+        selection = QItemSelection()
+        first_view_idx = None
+        for parent_path, row in placed:
+            p = self._index_from_path(parent_path)
+            src_idx = self.model.index(row, 0, p)
+            view_idx = self._source_to_view(src_idx)
+            if view_idx.isValid():
+                selection.select(view_idx, view_idx)
+                if first_view_idx is None:
+                    first_view_idx = view_idx
+        sm.select(
+            selection,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
         )
-        cmd = _MoveRowsCmd(
-            self,
-            _make_label(label, target_qname),
-            source_paths,
-            target_parent_path,
-            target_row,
-        )
-        self.undo_stack.push(cmd)
-        return True
-
+        if first_view_idx is not None:
+            sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
         if not name_index.isValid() or name_index.column() != 0:
@@ -757,6 +815,7 @@ class JsonTab(QWidget):
         copy_only: bool = False,
         cut: bool = False,
         paste: bool = False,
+        paste_zip: bool = False,
         delete: bool = False,
         duplicate: bool = False,
         move_up: bool = False,
@@ -770,6 +829,8 @@ class JsonTab(QWidget):
             changed = cut_selection(self.view)
         elif paste:
             changed = paste_from_clipboard(self.view)
+        elif paste_zip:
+            changed = paste_insert_zip(self.view)
         elif delete:
             changed = delete_selection(self.view)
         elif duplicate:

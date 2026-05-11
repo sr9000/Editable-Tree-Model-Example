@@ -13,7 +13,7 @@ import time
 
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
 
-from documents.tab import JsonTab, _EditValueCmd, _MoveRowCmd, _MoveRowsCmd, _RemoveRowsCmd
+from documents.tab import JsonTab, _EditValueCmd, _MoveRowsCmd, _RemoveRowsCmd
 from tree.item import JsonTreeItem
 from tree_actions.structure import delete_selection, move_selection_up
 

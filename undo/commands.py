@@ -218,21 +218,25 @@ class _RemoveRowsCmd(QUndoCommand):
 class _MoveRowsCmd(QUndoCommand):
     """Move N rows (possibly cross-parent) as a single undo step.
 
-    ``sources`` is a list of ``(parent_path, row)`` tuples that have been
-    snapshot-captured *before* the command is executed (i.e. the tab already
-    converted live ``QModelIndex`` values to paths).  ``target_parent_path``
-    and ``target_row`` describe where the block lands after the move.
+    Anchor-based variant (Step 9). ``sources`` is a list of
+    ``(parent_path, row)`` tuples captured *before* the command runs.
+    ``anchor`` is a ``MoveAnchor`` that names the destination gap by
+    reference to a non-moving sibling (or end-of-parent sentinel).
+
+    Selection restore is **not** performed inside redo/undo; the
+    action-layer caller reads ``placed_paths`` / ``source_paths`` and
+    drives the selection model itself.
 
     Algorithm (redo):
-    1. Sort sources in *descending* order so each ``removeRow`` leaves the
-       remaining source indexes valid.
-    2. For each removed item, record the detached ``JsonTreeItem`` and its
-       origin ``(parent_path, row)`` so undo can replay in reverse.
-    3. Adjust ``target_row`` downward by the number of removed siblings that
-       were *ahead* of the target inside the *same* parent – identical to
-       Qt's own drag-move convention.
-    4. Insert the detached items (in original ascending order) at the
-       adjusted target row, emitting the required model signals.
+    1. Sort sources descending by ``(parent_path, row)`` so each
+       removal leaves the remaining source indexes valid.
+    2. For each removed item, record the detached ``JsonTreeItem`` and
+       its origin ``(parent_path, row)``.
+    3. Resolve the anchor to a post-pop ``insert_row`` via
+       ``resolve_anchor_insert_row`` (subtracts the count of removed
+       siblings ahead of the anchor sibling in the same parent).
+    4. Insert the detached items in original ascending order at the
+       resolved insert row.
     """
 
     def __init__(
@@ -240,16 +244,26 @@ class _MoveRowsCmd(QUndoCommand):
         tab: "JsonTab",
         text: str,
         sources: list[tuple[tuple, int]],
-        target_parent_path: tuple,
-        target_row: int,
+        anchor,
     ):
         super().__init__(text)
         self._tab = tab
-        self._sources = sources  # list of (parent_path, row)
-        self._target_parent_path = target_parent_path
-        self._target_row = target_row
-        # Populated during first redo; used by undo to rebuild the inverse.
-        self._placed: list[tuple[tuple, int]] = []  # (parent_path, row) after redo
+        self._sources = sources  # list of (parent_path, row), original positions
+        self._anchor = anchor
+        # Populated during redo; used by undo and by the post-hook to drive selection.
+        self._placed: list[tuple[tuple, int]] = []
+
+    # ------------------------------------------------------------------
+    # Public accessors — used by the action layer for post-redo hooks
+    # ------------------------------------------------------------------
+
+    @property
+    def placed_paths(self) -> list[tuple[tuple, int]]:
+        return list(self._placed)
+
+    @property
+    def source_paths(self) -> list[tuple[tuple, int]]:
+        return list(self._sources)
 
     # ------------------------------------------------------------------
     # mergeWith: always False — every move is its own undo step
@@ -263,14 +277,15 @@ class _MoveRowsCmd(QUndoCommand):
     # ------------------------------------------------------------------
 
     def redo(self) -> None:
+        from tree_actions.anchors import resolve_anchor_insert_row
+
         tab = self._tab
         model = tab.model
 
-        # 1. Sort sources descending so removal doesn't shift remaining sources.
+        # 1. Descending source order: removals don't invalidate remaining sources.
         sorted_sources = sorted(self._sources, key=lambda p: (p[0], p[1]), reverse=True)
 
-        # Snapshot the items before touching the model.
-        detached: list[tuple[tuple, int, object]] = []  # (parent_path, row, item)
+        detached: list[tuple[tuple, int, object]] = []
         for parent_path, row in sorted_sources:
             p = tab._index_from_path(parent_path)
             parent_item = model.get_item(p)
@@ -280,31 +295,25 @@ class _MoveRowsCmd(QUndoCommand):
                 parent_item.mark_children_dirty()
             detached.append((parent_path, row, item))
 
-        # 2. Re-order detached back to ascending source order (they were removed
-        #    descending; reverse to restore original relative order).
-        detached.reverse()
+        detached.reverse()  # restore ascending source order
 
-        # 3. Compute adjusted target row.
-        target_row = self._target_row
-        t_parent = tab._index_from_path(self._target_parent_path)
-        for parent_path, row, _item in detached:
-            if parent_path == self._target_parent_path and row < target_row:
-                target_row -= 1
-
-        # 4. Insert at target.
+        # 2. Resolve the anchor to its current row in the destination parent.
+        insert_row = resolve_anchor_insert_row(model, tab, self._anchor, self._sources)
+        t_parent = tab._index_from_path(self._anchor.parent_path)
         t_parent_item = model.get_item(t_parent)
-        t_parent_item._mark_for_insert = True  # sentinel — not used, see below
+
+        # Clamp defensively (out-of-range insert rows should never reach here,
+        # but list.insert silently clamps so guarding against drift is cheap).
+        insert_row = max(0, min(insert_row, t_parent_item.child_count()))
+
         self._placed = []
-        for offset, (_src_parent_path, _src_row, item) in enumerate(detached):
-            ins_row = target_row + offset
+        for offset, (_sp, _sr, item) in enumerate(detached):
+            ins_row = insert_row + offset
             item.parent_item = t_parent_item
             with model.rows_insertion(t_parent, ins_row, 1):
                 t_parent_item.child_items.insert(ins_row, item)
                 t_parent_item.mark_children_dirty()
-            self._placed.append((self._target_parent_path, ins_row))
-
-        # Select all placed rows (restores multi-selection after the move).
-        _select_placed_rows(tab, self._placed)
+            self._placed.append((self._anchor.parent_path, ins_row))
 
     def undo(self) -> None:
         tab = self._tab
@@ -313,7 +322,6 @@ class _MoveRowsCmd(QUndoCommand):
         if not self._placed:
             return
 
-        # Remove placed items in descending order.
         sorted_placed = sorted(self._placed, key=lambda p: (p[0], p[1]), reverse=True)
         detached: list[object] = []
         for parent_path, row in sorted_placed:
@@ -325,12 +333,9 @@ class _MoveRowsCmd(QUndoCommand):
                 parent_item.mark_children_dirty()
             detached.append(item)
 
-        # Reverse to restore original order (we removed descending, reverse → ascending).
         detached.reverse()
 
-        # Re-insert at original source positions in ascending order.
         sorted_sources_asc = sorted(self._sources, key=lambda p: (p[0], p[1]))
-        first_restored = None
         for (parent_path, row), item in zip(sorted_sources_asc, detached):
             p = tab._index_from_path(parent_path)
             parent_item = model.get_item(p)
@@ -338,12 +343,6 @@ class _MoveRowsCmd(QUndoCommand):
             with model.rows_insertion(p, row, 1):
                 parent_item.child_items.insert(row, item)
                 parent_item.mark_children_dirty()
-            if first_restored is None:
-                first_restored = (parent_path, row)
-
-        # Select all restored rows (restores multi-selection after undo).
-        restored = sorted(self._sources, key=lambda p: (p[0], p[1]))
-        _select_placed_rows(tab, restored)
 
 
 class _SortKeysCmd(QUndoCommand):

@@ -12,7 +12,6 @@ from documents.tab import (
     _ChangeTypeCmd,
     _EditValueCmd,
     _InsertRowsCmd,
-    _MoveRowCmd,
     _MoveRowsCmd,
     _RemoveRowsCmd,
     _RenameCmd,
@@ -140,7 +139,6 @@ def test_large_leaf_edit_does_not_store_full_document(qtbot):
     qtbot.addWidget(tab)
 
     # Replace the model with a huge array containing one tiny leaf to edit.
-    from tree.model import JsonTreeModel
 
     big = list(range(3000))
     big[7] = "before"
@@ -230,6 +228,10 @@ def test_move_row_command_is_o1(qtbot):
     assert isinstance(cmd, _MoveRowsCmd)
     # Compact state only — no snapshot fields.
     assert isinstance(cmd._sources, list) and len(cmd._sources) == 1
-    assert isinstance(cmd._target_parent_path, tuple)
+    # Step 9: anchor-based addressing replaces target_parent_path / target_row.
+    from tree_actions.anchors import MoveAnchor
+
+    assert isinstance(cmd._anchor, MoveAnchor)
+    assert isinstance(cmd._anchor.parent_path, tuple)
     assert not hasattr(cmd, "_before")
     assert not hasattr(cmd, "_after")

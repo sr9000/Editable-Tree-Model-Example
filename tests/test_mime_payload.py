@@ -8,16 +8,12 @@ import json
 from PySide6.QtCore import QMimeData, QModelIndex
 
 from tree.model import JsonTreeModel
-from tree_actions.clipboard import (
-    MIME_JSON_TREE,
-    build_tree_mime,
-    entries_from_mime,
-)
-
+from tree_actions.clipboard import MIME_JSON_TREE, build_tree_mime, entries_from_mime
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _rows(model: JsonTreeModel, *row_nums, parent=None):
     p = parent if parent is not None else QModelIndex()
@@ -27,6 +23,7 @@ def _rows(model: JsonTreeModel, *row_nums, parent=None):
 # ---------------------------------------------------------------------------
 # Test 1 — Round-trip: entries_from_mime(build_tree_mime(model, rows))
 # ---------------------------------------------------------------------------
+
 
 def test_round_trip_preserves_name_and_value(qtbot):
     model = JsonTreeModel({"alpha": 1, "beta": [2, 3], "gamma": "hello"})
@@ -61,6 +58,7 @@ def test_round_trip_order_stable_regardless_of_input_order(qtbot):
 # Test 2 — Disjoint cross-parent selection encodes to list text payload
 # ---------------------------------------------------------------------------
 
+
 def test_disjoint_cross_parent_encodes_to_list(qtbot):
     model = JsonTreeModel({"obj1": {"a": 1}, "obj2": {"b": 2}})
     model.expandAll = lambda: None  # not needed; just access children
@@ -86,6 +84,7 @@ def test_disjoint_cross_parent_encodes_to_list(qtbot):
 # Test 3 — Same-OBJECT-parent → dict in text/plain, entries list in binary
 # ---------------------------------------------------------------------------
 
+
 def test_same_object_parent_dict_text_payload(qtbot):
     model = JsonTreeModel({"a": 1, "b": 2, "c": 3})
     rows = _rows(model, 0, 1, 2)
@@ -110,6 +109,7 @@ def test_same_object_parent_dict_text_payload(qtbot):
 # ---------------------------------------------------------------------------
 # Test 4 — Decoder accepts plain-text JSON object from another app
 # ---------------------------------------------------------------------------
+
 
 def test_decoder_accepts_plain_text_json_object(qtbot):
     mime = QMimeData()
@@ -139,6 +139,7 @@ def test_decoder_accepts_plain_text_json_array(qtbot):
 # Test 5 — Decoder returns None for malformed JSON without raising
 # ---------------------------------------------------------------------------
 
+
 def test_decoder_rejects_malformed_json(qtbot):
     mime = QMimeData()
     mime.setText("this is { not valid JSON !!")
@@ -161,6 +162,7 @@ def test_decoder_returns_none_for_none(qtbot):
 # Test 6 — build_tree_mime returns None for empty rows
 # ---------------------------------------------------------------------------
 
+
 def test_build_tree_mime_empty_rows_returns_none(qtbot):
     model = JsonTreeModel({"a": 1})
     assert build_tree_mime(model, []) is None
@@ -170,6 +172,8 @@ def test_build_tree_mime_empty_rows_returns_none(qtbot):
 # Test 7 — MIME_JSON_TREE constant defined exactly once (import smoke)
 # ---------------------------------------------------------------------------
 
+
 def test_mime_json_tree_constant_value():
     from tree_actions import MIME_JSON_TREE as reexported
+
     assert reexported == MIME_JSON_TREE == "application/x-json-tree"

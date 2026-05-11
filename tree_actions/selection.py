@@ -108,6 +108,39 @@ def selection_spans_multiple_parents(rows: list) -> bool:
     return any(idx.parent() != first_parent for idx in rows[1:])
 
 
+def deepest_selected_rows(tree_view: QTreeView) -> list:
+    """Inverse of :func:`top_level_source_rows` — when both an ancestor and one
+    of its descendants are selected, **the ancestor is dropped** and the
+    descendants are kept.
+
+    Use for *projection* operations (multi-copy filter mode) where the
+    selection acts as a mask over each top-level ancestor's subtree.
+    Rows whose subtree contains no other selected row are passed through
+    unchanged.
+    """
+    rows = [idx for idx in _selected_rows(tree_view) if idx.isValid()]
+    return [idx for idx in rows if not any(_is_ancestor(idx, other) for other in rows if other != idx)]
+
+
+def selection_shape(rows: list) -> str:
+    """Classify a selection as one of:
+
+    - ``"single"`` — exactly one selected row.
+    - ``"filter"`` — at least one (ancestor, descendant) pair within the
+      selection. Multi-copy treats this as a projection mask.
+    - ``"disjoint"`` — multiple rows with no ancestor/descendant pairs.
+    """
+    if len(rows) <= 1:
+        return "single"
+    for idx in rows:
+        for other in rows:
+            if other is idx:
+                continue
+            if _is_ancestor(idx, other):
+                return "filter"
+    return "disjoint"
+
+
 def _row0(model: JsonTreeModel, index: QModelIndex) -> QModelIndex:
     if not index.isValid():
         return QModelIndex()

@@ -54,6 +54,7 @@ def _selected_names(tab: JsonTab) -> list[str]:
 # Original regression: only one row moved (SelectItems vs SelectRows)
 # ---------------------------------------------------------------------------
 
+
 def test_alt_up_moves_block_under_select_items_behaviour(qtbot):
     """Two adjacent siblings selected via SelectItems → Alt+Up must move both."""
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3, "d": 4})
@@ -110,6 +111,7 @@ def test_alt_up_block_when_user_selects_value_column_cells(qtbot):
 # ---------------------------------------------------------------------------
 # Selection preservation after move
 # ---------------------------------------------------------------------------
+
 
 def test_selection_preserved_after_alt_up_same_parent(qtbot):
     """Moved rows must still be selected after Alt+Up."""

@@ -2,8 +2,12 @@
 
 _Last scanned: **2026-05-11**. PySide6 desktop **structured-data
 editor** (originated from Qt's "Editable Tree Model" example). Steps 1–3
-of the multiselect / drag-and-drop plan have shipped. Tests:
-**622 collected, 622 passing** (3 offscreen colour-scheme failures excluded).
+of the multiselect / drag-and-drop plan have shipped; Step 9
+(move-mechanics & multi-action redesign) shipped on top, replacing the
+three-branch move logic with a single anchor-based primitive and
+adding multi-copy filter mode + multi-paste-clones + multi-insert-zip.
+Tests: **656 passing, 1 known offscreen-only failure** (color-scheme
+sync — see `todo-n-fixme.md`).
 
 ---
 
@@ -107,10 +111,16 @@ delegates/                    (≈620 LOC)
   name_delegate.py            # NameDelegate
 
 tree_actions/                 (≈730 LOC)
-  selection.py                # _resolve_model, proxy/source mapping, ancestor checks
-  clipboard.py                # MIME format, copy / copy-with-name / copy-value-only
-  paste.py                    # paste_from_clipboard + collision avoidance
+  selection.py                # _resolve_model, proxy/source mapping, ancestor checks,
+                              # selected_source_rows / top_level_source_rows /
+                              # deepest_selected_rows / selection_shape (Step 9)
+  anchors.py                  # MoveAnchor + anchor_at_end / before / after factories (Step 9)
+  clipboard.py                # MIME format, copy / copy-with-name / copy-value-only,
+                              # filter-mode projection on multi-copy (Step 9)
+  paste.py                    # paste_from_clipboard + collision avoidance,
+                              # paste_clones_at_targets / paste_insert_zip (Step 9)
   structure.py                # insert/cut/delete/duplicate/move/sort/expand/collapse
+                              # — anchor-based; single algorithm replaces 3 prior branches
   context_menu.py             # column-aware show_context_menu
 
 undo/                         (≈370 LOC)
@@ -253,6 +263,7 @@ Defined in `mainwindow.ui` (window-level QActions) and
 | `Ctrl+C`       | tab    | Copy selection                               |
 | `Ctrl+X`       | tab    | Cut selection                                |
 | `Ctrl+V`       | tab    | Paste                                        |
+| `Ctrl+Shift+V` | tab    | **Multi-insert** — zip-pair clipboard top-level entries with top-level selected targets; replaces each target's value |
 | `Ctrl+D`       | tab    | Duplicate selection                          |
 | `Alt+Up`       | tab    | Move selected row(s) up; at row 0 bubble out before parent |
 | `Alt+Down`     | tab    | Move selected row(s) down; at last row bubble out after parent |
