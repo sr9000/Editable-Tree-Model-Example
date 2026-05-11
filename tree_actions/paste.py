@@ -12,6 +12,7 @@ from tree_actions.selection import (
     _selected_rows,
     _to_source_index,
     _to_view_index,
+    selected_source_rows,
     top_level_source_rows,
 )
 
@@ -146,6 +147,18 @@ def paste_from_clipboard(tree_view: QTreeView) -> bool:
     return _paste_entries_at(tree_view, parent_index, insert_pos, label="paste")
 
 
+def paste_auto(tree_view: QTreeView) -> bool:
+    """Default paste entrypoint used by shortcuts/menu.
+
+    With multi-selection, clone all clipboard entries at every selected target.
+    Otherwise keep the legacy single-target smart paste behavior.
+    """
+    rows = [idx for idx in selected_source_rows(tree_view) if idx.isValid()]
+    if len(rows) > 1:
+        return paste_clones_at_targets(tree_view)
+    return paste_from_clipboard(tree_view)
+
+
 def paste_before(tree_view: QTreeView) -> bool:
     model, _proxy = _resolve_model(tree_view)
     if model is None:
@@ -254,29 +267,121 @@ def paste_clones_at_targets(tree_view: QTreeView) -> bool:
             changed = _paste_entries_at(tree_view, parent_index, insert_pos, label="paste") or changed
         return changed
 
-    targets: list[tuple[tuple, int]] = []
+    targets: list[tuple[tuple[int, ...], int]] = []
     for target in selected:
         target_item = model.get_item(target)
         if target_item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
             targets.append((tab._index_path(target), model.rowCount(target)))
         else:
             targets.append((tab._index_path(target.parent()), target.row() + 1))
+    used_by_parent: dict[tuple[int, ...], set[str]] = {}
+    inserts: list[dict[str, Any]] = []
+    # Descending so earlier inserts in the same parent don't shift later positions.
+    for parent_path, insert_pos in sorted(targets, key=lambda t: (t[0], t[1]), reverse=True):
+        parent_index = tab._index_from_path(parent_path)
+        parent_item = model.get_item(parent_index)
+        parent_is_object = parent_item.json_type is JsonType.OBJECT
+        if parent_is_object and parent_path not in used_by_parent:
+            used_by_parent[parent_path] = {c.name for c in parent_item.child_items if isinstance(c.name, str)}
+        used = used_by_parent.get(parent_path, set())
+        for offset, entry in enumerate(entries):
+            if parent_is_object:
+                raw_name = entry.get("name")
+                base = raw_name if isinstance(raw_name, str) and raw_name else "new_key"
+                if base in used:
+                    name = parent_item._unique_child_name(base, used_names=used)
+                else:
+                    name = base
+                used.add(name)
+            else:
+                name = None
+            inserts.append(
+                {
+                    "parent_path": parent_path,
+                    "row": insert_pos + offset,
+                    "value": entry["value"],
+                    "name": name,
+                }
+            )
 
-    tab.undo_stack.beginMacro("paste at selection")
-    try:
-        # Descending so earlier inserts in the same parent don't shift later positions.
-        for parent_path, insert_pos in sorted(targets, key=lambda t: (t[0], t[1]), reverse=True):
-            parent_index = tab._index_from_path(parent_path)
-            _paste_entries_at(tree_view, parent_index, insert_pos, label="paste")
-    finally:
-        tab.undo_stack.endMacro()
-    return True
+    if not inserts:
+        return False
+    return tab.push_insert_rows(inserts, label="paste at selection")
 
 
-def paste_insert_zip(tree_view: QTreeView) -> bool:
-    """**Multi-insert** (``Ctrl+Shift+V``). Zip-pair clipboard top-level
-    entries with top-level selected targets and replace each target's
-    value with its paired entry.
+def paste_insert_after_zip(tree_view: QTreeView) -> bool:
+    """**Multi-insert** (``Ctrl+Shift+V``).
+
+    Zip-pair clipboard entries with top-level selected targets and insert each
+    paired entry *after* its target row. Count mismatch policy is
+    ``zip``-to-shortest. Uses :func:`top_level_source_rows` (no deep scan).
+    """
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    entries = _clipboard_entries()
+    if not entries:
+        return False
+
+    targets = sorted(
+        [_row0(model, t) for t in top_level_source_rows(tree_view) if t.isValid()],
+        key=_index_path,
+    )
+    if not targets:
+        return False
+
+    pairs = list(zip(targets, entries))
+    if not pairs:
+        return False
+
+    tab = _tab_of(tree_view)
+    if tab is None:
+        changed = False
+        for target, entry in sorted(pairs, key=lambda p: _index_path(p[0]), reverse=True):
+            parent = target.parent()
+            row = target.row() + 1
+            if not model.insertRow(row, parent):
+                continue
+            if isinstance(entry.get("name"), str) and model.get_item(parent).json_type is JsonType.OBJECT:
+                model.setData(model.index(row, 0, parent), entry["name"], Qt.ItemDataRole.EditRole)
+            if model.setData(model.index(row, 2, parent), entry["value"], Qt.ItemDataRole.EditRole):
+                changed = True
+        return changed
+
+    used_by_parent: dict[tuple[int, ...], set[str]] = {}
+    inserts: list[dict[str, Any]] = []
+    for target, entry in sorted(pairs, key=lambda p: _index_path(p[0]), reverse=True):
+        parent = target.parent()
+        parent_path = tab._index_path(parent)
+        parent_item = model.get_item(parent)
+        parent_is_object = parent_item.json_type is JsonType.OBJECT
+        if parent_is_object and parent_path not in used_by_parent:
+            used_by_parent[parent_path] = {c.name for c in parent_item.child_items if isinstance(c.name, str)}
+        used = used_by_parent.get(parent_path, set())
+        if parent_is_object:
+            raw_name = entry.get("name")
+            base = raw_name if isinstance(raw_name, str) and raw_name else "new_key"
+            if base in used:
+                name = parent_item._unique_child_name(base, used_names=used)
+            else:
+                name = base
+            used.add(name)
+        else:
+            name = None
+        inserts.append(
+            {
+                "parent_path": parent_path,
+                "row": target.row() + 1,
+                "value": entry["value"],
+                "name": name,
+            }
+        )
+    return tab.push_insert_rows(inserts, label="paste insert each")
+
+
+def paste_replace_zip(tree_view: QTreeView) -> bool:
+    """**Multi-replace**. Zip-pair clipboard top-level entries with top-level
+    selected targets and replace each target's value with its paired entry.
 
     Policy on count mismatch: ``zip``-to-shortest. Uses
     :func:`top_level_source_rows` — no deep scan.
@@ -304,13 +409,18 @@ def paste_insert_zip(tree_view: QTreeView) -> bool:
                 changed = True
         return changed
 
-    tab.undo_stack.beginMacro("paste at each (zip)")
+    tab.undo_stack.beginMacro("paste replace each (zip)")
     moved = 0
     try:
         for target, entry in zip(targets, entries):
             value_index = model.index(target.row(), 2, target.parent())
-            if tab.push_edit_value(value_index, entry["value"], label="paste at each"):
+            if tab.push_edit_value(value_index, entry["value"], label="paste replace each"):
                 moved += 1
     finally:
         tab.undo_stack.endMacro()
     return moved > 0
+
+
+def paste_insert_zip(tree_view: QTreeView) -> bool:
+    """Backward-compatible alias for the renamed multi-replace action."""
+    return paste_replace_zip(tree_view)

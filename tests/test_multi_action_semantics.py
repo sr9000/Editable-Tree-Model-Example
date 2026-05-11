@@ -1,4 +1,4 @@
-"""Step 9 — Multi-action semantics: copy / paste / insert.
+"""Step 10 — Multi-action semantics: copy / paste / insert / replace.
 
 Three distinct behaviours sharing the canonical clipboard MIME format:
 
@@ -6,11 +6,13 @@ Three distinct behaviours sharing the canonical clipboard MIME format:
   Disjoint: copy each top-level row's full subtree.
   Filter (ancestor + descendant both selected): project ancestor
   subtrees down to only the selected descendants.
-- **Multi-paste** (Ctrl+V): paste a clone of *every* clipboard entry
-  at *every* selected target, single macro undo step.
+- **Multi-paste** (Ctrl+V): with multi-selection, paste a clone of
+  *every* clipboard entry at *every* selected target, single undo step.
 - **Multi-insert** (Ctrl+Shift+V): zip-pair clipboard top-level
-  entries with top-level selected targets and replace each target's
-  value; single macro undo step.
+  entries with top-level selected targets and insert each paired entry
+  *after* its target; single undo step.
+- **Multi-replace** (separate action): zip-pair clipboard top-level
+  entries with top-level selected targets and replace each target value.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from PySide6.QtWidgets import QApplication
 
 from documents.tab import JsonTab
 from tree_actions.clipboard import MIME_JSON_TREE, copy_selection
-from tree_actions.paste import paste_clones_at_targets, paste_insert_zip
+from tree_actions.paste import paste_auto, paste_clones_at_targets, paste_insert_after_zip, paste_replace_zip
 from tree_actions.selection import deepest_selected_rows, selection_shape
 
 
@@ -44,6 +46,10 @@ def _select_items(tab: JsonTab, *source_indexes) -> None:
     sm.setCurrentIndex(first_view, QItemSelectionModel.SelectionFlag.NoUpdate)
     for idx in rest:
         sm.select(tab._source_to_view(idx), QItemSelectionModel.SelectionFlag.Select)
+
+
+def _root_values(tab: JsonTab) -> list:
+    return [item.to_json() for item in tab.model.root_item.child_items]
 
 
 # ---------------------------------------------------------------------------
@@ -147,11 +153,7 @@ def test_multi_paste_clones_at_every_selected_leaf(qtbot):
     before_count = tab.undo_stack.count()
     assert paste_clones_at_targets(tab.view)
 
-    keys = list(tab.model.root_item.to_json().keys())
-    # Both "a" and "c" must have a sibling immediately after them.
-    assert keys.index("a") < keys.index("new_key") if "new_key" in keys else True
-    # Two new entries added.
-    assert len(keys) == 5
+    assert _root_values(tab) == [1, 99, 2, 3, 99]
     # Single undo step.
     assert tab.undo_stack.count() == before_count + 1
     tab.undo_stack.undo()
@@ -174,14 +176,36 @@ def test_multi_paste_clones_into_containers(qtbot):
     assert after["arr"] == [10, 2]
 
 
+def test_ctrl_v_dispatches_to_multi_paste_when_multiple_rows_selected(qtbot):
+    tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3})
+    _select_items(tab, _idx(tab, 0), _idx(tab, 2))
+
+    QApplication.clipboard().setText("99")
+    before_count = tab.undo_stack.count()
+    tab._run_tree_action("Pasted JSON", paste=True)
+
+    assert _root_values(tab) == [1, 99, 2, 3, 99]
+    assert tab.undo_stack.count() == before_count + 1
+
+
+def test_paste_auto_single_selection_keeps_single_target_semantics(qtbot):
+    tab = _make_tab(qtbot, {"a": 1, "b": 2})
+    _select_items(tab, _idx(tab, 0))
+
+    QApplication.clipboard().setText("99")
+    assert paste_auto(tab.view)
+
+    assert _root_values(tab) == [1, 99, 2]
+
+
 # ---------------------------------------------------------------------------
-# Multi-insert (Ctrl+Shift+V) — zip-pair clipboard entries with targets
+# Multi-insert (Ctrl+Shift+V) — zip insert-after at paired targets
 # ---------------------------------------------------------------------------
 
 
-def test_multi_insert_zip_replaces_each_target_with_paired_entry(qtbot):
-    """Two top-level targets, two clipboard entries → each target's value
-    is replaced with the paired entry's value."""
+def test_multi_insert_zip_inserts_after_each_paired_target(qtbot):
+    """Two top-level targets, two clipboard entries -> insert after each
+    paired target (target values are not replaced)."""
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3})
     a = _idx(tab, 0)
     c = _idx(tab, 2)
@@ -189,12 +213,9 @@ def test_multi_insert_zip_replaces_each_target_with_paired_entry(qtbot):
 
     QApplication.clipboard().setText("[100, 200]")
     before_count = tab.undo_stack.count()
-    assert paste_insert_zip(tab.view)
+    assert paste_insert_after_zip(tab.view)
 
-    after = tab.model.root_item.to_json()
-    assert after["a"] == 100
-    assert after["b"] == 2  # untouched
-    assert after["c"] == 200
+    assert _root_values(tab) == [1, 100, 2, 3, 200]
     assert tab.undo_stack.count() == before_count + 1
 
 
@@ -204,12 +225,9 @@ def test_multi_insert_zip_to_shortest_when_counts_mismatch(qtbot):
     _select_items(tab, _idx(tab, 0), _idx(tab, 1), _idx(tab, 2))
 
     QApplication.clipboard().setText("[100, 200]")
-    assert paste_insert_zip(tab.view)
+    assert paste_insert_after_zip(tab.view)
 
-    after = tab.model.root_item.to_json()
-    assert after["a"] == 100
-    assert after["b"] == 200
-    assert after["c"] == 3  # untouched
+    assert _root_values(tab) == [1, 100, 2, 200, 3]
 
 
 def test_multi_insert_zip_no_deep_scan(qtbot):
@@ -222,7 +240,21 @@ def test_multi_insert_zip_no_deep_scan(qtbot):
     _select_items(tab, a, ax)
 
     QApplication.clipboard().setText("[42]")
-    assert paste_insert_zip(tab.view)
+    assert paste_insert_after_zip(tab.view)
     # Only "a" was used as target — "a.x" was pruned (descendant of selected ancestor).
     after = tab.model.root_item.to_json()
-    assert after["a"] == 42
+    assert after["a"] == {"x": 1}
+    assert list(after.values()) == [{"x": 1}, 42, 2]
+
+
+def test_multi_replace_zip_replaces_each_target_with_paired_entry(qtbot):
+    tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3})
+    _select_items(tab, _idx(tab, 0), _idx(tab, 2))
+
+    QApplication.clipboard().setText("[100, 200]")
+    before_count = tab.undo_stack.count()
+    assert paste_replace_zip(tab.view)
+
+    after = tab.model.root_item.to_json()
+    assert after == {"a": 100, "b": 2, "c": 200}
+    assert tab.undo_stack.count() == before_count + 1

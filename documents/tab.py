@@ -26,7 +26,7 @@ from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
-from tree_actions.paste import paste_from_clipboard, paste_insert_zip
+from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
 from tree_actions.structure import (
     cut_selection,
     delete_selection,
@@ -816,6 +816,7 @@ class JsonTab(QWidget):
         cut: bool = False,
         paste: bool = False,
         paste_zip: bool = False,
+        replace_zip: bool = False,
         delete: bool = False,
         duplicate: bool = False,
         move_up: bool = False,
@@ -828,9 +829,11 @@ class JsonTab(QWidget):
         elif cut:
             changed = cut_selection(self.view)
         elif paste:
-            changed = paste_from_clipboard(self.view)
+            changed = paste_auto(self.view)
         elif paste_zip:
-            changed = paste_insert_zip(self.view)
+            changed = paste_insert_after_zip(self.view)
+        elif replace_zip:
+            changed = paste_replace_zip(self.view)
         elif delete:
             changed = delete_selection(self.view)
         elif duplicate:

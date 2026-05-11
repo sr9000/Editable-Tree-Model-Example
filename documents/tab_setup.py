@@ -89,10 +89,14 @@ def init_shortcuts(tab) -> None:
     tab._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, tab.view)
     tab._paste_shortcut.activated.connect(lambda: tab._run_tree_action("Pasted JSON", paste=True))
 
-    # Step 9: Ctrl+Shift+V = multi-insert (1:1 zip-pair clipboard entries with
-    # top-level selected rows; replaces each target's value).
+    # Step 10: Ctrl+Shift+V = multi-insert after each paired selected target.
     tab._paste_zip_shortcut = QShortcut(QKeySequence("Ctrl+Shift+V"), tab.view)
     tab._paste_zip_shortcut.activated.connect(lambda: tab._run_tree_action("Inserted at selection", paste_zip=True))
+
+    tab._replace_zip_shortcut = QShortcut(QKeySequence("Ctrl+Alt+V"), tab.view)
+    tab._replace_zip_shortcut.activated.connect(
+        lambda: tab._run_tree_action("Replaced values at selection", replace_zip=True)
+    )
 
     tab._delete_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), tab.view)
     tab._delete_shortcut.activated.connect(lambda: tab._run_tree_action("Deleted selection", delete=True))
