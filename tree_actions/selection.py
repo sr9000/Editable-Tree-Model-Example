@@ -54,9 +54,28 @@ def _selected_rows(tree_view: QTreeView) -> list:
     if selection is None:
         return []
 
+    # ``selectedRows(0)`` only returns full rows under SelectRows behaviour.
+    # The live app uses SelectItems, so we additionally consider every
+    # selected cell and collapse them to one entry per (row, parent).
     rows = selection.selectedRows(0)
     if rows:
         return [_to_source_index(idx) for idx in rows]
+
+    selected = selection.selectedIndexes()
+    if selected:
+        seen: set[tuple[int, object]] = set()
+        result = []
+        for idx in selected:
+            src = _to_source_index(idx)
+            if not src.isValid():
+                continue
+            key = (src.row(), src.internalPointer())
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(source_model.index(src.row(), 0, src.parent()))
+        if result:
+            return result
 
     current = selection.currentIndex()
     if not current.isValid():
