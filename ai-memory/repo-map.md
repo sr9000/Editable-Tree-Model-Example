@@ -1,9 +1,9 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-09**. PySide6 desktop **structured-data
-editor** (originated from Qt's "Editable Tree Model" example). Steps 1–2
+_Last scanned: **2026-05-11**. PySide6 desktop **structured-data
+editor** (originated from Qt's "Editable Tree Model" example). Steps 1–3
 of the multiselect / drag-and-drop plan have shipped. Tests:
-**614 collected, 614 passing** (3 offscreen colour-scheme failures excluded).
+**622 collected, 622 passing** (3 offscreen colour-scheme failures excluded).
 
 ---
 
@@ -509,7 +509,9 @@ truth for one document.
   empty), `file_path`, `show_root`, `permanent_message_callback`,
   `theme`, `icon_provider`.
 - Owns the search line edit (debounced 150 ms via `QTimer`, Ctrl+F).
-- Typed-command push API: `push_move_row`, `push_rename`,
+- Typed-command push API: `push_move_row` (delegates to `push_move_rows`),
+  `push_move_rows(sources, target_parent, target_row)` (Step 3 — N-row
+  atomic move, cycle-guard included), `push_rename`,
   `push_edit_value`, `push_change_type`, `push_insert_rows`,
   `push_remove_rows`, `push_sort_keys`. `commit_set_data(index, value,
   role)` is the single delegate-side mutation entry point and
@@ -673,7 +675,9 @@ direct mutators (headless tests).
 ## 15) Undo system — `undo/`
 
 Typed `QUndoCommand` subclasses (`undo/commands.py`):
-`_MoveRowCmd`, `_RenameCmd`, `_EditValueCmd`, `_ChangeTypeCmd`,
+`_MoveRowCmd` (kept for import compatibility), `_MoveRowsCmd` (Step 3 —
+N-row atomic cross-parent move; `mergeWith` always `False`),
+`_RenameCmd`, `_EditValueCmd`, `_ChangeTypeCmd`,
 `_InsertRowsCmd`, `_RemoveRowsCmd`, `_SortKeysCmd`. Path-based
 addressing avoids `QModelIndex` invalidation across mutations.
 

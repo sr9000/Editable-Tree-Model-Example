@@ -44,6 +44,7 @@ from undo.commands import (
     _EditValueCmd,
     _InsertRowsCmd,
     _MoveRowCmd,
+    _MoveRowsCmd,
     _RemoveRowsCmd,
     _RenameCmd,
     _SortKeysCmd,
@@ -572,10 +573,66 @@ class JsonTab(QWidget):
         n = parent_item.child_count()
         if not (0 <= src < n and 0 <= dst < n):
             return False
-        target_qname = self._qualified_name(self.model.index(src, 0, parent_index))
-        cmd = _MoveRowCmd(self, _make_label(label, target_qname), self._index_path(parent_index), src, dst)
+        source_idx = self.model.index(src, 0, parent_index)
+        # push_move_rows uses pre-pop target_row; dst is post-pop.
+        # Forward move (src < dst): removing src shifts later rows down by 1,
+        # so pre-pop target = dst + 1 to land at the same final position.
+        # Backward move (src > dst): no shift needed, pre-pop target = dst.
+        pre_pop_target = dst + 1 if src < dst else dst
+        return self.push_move_rows(
+            [source_idx],
+            parent_index,
+            pre_pop_target,
+            label=label,
+        )
+
+    def push_move_rows(
+        self,
+        sources: list,
+        target_parent: QModelIndex,
+        target_row: int,
+        *,
+        label: str = "move rows",
+    ) -> bool:
+        """Move *sources* (list of source ``QModelIndex``) to
+        ``(target_parent, target_row)`` as a single undo command.
+
+        Returns ``False`` when:
+        - *sources* is empty,
+        - any source's ancestor path equals ``target_parent``'s path
+          (cycle guard), or
+        - ``target_row`` is out of range after removing the sources.
+        """
+        if not sources:
+            return False
+
+        target_parent_path = self._index_path(target_parent)
+
+        # Cycle guard: reject if any source would become an ancestor of target.
+        source_paths = []
+        for idx in sources:
+            row0 = self.model.index(idx.row(), 0, idx.parent())
+            sp = self._index_path(row0)
+            # sp is an ancestor of target_parent_path when target starts with sp
+            if target_parent_path[: len(sp)] == sp:
+                if self._status_message_callback is not None:
+                    self._status_message_callback("Cannot move a parent into its own descendant", 3000)
+                return False
+            source_paths.append((self._index_path(row0.parent()), row0.row()))
+
+        target_qname = self._qualified_name(
+            self.model.index(sources[0].row(), 0, sources[0].parent())
+        )
+        cmd = _MoveRowsCmd(
+            self,
+            _make_label(label, target_qname),
+            source_paths,
+            target_parent_path,
+            target_row,
+        )
         self.undo_stack.push(cmd)
         return True
+
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
         if not name_index.isValid() or name_index.column() != 0:

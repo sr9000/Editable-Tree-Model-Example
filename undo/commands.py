@@ -193,6 +193,141 @@ class _RemoveRowsCmd(QUndoCommand):
             self._tab._insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec["name"])
 
 
+class _MoveRowsCmd(QUndoCommand):
+    """Move N rows (possibly cross-parent) as a single undo step.
+
+    ``sources`` is a list of ``(parent_path, row)`` tuples that have been
+    snapshot-captured *before* the command is executed (i.e. the tab already
+    converted live ``QModelIndex`` values to paths).  ``target_parent_path``
+    and ``target_row`` describe where the block lands after the move.
+
+    Algorithm (redo):
+    1. Sort sources in *descending* order so each ``removeRow`` leaves the
+       remaining source indexes valid.
+    2. For each removed item, record the detached ``JsonTreeItem`` and its
+       origin ``(parent_path, row)`` so undo can replay in reverse.
+    3. Adjust ``target_row`` downward by the number of removed siblings that
+       were *ahead* of the target inside the *same* parent – identical to
+       Qt's own drag-move convention.
+    4. Insert the detached items (in original ascending order) at the
+       adjusted target row, emitting the required model signals.
+    """
+
+    def __init__(
+        self,
+        tab: "JsonTab",
+        text: str,
+        sources: list[tuple[tuple, int]],
+        target_parent_path: tuple,
+        target_row: int,
+    ):
+        super().__init__(text)
+        self._tab = tab
+        self._sources = sources  # list of (parent_path, row)
+        self._target_parent_path = target_parent_path
+        self._target_row = target_row
+        # Populated during first redo; used by undo to rebuild the inverse.
+        self._placed: list[tuple[tuple, int]] = []  # (parent_path, row) after redo
+
+    # ------------------------------------------------------------------
+    # mergeWith: always False — every move is its own undo step
+    # ------------------------------------------------------------------
+
+    def mergeWith(self, _other: QUndoCommand) -> bool:  # type: ignore[override]
+        return False
+
+    # ------------------------------------------------------------------
+    # redo / undo
+    # ------------------------------------------------------------------
+
+    def redo(self) -> None:
+        tab = self._tab
+        model = tab.model
+
+        # 1. Sort sources descending so removal doesn't shift remaining sources.
+        sorted_sources = sorted(self._sources, key=lambda p: (p[0], p[1]), reverse=True)
+
+        # Snapshot the items before touching the model.
+        detached: list[tuple[tuple, int, object]] = []  # (parent_path, row, item)
+        for parent_path, row in sorted_sources:
+            p = tab._index_from_path(parent_path)
+            parent_item = model.get_item(p)
+            item = parent_item.child_items[row]
+            with model.rows_removal(p, row, 1):
+                parent_item.child_items.pop(row)
+                parent_item.mark_children_dirty()
+            detached.append((parent_path, row, item))
+
+        # 2. Re-order detached back to ascending source order (they were removed
+        #    descending; reverse to restore original relative order).
+        detached.reverse()
+
+        # 3. Compute adjusted target row.
+        target_row = self._target_row
+        t_parent = tab._index_from_path(self._target_parent_path)
+        for parent_path, row, _item in detached:
+            if parent_path == self._target_parent_path and row < target_row:
+                target_row -= 1
+
+        # 4. Insert at target.
+        t_parent_item = model.get_item(t_parent)
+        t_parent_item._mark_for_insert = True  # sentinel — not used, see below
+        self._placed = []
+        for offset, (_src_parent_path, _src_row, item) in enumerate(detached):
+            ins_row = target_row + offset
+            item.parent_item = t_parent_item
+            with model.rows_insertion(t_parent, ins_row, 1):
+                t_parent_item.child_items.insert(ins_row, item)
+                t_parent_item.mark_children_dirty()
+            self._placed.append((self._target_parent_path, ins_row))
+
+        # Update current index to first placed item.
+        if self._placed:
+            first_path, first_row = self._placed[0]
+            p = tab._index_from_path(first_path)
+            tab.view.setCurrentIndex(tab._source_to_view(model.index(first_row, 0, p)))
+
+    def undo(self) -> None:
+        tab = self._tab
+        model = tab.model
+
+        if not self._placed:
+            return
+
+        # Remove placed items in descending order.
+        sorted_placed = sorted(self._placed, key=lambda p: (p[0], p[1]), reverse=True)
+        detached: list[object] = []
+        for parent_path, row in sorted_placed:
+            p = tab._index_from_path(parent_path)
+            parent_item = model.get_item(p)
+            item = parent_item.child_items[row]
+            with model.rows_removal(p, row, 1):
+                parent_item.child_items.pop(row)
+                parent_item.mark_children_dirty()
+            detached.append(item)
+
+        # Reverse to restore original order (we removed descending, reverse → ascending).
+        detached.reverse()
+
+        # Re-insert at original source positions in ascending order.
+        sorted_sources_asc = sorted(self._sources, key=lambda p: (p[0], p[1]))
+        first_restored = None
+        for (parent_path, row), item in zip(sorted_sources_asc, detached):
+            p = tab._index_from_path(parent_path)
+            parent_item = model.get_item(p)
+            item.parent_item = parent_item
+            with model.rows_insertion(p, row, 1):
+                parent_item.child_items.insert(row, item)
+                parent_item.mark_children_dirty()
+            if first_restored is None:
+                first_restored = (parent_path, row)
+
+        if first_restored is not None:
+            fp, fr = first_restored
+            p = tab._index_from_path(fp)
+            tab.view.setCurrentIndex(tab._source_to_view(model.index(fr, 0, p)))
+
+
 class _SortKeysCmd(QUndoCommand):
     """Sort children of an OBJECT and store prior subtree subset for undo."""
 

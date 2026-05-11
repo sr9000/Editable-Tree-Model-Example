@@ -13,6 +13,7 @@ from documents.tab import (
     _EditValueCmd,
     _InsertRowsCmd,
     _MoveRowCmd,
+    _MoveRowsCmd,
     _RemoveRowsCmd,
     _RenameCmd,
     _SortKeysCmd,
@@ -87,11 +88,11 @@ def test_tree_actions_use_typed_commands(qtbot):
     # Move up / move down.
     _select_row0(tab, 1)
     assert move_selection_up(view)
-    assert isinstance(_last_command(tab), _MoveRowCmd)
+    assert isinstance(_last_command(tab), _MoveRowsCmd)
 
     _select_row0(tab, 0)
     assert move_selection_down(view)
-    assert isinstance(_last_command(tab), _MoveRowCmd)
+    assert isinstance(_last_command(tab), _MoveRowsCmd)
 
     # Duplicate.
     _select_row0(tab, 0)
@@ -219,17 +220,16 @@ def test_sort_stores_sorted_subtree_only(qtbot):
 
 
 def test_move_row_command_is_o1(qtbot):
-    """Move row command should store only parent path + 2 row indices."""
+    """Move rows command should store paths, not a full snapshot."""
     tab = JsonTab(lambda *_: None)
     qtbot.addWidget(tab)
 
     _select_row0(tab, 1)
     assert move_selection_up(tab.view)
     cmd = _last_command(tab)
-    assert isinstance(cmd, _MoveRowCmd)
+    assert isinstance(cmd, _MoveRowsCmd)
     # Compact state only — no snapshot fields.
-    assert cmd._src == 1
-    assert cmd._dst == 0
-    assert isinstance(cmd._parent_path, tuple)
+    assert isinstance(cmd._sources, list) and len(cmd._sources) == 1
+    assert isinstance(cmd._target_parent_path, tuple)
     assert not hasattr(cmd, "_before")
     assert not hasattr(cmd, "_after")
