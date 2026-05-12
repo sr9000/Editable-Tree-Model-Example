@@ -3,7 +3,7 @@
 from contextlib import contextmanager
 from typing import Any, Optional, cast
 
-from PySide6.QtCore import QAbstractItemModel, QMimeData, QModelIndex, QPersistentModelIndex, Qt, Signal
+from PySide6.QtCore import QAbstractItemModel, QMimeData, QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
 
 from themes.icon_provider import IconProvider, StubIconProvider
 from tree.item import JsonTreeItem
@@ -35,6 +35,7 @@ class JsonTreeModel(QAbstractItemModel):
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
         self._attached_view = None
         self._drag_source_rows: list[QModelIndex] = []
+        self._suppress_external_remove_rows = False
 
     def attach_view(self, view) -> None:
         self._attached_view = view
@@ -43,6 +44,21 @@ class JsonTreeModel(QAbstractItemModel):
         rows = list(self._drag_source_rows)
         self._drag_source_rows = []
         return rows
+
+    def arm_external_remove_rows_suppression(self) -> None:
+        """Ignore one event-loop tick of external removeRows calls.
+
+        Some Qt drag/drop paths may call removeRows on the source model
+        after dropMimeData(MoveAction) returns True. Internal moves are
+        already applied via push_move_rows, so the extra remove would delete
+        unrelated rows after indexes shift.
+        """
+        self._suppress_external_remove_rows = True
+
+        def _clear() -> None:
+            self._suppress_external_remove_rows = False
+
+        QTimer.singleShot(0, _clear)
 
     def set_icon_provider(self, provider: IconProvider | None) -> None:
         next_provider = provider or StubIconProvider()
@@ -242,6 +258,8 @@ class JsonTreeModel(QAbstractItemModel):
             self.endRemoveRows()
 
     def removeRows(self, position: int, rows: int, parent: QModelIndex = QModelIndex()) -> bool:
+        if self._suppress_external_remove_rows:
+            return True
         if self.show_root and not parent.isValid():
             parent = self._root_index()
         if parent_item := self.get_item(parent):

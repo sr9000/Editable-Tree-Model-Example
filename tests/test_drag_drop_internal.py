@@ -96,3 +96,21 @@ def test_move_action_without_internal_source_falls_back_to_copy(qtbot):
 
     assert source.model.root_item.to_json() == {"left": {"a": 1}}
     assert target.model.root_item.to_json() == {"right": {"a": 1}}
+
+
+def test_internal_move_ignores_immediate_followup_remove_rows(qtbot):
+    tab = _make_tab(qtbot, {"src": {"a": 1, "b": 2, "c": 3}, "dst": {}})
+
+    src = _idx(tab, 0)
+    dst = _idx(tab, 1)
+    a = tab.model.index(0, 0, src)
+
+    mime = tab.model.mimeData([a])
+    assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, dst)
+
+    # Simulate Qt calling removeRows on the source right after a move-drop.
+    assert tab.model.removeRows(0, 1, src)
+
+    root = tab.model.root_item.to_json()
+    assert root["dst"] == {"a": 1}
+    assert root["src"] == {"b": 2, "c": 3}
