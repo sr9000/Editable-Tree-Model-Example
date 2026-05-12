@@ -78,33 +78,74 @@ def anchor_after_index(sibling_index: QModelIndex, tab) -> MoveAnchor:
 # ---------------------------------------------------------------------------
 
 
+def adjust_path_for_removed_sources(
+    path: tuple[int, ...],
+    source_paths: list[tuple[tuple[int, ...], int]],
+) -> tuple[int, ...]:
+    """Shift each index in *path* down by the number of *source_paths*
+    that sat in the same ancestor (under the original tree) at a row
+    strictly less than the corresponding index in *path*.
+
+    This is required because anchor paths are captured **before** the
+    move command detaches its sources. When a source sits in an ancestor
+    of the anchor at row ``r`` and the anchor's index at that level is
+    ``> r``, that anchor index has effectively shifted by one after the
+    source is removed.
+
+    Without this adjustment a drop ``OnItem`` of a sibling that lives
+    *after* the dragged source would land in the WRONG container — the
+    next sibling whose path slot was vacated by the detach. That bug
+    manifests as "dragging element N onto element N+1 puts it into
+    element N+2" with object/array drop targets.
+    """
+    adjusted: list[int] = []
+    for depth, row in enumerate(path):
+        prefix = tuple(path[:depth])
+        shift = sum(
+            1
+            for sp_parent, sp_row in source_paths
+            if sp_parent == prefix and sp_row < row
+        )
+        adjusted.append(row - shift)
+    return tuple(adjusted)
+
+
+def resolve_anchor_target(
+    model,
+    tab,
+    anchor: MoveAnchor,
+    detached_source_paths: list[tuple[tuple[int, ...], int]],
+) -> tuple[tuple[int, ...], int]:
+    """Return the post-pop ``(parent_path, insert_row)`` for ``anchor``.
+
+    Both halves of the anchor (``parent_path`` and ``before_sibling_path``)
+    are adjusted via :func:`adjust_path_for_removed_sources` to keep the
+    anchor stable across the source-removal step of ``_MoveRowsCmd.redo``.
+    """
+    adjusted_parent_path = adjust_path_for_removed_sources(anchor.parent_path, detached_source_paths)
+
+    if anchor.is_at_end:
+        parent_index = tab._index_from_path(adjusted_parent_path)
+        return adjusted_parent_path, model.rowCount(parent_index)
+
+    assert anchor.before_sibling_path is not None
+    adjusted_sibling_path = adjust_path_for_removed_sources(anchor.before_sibling_path, detached_source_paths)
+    return adjusted_parent_path, adjusted_sibling_path[-1]
+
+
 def resolve_anchor_insert_row(
     model,
     tab,
     anchor: MoveAnchor,
     detached_source_paths: list[tuple[tuple[int, ...], int]],
 ) -> int:
-    """Return the post-pop ``insert_row`` for ``anchor``, given the set of
-    ``(parent_path, row)`` sources that have already been removed.
+    """Return only the post-pop ``insert_row`` for ``anchor``.
 
-    Stable because the anchor's reference sibling is identified by its
-    pre-pop path; we recompute where it lives now by subtracting the
-    number of removed siblings that sat ahead of it in the same parent.
+    Kept for backwards compatibility with callers that only need the
+    row part. New code should call :func:`resolve_anchor_target` instead.
     """
-    if anchor.is_at_end:
-        parent_index = tab._index_from_path(anchor.parent_path)
-        return model.rowCount(parent_index)
-
-    assert anchor.before_sibling_path is not None
-    parent_path = anchor.parent_path
-    sibling_original_row = anchor.before_sibling_path[-1]
-    # Number of detached sources that sat in the same parent at rows < sibling_row.
-    shift = sum(
-        1
-        for src_parent_path, src_row in detached_source_paths
-        if src_parent_path == parent_path and src_row < sibling_original_row
-    )
-    return sibling_original_row - shift
+    _parent_path, insert_row = resolve_anchor_target(model, tab, anchor, detached_source_paths)
+    return insert_row
 
 
 def pre_pop_target_row_to_anchor(

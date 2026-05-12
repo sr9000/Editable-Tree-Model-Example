@@ -278,7 +278,7 @@ class _MoveRowsCmd(QUndoCommand):
     # ------------------------------------------------------------------
 
     def redo(self) -> None:
-        from tree_actions.anchors import resolve_anchor_insert_row
+        from tree_actions.anchors import resolve_anchor_target
 
         tab = self._tab
         model = tab.model
@@ -298,9 +298,13 @@ class _MoveRowsCmd(QUndoCommand):
 
         detached.reverse()  # restore ascending source order
 
-        # 2. Resolve the anchor to its current row in the destination parent.
-        insert_row = resolve_anchor_insert_row(model, tab, self._anchor, self._sources)
-        t_parent = tab._index_from_path(self._anchor.parent_path)
+        # 2. Resolve the anchor to the current (parent_path, insert_row) AFTER
+        # removing sources. The anchor's parent path itself may have shifted
+        # if any source sat in an ancestor at a lower row — without this
+        # adjustment a drop onto a sibling that lives after the dragged
+        # source(s) would land in the WRONG container.
+        adjusted_parent_path, insert_row = resolve_anchor_target(model, tab, self._anchor, self._sources)
+        t_parent = tab._index_from_path(adjusted_parent_path)
         t_parent_item = model.get_item(t_parent)
         used_names = {c.name for c in t_parent_item.child_items if isinstance(c.name, str)}
 
@@ -319,7 +323,7 @@ class _MoveRowsCmd(QUndoCommand):
             with model.rows_insertion(t_parent, ins_row, 1):
                 t_parent_item.child_items.insert(ins_row, item)
                 t_parent_item.mark_children_dirty()
-            self._placed.append((self._anchor.parent_path, ins_row))
+            self._placed.append((adjusted_parent_path, ins_row))
 
     def undo(self) -> None:
         tab = self._tab
