@@ -1,8 +1,8 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-11**. PySide6 desktop **structured-data
-editor** (originated from Qt's "Editable Tree Model" example). Steps 1–3
-of the multiselect / drag-and-drop plan have shipped; Step 9
+_Last scanned: **2026-05-12**. PySide6 desktop **structured-data
+editor** (originated from Qt's "Editable Tree Model" example). Steps 1–3,
+5 and 6 of the multiselect / drag-and-drop plan have shipped; Step 9
 (move-mechanics & multi-action redesign) shipped on top, replacing the
 three-branch move logic with a single anchor-based primitive and
 adding multi-copy filter mode + multi-paste-clones + multi-insert-zip.
@@ -26,6 +26,7 @@ sync — see `todo-n-fixme.md`).
 | Name column rename                                    | `delegates/name_delegate.py`                                         |
 | Modal editors (multiline / hex)                       | `dialogs/qmultiline_dlg.py`, `dialogs/qhexedit_dlg.py`               |
 | Context menu / clipboard / paste / structural ops     | `tree_actions/`                                                      |
+| Drag-and-drop policy / dispatch                       | `tree_actions/dnd.py`, `tree/model.py`                               |
 | Filter / search                                       | `tree_filter_proxy.py`, `documents/tab_setup.py::init_search_filter` |
 | Typed undo commands + diff replay                     | `undo/commands.py`, `undo/diff.py`                                   |
 | File I/O (JSON / JSONL / YAML / YAML-multi)           | `io_formats/`                                                        |
@@ -118,7 +119,8 @@ tree_actions/                 (≈730 LOC)
   clipboard.py                # MIME format, copy / copy-with-name / copy-value-only,
                               # filter-mode projection on multi-copy (Step 9)
   paste.py                    # paste_from_clipboard + collision avoidance,
-                              # paste_clones_at_targets / paste_insert_zip (Step 9)
+                              # paste_entries_at / paste_clones_at_targets / paste_insert_zip (Step 9)
+  dnd.py                      # can_drop / handle_drop (Step 6)
   structure.py                # insert/cut/delete/duplicate/move/sort/expand/collapse
                               # — anchor-based; single algorithm replaces 3 prior branches
   context_menu.py             # column-aware show_context_menu
@@ -532,6 +534,8 @@ truth for one document.
   `0x0E710002`).
 - Undo/redo replay via `undo.diff.DiffApplier` — emits surgical Qt
   model signals so expansion and selection survive.
+- Move commands capture subtree-relative expansion + selection state and
+  replay it on redo/undo, so moved branches keep open/closed state.
 - Dirty state tied to `undo_stack.cleanChanged`; `dirtyChanged(bool)`
   signal updates the tab title (`*` suffix) via `display_name()`.
 - `set_theme(theme, icon_provider=None)` updates both theme-aware
@@ -548,9 +552,10 @@ truth for one document.
 ### `documents/tab_setup.py`
 
 - Builds the `QTreeView` (`UniformRowHeights`, `AlternatingRowColors`,
-  `ExtendedSelection`, `SelectItems`, `ScrollPerPixel`).
+  `ExtendedSelection`, `SelectItems`, `ScrollPerPixel`, native drag/drop).
 - Attaches delegates, wires shortcuts, search proxy, font-zoom helpers,
-  column-resize tracking.
+  column-resize tracking, and binds the model's drag-drop callbacks to
+  the owning view.
 
 ### `documents/tab_paths.py`
 
@@ -584,7 +589,10 @@ truth for one document.
   are thin orchestrators that call `build_tree_mime` and push to the
   clipboard. MIME type constant `MIME_JSON_TREE = "application/x-json-tree"`.
   All three public names re-exported from `tree_actions/__init__.py`.
-- `paste.py`: `paste_from_clipboard` with collision avoidance.
+- `paste.py`: `paste_from_clipboard` with collision avoidance and reusable
+  `paste_entries_at(...)` for decoded payload insertion.
+- `dnd.py`: `can_drop(...)` / `handle_drop(...)`; internal move routes to
+  `JsonTab.push_move_rows`, copy/cross-tab routes to `paste_entries_at`.
 - `structure.py`: `insert_sibling_before/after`, `insert_child_current`,
   `delete_selection`, `cut_selection`, `duplicate_selection`,
   `move_selection_up/down`, `sort_selection_keys(recursive)`,
@@ -621,6 +629,9 @@ direct mutators (headless tests).
 - `restore(tab)` returns `True` when state was found and applied;
   callers fall back to defaults (`expandAll` +
   `resizeColumnToContents`) on `False`.
+- `iter_expanded_relative_paths(view, source_index)` and
+  `apply_expanded_relative_paths(view, source_index, paths)` support
+  move-time subtree expansion preservation.
 - `discard(path)` removes the group on `Save As` to a new path.
 - Hard cap `MAX_EXPANDED_PATHS = 5000`.
 

@@ -1,12 +1,65 @@
 import hashlib
 from pathlib import Path
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QModelIndex, QSettings, QSortFilterProxyModel
 
 from settings import APPLICATION_ID
 from state.qsettings_coercion import _coerce_int, _coerce_int_list, _coerce_path, _coerce_paths
 
 MAX_EXPANDED_PATHS = 5000
+
+
+def _source_to_view_index(view, source_index: QModelIndex) -> QModelIndex:
+    model = view.model()
+    if isinstance(model, QSortFilterProxyModel):
+        return model.mapFromSource(source_index)
+    return source_index
+
+
+def iter_expanded_relative_paths(view, source_index: QModelIndex):
+    """Yield expanded descendant paths relative to *source_index*.
+
+    Relative paths are tuples of row numbers and never include the source root
+    itself. Example: ``(2, 0)`` means child row 2, then its child row 0.
+    """
+    if not source_index.isValid():
+        return
+
+    model = source_index.model()
+
+    def walk(parent: QModelIndex, rel_prefix: tuple[int, ...]):
+        for row in range(model.rowCount(parent)):
+            child = model.index(row, 0, parent)
+            if not child.isValid():
+                continue
+            rel = rel_prefix + (row,)
+            view_child = _source_to_view_index(view, child)
+            if view_child.isValid() and view.isExpanded(view_child):
+                yield rel
+            yield from walk(child, rel)
+
+    yield from walk(source_index, ())
+
+
+def apply_expanded_relative_paths(view, source_index: QModelIndex, paths) -> None:
+    """Expand descendants under *source_index* from relative row-path tuples."""
+    if not source_index.isValid():
+        return
+
+    model = source_index.model()
+    for rel in paths:
+        cursor = source_index
+        ok = True
+        for row in rel:
+            cursor = model.index(int(row), 0, cursor)
+            if not cursor.isValid():
+                ok = False
+                break
+        if not ok:
+            continue
+        view_idx = _source_to_view_index(view, cursor)
+        if view_idx.isValid():
+            view.setExpanded(view_idx, True)
 
 
 def state_key(path: str) -> str:

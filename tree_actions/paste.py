@@ -67,12 +67,18 @@ def _resolve_paste_target(model, current: QModelIndex, mode: str):
     return None
 
 
-def _paste_entries_at(tree_view: QTreeView, parent_index: QModelIndex, insert_pos: int, *, label: str) -> bool:
+def paste_entries_at(
+    tree_view: QTreeView,
+    parent_index: QModelIndex,
+    insert_pos: int,
+    entries: list[dict[str, Any]],
+    *,
+    label: str,
+) -> bool:
     model, _proxy = _resolve_model(tree_view)
     if model is None:
         return False
 
-    entries = _clipboard_entries()
     if not entries:
         return False
 
@@ -132,6 +138,13 @@ def _paste_entries_at(tree_view: QTreeView, parent_index: QModelIndex, insert_po
 
     tree_view.setCurrentIndex(_to_view_index(tree_view, model.index(insert_pos, 0, parent_index)))
     return True
+
+
+def _paste_entries_at(tree_view: QTreeView, parent_index: QModelIndex, insert_pos: int, *, label: str) -> bool:
+    entries = _clipboard_entries()
+    if not entries:
+        return False
+    return paste_entries_at(tree_view, parent_index, insert_pos, entries, label=label)
 
 
 def paste_from_clipboard(tree_view: QTreeView) -> bool:

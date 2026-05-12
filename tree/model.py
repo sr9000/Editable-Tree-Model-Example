@@ -1,9 +1,9 @@
 # Ported from: https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/editabletreemodel
 
 from contextlib import contextmanager
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
+from PySide6.QtCore import QAbstractItemModel, QMimeData, QModelIndex, QPersistentModelIndex, Qt, Signal
 
 from themes.icon_provider import IconProvider, StubIconProvider
 from tree.item import JsonTreeItem
@@ -33,6 +33,16 @@ class JsonTreeModel(QAbstractItemModel):
         self.root_item = JsonTreeItem(None, data)
         self.show_root = show_root
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
+        self._attached_view = None
+        self._drag_source_rows: list[QModelIndex] = []
+
+    def attach_view(self, view) -> None:
+        self._attached_view = view
+
+    def consume_drag_source_rows(self) -> list[QModelIndex]:
+        rows = list(self._drag_source_rows)
+        self._drag_source_rows = []
+        return rows
 
     def set_icon_provider(self, provider: IconProvider | None) -> None:
         next_provider = provider or StubIconProvider()
@@ -62,23 +72,32 @@ class JsonTreeModel(QAbstractItemModel):
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
-            return Qt.ItemFlag.NoItemFlags
+            return Qt.ItemFlag.ItemIsDropEnabled
 
         default = QAbstractItemModel.flags(self, index)
         item = self.get_item(index)
 
+        edit_flags = default
+
         if index.column() == 0:
             if item is self.root_item:
-                return default
-            parent_item = item.parent()
-            if parent_item is not None and parent_item.json_type is JsonType.OBJECT:
-                return default | Qt.ItemFlag.ItemIsEditable
-            return default
+                edit_flags = default
+            else:
+                parent_item = item.parent()
+                if parent_item is not None and parent_item.json_type is JsonType.OBJECT:
+                    edit_flags = default | Qt.ItemFlag.ItemIsEditable
 
-        if index.column() == 1:
-            return default | Qt.ItemFlag.ItemIsEditable
+        elif index.column() == 1:
+            edit_flags = default | Qt.ItemFlag.ItemIsEditable
 
-        return default | Qt.ItemFlag.ItemIsEditable if item.editable else default
+        elif item.editable:
+            edit_flags = default | Qt.ItemFlag.ItemIsEditable
+
+        if item is not self.root_item:
+            edit_flags |= Qt.ItemFlag.ItemIsDragEnabled
+        if item is self.root_item or item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+            edit_flags |= Qt.ItemFlag.ItemIsDropEnabled
+        return edit_flags
 
     def index(self, row: int, column: int, parent: QModelIndex = QModelIndex()) -> QModelIndex:
         if not parent.isValid() and self.show_root:
@@ -138,6 +157,65 @@ class JsonTreeModel(QAbstractItemModel):
     ) -> Any:
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return ["Name", "Type", "Value"][section]
+
+    def mimeTypes(self) -> list[str]:
+        from tree_actions.clipboard import MIME_JSON_TREE
+
+        return [MIME_JSON_TREE, "text/plain"]
+
+    def mimeData(self, indexes) -> QMimeData:  # type: ignore[override]
+        from tree_actions.clipboard import build_tree_mime
+
+        rows_by_path: dict[tuple[int, ...], QModelIndex] = {}
+        for idx in indexes:
+            if not idx.isValid():
+                continue
+            row0 = self.index(idx.row(), 0, idx.parent())
+            if not row0.isValid():
+                continue
+            if self.get_item(row0) is self.root_item:
+                continue
+            path: list[int] = []
+            cursor = row0
+            while cursor.isValid():
+                path.append(cursor.row())
+                cursor = cursor.parent()
+            rows_by_path[tuple(reversed(path))] = row0
+
+        source_rows = [rows_by_path[path] for path in sorted(rows_by_path)]
+        self._drag_source_rows = source_rows
+        mime = build_tree_mime(self, source_rows)
+        return mime if mime is not None else QMimeData()
+
+    def supportedDragActions(self) -> Qt.DropAction:
+        return cast(Qt.DropAction, Qt.DropAction.MoveAction | Qt.DropAction.CopyAction)
+
+    def supportedDropActions(self) -> Qt.DropAction:
+        return cast(Qt.DropAction, Qt.DropAction.MoveAction | Qt.DropAction.CopyAction)
+
+    def canDropMimeData(
+        self,
+        data: QMimeData,
+        action: Qt.DropAction,
+        row: int,
+        column: int,
+        parent: QModelIndex,
+    ) -> bool:
+        from tree_actions.dnd import can_drop
+
+        return can_drop(self, data, action, row, column, parent)
+
+    def dropMimeData(
+        self,
+        data: QMimeData,
+        action: Qt.DropAction,
+        row: int,
+        column: int,
+        parent: QModelIndex,
+    ) -> bool:
+        from tree_actions.dnd import handle_drop
+
+        return handle_drop(self._attached_view, self, data, action, row, column, parent)
 
     @contextmanager
     def rows_insertion(self, parent: QModelIndex, position: int, rows: int):

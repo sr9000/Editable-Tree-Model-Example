@@ -27,6 +27,11 @@ def init_layout(tab) -> None:
     tab.view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
     tab.view.setAnimated(False)
     tab.view.setAllColumnsShowFocus(True)
+    tab.view.setDragEnabled(True)
+    tab.view.setAcceptDrops(True)
+    tab.view.setDropIndicatorShown(True)
+    tab.view.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+    tab.view.setDefaultDropAction(Qt.DropAction.MoveAction)
     tab.view.installEventFilter(tab)
     tab.view.viewport().installEventFilter(tab)
     initial_pt = tab.view.font().pointSize()
@@ -47,6 +52,7 @@ def init_model(tab, model_data: Any, show_root: bool) -> None:
     tab.undo_stack = QUndoStack(tab)
 
     tab.model = JsonTreeModel(model_data, tab.view, show_root=show_root, icon_provider=tab._icon_provider)
+    tab.model.attach_view(tab.view)
     tab.proxy = TreeFilterProxy(tab)
     tab.proxy.setSourceModel(tab.model)
 

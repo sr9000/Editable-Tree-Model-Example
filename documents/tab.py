@@ -20,6 +20,7 @@ from documents.tab_setup import (
     init_shortcuts,
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
+from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec
@@ -27,6 +28,7 @@ from tree.item import JsonTreeItem
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
+from tree_actions.selection import selected_source_rows
 from tree_actions.structure import (
     cut_selection,
     delete_selection,
@@ -195,6 +197,9 @@ class JsonTab(QWidget):
         self._diff_applier = DiffApplier(self)
 
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
+        self._move_view_state_by_cmd_id: dict[int, dict[str, Any]] = {}
+        self._last_undo_index = self.undo_stack.index()
+        self.undo_stack.indexChanged.connect(self._on_undo_index_changed)
         self.undo_stack.setClean()
         self._set_dirty(False)
 
@@ -504,6 +509,115 @@ class JsonTab(QWidget):
         visit(QModelIndex())
         return paths
 
+    def _capture_move_view_state(self, sources: list) -> dict[str, Any]:
+        roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]] = {}
+        for idx in sources:
+            row0 = self.model.index(idx.row(), 0, idx.parent())
+            if not row0.isValid():
+                continue
+            key = (self._index_path(row0.parent()), row0.row())
+            view_idx = self._source_to_view(row0)
+            roots_state[key] = {
+                "expanded_root": bool(view_idx.isValid() and self.view.isExpanded(view_idx)),
+                "expanded_rel": list(iter_expanded_relative_paths(self.view, row0)),
+            }
+
+        selected_paths = [self._index_path(idx) for idx in selected_source_rows(self.view) if idx.isValid()]
+        current_src = self._proxy_to_source(self.view.currentIndex())
+        if current_src.isValid():
+            current_src = self.model.index(current_src.row(), 0, current_src.parent())
+        current_path = self._index_path(current_src) if current_src.isValid() else None
+        return {
+            "roots": roots_state,
+            "selection_before": selected_paths,
+            "current_before": current_path,
+        }
+
+    @staticmethod
+    def _sort_move_paths(paths: list[tuple[tuple[int, ...], int]]) -> list[tuple[tuple[int, ...], int]]:
+        return sorted(paths, key=lambda p: (p[0], p[1]))
+
+    def _apply_relative_expansion_mapping(
+        self,
+        source_roots: list[tuple[tuple[int, ...], int]],
+        target_roots: list[tuple[tuple[int, ...], int]],
+        roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]],
+    ) -> None:
+        ordered_sources = self._sort_move_paths(source_roots)
+        for source_root, target_root in zip(ordered_sources, target_roots):
+            state = roots_state.get(source_root)
+            if state is None:
+                continue
+            target_parent_path, target_row = target_root
+            target_parent = self._index_from_path(target_parent_path)
+            target_index = self.model.index(target_row, 0, target_parent)
+            if not target_index.isValid():
+                continue
+            target_view = self._source_to_view(target_index)
+            if target_view.isValid():
+                self.view.setExpanded(target_view, bool(state.get("expanded_root", False)))
+            apply_expanded_relative_paths(self.view, target_index, state.get("expanded_rel", []))
+
+    def _restore_selection_paths(self, paths: list[tuple[int, ...]], current_path: tuple[int, ...] | None) -> None:
+        from PySide6.QtCore import QItemSelection, QItemSelectionModel
+
+        sm = self.view.selectionModel()
+        if sm is None:
+            return
+        selection = QItemSelection()
+        first_view_idx = None
+        for path in paths:
+            src_idx = self._index_from_path(path)
+            view_idx = self._source_to_view(src_idx)
+            if not view_idx.isValid():
+                continue
+            selection.select(view_idx, view_idx)
+            if first_view_idx is None:
+                first_view_idx = view_idx
+        sm.select(
+            selection,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+        )
+        if current_path is not None:
+            src_current = self._index_from_path(current_path)
+            view_current = self._source_to_view(src_current)
+            if view_current.isValid():
+                sm.setCurrentIndex(view_current, QItemSelectionModel.SelectionFlag.NoUpdate)
+                return
+        if first_view_idx is not None:
+            sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
+
+    def _apply_move_view_state(self, cmd: _MoveRowsCmd, *, undo: bool) -> None:
+        state = self._move_view_state_by_cmd_id.get(id(cmd))
+        if state is None:
+            return
+        roots_state = state.get("roots", {})
+        if undo:
+            self._apply_relative_expansion_mapping(
+                cmd.source_paths, self._sort_move_paths(cmd.source_paths), roots_state
+            )
+            self._restore_selection_paths(state.get("selection_before", []), state.get("current_before"))
+            return
+        self._apply_relative_expansion_mapping(cmd.source_paths, cmd.placed_paths, roots_state)
+        self._restore_selection_at_paths(cmd.placed_paths)
+
+    def _on_undo_index_changed(self, new_index: int) -> None:
+        old_index = self._last_undo_index
+        if new_index == old_index:
+            return
+
+        if new_index > old_index:
+            for i in range(old_index, new_index):
+                cmd = self.undo_stack.command(i)
+                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in self._move_view_state_by_cmd_id:
+                    self._apply_move_view_state(cmd, undo=False)
+        else:
+            for i in range(old_index - 1, new_index - 1, -1):
+                cmd = self.undo_stack.command(i)
+                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in self._move_view_state_by_cmd_id:
+                    self._apply_move_view_state(cmd, undo=True)
+        self._last_undo_index = new_index
+
     # ------------------------------------------------------------------
     # Smart-restore diff helpers
     # ------------------------------------------------------------------
@@ -635,13 +749,14 @@ class JsonTab(QWidget):
                     return False
 
         # Build the command.
+        move_view_state = self._capture_move_view_state(sources)
         target_qname = self._qualified_name(self.model.index(sources[0].row(), 0, sources[0].parent()))
         cmd = _MoveRowsCmd(self, _make_label(label, target_qname), source_paths, anchor)
         self.undo_stack.push(cmd)
+        self._move_view_state_by_cmd_id[id(cmd)] = move_view_state
         # Expose placed paths for action-layer post-hooks (esp. macros).
         self._last_move_placed = cmd.placed_paths
-        # Action-layer post-hook: re-select the placed rows in the view.
-        self._restore_selection_at_paths(cmd.placed_paths)
+        self._apply_move_view_state(cmd, undo=False)
         return True
 
     def push_move_rows(
