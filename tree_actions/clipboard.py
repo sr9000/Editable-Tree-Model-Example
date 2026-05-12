@@ -136,6 +136,25 @@ def _entries_text_payload(model: JsonTreeModel, rows, entries: list[dict[str, An
     return [entry["value"] for entry in entries]
 
 
+def _path_relative_to_root(model: JsonTreeModel, index) -> tuple[int, ...]:
+    """Return an index path relative to ``model.root_item``.
+
+    This path intentionally excludes the synthetic root row when
+    ``show_root=True`` so drag metadata matches ``documents.tab_paths``.
+    """
+    if not index.isValid():
+        return ()
+    root_item = model.root_item
+    if model.get_item(index) is root_item:
+        return ()
+    path: list[int] = []
+    cursor = index
+    while cursor.isValid() and model.get_item(cursor) is not root_item:
+        path.append(cursor.row())
+        cursor = cursor.parent()
+    return tuple(reversed(path))
+
+
 # ---------------------------------------------------------------------------
 # Public MIME (de)serializer — canonical wire format
 # ---------------------------------------------------------------------------
@@ -157,7 +176,8 @@ def build_tree_mime(model: JsonTreeModel, source_rows) -> QMimeData | None:
     entries = _build_copy_entries(model, rows)
     text_payload = _entries_text_payload(model, rows, entries)
 
-    metadata = simplejson.dumps({"entries": entries}, default=mpq_json_default)
+    source_paths = [list(_path_relative_to_root(model, idx)) for idx in rows]
+    metadata = simplejson.dumps({"entries": entries, "source_paths": source_paths}, default=mpq_json_default)
     text = simplejson.dumps(text_payload, default=mpq_json_default, indent=2)
 
     mime = QMimeData()
@@ -213,6 +233,31 @@ def entries_from_mime(mime: QMimeData) -> list[dict[str, Any]] | None:
     if isinstance(parsed, list):
         return [{"name": None, "value": value} for value in parsed]
     return [{"name": None, "value": parsed}]
+
+
+def source_paths_from_mime(mime: QMimeData) -> list[tuple[int, ...]] | None:
+    """Decode optional drag source paths from ``application/x-json-tree``.
+
+    Returns ``None`` when source paths are absent or malformed.
+    """
+    if mime is None or not mime.hasFormat(MIME_JSON_TREE):
+        return None
+    try:
+        raw = mime.data(MIME_JSON_TREE).data().decode("utf-8")
+        parsed = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    raw_paths = parsed.get("source_paths")
+    if not isinstance(raw_paths, list):
+        return None
+    decoded: list[tuple[int, ...]] = []
+    for path in raw_paths:
+        if not isinstance(path, list) or not all(isinstance(row, int) and row >= 0 for row in path):
+            return None
+        decoded.append(tuple(path))
+    return decoded
 
 
 def _clipboard_entries() -> list[dict[str, Any]] | None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtCore import Qt
 
 from documents.tab import JsonTab
 
@@ -64,8 +64,8 @@ def test_cross_tab_copy_drop_keeps_source_unchanged(qtbot):
     assert target.model.root_item.to_json() == {"right": {"a": 1, "b": 2}}
 
 
-def test_can_drop_rejects_on_row_drop_onto_primitive(qtbot):
-    tab = _make_tab(qtbot, {"obj": {"a": 1}, "dst": {"x": 0}})
+def test_on_row_drop_onto_primitive_falls_back_to_sibling_after(qtbot):
+    tab = _make_tab(qtbot, {"obj": {"a": 1}, "dst": {"x": 0, "y": 9}})
     obj = _idx(tab, 0)
     src_child = tab.model.index(0, 0, obj)
     mime = tab.model.mimeData([src_child])
@@ -73,13 +73,15 @@ def test_can_drop_rejects_on_row_drop_onto_primitive(qtbot):
     dst = _idx(tab, 1)
     primitive = tab.model.index(0, 0, dst)
 
-    assert not tab.model.canDropMimeData(
+    assert tab.model.canDropMimeData(
         mime,
         Qt.DropAction.MoveAction,
         -1,
         0,
         primitive,
     )
+    assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, -1, 0, primitive)
+    assert tab.model.root_item.to_json() == {"obj": {}, "dst": {"x": 0, "a": 1, "y": 9}}
 
 
 def test_move_action_without_internal_source_falls_back_to_copy(qtbot):
