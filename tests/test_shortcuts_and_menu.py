@@ -73,11 +73,7 @@ def test_delete_shortcut_not_ambiguous_and_deletes_once(qtbot):
         assert tab is not None
 
         # Ambiguity guard: Del must be owned only by the window action.
-        del_shortcuts = [
-            sc
-            for sc in win.findChildren(QShortcut)
-            if sc.key().toString() == "Del"
-        ]
+        del_shortcuts = [sc for sc in win.findChildren(QShortcut) if sc.key().toString() == "Del"]
         assert del_shortcuts == []
         assert win.rowRemoveAction.shortcut().toString() == "Del"
 
