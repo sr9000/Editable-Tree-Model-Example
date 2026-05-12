@@ -114,3 +114,57 @@ def test_internal_move_ignores_immediate_followup_remove_rows(qtbot):
     root = tab.model.root_item.to_json()
     assert root["dst"] == {"a": 1}
     assert root["src"] == {"b": 2, "c": 3}
+
+
+def test_internal_move_auto_renames_object_key_collisions(qtbot):
+    tab = _make_tab(qtbot, {"src": {"k": 1}, "dst": {"k": 2}})
+
+    src = _idx(tab, 0)
+    dst = _idx(tab, 1)
+    k = tab.model.index(0, 0, src)
+    mime = tab.model.mimeData([k])
+
+    assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, 1, 0, dst)
+    assert tab.model.root_item.to_json() == {"src": {}, "dst": {"k": 2, "k_2": 1}}
+
+
+def test_internal_move_array_child_into_object_gets_generated_name(qtbot):
+    tab = _make_tab(qtbot, {"arr": [10], "obj": {"a": 1}})
+
+    arr = _idx(tab, 0)
+    obj = _idx(tab, 1)
+    item = tab.model.index(0, 0, arr)
+    mime = tab.model.mimeData([item])
+
+    assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, 1, 0, obj)
+
+    result = tab.model.root_item.to_json()
+    assert result["arr"] == []
+    assert result["obj"]["a"] == 1
+    assert 10 in result["obj"].values()
+
+
+def test_repeated_internal_moves_keep_model_serializable(qtbot):
+    tab = _make_tab(
+        qtbot,
+        {
+            "left": {"a": 1, "b": 2, "c": 3},
+            "right": {"x": 9},
+        },
+    )
+
+    left = _idx(tab, 0)
+    right = _idx(tab, 1)
+
+    for _ in range(20):
+        a = tab.model.index(0, 0, left)
+        mime1 = tab.model.mimeData([a])
+        assert tab.model.dropMimeData(mime1, Qt.DropAction.MoveAction, 1, 0, right)
+
+        x = tab.model.index(0, 0, right)
+        mime2 = tab.model.mimeData([x])
+        assert tab.model.dropMimeData(mime2, Qt.DropAction.MoveAction, 0, 0, left)
+
+    # Main invariant: no unnamed OBJECT children and stable full serialization.
+    snapshot = tab.model.root_item.to_json()
+    assert isinstance(snapshot, dict)

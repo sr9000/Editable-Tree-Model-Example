@@ -4,6 +4,7 @@ from typing import Any
 from PySide6.QtCore import QItemSelection, QItemSelectionModel, Qt
 from PySide6.QtGui import QUndoCommand
 
+from tree.item_names import unique_child_name
 from tree.types import JsonType
 
 _CMD_ID_RENAME = 0x0E71_0001
@@ -301,6 +302,7 @@ class _MoveRowsCmd(QUndoCommand):
         insert_row = resolve_anchor_insert_row(model, tab, self._anchor, self._sources)
         t_parent = tab._index_from_path(self._anchor.parent_path)
         t_parent_item = model.get_item(t_parent)
+        used_names = {c.name for c in t_parent_item.child_items if isinstance(c.name, str)}
 
         # Clamp defensively (out-of-range insert rows should never reach here,
         # but list.insert silently clamps so guarding against drift is cheap).
@@ -310,6 +312,10 @@ class _MoveRowsCmd(QUndoCommand):
         for offset, (_sp, _sr, item) in enumerate(detached):
             ins_row = insert_row + offset
             item.parent_item = t_parent_item
+            if t_parent_item.json_type is JsonType.OBJECT:
+                base = item.name.strip() if isinstance(item.name, str) and item.name.strip() else "new_key"
+                item.name = unique_child_name(t_parent_item.child_items, base=base, used_names=used_names)
+                used_names.add(item.name)
             with model.rows_insertion(t_parent, ins_row, 1):
                 t_parent_item.child_items.insert(ins_row, item)
                 t_parent_item.mark_children_dirty()
@@ -336,10 +342,19 @@ class _MoveRowsCmd(QUndoCommand):
         detached.reverse()
 
         sorted_sources_asc = sorted(self._sources, key=lambda p: (p[0], p[1]))
+        used_by_parent: dict[tuple, set[str]] = {}
         for (parent_path, row), item in zip(sorted_sources_asc, detached):
             p = tab._index_from_path(parent_path)
             parent_item = model.get_item(p)
             item.parent_item = parent_item
+            if parent_item.json_type is JsonType.OBJECT:
+                used = used_by_parent.setdefault(
+                    parent_path,
+                    {c.name for c in parent_item.child_items if isinstance(c.name, str)},
+                )
+                base = item.name.strip() if isinstance(item.name, str) and item.name.strip() else "new_key"
+                item.name = unique_child_name(parent_item.child_items, base=base, used_names=used)
+                used.add(item.name)
             with model.rows_insertion(p, row, 1):
                 parent_item.child_items.insert(row, item)
                 parent_item.mark_children_dirty()

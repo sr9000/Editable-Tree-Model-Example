@@ -3,7 +3,7 @@
 from contextlib import contextmanager
 from typing import Any, Optional, cast
 
-from PySide6.QtCore import QAbstractItemModel, QMimeData, QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
+from PySide6.QtCore import QAbstractItemModel, QMimeData, QModelIndex, QPersistentModelIndex, Qt, Signal
 
 from themes.icon_provider import IconProvider, StubIconProvider
 from tree.item import JsonTreeItem
@@ -35,7 +35,7 @@ class JsonTreeModel(QAbstractItemModel):
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
         self._attached_view = None
         self._drag_source_rows: list[QModelIndex] = []
-        self._suppress_external_remove_rows = False
+        self._suppressed_remove_ops: set[tuple[tuple[int, ...], int, int]] = set()
 
     def attach_view(self, view) -> None:
         self._attached_view = view
@@ -45,20 +45,32 @@ class JsonTreeModel(QAbstractItemModel):
         self._drag_source_rows = []
         return rows
 
-    def arm_external_remove_rows_suppression(self) -> None:
-        """Ignore one event-loop tick of external removeRows calls.
+    def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
+        path: list[int] = []
+        cursor = index
+        while cursor.isValid():
+            path.append(cursor.row())
+            cursor = cursor.parent()
+        return tuple(reversed(path))
 
-        Some Qt drag/drop paths may call removeRows on the source model
-        after dropMimeData(MoveAction) returns True. Internal moves are
-        already applied via push_move_rows, so the extra remove would delete
-        unrelated rows after indexes shift.
-        """
-        self._suppress_external_remove_rows = True
-
-        def _clear() -> None:
-            self._suppress_external_remove_rows = False
-
-        QTimer.singleShot(0, _clear)
+    def arm_external_remove_rows_suppression(self, source_paths: list[tuple[tuple[int, ...], int]]) -> None:
+        """Suppress only the exact removeRows calls Qt may emit post-drop."""
+        ops: set[tuple[tuple[int, ...], int, int]] = set()
+        by_parent: dict[tuple[int, ...], list[int]] = {}
+        for p_path, row in source_paths:
+            by_parent.setdefault(tuple(p_path), []).append(int(row))
+        for p_path, rows in by_parent.items():
+            rows = sorted(set(rows))
+            start = rows[0]
+            prev = start
+            for r in rows[1:]:
+                if r == prev + 1:
+                    prev = r
+                    continue
+                ops.add((p_path, start, prev - start + 1))
+                start = prev = r
+            ops.add((p_path, start, prev - start + 1))
+        self._suppressed_remove_ops = ops
 
     def set_icon_provider(self, provider: IconProvider | None) -> None:
         next_provider = provider or StubIconProvider()
@@ -199,9 +211,28 @@ class JsonTreeModel(QAbstractItemModel):
             rows_by_path[tuple(reversed(path))] = row0
 
         source_rows = [rows_by_path[path] for path in sorted(rows_by_path)]
-        self._drag_source_rows = source_rows
-        mime = build_tree_mime(self, source_rows)
+        # Drag moves operate on top-level rows only; descendants of selected
+        # ancestors are pruned to avoid unstable detach/insert sequences.
+        top_level_rows: list[QModelIndex] = []
+        for idx in source_rows:
+            if any(other != idx and self.isDescendantOf(idx, other) for other in source_rows):
+                continue
+            top_level_rows.append(idx)
+        self._drag_source_rows = top_level_rows
+        try:
+            mime = build_tree_mime(self, top_level_rows)
+        except Exception:
+            self._drag_source_rows = []
+            return QMimeData()
         return mime if mime is not None else QMimeData()
+
+    def isDescendantOf(self, index: QModelIndex, potential_ancestor: QModelIndex) -> bool:
+        parent = index.parent()
+        while parent.isValid():
+            if parent == potential_ancestor:
+                return True
+            parent = parent.parent()
+        return False
 
     def supportedDragActions(self) -> Qt.DropAction:
         return cast(Qt.DropAction, Qt.DropAction.MoveAction | Qt.DropAction.CopyAction)
@@ -258,8 +289,14 @@ class JsonTreeModel(QAbstractItemModel):
             self.endRemoveRows()
 
     def removeRows(self, position: int, rows: int, parent: QModelIndex = QModelIndex()) -> bool:
-        if self._suppress_external_remove_rows:
+        op = (self._index_path(parent), int(position), int(rows))
+        if op in self._suppressed_remove_ops:
+            self._suppressed_remove_ops.discard(op)
             return True
+        if self._suppressed_remove_ops:
+            # If Qt did not emit the expected follow-up remove signature,
+            # drop stale suppression entries so future explicit deletes work.
+            self._suppressed_remove_ops.clear()
         if self.show_root and not parent.isValid():
             parent = self._root_index()
         if parent_item := self.get_item(parent):

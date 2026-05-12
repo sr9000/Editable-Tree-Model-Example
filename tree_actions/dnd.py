@@ -78,9 +78,10 @@ def handle_drop(view, model, mime, action: Qt.DropAction, row: int, column: int,
     if action == Qt.DropAction.MoveAction:
         source_rows = model.consume_drag_source_rows()
         if source_rows:
+            source_paths = [(tab._index_path(idx.parent()), idx.row()) for idx in source_rows if idx.isValid()]
             moved = tab.push_move_rows(source_rows, target_parent, target_row, label="drag move")
-            if moved:
-                model.arm_external_remove_rows_suppression()
+            if moved and source_paths:
+                model.arm_external_remove_rows_suppression(source_paths)
             return moved
 
     entries = entries_from_mime(mime)
