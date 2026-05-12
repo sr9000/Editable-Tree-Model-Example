@@ -235,3 +235,17 @@ def test_move_row_command_is_o1(qtbot):
     assert isinstance(cmd._anchor.parent_path, tuple)
     assert not hasattr(cmd, "_before")
     assert not hasattr(cmd, "_after")
+
+
+def test_insert_child_on_empty_root_container(qtbot):
+    tab = JsonTab(lambda *_: None, data={}, show_root=True)
+    qtbot.addWidget(tab)
+
+    root_src = tab.model.index(0, 0, QModelIndex())
+    root_view = tab._source_to_view(root_src)
+    tab.view.setCurrentIndex(root_view)
+    tab.view.selectionModel().select(root_view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+
+    assert insert_child_current(tab.view)
+    assert tab.model.root_item.to_json() == {"new_key": None}
+    assert isinstance(_last_command(tab), _InsertRowsCmd)

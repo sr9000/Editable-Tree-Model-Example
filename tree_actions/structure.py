@@ -99,10 +99,16 @@ def insert_child_current(tree_view: QTreeView) -> bool:
         return False
 
     current = _to_source_index(tree_view.currentIndex())
-    if not current.isValid():
+    if current.isValid():
+        parent_row0 = _row0(model, current)
+    elif model.show_root:
+        parent_row0 = model.index(0, 0, QModelIndex())
+    else:
+        parent_row0 = QModelIndex()
+
+    if not parent_row0.isValid() and model.get_item(parent_row0).json_type not in (JsonType.OBJECT, JsonType.ARRAY):
         return False
 
-    parent_row0 = _row0(model, current)
     parent_item = model.get_item(parent_row0)
     if parent_item.json_type not in (JsonType.OBJECT, JsonType.ARRAY):
         return False

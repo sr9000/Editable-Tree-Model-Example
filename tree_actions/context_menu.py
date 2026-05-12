@@ -148,12 +148,15 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     can_move_up = False
     can_move_down = False
     has_non_root = False
+    can_insert_child = False
 
     if has_selection:
         assert source_model is not None
         for row in selected_rows:
             row0 = _row0(source_model, row)
             item = source_model.get_item(row0)
+            if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+                can_insert_child = True
             if item is source_model.root_item:
                 continue
             has_non_root = True
@@ -262,7 +265,7 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
         insert_menu,
         "Insert as Child",
         lambda: insert_child_current(tree_view),
-        enabled=is_container,
+        enabled=can_insert_child,
     )
 
     context_menu.addSeparator()
