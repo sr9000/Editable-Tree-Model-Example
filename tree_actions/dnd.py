@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+from PySide6.QtCore import QModelIndex, Qt
+
+from tree.types import JsonType
+from tree_actions.clipboard import MIME_JSON_TREE, entries_from_mime
+from tree_actions.paste import paste_entries_at
+
+
+def _tab_of(view):
+    parent = view.parent() if view is not None else None
+    if parent is not None and hasattr(parent, "push_move_rows"):
+        return parent
+    return None
+
+
+def _row0(model, index: QModelIndex) -> QModelIndex:
+    if not index.isValid():
+        return QModelIndex()
+    return model.index(index.row(), 0, index.parent())
+
+
+def _resolve_drop_target(model, row: int, parent: QModelIndex) -> tuple[QModelIndex, int] | None:
+    parent_row0 = _row0(model, parent)
+
+    if row != -1:
+        target_parent = parent_row0 if parent_row0.isValid() else QModelIndex()
+        clamped = max(0, min(int(row), model.rowCount(target_parent)))
+        return target_parent, clamped
+
+    if not parent_row0.isValid():
+        return QModelIndex(), model.rowCount(QModelIndex())
+
+    parent_item = model.get_item(parent_row0)
+    if parent_item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+        return parent_row0, model.rowCount(parent_row0)
+
+    # Fallback for on-row drops over leaves: place after leaf sibling.
+    return parent_row0.parent(), parent_row0.row() + 1
+
+
+def can_drop(model, mime, action: Qt.DropAction, row: int, column: int, parent: QModelIndex) -> bool:
+    if action == Qt.DropAction.IgnoreAction:
+        return False
+    if action not in (Qt.DropAction.MoveAction, Qt.DropAction.CopyAction):
+        return False
+    if column not in (-1, 0):
+        return False
+    if mime is None:
+        return False
+    if not mime.hasFormat(MIME_JSON_TREE) and not (hasattr(mime, "text") and mime.text().strip()):
+        return False
+    if not entries_from_mime(mime):
+        return False
+
+    if row == -1 and parent.isValid():
+        item = model.get_item(_row0(model, parent))
+        if item.json_type not in (JsonType.OBJECT, JsonType.ARRAY):
+            # ON-row drop onto primitive is explicitly disabled in step 6.
+            return False
+
+    return _resolve_drop_target(model, row, parent) is not None
+
+
+def handle_drop(view, model, mime, action: Qt.DropAction, row: int, column: int, parent: QModelIndex) -> bool:
+    if not can_drop(model, mime, action, row, column, parent):
+        return False
+
+    target = _resolve_drop_target(model, row, parent)
+    if target is None:
+        return False
+    target_parent, target_row = target
+
+    tab = _tab_of(view)
+    if tab is None:
+        return False
+
+    if action == Qt.DropAction.MoveAction:
+        source_rows = model.consume_drag_source_rows()
+        if source_rows:
+            return tab.push_move_rows(source_rows, target_parent, target_row, label="drag move")
+
+    entries = entries_from_mime(mime)
+    if not entries:
+        return False
+    copy_label = "drag copy" if action == Qt.DropAction.CopyAction else "drag drop"
+    return paste_entries_at(view, target_parent, target_row, entries, label=copy_label)
