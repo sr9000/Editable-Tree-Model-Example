@@ -35,7 +35,6 @@ class JsonTreeModel(QAbstractItemModel):
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
         self._attached_view = None
         self._drag_source_rows: list[QModelIndex] = []
-        self._suppressed_remove_ops: set[tuple[tuple[int, ...], int, int]] = set()
 
     def attach_view(self, view) -> None:
         self._attached_view = view
@@ -53,24 +52,6 @@ class JsonTreeModel(QAbstractItemModel):
             cursor = cursor.parent()
         return tuple(reversed(path))
 
-    def arm_external_remove_rows_suppression(self, source_paths: list[tuple[tuple[int, ...], int]]) -> None:
-        """Suppress only the exact removeRows calls Qt may emit post-drop."""
-        ops: set[tuple[tuple[int, ...], int, int]] = set()
-        by_parent: dict[tuple[int, ...], list[int]] = {}
-        for p_path, row in source_paths:
-            by_parent.setdefault(tuple(p_path), []).append(int(row))
-        for p_path, rows in by_parent.items():
-            rows = sorted(set(rows))
-            start = rows[0]
-            prev = start
-            for r in rows[1:]:
-                if r == prev + 1:
-                    prev = r
-                    continue
-                ops.add((p_path, start, prev - start + 1))
-                start = prev = r
-            ops.add((p_path, start, prev - start + 1))
-        self._suppressed_remove_ops = ops
 
     def set_icon_provider(self, provider: IconProvider | None) -> None:
         next_provider = provider or StubIconProvider()
@@ -289,14 +270,6 @@ class JsonTreeModel(QAbstractItemModel):
             self.endRemoveRows()
 
     def removeRows(self, position: int, rows: int, parent: QModelIndex = QModelIndex()) -> bool:
-        op = (self._index_path(parent), int(position), int(rows))
-        if op in self._suppressed_remove_ops:
-            self._suppressed_remove_ops.discard(op)
-            return True
-        if self._suppressed_remove_ops:
-            # If Qt did not emit the expected follow-up remove signature,
-            # drop stale suppression entries so future explicit deletes work.
-            self._suppressed_remove_ops.clear()
         if self.show_root and not parent.isValid():
             parent = self._root_index()
         if parent_item := self.get_item(parent):

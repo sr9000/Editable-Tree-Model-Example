@@ -3,12 +3,13 @@ from typing import Any
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoStack
-from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QTreeView, QVBoxLayout
+from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QVBoxLayout
 
 from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from tree.model import JsonTreeModel
+from tree.view import JsonTreeView
 from tree_actions.context_menu import show_context_menu
 from tree_filter_proxy import TreeFilterProxy
 
@@ -19,7 +20,7 @@ def init_layout(tab) -> None:
     tab.search_edit = QLineEdit(tab)
     tab.search_edit.setPlaceholderText("Filter (Ctrl+F)")
 
-    tab.view = QTreeView(tab)
+    tab.view = JsonTreeView(tab)
     tab.view.setUniformRowHeights(True)
     tab.view.setAlternatingRowColors(True)
     tab.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)

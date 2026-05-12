@@ -98,7 +98,13 @@ def test_move_action_without_internal_source_falls_back_to_copy(qtbot):
     assert target.model.root_item.to_json() == {"right": {"a": 1}}
 
 
-def test_internal_move_ignores_immediate_followup_remove_rows(qtbot):
+def test_internal_move_view_skips_post_drag_clear_or_remove(qtbot):
+    """Regression for the 'disappearing item' bug.
+
+    After a successful internal MoveAction handled by our model,
+    ``JsonTreeView.startDrag`` must skip Qt's default post-drag
+    ``clearOrRemove`` so the freshly-placed destination rows survive.
+    """
     tab = _make_tab(qtbot, {"src": {"a": 1, "b": 2, "c": 3}, "dst": {}})
 
     src = _idx(tab, 0)
@@ -108,12 +114,15 @@ def test_internal_move_ignores_immediate_followup_remove_rows(qtbot):
     mime = tab.model.mimeData([a])
     assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, dst)
 
-    # Simulate Qt calling removeRows on the source right after a move-drop.
-    assert tab.model.removeRows(0, 1, src)
+    # The dnd handler marked the view as drag-handled-internally; this is
+    # what would prevent Qt's startDrag from invoking clearOrRemove.
+    assert tab.view._drag_handled_internally is True
 
+    # An explicit removeRows from user code is still honoured.
+    assert tab.model.removeRows(0, 1, src)
     root = tab.model.root_item.to_json()
     assert root["dst"] == {"a": 1}
-    assert root["src"] == {"b": 2, "c": 3}
+    assert root["src"] == {"c": 3}
 
 
 def test_internal_move_auto_renames_object_key_collisions(qtbot):
