@@ -33,14 +33,20 @@ from documents.tab import JsonTab
 # Reusable helpers (mirroring test_drag_drop_matrix.py for self-containedness)
 # ---------------------------------------------------------------------------
 
-def _make_tab(qtbot, data) -> JsonTab:
-    tab = JsonTab(lambda *_: None, data=data)
+def _make_tab(qtbot, data, show_root) -> JsonTab:
+    tab = JsonTab(lambda *_: None, data=data, show_root=show_root)
     qtbot.addWidget(tab)
     return tab
 
 
+def _proxy_root(tab):
+    if tab.model.show_root:
+        return tab.proxy.index(0, 0, QModelIndex())
+    return QModelIndex()
+
+
 def _pidx(tab, path):
-    idx = QModelIndex()
+    idx = _proxy_root(tab)
     for r in path:
         idx = tab.proxy.index(r, 0, idx)
     return idx
@@ -58,7 +64,7 @@ def _drop(tab, sel_paths, row, col, parent_path):
     sel = [_pidx(tab, p) for p in sel_paths]
     _select(tab, sel)
     mime = tab.proxy.mimeData(sel)
-    parent = QModelIndex() if parent_path is None else _pidx(tab, parent_path)
+    parent = _proxy_root(tab) if parent_path is None else _pidx(tab, parent_path)
     return tab.proxy.dropMimeData(mime, Qt.DropAction.MoveAction, row, col, parent)
 
 
@@ -173,9 +179,10 @@ FIXTURES: list[tuple[str, Any]] = [
 
 @pytest.mark.parametrize("fixture_name,initial", FIXTURES)
 @pytest.mark.parametrize("seed", [0xC0FFEE, 0xDEADBEEF, 0x1337])
-def test_property_random_drops_preserve_invariants(qtbot, fixture_name, initial, seed):
+@pytest.mark.parametrize("show_root", [False, True], ids=["show_root=False", "show_root=True"])
+def test_property_random_drops_preserve_invariants(qtbot, fixture_name, initial, seed, show_root):
     rng = random.Random(seed ^ hash(fixture_name))
-    tab = _make_tab(qtbot, initial)
+    tab = _make_tab(qtbot, initial, show_root)
     initial_snap = tab.model.root_item.to_json()
     initial_leaves = sorted(repr(x) for x in _collect_leaf_primitives(initial_snap))
 

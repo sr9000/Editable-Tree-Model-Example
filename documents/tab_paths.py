@@ -22,25 +22,57 @@ def source_to_view(tab, source_index: QModelIndex | QPersistentModelIndex) -> QM
 
 
 def index_path(tab, index: QModelIndex) -> tuple[int, ...]:
+    """Return a stable, parent-relative path for *index*.
+
+    Convention: paths are **always relative to ``root_item``** — the
+    synthetic root row that ``show_root=True`` exposes is implicit and
+    NEVER appears in returned paths. So:
+
+    - ``root_item`` itself → ``()``
+    - first child of root_item → ``(0,)``
+    - grand-child at root_item.child(2).child(1) → ``(2, 1)``
+
+    This convention matches :func:`index_from_path`, which always starts
+    its walk at ``root_item`` (regardless of ``show_root``). Without it
+    the anchor-based move code captures source parents and anchor
+    targets in two different coordinate systems and corrupts the tree
+    on every drop under ``show_root=True``.
+    """
     index = proxy_to_source(index)
     if not index.isValid():
         return ()
-    if tab.model.show_root and tab.model.get_item(index) is tab.model.root_item:
+    root_item = tab.model.root_item
+    if tab.model.get_item(index) is root_item:
         return ()
     path: list[int] = []
     cursor = index
-    while cursor.isValid():
+    while cursor.isValid() and tab.model.get_item(cursor) is not root_item:
         path.append(cursor.row())
         cursor = cursor.parent()
     return tuple(reversed(path))
 
 
 def index_from_path(tab, path: tuple[int, ...]) -> QModelIndex:
-    if tab.model.show_root and not path:
-        return tab.model.index(0, 0, QModelIndex())
-    idx = QModelIndex()
+    """Inverse of :func:`index_path` — walk *path* starting at root_item.
+
+    Always descends from ``root_item`` regardless of ``show_root``. When
+    ``show_root=False`` we still start at the (invalid) QModelIndex that
+    Qt uses for root_item's children; when ``show_root=True`` we first
+    materialise root_item's index so that the path entries align with
+    the underlying ``child_items`` list.
+    """
+    model = tab.model
+    if model.show_root:
+        root_idx = model.index(0, 0, QModelIndex())
+        if not path:
+            return root_idx
+        idx = root_idx
+    else:
+        if not path:
+            return QModelIndex()
+        idx = QModelIndex()
     for row in path:
-        nxt = tab.model.index(row, 0, idx)
+        nxt = model.index(row, 0, idx)
         if not nxt.isValid():
             return QModelIndex()
         idx = nxt
