@@ -17,21 +17,21 @@ These properties together catch the failure modes that surfaced as
 "null rows", "items disappearing", "off-by-one container placement",
 and "duplicate keys after move".
 """
+
 from __future__ import annotations
 
 import random
 from typing import Any
 
+import pytest
 from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex, Qt
 
-import pytest
-
 from documents.tab import JsonTab
-
 
 # ---------------------------------------------------------------------------
 # Reusable helpers (mirroring test_drag_drop_matrix.py for self-containedness)
 # ---------------------------------------------------------------------------
+
 
 def _make_tab(qtbot, data, show_root) -> JsonTab:
     tab = JsonTab(lambda *_: None, data=data, show_root=show_root)
@@ -83,9 +83,9 @@ def _validate_object_names(item, breadcrumb="$") -> None:
     if item.json_type.name == "OBJECT":
         seen: set[str] = set()
         for child in item.child_items:
-            assert isinstance(child.name, str) and child.name, (
-                f"OBJECT child has invalid name at {breadcrumb}: {child.name!r}"
-            )
+            assert (
+                isinstance(child.name, str) and child.name
+            ), f"OBJECT child has invalid name at {breadcrumb}: {child.name!r}"
             assert child.name not in seen, f"Duplicate OBJECT key {child.name!r} at {breadcrumb}"
             seen.add(child.name)
     for i, child in enumerate(item.child_items):
@@ -111,6 +111,7 @@ def _collect_leaf_primitives(value: Any) -> list[Any]:
 # ---------------------------------------------------------------------------
 # Random scenario engine
 # ---------------------------------------------------------------------------
+
 
 def _try_random_drop(tab, rng) -> str:
     """Make one random drop attempt. Returns a description for diagnostics."""
@@ -168,11 +169,14 @@ FIXTURES: list[tuple[str, Any]] = [
     ("flat array primitives", ["a", "b", "c", "d", "e", "f"]),
     ("flat array objects", [{"a": 1}, {"b": 2}, {"c": 3}, {"d": 4}, {"e": 5}, {"f": 6}]),
     ("mixed array", [{"k": 1}, 2, [3, 4], "s", {"deep": {"x": 9}}, None]),
-    ("nested object", {
-        "left": {"a": 1, "b": 2, "c": 3},
-        "right": [10, 20, 30],
-        "mix": {"arr": [{"q": 0}], "obj": {"r": 1, "s": 2}},
-    }),
+    (
+        "nested object",
+        {
+            "left": {"a": 1, "b": 2, "c": 3},
+            "right": [10, 20, 30],
+            "mix": {"arr": [{"q": 0}], "obj": {"r": 1, "s": 2}},
+        },
+    ),
     ("two-tier array", [[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
 ]
 
@@ -196,9 +200,9 @@ def test_property_random_drops_preserve_invariants(qtbot, fixture_name, initial,
 
         # 1. Serializability.
         snap = tab.model.root_item.to_json()
-        assert isinstance(snap, (dict, list)), (
-            f"[{fixture_name}] root collapsed to {type(snap)} at step {step}\nhistory={history}"
-        )
+        assert isinstance(
+            snap, (dict, list)
+        ), f"[{fixture_name}] root collapsed to {type(snap)} at step {step}\nhistory={history}"
 
         # 2. Conservation of primitive leaves.
         leaves = sorted(repr(x) for x in _collect_leaf_primitives(snap))
@@ -213,9 +217,9 @@ def test_property_random_drops_preserve_invariants(qtbot, fixture_name, initial,
     # 4. Undo back to the original.
     while tab.undo_stack.canUndo():
         tab.undo_stack.undo()
-    assert tab.model.root_item.to_json() == initial_snap, (
-        f"[{fixture_name}] undo to depth 0 did not restore original\nhistory={history}"
-    )
+    assert (
+        tab.model.root_item.to_json() == initial_snap
+    ), f"[{fixture_name}] undo to depth 0 did not restore original\nhistory={history}"
 
     # And redo back to the final post-fuzz state must succeed without error.
     while tab.undo_stack.canRedo():

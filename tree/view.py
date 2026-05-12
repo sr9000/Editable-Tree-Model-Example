@@ -84,7 +84,9 @@ class JsonTreeView(QTreeView):
         view_default = self.defaultDropAction()
         if view_default != Qt.DropAction.IgnoreAction and (supported_actions & view_default):
             default_action = view_default
-        elif (supported_actions & Qt.DropAction.CopyAction) and self.dragDropMode() != QAbstractItemView.DragDropMode.InternalMove:
+        elif (
+            supported_actions & Qt.DropAction.CopyAction
+        ) and self.dragDropMode() != QAbstractItemView.DragDropMode.InternalMove:
             default_action = Qt.DropAction.CopyAction
 
         result = drag.exec(supported_actions, default_action)

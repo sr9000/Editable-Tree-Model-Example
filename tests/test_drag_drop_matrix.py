@@ -14,6 +14,7 @@ Every test runs against **both** ``show_root`` modes because the real
 app uses ``show_root=True`` and the path convention differs subtly
 between modes.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -33,6 +34,7 @@ def show_root(request):
 # ---------------------------------------------------------------------------
 # Fixture helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_tab(qtbot, data, show_root) -> JsonTab:
     tab = JsonTab(lambda *_: None, data=data, show_root=show_root)
@@ -78,6 +80,7 @@ def _drop(tab, sel_paths, row, col, parent_path=None):
 
 # Convenience: 4 indicator helpers ------------------------------------------------
 
+
 def above_of(tab, sel_paths, row, parent_path=None):
     """Drop AboveItem of (parent_path, row): Qt sends row=R, col=0, parent=P."""
     return _drop(tab, sel_paths, row, 0, parent_path)
@@ -113,7 +116,7 @@ OBJECTS_6 = [{"a": 1}, {"b": 2}, {"c": 3}, {"d": 4}, {"e": 5}, {"f": 6}]
 
 def test_drop_d_on_e_inserts_into_e(qtbot, show_root):
     """User-reported BUG2: drag 4th onto 5th must land INSIDE 5th."""
-    tab = _make_tab(qtbot, list(OBJECTS_6))
+    tab = _make_tab(qtbot, list(OBJECTS_6), show_root)
     assert on_item(tab, [(3,)], (4,))
     result = snap(tab)
     assert len(result) == 5
@@ -128,7 +131,7 @@ def test_drop_d_on_e_inserts_into_e(qtbot, show_root):
 
 def test_drop_e_on_f_inserts_into_f(qtbot, show_root):
     """User-reported BUG1: drag 5th onto last 6th must land INSIDE 6th, not after it."""
-    tab = _make_tab(qtbot, list(OBJECTS_6))
+    tab = _make_tab(qtbot, list(OBJECTS_6), show_root)
     assert on_item(tab, [(4,)], (5,))
     result = snap(tab)
     assert len(result) == 5
@@ -140,7 +143,7 @@ def test_drop_e_on_f_inserts_into_f(qtbot, show_root):
 
 def test_drop_b_on_e_inserts_into_e(qtbot, show_root):
     """Drop FAR-EARLIER source onto a later container — same shift bug pattern."""
-    tab = _make_tab(qtbot, list(OBJECTS_6))
+    tab = _make_tab(qtbot, list(OBJECTS_6), show_root)
     assert on_item(tab, [(1,)], (4,))
     result = snap(tab)
     assert len(result) == 5
@@ -153,7 +156,7 @@ def test_drop_b_on_e_inserts_into_e(qtbot, show_root):
 
 def test_drop_a_b_c_on_e_inserts_into_e(qtbot, show_root):
     """Multi-source: 3 earlier siblings onto a single later container."""
-    tab = _make_tab(qtbot, list(OBJECTS_6))
+    tab = _make_tab(qtbot, list(OBJECTS_6), show_root)
     assert on_item(tab, [(0,), (1,), (2,)], (4,))
     result = snap(tab)
     assert len(result) == 3
@@ -170,9 +173,10 @@ def test_drop_a_b_c_on_e_inserts_into_e(qtbot, show_root):
 # Reverse direction: source AFTER target — anchor path should NOT shift.
 # ===========================================================================
 
+
 def test_drop_e_on_b_inserts_into_b(qtbot, show_root):
     """Drop later source onto earlier container — target path does NOT shift."""
-    tab = _make_tab(qtbot, list(OBJECTS_6))
+    tab = _make_tab(qtbot, list(OBJECTS_6), show_root)
     assert on_item(tab, [(4,)], (1,))
     result = snap(tab)
     assert len(result) == 5
@@ -183,7 +187,7 @@ def test_drop_e_on_b_inserts_into_b(qtbot, show_root):
 
 
 def test_drop_f_on_a_inserts_into_a(qtbot, show_root):
-    tab = _make_tab(qtbot, list(OBJECTS_6))
+    tab = _make_tab(qtbot, list(OBJECTS_6), show_root)
     assert on_item(tab, [(5,)], (0,))
     result = snap(tab)
     assert len(result) == 5
@@ -195,6 +199,7 @@ def test_drop_f_on_a_inserts_into_a(qtbot, show_root):
 # ===========================================================================
 # Indicator-position semantics (Above / Below / OnViewport)
 # ===========================================================================
+
 
 def test_above_item_within_same_parent_is_reorder(qtbot, show_root):
     tab = _make_tab(qtbot, ["a", "b", "c", "d", "e", "f"], show_root)
@@ -224,6 +229,7 @@ def test_on_viewport_appends_to_root(qtbot, show_root):
 # ===========================================================================
 # Bug-3 angle: 1st root element drags correctly at the model level
 # ===========================================================================
+
 
 def test_drag_first_root_child_to_middle(qtbot, show_root):
     tab = _make_tab(qtbot, ["a", "b", "c", "d", "e", "f"], show_root)
@@ -259,6 +265,7 @@ def test_drag_first_root_child_flag_is_drag_enabled(qtbot, show_root):
 # Undo round-trip: every successful drop must be reversible by ONE undo step
 # ===========================================================================
 
+
 def test_undo_reverses_drop_into_container(qtbot, show_root):
     initial = list(OBJECTS_6)
     tab = _make_tab(qtbot, initial, show_root)
@@ -290,6 +297,7 @@ def test_undo_reverses_multi_source_drop(qtbot, show_root):
 # ===========================================================================
 # Nested-tree drops: dragging across container types
 # ===========================================================================
+
 
 def test_drag_array_child_into_object(qtbot, show_root):
     tab = _make_tab(qtbot, {"arr": [10, 20, 30], "obj": {"x": 1}}, show_root)
@@ -331,6 +339,7 @@ def test_drag_container_with_subtree(qtbot, show_root):
 # Cycle guard: source must not become an ancestor of the target
 # ===========================================================================
 
+
 def test_cannot_drop_parent_into_own_descendant(qtbot, show_root):
     tab = _make_tab(qtbot, {"outer": {"inner": {"leaf": 1}}}, show_root)
     outer = (0,)
@@ -353,6 +362,7 @@ def test_cannot_drop_parent_above_own_child(qtbot, show_root):
 # No-op detection: drop "between own neighbors" must be rejected
 # ===========================================================================
 
+
 def test_drop_between_own_neighbors_is_noop(qtbot, show_root):
     tab = _make_tab(qtbot, ["a", "b", "c"], show_root)
     # Drop "b" AboveItem of "c" — no movement.
@@ -370,6 +380,7 @@ def test_at_end_when_block_is_already_suffix_is_noop(qtbot, show_root):
 # ===========================================================================
 # OBJECT key naming invariants under move
 # ===========================================================================
+
 
 def test_move_into_object_renames_on_collision(qtbot, show_root):
     tab = _make_tab(qtbot, {"a": {"k": 1}, "b": {"k": 2}}, show_root)
@@ -398,6 +409,7 @@ def test_move_array_child_into_object_gets_generated_name(qtbot, show_root):
 # ===========================================================================
 # Stress: repeated container-drop cycles must remain reversible and serializable
 # ===========================================================================
+
 
 def test_repeated_container_drops_remain_consistent(qtbot, show_root):
     tab = _make_tab(qtbot, [{"a": 1}, {"b": 2}, {"c": 3}], show_root)
@@ -442,6 +454,7 @@ def test_full_redo_undo_cycle_round_trips(qtbot, show_root):
 # ===========================================================================
 # Anchor adjustment unit tests — the exact mechanic we just fixed
 # ===========================================================================
+
 
 def test_adjust_path_for_removed_sources_shifts_higher_indexes():
     from tree_actions.anchors import adjust_path_for_removed_sources

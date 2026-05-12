@@ -101,11 +101,7 @@ def adjust_path_for_removed_sources(
     adjusted: list[int] = []
     for depth, row in enumerate(path):
         prefix = tuple(path[:depth])
-        shift = sum(
-            1
-            for sp_parent, sp_row in source_paths
-            if sp_parent == prefix and sp_row < row
-        )
+        shift = sum(1 for sp_parent, sp_row in source_paths if sp_parent == prefix and sp_row < row)
         adjusted.append(row - shift)
     return tuple(adjusted)
 

@@ -52,7 +52,6 @@ class JsonTreeModel(QAbstractItemModel):
             cursor = cursor.parent()
         return tuple(reversed(path))
 
-
     def set_icon_provider(self, provider: IconProvider | None) -> None:
         next_provider = provider or StubIconProvider()
         if next_provider is self._icon_provider:
