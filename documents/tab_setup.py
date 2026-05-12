@@ -105,8 +105,8 @@ def init_shortcuts(tab) -> None:
         lambda: tab._run_tree_action("Replaced values at selection", replace_zip=True)
     )
 
-    tab._delete_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), tab.view)
-    tab._delete_shortcut.activated.connect(lambda: tab._run_tree_action("Deleted selection", delete=True))
+    # Delete is owned by MainWindow's rowRemoveAction (Del). Keeping a second
+    # per-tab Delete shortcut causes ambiguous shortcut warnings.
 
     tab._duplicate_shortcut = QShortcut(QKeySequence("Ctrl+D"), tab.view)
     tab._duplicate_shortcut.activated.connect(lambda: tab._run_tree_action("Duplicated selection", duplicate=True))
