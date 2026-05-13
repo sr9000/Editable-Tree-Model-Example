@@ -7,11 +7,16 @@ import copy
 from PySide6.QtCore import QItemSelectionModel
 
 from documents.tab import JsonTab
-from tree_actions.structure import move_selection_down, move_selection_up
+from tree_actions.structure import (
+    move_selection_down,
+    move_selection_out_down,
+    move_selection_out_up,
+    move_selection_up,
+)
 
 
-def _make_tab(qtbot, data) -> JsonTab:
-    tab = JsonTab(lambda *_: None, data=data)
+def _make_tab(qtbot, data, *, show_root: bool = False) -> JsonTab:
+    tab = JsonTab(lambda *_: None, data=data, show_root=show_root)
     qtbot.addWidget(tab)
     return tab
 
@@ -122,3 +127,50 @@ def test_alt_down_bottom_block_bubbles_out_after_parent_and_undo(qtbot):
     assert move_selection_down(tab.view)
     assert tab.model.root_item.to_json() == {"obj": {"x": 1}, "y": 2, "z": 3, "tail": 0}
     _assert_single_undo_roundtrip(tab, before, before_count)
+
+
+def test_show_root_true_root_level_move_uses_root_relative_paths(qtbot):
+    tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3}, show_root=True)
+    before = copy.deepcopy(tab.model.root_item.to_json())
+    before_count = tab.undo_stack.count()
+
+    b = _idx(tab, 1)
+    _select_source_rows(tab, b)
+
+    assert move_selection_up(tab.view)
+    assert list(tab.model.root_item.to_json().keys()) == ["b", "a", "c"]
+    tab.undo_stack.undo()
+    assert tab.model.root_item.to_json() == before
+    tab.undo_stack.redo()
+    assert list(tab.model.root_item.to_json().keys()) == ["b", "a", "c"]
+    assert tab.undo_stack.count() == before_count + 1
+
+
+def test_show_root_true_boundary_move_bubbles_out_and_redo_does_not_crash(qtbot):
+    tab = _make_tab(qtbot, {"obj": {"x": 1, "y": 2}, "tail": 0}, show_root=True)
+    before = copy.deepcopy(tab.model.root_item.to_json())
+
+    x = _idx(tab, 0, 0)
+    _select_source_rows(tab, x)
+
+    assert move_selection_up(tab.view)
+    assert tab.model.root_item.to_json() == {"x": 1, "obj": {"y": 2}, "tail": 0}
+    tab.undo_stack.undo()
+    assert tab.model.root_item.to_json() == before
+    tab.undo_stack.redo()
+    assert tab.model.root_item.to_json() == {"x": 1, "obj": {"y": 2}, "tail": 0}
+
+
+def test_move_selection_out_up_down_regardless_of_boundary(qtbot):
+    tab = _make_tab(qtbot, {"head": 0, "obj": {"x": 1, "y": 2}, "tail": 3}, show_root=True)
+
+    y = _idx(tab, 1, 1)
+    _select_source_rows(tab, y)
+    assert move_selection_out_up(tab.view)
+    assert tab.model.root_item.to_json() == {"head": 0, "y": 2, "obj": {"x": 1}, "tail": 3}
+
+    tab.undo_stack.undo()
+    x = _idx(tab, 1, 0)
+    _select_source_rows(tab, x)
+    assert move_selection_out_down(tab.view)
+    assert tab.model.root_item.to_json() == {"head": 0, "obj": {"y": 2}, "x": 1, "tail": 3}

@@ -1,3 +1,5 @@
+from typing import cast
+
 from PySide6.QtCore import QModelIndex, QSortFilterProxyModel
 from PySide6.QtWidgets import QTreeView
 
@@ -9,7 +11,7 @@ def _resolve_model(tree_view: QTreeView) -> tuple[JsonTreeModel | None, QSortFil
     if isinstance(model, JsonTreeModel):
         return model, None
     if isinstance(model, QSortFilterProxyModel) and isinstance(model.sourceModel(), JsonTreeModel):
-        return model.sourceModel(), model
+        return cast(JsonTreeModel, model.sourceModel()), model
     return None, None
 
 
@@ -28,6 +30,25 @@ def _to_view_index(tree_view: QTreeView, index: QModelIndex) -> QModelIndex:
 
 
 def _index_path(index) -> tuple[int, ...]:
+    model = index.model() if index.isValid() else None
+    source_model = None
+    if isinstance(model, JsonTreeModel):
+        source_model = model
+    elif isinstance(model, QSortFilterProxyModel) and isinstance(model.sourceModel(), JsonTreeModel):
+        index = model.mapToSource(index)
+        source_model = model.sourceModel()
+
+    if source_model is not None:
+        root_item = source_model.root_item
+        if source_model.get_item(index) is root_item:
+            return ()
+        path: list[int] = []
+        cursor = index
+        while cursor.isValid() and source_model.get_item(cursor) is not root_item:
+            path.append(cursor.row())
+            cursor = cursor.parent()
+        return tuple(reversed(path))
+
     path: list[int] = []
     cursor = index
     while cursor.isValid():

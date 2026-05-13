@@ -37,6 +37,8 @@ from tree_actions.structure import (
     insert_sibling_after,
     insert_sibling_before,
     move_selection_down,
+    move_selection_out_down,
+    move_selection_out_up,
     move_selection_up,
     sort_selection_keys,
 )
@@ -936,6 +938,8 @@ class JsonTab(QWidget):
         duplicate: bool = False,
         move_up: bool = False,
         move_down: bool = False,
+        move_out_up: bool = False,
+        move_out_down: bool = False,
         sort_keys: bool = False,
     ) -> None:
         changed = False
@@ -957,6 +961,10 @@ class JsonTab(QWidget):
             changed = move_selection_up(self.view)
         elif move_down:
             changed = move_selection_down(self.view)
+        elif move_out_up:
+            changed = move_selection_out_up(self.view)
+        elif move_out_down:
+            changed = move_selection_out_down(self.view)
         elif sort_keys:
             changed = sort_selection_keys(self.view, recursive=False)
 

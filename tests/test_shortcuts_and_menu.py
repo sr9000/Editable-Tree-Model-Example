@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
+from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtGui import QShortcut
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMenu
 
 from app.main_window import MainWindow
 from documents.tab import JsonTab
+from tree_actions.context_menu import show_context_menu
 
 
 def _set_current_source_row(tab: JsonTab, source_index: QModelIndex) -> None:
@@ -47,6 +48,8 @@ def test_shortcuts_canary_triggers_every_tab_shortcut(qtbot):
     tab._duplicate_shortcut.activated.emit()
     tab._move_up_shortcut.activated.emit()
     tab._move_down_shortcut.activated.emit()
+    tab._move_out_up_shortcut.activated.emit()
+    tab._move_out_down_shortcut.activated.emit()
     tab._sort_shortcut.activated.emit()
     tab._find_shortcut.activated.emit()
     QApplication.processEvents()
@@ -65,6 +68,8 @@ def test_shortcuts_canary_triggers_every_tab_shortcut(qtbot):
         "duplicate",
         "move_up",
         "move_down",
+        "move_out_up",
+        "move_out_down",
         "sort_keys",
     }
 
@@ -100,3 +105,39 @@ def test_delete_shortcut_not_ambiguous_and_deletes_once(qtbot):
         win.close()
         win.deleteLater()
         QApplication.processEvents()
+
+
+def test_context_menu_shows_shortcuts_for_registered_actions(qtbot):
+    tab = JsonTab(lambda *_: None, data={"obj": {"x": 1, "y": 2}, "tail": 3}, show_root=True)
+    qtbot.addWidget(tab)
+    tab.show()
+    tab.view.expandAll()
+    QApplication.processEvents()
+
+    nested = tab._index_from_path((0, 0))
+    _set_current_source_row(tab, nested)
+    position = tab.view.visualRect(tab._source_to_view(nested)).center()
+
+    seen: dict[str, str] = {}
+
+    def _collect(menu: QMenu):
+        for action in menu.actions():
+            submenu = action.menu()
+            if submenu is not None:
+                _collect(submenu)
+            elif action.text():
+                seen[action.text()] = action.shortcut().toString()
+
+    menu = show_context_menu(tab.view, position, execute=False)
+    assert menu is not None
+    _collect(menu)
+
+    assert seen["Insert Before"] == "Ctrl+I"
+    assert seen["Insert After"] == "Ctrl+Shift+I"
+    assert seen["Duplicate"] == "Ctrl+D"
+    assert seen["Delete"] == "Del"
+    assert seen["Move Up"] == "Alt+Up"
+    assert seen["Move Down"] == "Alt+Down"
+    assert seen["Move Out of Parent (Up)"] == "Ctrl+Alt+Up"
+    assert seen["Move Out of Parent (Down)"] == "Ctrl+Alt+Down"
+    assert seen["Sort Keys"] == "Ctrl+Alt+S"

@@ -26,6 +26,8 @@ from tree_actions.structure import (
     insert_sibling_after,
     insert_sibling_before,
     move_selection_down,
+    move_selection_out_down,
+    move_selection_out_up,
     move_selection_up,
     sort_selection_keys,
 )
@@ -117,7 +119,7 @@ def _prepare_context_selection(tree_view: QTreeView, index) -> None:
     sm.setCurrentIndex(index, QItemSelectionModel.SelectionFlag.NoUpdate)
 
 
-def show_context_menu(tree_view: QTreeView, position: QPoint):
+def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool = True):
     context_menu = QMenu(tree_view)
 
     index = tree_view.indexAt(position)
@@ -132,8 +134,9 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
             return
         _add(context_menu, "Expand All", lambda: expand_all(tree_view))
         _add(context_menu, "Collapse All", lambda: collapse_all(tree_view))
-        context_menu.exec(tree_view.mapToGlobal(position))
-        return
+        if execute:
+            context_menu.exec(tree_view.mapToGlobal(position))
+        return context_menu
 
     # ------------------------------------------------------------------
     # Capability flags driven by current selection
@@ -147,6 +150,7 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     can_sort_keys = False
     can_move_up = False
     can_move_down = False
+    can_move_out = False
     has_non_root = False
     can_insert_child = False
 
@@ -162,6 +166,9 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
             has_non_root = True
             is_container = is_container or item.json_type in (JsonType.OBJECT, JsonType.ARRAY)
             can_sort_keys = can_sort_keys or item.json_type is JsonType.OBJECT
+            parent_index = row0.parent()
+            if parent_index.isValid() and source_model.get_item(parent_index) is not source_model.root_item:
+                can_move_out = True
         can_move_up = has_non_root
         can_move_down = has_non_root
 
@@ -254,12 +261,14 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
         "Insert Before",
         lambda: insert_sibling_before(tree_view),
         enabled=has_non_root,
+        shortcut="Ctrl+I",
     )
     _add(
         insert_menu,
         "Insert After",
         lambda: insert_sibling_after(tree_view),
         enabled=has_non_root,
+        shortcut="Ctrl+Shift+I",
     )
     _add(
         insert_menu,
@@ -275,6 +284,7 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
         "Duplicate",
         lambda: duplicate_selection(tree_view),
         enabled=has_non_root,
+        shortcut="Ctrl+D",
     )
     _add(
         context_menu,
@@ -289,13 +299,28 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     # ------------------------------------------------------------------
     # Arrange group: move / sort
     # ------------------------------------------------------------------
-    _add(context_menu, "Move Up", lambda: move_selection_up(tree_view), enabled=can_move_up)
-    _add(context_menu, "Move Down", lambda: move_selection_down(tree_view), enabled=can_move_down)
+    _add(context_menu, "Move Up", lambda: move_selection_up(tree_view), enabled=can_move_up, shortcut="Alt+Up")
+    _add(context_menu, "Move Down", lambda: move_selection_down(tree_view), enabled=can_move_down, shortcut="Alt+Down")
+    _add(
+        context_menu,
+        "Move Out of Parent (Up)",
+        lambda: move_selection_out_up(tree_view),
+        enabled=can_move_out,
+        shortcut="Ctrl+Alt+Up",
+    )
+    _add(
+        context_menu,
+        "Move Out of Parent (Down)",
+        lambda: move_selection_out_down(tree_view),
+        enabled=can_move_out,
+        shortcut="Ctrl+Alt+Down",
+    )
     _add(
         context_menu,
         "Sort Keys",
         lambda: sort_selection_keys(tree_view, recursive=False),
         enabled=can_sort_keys,
+        shortcut="Ctrl+Alt+S",
     )
     _add(
         context_menu,
@@ -309,4 +334,6 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     _add(context_menu, "Expand All", lambda: expand_all(tree_view))
     _add(context_menu, "Collapse All", lambda: collapse_all(tree_view))
 
-    context_menu.exec(tree_view.mapToGlobal(position))
+    if execute:
+        context_menu.exec(tree_view.mapToGlobal(position))
+    return context_menu

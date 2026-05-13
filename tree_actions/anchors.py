@@ -126,6 +126,8 @@ def resolve_anchor_target(
 
     assert anchor.before_sibling_path is not None
     adjusted_sibling_path = adjust_path_for_removed_sources(anchor.before_sibling_path, detached_source_paths)
+    if not adjusted_sibling_path:
+        return adjusted_parent_path, 0
     return adjusted_parent_path, adjusted_sibling_path[-1]
 
 
@@ -215,6 +217,8 @@ def anchor_is_no_op(
         return False  # let caller decide via resolved row
 
     assert anchor.before_sibling_path is not None
+    if not anchor.before_sibling_path:
+        return False
     sibling_row = anchor.before_sibling_path[-1]
     # If sibling_row is exactly last_src + 1, the block already lands "before"
     # that sibling — no movement.

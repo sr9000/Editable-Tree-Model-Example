@@ -117,6 +117,14 @@ def init_shortcuts(tab) -> None:
     tab._move_down_shortcut = QShortcut(QKeySequence("Alt+Down"), tab.view)
     tab._move_down_shortcut.activated.connect(lambda: tab._run_tree_action("Moved down", move_down=True))
 
+    tab._move_out_up_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Up"), tab.view)
+    tab._move_out_up_shortcut.activated.connect(lambda: tab._run_tree_action("Moved out of parent", move_out_up=True))
+
+    tab._move_out_down_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Down"), tab.view)
+    tab._move_out_down_shortcut.activated.connect(
+        lambda: tab._run_tree_action("Moved out of parent", move_out_down=True)
+    )
+
     tab._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), tab.view)
     tab._sort_shortcut.activated.connect(lambda: tab._run_tree_action("Sorted keys", sort_keys=True))
 
