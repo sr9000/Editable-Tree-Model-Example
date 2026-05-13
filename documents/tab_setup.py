@@ -61,6 +61,10 @@ def init_model(tab, model_data: Any, show_root: bool) -> None:
     tab.model.modelReset.connect(tab._on_model_reset)
 
 
+def init_validation_state(tab, model_data: Any) -> None:
+    tab._init_validation_state(model_data)
+
+
 def init_delegates_and_connections(tab, update_actions_callback) -> None:
     tab.name_delegate = NameDelegate(tab)
     tab.type_delegate = JsonTypeDelegate(tab, theme=tab._theme, icon_provider=tab._icon_provider)

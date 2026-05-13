@@ -5,8 +5,7 @@ from typing import Any, Protocol
 
 
 class CompiledValidator(Protocol):
-    def iter_errors(self, instance: Any) -> Iterable[Any]:
-        ...
+    def iter_errors(self, instance: Any) -> Iterable[Any]: ...
 
 
 def compile_schema(schema: Mapping[str, Any]) -> CompiledValidator:

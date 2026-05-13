@@ -2,6 +2,7 @@ import base64
 import gzip
 import zlib
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable
 
 import gmpy2
@@ -18,6 +19,7 @@ from documents.tab_setup import (
     init_model,
     init_search_filter,
     init_shortcuts,
+    init_validation_state,
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
@@ -52,6 +54,9 @@ from undo.commands import (
     _SortKeysCmd,
 )
 from undo.diff import DiffApplier
+from validation.index import IssueIndex
+from validation.schema_source import SchemaRef, discover_schema, load_schema
+from validation.validator import validate_document
 
 
 def _make_label(text: str, target_qname: str) -> str:
@@ -101,6 +106,8 @@ def _demo_data() -> dict[str, Any]:
 
 class JsonTab(QWidget):
     dirtyChanged = Signal(bool)
+    schemaChanged = Signal(object)
+    validationChanged = Signal(object)
 
     def eventFilter(self, watched, event):  # type: ignore[override]
         view = getattr(self, "view", None)
@@ -190,12 +197,16 @@ class JsonTab(QWidget):
         self.file_path = file_path
         self.save_format: str | None = None
         self._dirty = False
+        self._schema_ref = SchemaRef(path=None, inline=None, origin="none")
+        self._schema: dict[str, Any] | None = None
+        self._issue_index = IssueIndex([], model_data)
 
         init_model(self, model_data, show_root=show_root)
         init_delegates_and_connections(self, update_actions_callback)
         self.set_monospace_fields_enabled(self._monospace_fields_enabled)
         init_shortcuts(self)
         init_search_filter(self)
+        init_validation_state(self, model_data)
         self._diff_applier = DiffApplier(self)
 
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
@@ -204,6 +215,45 @@ class JsonTab(QWidget):
         self.undo_stack.indexChanged.connect(self._on_undo_index_changed)
         self.undo_stack.setClean()
         self._set_dirty(False)
+
+    @property
+    def schema(self) -> dict[str, Any] | None:
+        return self._schema
+
+    @property
+    def schema_ref(self) -> SchemaRef:
+        return self._schema_ref
+
+    @property
+    def issue_index(self) -> IssueIndex:
+        return self._issue_index
+
+    def _init_validation_state(self, model_data: Any) -> None:
+        doc_path = Path(self.file_path).expanduser() if self.file_path else None
+        ref = discover_schema(doc_path, model_data)
+        self._schema_ref = ref
+        loaded = load_schema(ref)
+        self._schema = dict(loaded) if loaded is not None else None
+        self.schemaChanged.emit(self._schema_ref)
+        self.revalidate()
+
+    def set_schema(self, ref: SchemaRef) -> None:
+        self._schema_ref = ref
+        loaded = load_schema(ref)
+        self._schema = dict(loaded) if loaded is not None else None
+        self.schemaChanged.emit(self._schema_ref)
+        self.revalidate()
+
+    def clear_schema(self) -> None:
+        self.set_schema(SchemaRef(path=None, inline=None, origin="none"))
+
+    def revalidate(self) -> None:
+        root_data = self.model.root_item.to_json()
+        issues = []
+        if self._schema is not None:
+            issues = validate_document(root_data, self._schema)
+        self._issue_index = IssueIndex(issues, root_data)
+        self.validationChanged.emit(self._issue_index)
 
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
         self._theme = theme
