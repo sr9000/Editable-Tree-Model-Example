@@ -1,6 +1,6 @@
 # TODO & FIXME
 
-_Last updated: **2026-05-08**._
+_Last updated: **2026-05-13**._
 
 Tracks **missing/incomplete features** (TODO) and **bugs/issues**
 (FIXME) discovered while auditing the editor codebase.
@@ -8,15 +8,24 @@ Cross-reference with `pros-n-cons.md` and `repo-map.md` for context.
 
 Format: `- [ ] [scope] description — file:symbol`
 
-> **Status (2026-05-08)** — All historical phases (0–6 + package
+> **Status (2026-05-13)** — All historical phases (0–6 + package
 > refactor + the six former-`plans/` phases on context-menu polish,
 > zoom-column preservation, kind-switch coercion, container preview,
-> app-color-scheme theming, and tests/memory) are shipped; the
-> `plans/` folder is gone. The current tree collects **576 tests**;
-> **573 pass and 3 fail** under `QT_QPA_PLATFORM=offscreen` (the 3
-> failures are platform-only — Qt's offscreen QPA ignores
-> `QStyleHints.setColorScheme`). Production code still contains
-> **zero `TODO` / `FIXME` / `XXX` / `HACK` markers**.
+> app-color-scheme theming, and tests/memory) are shipped, **and** the
+> drag-and-drop / multi-action plan (Steps 1–10 under `plans/`) is now
+> complete: multiselect foundation, MIME helpers, atomic multi-row
+> undo move, keyboard Alt±Up/Down with parent-boundary bubble-out,
+> Ctrl+Alt+Up/Down move-out, expansion preservation across moves,
+> native QTreeView drag-and-drop (with `JsonTreeView.startDrag`
+> override so the model fully owns internal moves), drop policies +
+> cycle guards, the anchor-based move primitive (`tree_actions/anchors.py`),
+> and multi-action paste dispatchers
+> (`paste_auto` / `paste_clones_at_targets` /
+> `paste_insert_after_zip` / `paste_replace_zip`). The current tree
+> collects **779 tests**; **776 pass and 3 fail** under
+> `QT_QPA_PLATFORM=offscreen` (the 3 failures are platform-only — Qt's
+> offscreen QPA ignores `QStyleHints.setColorScheme`). Production code
+> still contains **zero `TODO` / `FIXME` / `XXX` / `HACK` markers**.
 
 ---
 
@@ -44,6 +53,63 @@ Format: `- [ ] [scope] description — file:symbol`
   `parse_float=mpq` on the pinned version; the compatible load path
   is `parse_float=mpq` only. Saves still use `use_decimal=True`. Not
   a bug — documented incompatibility.
+- **Drag-and-drop "disappearing item" bug** (fixed mid-Step-6):
+  Qt's default `QAbstractItemView::startDrag` calls
+  `d->clearOrRemove()` for `MoveAction` results, which removed the
+  freshly-placed destination rows after the model had already moved
+  them. Fix: `tree/view.py::JsonTreeView` overrides `startDrag` and
+  skips `clearOrRemove` whenever the drop was handled internally
+  (signalled by `view.mark_drag_handled_internally()` from
+  `tree_actions/dnd.py::handle_drop`).
+- **Bigint overflow in `ValueDelegate.initStyleOption`** (fixed
+  alongside the drag-and-drop work, commit `cdea82e`):
+  reading `model.data(index, EditRole)` boxes the Python `int` into a
+  C++ `long long` via Shiboken, overflowing for integers > 2^63−1.
+  Fix: when `index.internalPointer()` is a `JsonTreeItem`, read the
+  raw value and `json_type` directly from the item so the QVariant
+  round-trip is bypassed. Regression test in
+  `tests/test_value_delegate_theme.py`.
+- **Multi-row Alt+Up/Down under `SelectItems`** (fixed during Step 4):
+  `_selected_rows` fell back to `currentIndex()` when `selectedRows(0)`
+  returned empty — which is always the case under `SelectItems`, the
+  selection mode the live `JsonTab` uses. Only one row moved despite
+  multiple cells being selected. Fix: collect `selectedIndexes()`,
+  normalise each hit to col-0, dedup by `(row, parent)`. Regression
+  test in `tests/test_keyboard_multimove_app_mode.py`.
+- **Multi-selection collapsed after Alt+Up/Down** (fixed during Step
+  4): `_MoveRowsCmd.redo/undo` used `view.setCurrentIndex()`, which
+  internally issues `SelectCurrent` and shrinks the selection to a
+  single row. Fix: `_select_placed_rows` helper builds a full
+  `QItemSelection` over every placed row and commits it with
+  `ClearAndSelect | Rows`, then moves the focus via
+  `selectionModel().setCurrentIndex(NoUpdate)`. Same treatment in
+  the macro-fallback path. Regression coverage in
+  `tests/test_keyboard_multimove_app_mode.py`.
+- **`paste_insert_zip` semantics swap** (fixed in Step 10): the
+  original `paste_insert_zip()` was actually doing replace-in-place
+  semantics; renamed to `paste_replace_zip` (Ctrl+Alt+V) and a fresh
+  `paste_insert_after_zip` (Ctrl+Shift+V) was written that inserts
+  each clipboard entry as sibling-after its matching target.
+- **Ctrl+V single-target paste under multi-selection** (fixed in
+  Step 10): `paste_from_clipboard()` only looked at
+  `currentIndex()`, so multi-paste landed at the last clicked row
+  only. Fixed by routing Ctrl+V through `paste_auto()` which
+  dispatches to `paste_clones_at_targets` for multi-selection.
+- **Context-menu eats the multi-selection** (fixed in Step 10):
+  right-clicking on one row of an existing multi-selection used to
+  collapse to that single row. Fixed in
+  `tree_actions/context_menu.py::show_context_menu` — preserve the
+  selection iff the hit row is inside it, otherwise fall back to the
+  legacy single-row behaviour.
+- **Insert-as-child at the synthetic root** (fixed mid-DnD work,
+  commit `18915db`): inserting a child directly under the synthetic
+  root produced an invalid index path. Fixed by routing the root
+  case through `JsonTreeModel._root_index()` consistently.
+- **Cycle drag into descendant** (covered by Step 7): dragging a
+  parent onto its own descendant used to corrupt the tree (orphaned
+  subtree). `tree_actions/dnd.py::can_drop` now rejects any move
+  where a source path is a prefix of the resolved
+  `target_parent_path`; `tests/test_drop_policies.py` covers it.
 
 ---
 
@@ -150,10 +216,6 @@ the repo root.
       (context menu).
 - [ ] [feature] Multiline statistics: lines / words / runes (Unicode
       code points) on the multiline editor.
-- [ ] [feature] Drag-and-drop value reordering with mouse and
-      `Shift+Up/Down/Right/Left`.
-- [ ] [feature] Multi-select on `Ctrl+A`; copy-as-array /
-      copy-as-object; contiguous-selection drag-and-drop.
 - [ ] [feature] Toggleable alphabet sort and custom array sort.
 - [ ] [feature] Array multi-cursor edit.
 - [ ] [feature] Case transforms (Kebab / Snake / Camel / Caps) on
@@ -162,12 +224,96 @@ the repo root.
 - [ ] [feature] Configurable keymap via `settings.json`.
 - [ ] [feature] `Ctrl+PgUp` / `Ctrl+PgDown` to switch between tabs.
 
+> _Delivered in 2026-05-13 drag-and-drop sweep:_
+> - ~~Drag-and-drop value reordering with mouse~~ — native
+>   `QTreeView` drag/drop via `tree_actions/dnd.py` +
+>   `tree/view.py::JsonTreeView`.
+> - ~~Multi-select on `Ctrl+A`; copy-as-array / copy-as-object;
+>   contiguous-selection drag-and-drop~~ — multiselect foundation
+>   (Step 1), MIME helpers with array/dict shape selection (Step 2),
+>   multi-row undo (Step 3), keyboard multimove (Step 4), expansion
+>   preservation (Step 5), drag-drop (Step 6), drop policies (Step 7),
+>   shortcuts/menu (Step 8), anchor primitive + multi-action paste
+>   semantics (Steps 9–10).
+> - ~~`Shift+Up/Down/Right/Left` field reordering~~ — replaced by
+>   `Alt+Up/Down` (same parent) and `Ctrl+Alt+Up/Down` (promote out of
+>   parent) at the keyboard layer.
+
 ---
 
 ## Resolved (kept for posterity)
 
 The following bugs/features were fixed or delivered in past phases;
 listed once here so future audits don't reopen them.
+
+### Drag-and-drop / multi-action plan — Steps 1–10 (shipped 2026-05-13)
+- **Step 1 — multiselect foundation.** Promoted
+  `_selected_rows` / `_top_level_selected_rows` to public
+  `selected_source_rows` / `top_level_source_rows`; added
+  `selection_spans_multiple_parents`. Back-compat underscore
+  aliases retained. `tests/test_multiselect_foundation.py`.
+- **Step 2 — reusable MIME (de)serializer.** Extracted
+  `build_tree_mime(model, source_rows) -> QMimeData | None` and
+  pure decoder `entries_from_mime(mime)`. `MIME_JSON_TREE`,
+  both helpers re-exported from `tree_actions/__init__.py`.
+  `tests/test_mime_payload.py`.
+- **Step 3 — atomic multi-row undo move.** `_MoveRowsCmd` with
+  pre-pop `target_row` arithmetic for same-parent forward/backward
+  moves; `JsonTab.push_move_rows(sources, target_parent, target_row)`
+  with cycle guard; `push_move_row` now delegates. `mergeWith` always
+  `False`. `tests/test_undo_multimove.py`.
+- **Step 4 — keyboard multimove with bubble-out.** Alt+Up/Down on
+  any selection (single, contiguous, disjoint, multi-parent); at
+  the parent boundary the selection promotes/demotes across the
+  parent. `_select_placed_rows` preserves the multi-selection
+  through redo/undo. `tests/test_keyboard_multimove*.py`.
+- **Step 5 — preserve collapse / expansion state across moves.**
+  Move commands capture subtree-relative expansion and selection
+  state and replay them. `tests/test_move_preserves_expansion.py`.
+- **Step 6 — native drag-and-drop wired to multi-move.**
+  `JsonTreeModel.mimeTypes / mimeData / canDropMimeData /
+  dropMimeData / supportedDrag,DropActions / flags()`;
+  `tree_actions/dnd.py::can_drop / handle_drop`;
+  `documents/tab_setup.py` flips on
+  `setDragEnabled / setAcceptDrops / setDropIndicatorShown /
+  setDragDropMode(DragDrop)`; `model.attach_view(view)` plumbing.
+  `tree/view.py::JsonTreeView` overrides `startDrag` so Qt's
+  `clearOrRemove` doesn't delete the freshly-placed destination
+  rows. `tests/test_drag_drop_internal.py` +
+  `test_drag_drop_matrix.py` + `test_drag_drop_property.py`.
+- **Step 7 — drop policies, indicators & visual cues.** Cycle
+  guard via `source_paths_from_mime` envelope key in MIME;
+  `_resolve_drop_target` covers row≥0, row=−1 on container, row=−1
+  on leaf (sibling-after), row=−1 on invalid root. Transient
+  status message `"Moved N rows under $.foo"` /
+  `"Copied N rows under $.bar"`. `tests/test_drop_policies.py`.
+- **Step 8 — shortcuts, menu labels, repo-map refresh.** Hooked
+  `Alt+Up/Down`, `Ctrl+Alt+Up/Down` (move out of parent),
+  `Ctrl+Shift+V` (paste-insert-zip), `Ctrl+Alt+V` (paste-replace-zip)
+  per-tab; documented in §4 / §5 of `repo-map.md`.
+- **Step 9 — move-mechanics + multi-action redesign.** Collapsed
+  the three move branches (`_move_same_parent`,
+  `_multi_parent_common_grandparent_move`,
+  `_move_multi_parent_fallback`) into a single anchor-based
+  primitive in `tree_actions/anchors.py`
+  (`MoveAnchor`, `anchor_at_end / before / after`,
+  `resolve_anchor_target`, `pre_pop_target_row_to_anchor`,
+  `anchor_is_cycle / no_op`).
+  `JsonTab.push_move_rows_anchor` is the single entry point;
+  `push_move_rows` is a thin shim. New filter-mode projection in
+  multi-copy; new `paste_clones_at_targets`, `paste_insert_zip`
+  helpers. `tests/test_anchor_move.py` +
+  `test_multi_action_semantics.py`.
+- **Step 10 — multi-action paste + context-menu fixes.** Renamed
+  the original `paste_insert_zip` (which actually replaced values)
+  to `paste_replace_zip` (Ctrl+Alt+V); added a real
+  `paste_insert_after_zip` (Ctrl+Shift+V) that inserts each
+  clipboard entry as sibling-after its matching target. Added
+  `paste_auto` dispatcher (single ⇒ legacy paste,
+  multi ⇒ `paste_clones_at_targets`) and routed Ctrl+V through it.
+  `tree_actions/context_menu.py` now preserves multi-selection on
+  right-click inside the selection and collapses to the hit row
+  otherwise. `tests/test_context_menu_multiselect.py`.
 
 ### Former `plans/` phases (shipped between 2026-05-06 and 2026-05-08)
 - **Phase 1 — context-menu polish.** Type column shows only
