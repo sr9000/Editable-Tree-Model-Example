@@ -86,6 +86,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _setup_validation_dock(self) -> None:
         self.validation_dock = ValidationDock(self)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.validation_dock)
+        self.validation_dock.issueActivated.connect(
+            lambda issue, edit: self._on_validation_issue_activated(issue, edit=edit)
+        )
 
         self.viewValidationPanelAction = QAction(self.tr("Validation Panel"), self)
         self.viewValidationPanelAction.setCheckable(True)
@@ -101,6 +104,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         visible = self._coerce_bool(self._settings.value("validation/dock_visible", True), default=True)
         self.validation_dock.setVisible(visible)
         self.viewValidationPanelAction.setChecked(visible)
+
+    def _on_validation_issue_activated(self, issue, *, edit: bool = False) -> None:
+        tab = self._current_tab()
+        if tab is None:
+            return
+        tab.goto_validation_issue(issue, edit=edit)
 
     def _setup_monospace_action(self) -> None:
         self.viewMonospaceFieldsAction = QAction("Monospace Names && Values", self)

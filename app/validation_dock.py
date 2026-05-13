@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 class ValidationDock(QDockWidget):
-    issueActivated = Signal(object)
+    issueActivated = Signal(object, bool)
 
     ALLOWED_AREAS = (
         Qt.DockWidgetArea.LeftDockWidgetArea
@@ -36,6 +36,7 @@ class ValidationDock(QDockWidget):
         self.list_view = QListView(self)
         self.list_view.setModel(self.model)
         self.list_view.clicked.connect(self._on_index_clicked)
+        self.list_view.activated.connect(self._on_index_activated)
 
         container = QWidget(self)
         layout = QVBoxLayout(container)
@@ -77,4 +78,9 @@ class ValidationDock(QDockWidget):
     def _on_index_clicked(self, index) -> None:
         issue = self.model.issue_at(index.row())
         if issue is not None:
-            self.issueActivated.emit(issue)
+            self.issueActivated.emit(issue, False)
+
+    def _on_index_activated(self, index) -> None:
+        issue = self.model.issue_at(index.row())
+        if issue is not None:
+            self.issueActivated.emit(issue, True)

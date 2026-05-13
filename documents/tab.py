@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QEvent, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QItemSelectionModel, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.tab_io import save as tab_save
@@ -55,6 +55,8 @@ from undo.commands import (
 )
 from undo.diff import DiffApplier
 from validation.index import IssueIndex
+from validation.issue import ValidationIssue
+from validation.json_pointer import instance_path_to_model_path
 from validation.schema_source import SchemaRef, discover_schema, load_schema
 from validation.validator import validate_document
 
@@ -254,6 +256,54 @@ class JsonTab(QWidget):
             issues = validate_document(root_data, self._schema)
         self._issue_index = IssueIndex(issues, root_data)
         self.validationChanged.emit(self._issue_index)
+
+    def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
+        root_data = self.model.root_item.to_json()
+        model_path = instance_path_to_model_path(root_data, issue.instance_path)
+        if model_path is None:
+            if self._status_message_callback is not None:
+                self._status_message_callback("Validation issue path no longer exists", 2000)
+            return False
+
+        source_row = self._index_from_path(model_path)
+        if not source_row.isValid():
+            if self._status_message_callback is not None:
+                self._status_message_callback("Validation issue path no longer exists", 2000)
+            return False
+
+        source_row = source_row.siblingAtColumn(0)
+        view_row = self._source_to_view(source_row)
+        if not view_row.isValid():
+            if self._status_message_callback is not None:
+                self._status_message_callback("Validation issue path no longer exists", 2000)
+            return False
+
+        sm = self.view.selectionModel()
+        if sm is not None:
+            sm.select(
+                view_row,
+                QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+            )
+            sm.setCurrentIndex(view_row, QItemSelectionModel.SelectionFlag.NoUpdate)
+
+        self.view.setCurrentIndex(view_row)
+        self.view.scrollTo(view_row, QAbstractItemView.ScrollHint.PositionAtCenter)
+
+        if not edit:
+            return True
+
+        source_value = source_row.siblingAtColumn(2)
+        if not source_value.isValid():
+            return True
+        if not (self.model.flags(source_value) & Qt.ItemFlag.ItemIsEditable):
+            return True
+
+        view_value = self._source_to_view(source_value)
+        if not view_value.isValid():
+            return True
+        self.view.setCurrentIndex(view_value)
+        self.view.edit(view_value)
+        return True
 
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
         self._theme = theme

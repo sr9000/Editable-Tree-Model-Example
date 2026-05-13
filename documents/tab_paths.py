@@ -52,7 +52,7 @@ def index_path(tab, index: QModelIndex) -> tuple[int, ...]:
     return tuple(reversed(path))
 
 
-def index_from_path(tab, path: tuple[int, ...]) -> QModelIndex:
+def index_from_path(tab, path: tuple[int | None, ...] | None) -> QModelIndex:
     """Inverse of :func:`index_path` — walk *path* starting at root_item.
 
     Always descends from ``root_item`` regardless of ``show_root``. When
@@ -61,6 +61,8 @@ def index_from_path(tab, path: tuple[int, ...]) -> QModelIndex:
     materialise root_item's index so that the path entries align with
     the underlying ``child_items`` list.
     """
+    if path is None:
+        return QModelIndex()
     model = tab.model
     if model.show_root:
         root_idx = model.index(0, 0, QModelIndex())
@@ -72,6 +74,8 @@ def index_from_path(tab, path: tuple[int, ...]) -> QModelIndex:
             return QModelIndex()
         idx = QModelIndex()
     for row in path:
+        if not isinstance(row, int) or row < 0:
+            return QModelIndex()
         nxt = model.index(row, 0, idx)
         if not nxt.isValid():
             return QModelIndex()
