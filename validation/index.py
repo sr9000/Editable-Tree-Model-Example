@@ -20,9 +20,11 @@ class IssueIndex:
         self._exact: dict[tuple[int, ...], list[ValidationIssue]] = defaultdict(list)
         self._severity: dict[tuple[int, ...], str] = {}
         self._ancestor: dict[tuple[int, ...], str] = {}
+        self._issues: list[ValidationIssue] = []
         self._count = 0
 
         for issue in issues:
+            self._issues.append(issue)
             self._count += 1
             model_path = instance_path_to_model_path(root_data, issue.instance_path)
             if model_path is None:
@@ -42,6 +44,9 @@ class IssueIndex:
 
     def ancestor_severity(self, model_path: tuple[int, ...]) -> str | None:
         return self._ancestor.get(model_path)
+
+    def all_issues(self) -> list[ValidationIssue]:
+        return list(self._issues)
 
     def __len__(self) -> int:
         return self._count

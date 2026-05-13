@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QModelIndex, QSettings
+from PySide6.QtCore import QByteArray, QModelIndex, QSettings, Qt
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import QDialog, QFileDialog, QFontDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
 
@@ -14,6 +14,7 @@ from app.main_window_actions import setup_connections as setup_main_window_conne
 from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, refresh_recent_menu
 from app.theme_controller import ThemeController
+from app.validation_dock import ValidationDock
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
@@ -23,6 +24,18 @@ from tree_actions.structure import collapse_all, delete_selection, expand_all
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
+    @staticmethod
+    def _coerce_bool(value, *, default: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lowered = value.strip().casefold()
+            if lowered in {"1", "true", "yes", "on"}:
+                return True
+            if lowered in {"0", "false", "no", "off"}:
+                return False
+        return default
+
     @staticmethod
     def _normalize_font_for_dialog(seed: QFont) -> QFont:
         font = QFont(seed)
@@ -63,11 +76,31 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
         refresh_recent_menu(self)
+        self._setup_validation_dock()
         self._setup_font_actions()
         self._setup_monospace_action()
         setup_history_menu(self)
         self.setup_model(yaml_filename)
         self.setup_connections()
+
+    def _setup_validation_dock(self) -> None:
+        self.validation_dock = ValidationDock(self)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.validation_dock)
+
+        self.viewValidationPanelAction = QAction(self.tr("Validation Panel"), self)
+        self.viewValidationPanelAction.setCheckable(True)
+        self.viewMenu.addSeparator()
+        self.viewMenu.addAction(self.viewValidationPanelAction)
+
+        dock_state = self._settings.value("validation/dock_state")
+        if isinstance(dock_state, QByteArray):
+            self.restoreState(dock_state)
+        elif isinstance(dock_state, (bytes, bytearray)):
+            self.restoreState(QByteArray(dock_state))
+
+        visible = self._coerce_bool(self._settings.value("validation/dock_visible", True), default=True)
+        self.validation_dock.setVisible(visible)
+        self.viewValidationPanelAction.setChecked(visible)
 
     def _setup_monospace_action(self) -> None:
         self.viewMonospaceFieldsAction = QAction("Monospace Names && Values", self)
@@ -156,6 +189,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _on_tab_changed(self, _index: int) -> None:
         tab = self._current_tab()
         self._bind_undo_signals(tab)
+        self.validation_dock.attach_tab(tab)
         if tab is not None:
             tab.resize_key_columns()
         if self._history_dialog is not None and self._history_dialog.isVisible():
@@ -278,7 +312,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             widget.deleteLater()
         self.update_actions()
         # Re-bind to whatever tab is now current (if any).
-        self._bind_undo_signals(self._current_tab())
+        current = self._current_tab()
+        self._bind_undo_signals(current)
+        self.validation_dock.attach_tab(current)
 
     def insert_child(self):
         tab = self._current_tab()
@@ -415,4 +451,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 return
             if isinstance(widget, JsonTab):
                 view_state.save(widget)
+        self._settings.setValue("validation/dock_state", self.saveState())
+        self._settings.setValue("validation/dock_visible", self.validation_dock.isVisible())
         super().closeEvent(event)
