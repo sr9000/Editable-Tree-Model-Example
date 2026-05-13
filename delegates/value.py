@@ -87,12 +87,23 @@ class ValueDelegate(_TextEditorDelegateBase):
 
     def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex) -> None:  # type: ignore[override]
         super().initStyleOption(option, index)
-        model = index.model()
-        raw = model.data(index, Qt.ItemDataRole.EditRole) if model is not None else index.data(Qt.ItemDataRole.EditRole)
-        json_type = model.data(index, JSON_TYPE_ROLE) if model is not None else index.data(JSON_TYPE_ROLE)
-        typed = self._coerce_json_type(json_type)
         source_index = self._source_index(index)
         item = source_index.internalPointer() if source_index.isValid() else None
+        # Read raw value and type directly from the tree item when possible.
+        # This avoids the Qt QVariant round-trip that silently overflows for
+        # arbitrarily-large Python integers (bigints > 8-byte signed int limit).
+        if isinstance(item, JsonTreeItem):
+            raw = item.data(source_index.column())
+            json_type = item.json_type
+        else:
+            model = index.model()
+            raw = (
+                model.data(index, Qt.ItemDataRole.EditRole)
+                if model is not None
+                else index.data(Qt.ItemDataRole.EditRole)
+            )
+            json_type = model.data(index, JSON_TYPE_ROLE) if model is not None else index.data(JSON_TYPE_ROLE)
+        typed = self._coerce_json_type(json_type)
         show_preview = True
         if typed in (JsonType.ARRAY, JsonType.OBJECT) and isinstance(option.widget, QTreeView):
             tree_index = index.siblingAtColumn(0)

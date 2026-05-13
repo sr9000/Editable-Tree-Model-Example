@@ -125,6 +125,24 @@ def test_type_delegate_applies_theme_foreground_for_type_column(qapp):
     assert _color_hex(option.palette.color(option.palette.ColorRole.Text)) == _color_hex(style.fg)
 
 
+def test_value_delegate_init_style_option_does_not_overflow_for_bigint(qapp):
+    """Regression: initStyleOption must not raise OverflowError for integers
+    that exceed Qt's 8-byte signed integer limit (bigints stored verbatim in
+    JsonTreeItem bypass the QVariant round-trip that would explode)."""
+    BIG = 738_765_433_567_890_087_654_354_678_798_000
+    model = JsonTreeModel({"big": BIG})
+    type_index = model.index(0, 1, QModelIndex())
+    assert model.setData(type_index, JsonType.INTEGER, Qt.ItemDataRole.EditRole)
+    value_index = model.index(0, 2, QModelIndex())
+
+    delegate = ValueDelegate(theme=LIGHT_DEFAULT)
+    option = QStyleOptionViewItem()
+    # Must not raise OverflowError.
+    delegate.initStyleOption(option, value_index)
+
+    assert str(BIG) in option.text
+
+
 def test_json_tab_set_theme_emits_repaint_data_changed(qapp):
     tab = JsonTab(lambda *_args, **_kwargs: None, data={"a": 1, "b": {"c": 2}}, show_root=True, theme=LIGHT_DEFAULT)
     signals = []

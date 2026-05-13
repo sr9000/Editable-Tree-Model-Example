@@ -61,7 +61,7 @@ def test_edits_outside_merge_window_do_not_merge(qtbot, monkeypatch):
     value_idx = tab.model.index(answer_row, 2, QModelIndex())
 
     fake_t = [1000.0]
-    monkeypatch.setattr("documents.tab.time.monotonic", lambda: fake_t[0])
+    monkeypatch.setattr("time.monotonic", lambda: fake_t[0])
 
     before = tab.undo_stack.count()
     assert tab.commit_set_data(value_idx, 100, Qt.ItemDataRole.EditRole)

@@ -1,16 +1,17 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-08**. PySide6 desktop **structured-data
-editor** (originated from Qt's "Editable Tree Model" example). All
-historical phases (0–6 + package refactor + the six `plans/` phases
-on context-menu polish, zoom-column preservation, kind-switch
-coercion, container preview, app-level color-scheme theming, and
-tests/memory) have shipped; the `plans/` folder is gone. Tests:
-**576 collected, 573 passing**; 3 fail under
-`QT_QPA_PLATFORM=offscreen` because `QStyleHints.setColorScheme` is a
-no-op on the offscreen platform — these pass on real platforms
-(`tests/test_app_color_scheme.py::*`,
-`test_theme_switching.py::test_color_scheme_follows_selected_theme`)._
+_Last scanned: **2026-05-13**. PySide6 desktop **structured-data
+editor** (originated from Qt's "Editable Tree Model" example).
+**Drag-and-drop plan is fully shipped**: Steps 1–10 (multiselect
+foundation → MIME helpers → atomic multi-row undo move → keyboard
+Alt±arrow multimove with boundary bubble-out → expansion preservation
+across moves → native QTreeView drag-and-drop → drop policies & cycle
+guards → shortcuts/menu/docs → move-mechanics + multi-action redesign
+on anchors → multi-action context-menu paste/zip fixes) are all in
+mainline. The tree gained a `JsonTreeView` subclass that owns
+`startDrag` so the model can fully own internal moves without Qt's
+default post-drag row removal. Tests: **776 passing, 3 known
+offscreen-only failures** (color-scheme sync — see `todo-n-fixme.md`).
 
 ---
 
@@ -22,6 +23,7 @@ no-op on the offscreen platform — these pass on real platforms
 | Menu wiring + enable/disable                          | `app/main_window_actions.py`                                         |
 | Per-document tab (model/view/undo/search)             | `documents/tab.py` + `documents/tab_*.py`                            |
 | Tree data model & node                                | `tree/model.py`, `tree/item.py`, `tree/model_roles.py`               |
+| Custom tree view (owns `startDrag`)                   | `tree/view.py` (`JsonTreeView`)                                      |
 | Type system / inference                               | `tree/types.py` (`JsonType`, `parse_json_type`)                      |
 | Cross-type coercion (kind switch)                     | `tree/item_coercion.py` (+ `tree/stubs.py`)                          |
 | Editors per type / display formatting                 | `delegates/value.py`, `delegates/value_formatting.py`                |
@@ -29,6 +31,8 @@ no-op on the offscreen platform — these pass on real platforms
 | Name column rename                                    | `delegates/name_delegate.py`                                         |
 | Modal editors (multiline / hex)                       | `dialogs/qmultiline_dlg.py`, `dialogs/qhexedit_dlg.py`               |
 | Context menu / clipboard / paste / structural ops     | `tree_actions/`                                                      |
+| Drag-and-drop policy / dispatch                       | `tree_actions/dnd.py`, `tree/model.py`, `tree/view.py`               |
+| Anchor-based move primitive                           | `tree_actions/anchors.py`                                            |
 | Filter / search                                       | `tree_filter_proxy.py`, `documents/tab_setup.py::init_search_filter` |
 | Typed undo commands + diff replay                     | `undo/commands.py`, `undo/diff.py`                                   |
 | File I/O (JSON / JSONL / YAML / YAML-multi)           | `io_formats/`                                                        |
@@ -80,49 +84,92 @@ tree_filter_proxy.py          # TreeFilterProxy (recursive name+value)
 header_view_editor.py         # dormant mixin, not wired
 qmultiline_editor.py          # QPlainTextEdit subclass for multiline dialog
 plan.txt                      # long-term wishlist (no active phase status)
+drag-n-drop.patch             # full Step-1..10 patch archive (reference only)
 
 app/                          (≈800 LOC)
-  main_window.py              # MainWindow (~345 lines)
+  main_window.py              # MainWindow (~418 lines)
   main_window_actions.py      # setup_connections + update_actions
   theme_controller.py         # menu, persistence, watcher, color-scheme sync
+  font_controller.py          # global editor font / monospace toggle
   recent_files.py             # 8-entry recent-files list (QSettings)
   close_confirm.py            # Save/Discard/Cancel modal
   history.py                  # History menu + QUndoView dialog
 
-documents/                    (≈880 LOC)
-  tab.py                      # JsonTab (~580 lines): undo, search, zoom, push API
-  tab_setup.py                # layout, delegates, shortcuts, filter, column-resize tracking
+documents/                    (≈1330 LOC)
+  tab.py                      # JsonTab (~980 lines): undo, search, zoom, push API,
+                              # push_move_rows_anchor (anchor-based primitive)
+  tab_setup.py                # layout, delegates, shortcuts, filter, column-resize,
+                              # drag/drop flags, model.attach_view(view) for DnD callbacks
   tab_paths.py                # proxy↔source, $.path helpers
   tab_status.py               # breadcrumb + size hint per JsonType
   tab_io.py                   # save / save-as / snapshot
 
-tree/                         (≈1380 LOC)
+tree/                         (≈1520 LOC)
   types.py                    # JsonType + parse_json_type / infer_text_json_type
   item.py                     # JsonTreeItem
   item_coercion.py            # coerce_value_for_type (Phase-3 overhaul)
   item_names.py               # validate_object_child_name / unique_child_name
   stubs.py                    # friendly placeholder values for unrecoverable coercions
-  model.py                    # JsonTreeModel
+  model.py                    # JsonTreeModel (drag-drop hooks: mimeTypes/mimeData/
+                              # canDropMimeData/dropMimeData/supportedDrag/DropActions;
+                              # _drag_source_rows cache + consume_drag_source_rows;
+                              # attach_view; flags() returns ItemIsDragEnabled per row
+                              # and ItemIsDropEnabled on root + OBJECT/ARRAY)
   model_roles.py              # JSON_TYPE_ROLE + display/font/tooltip helpers
+  view.py                     # JsonTreeView — QTreeView subclass overriding startDrag
+                              # to skip Qt's default clearOrRemove when the model
+                              # already handled the internal move
 
 delegates/                    (≈620 LOC)
   base.py                     # _CapsLockSafeLineEdit, _TextEditorDelegateBase
-  value.py                    # ValueDelegate (per-JsonType editors + theme-aware paint)
+  value.py                    # ValueDelegate (per-JsonType editors + theme-aware paint).
+                              # initStyleOption reads raw value + type directly from the
+                              # JsonTreeItem when possible so bigints > 2**63-1 don't
+                              # overflow Shiboken's QVariant boxing.
   value_formatting.py         # format_default / format_with_type / container preview / _apply_type_style
   bytes_codec.py              # decode_bytes / encode_bytes (BYTES/ZLIB/GZIP)
   type_delegate.py            # JsonTypeDelegate (combobox with icons)
   name_delegate.py            # NameDelegate
 
-tree_actions/                 (≈730 LOC)
-  selection.py                # _resolve_model, proxy/source mapping, ancestor checks
-  clipboard.py                # MIME format, copy / copy-with-name / copy-value-only
-  paste.py                    # paste_from_clipboard + collision avoidance
+tree_actions/                 (≈2120 LOC)
+  selection.py                # _resolve_model, proxy/source mapping, ancestor checks,
+                              # selected_source_rows / top_level_source_rows /
+                              # deepest_selected_rows / selection_shape (Step 9)
+  anchors.py                  # MoveAnchor + anchor_at_end / before / after factories,
+                              # resolve_anchor_target / resolve_anchor_insert_row,
+                              # pre_pop_target_row_to_anchor, anchor_is_cycle/no_op
+                              # — single anchor primitive for every move caller (Step 9)
+  clipboard.py                # MIME format, build_tree_mime / entries_from_mime /
+                              # source_paths_from_mime (Step 7 envelope key);
+                              # copy_selection / *_with_name / *_value_only;
+                              # filter-mode projection on multi-copy (Step 9)
+  paste.py                    # paste_from_clipboard + collision avoidance,
+                              # paste_entries_at, paste_auto (multi-aware dispatch),
+                              # paste_clones_at_targets, paste_insert_after_zip,
+                              # paste_replace_zip, paste_insert_zip (Steps 9–10)
+  dnd.py                      # can_drop / handle_drop (Steps 6–7).
+                              # MoveAction: drains model.consume_drag_source_rows()
+                              # and routes to tab.push_move_rows; marks the originating
+                              # view so JsonTreeView.startDrag skips clearOrRemove.
+                              # CopyAction / cross-tab: routes to paste_entries_at.
+                              # _resolve_drop_target: row>=0 → (parent,row);
+                              # row==-1 on container → append; row==-1 on leaf →
+                              # sibling-after via parent.parent(). Cycle guard rejects
+                              # any source-path that is an ancestor of target_parent.
   structure.py                # insert/cut/delete/duplicate/move/sort/expand/collapse
-  context_menu.py             # column-aware show_context_menu
+                              # — anchor-based; single algorithm replaces 3 prior branches.
+                              # move_selection_out_up / out_down promote selection out
+                              # of the parent for keyboard bubble-out.
+  context_menu.py             # column-aware show_context_menu; right-click inside the
+                              # multi-selection preserves it (Step 10), right-click
+                              # outside collapses to the single hit row (legacy).
 
-undo/                         (≈370 LOC)
-  commands.py                 # _MoveRowCmd, _RenameCmd, _EditValueCmd, _ChangeTypeCmd,
-                              # _InsertRowsCmd, _RemoveRowsCmd, _SortKeysCmd
+undo/                         (≈540 LOC)
+  commands.py                 # _MoveRowCmd (kept for back-compat), _MoveRowsCmd
+                              # (anchor-based; _select_placed_rows helper preserves the
+                              # multi-selection through redo/undo), _RenameCmd,
+                              # _EditValueCmd, _ChangeTypeCmd, _InsertRowsCmd,
+                              # _RemoveRowsCmd, _SortKeysCmd
   diff.py                     # DiffApplier — surgical Qt-signal undo/redo replay
 
 io_formats/                   (≈110 LOC)
@@ -174,12 +221,24 @@ from tree.item import JsonTreeItem
 from tree.item_coercion import coerce_value_for_type
 from tree.types import JsonType, parse_json_type, infer_text_json_type, TEXT_FAMILY
 from tree.stubs import stub_integer, stub_float, stub_percent, stub_string, stub_multiline, stub_bytes_raw
+from tree.view import JsonTreeView
 from delegates.value import ValueDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.name_delegate import NameDelegate
 from tree_actions.context_menu import show_context_menu
-from tree_actions.clipboard import copy_selection, copy_selection_with_name, copy_selection_value_only
-from tree_actions.paste import paste_from_clipboard
+from tree_actions.clipboard import (
+    MIME_JSON_TREE, build_tree_mime, entries_from_mime, source_paths_from_mime,
+    copy_selection, copy_selection_with_name, copy_selection_value_only,
+)
+from tree_actions.paste import (
+    paste_from_clipboard, paste_auto, paste_clones_at_targets,
+    paste_insert_after_zip, paste_replace_zip, paste_entries_at,
+)
+from tree_actions.dnd import can_drop, handle_drop
+from tree_actions.anchors import (
+    MoveAnchor, anchor_at_end, anchor_before_index, anchor_after_index,
+    resolve_anchor_target, pre_pop_target_row_to_anchor,
+)
 from io_formats.load import load_file_with_format
 from io_formats.dump import dump_text
 from io_formats.detect import SAVE_FORMAT_JSON, SAVE_FORMAT_JSONL, SAVE_FORMAT_YAML, SAVE_FORMAT_YAML_MULTI
@@ -214,7 +273,7 @@ display in `delegates/value_formatting.py`; coercion in
 | `BYTES`        | `"bytes"`       | `QHexDialog` (modal)         | `"<24 byte>"` via `units.format_bytes`   | base64 wire format; encode-on-switch from string/int             |
 | `ZLIB`         | `"zlib"`        | `QHexDialog` (modal)         | `"<…>"`                                  | base64+zlib; cross-format re-encode lossless when `old_type` known |
 | `GZIP`         | `"gzip"`        | `QHexDialog` (modal)         | `"<…>"`                                  | base64+gzip                                                      |
-| `OBJECT`       | `"object"`      | n/a (children edited inline) | `"{N keys}  k: v, k2: v2, …"` (collapsed) | array→object preserves children with `item1, item2, …` keys     |
+| `OBJECT`       | `"object"`      | n/a (children edited inline) | `"{N keys}  k: v, k2: v2, …"` (collapsed) | array→object preserves children, drops keys                      |
 | `ARRAY`        | `"array"`       | n/a                          | `"[N items]  v1, v2, v3"` (collapsed)    | object→array preserves children, drops keys                      |
 | `NULL`         | `"null"`        | n/a (col 2 not editable)     | `"null"`                                 | always editable type; never serialised as a string               |
 
@@ -260,11 +319,16 @@ Defined in `mainwindow.ui` (window-level QActions) and
 | `Ctrl+C`       | tab    | Copy selection                               |
 | `Ctrl+X`       | tab    | Cut selection                                |
 | `Ctrl+V`       | tab    | Paste                                        |
+| `Ctrl+Shift+V` | tab    | **Multi-insert** (`paste_insert_after_zip`) — zip-pair clipboard top-level entries with top-level selected targets; inserts each entry as sibling-after the matching target |
+| `Ctrl+Alt+V`   | tab    | **Multi-replace** (`paste_replace_zip`) — zip-pair clipboard top-level entries with top-level selected targets; replaces each target's value |
 | `Ctrl+D`       | tab    | Duplicate selection                          |
-| `Alt+Up`       | tab    | Move row up                                  |
-| `Alt+Down`     | tab    | Move row down                                |
+| `Alt+Up`       | tab    | Move selected row(s) up; at row 0 bubble out before parent |
+| `Alt+Down`     | tab    | Move selected row(s) down; at last row bubble out after parent |
+| `Ctrl+Alt+Up`  | tab    | Move selection **out of parent** (promote to grandparent, before parent) |
+| `Ctrl+Alt+Down`| tab    | Move selection **out of parent** (promote to grandparent, after parent)  |
 | `Ctrl+Alt+S`   | tab    | Sort keys (under selected OBJECT)            |
 | `F2` / Enter   | tree   | Edit current cell (Qt default)               |
+| _mouse_        | tree   | **Drag-and-drop** — left-click+drag moves selection between/onto OBJECT/ARRAY rows; Ctrl-drag = copy; cycle-guard rejects drops into self/descendant; drop on a leaf becomes sibling-after |
 
 Undo/redo have no explicit shortcuts wired — the **History** menu owns
 Undo, Redo and "Show History…" via `app/history.py` (Qt's built-in
@@ -516,7 +580,9 @@ truth for one document.
   empty), `file_path`, `show_root`, `permanent_message_callback`,
   `theme`, `icon_provider`.
 - Owns the search line edit (debounced 150 ms via `QTimer`, Ctrl+F).
-- Typed-command push API: `push_move_row`, `push_rename`,
+- Typed-command push API: `push_move_row` (delegates to `push_move_rows`),
+  `push_move_rows(sources, target_parent, target_row)` (Step 3 — N-row
+  atomic move, cycle-guard included), `push_rename`,
   `push_edit_value`, `push_change_type`, `push_insert_rows`,
   `push_remove_rows`, `push_sort_keys`. `commit_set_data(index, value,
   role)` is the single delegate-side mutation entry point and
@@ -525,7 +591,9 @@ truth for one document.
   window for `_RenameCmd` / `_EditValueCmd` (ids `0x0E710001` /
   `0x0E710002`).
 - Undo/redo replay via `undo.diff.DiffApplier` — emits surgical Qt
-  model signals so expansion and selection survive.
+  model signals so expansion and selection survive replay.
+- Move commands capture subtree-relative expansion + selection state and
+  replay it on redo/undo, so moved branches keep open/closed state.
 - Dirty state tied to `undo_stack.cleanChanged`; `dirtyChanged(bool)`
   signal updates the tab title (`*` suffix) via `display_name()`.
 - `set_theme(theme, icon_provider=None)` updates both theme-aware
@@ -541,10 +609,20 @@ truth for one document.
 
 ### `documents/tab_setup.py`
 
-- Builds the `QTreeView` (`UniformRowHeights`, `AlternatingRowColors`,
-  `ExtendedSelection`, `SelectItems`, `ScrollPerPixel`).
-- Attaches delegates, wires shortcuts, search proxy, font-zoom helpers,
-  column-resize tracking.
+- Builds a `tree.view.JsonTreeView` (subclass of `QTreeView`) with
+  `UniformRowHeights`, `AlternatingRowColors`, `ExtendedSelection`,
+  `SelectItems`, `ScrollPerPixel`, and native drag/drop:
+  `setDragEnabled(True)`, `setAcceptDrops(True)`,
+  `setDropIndicatorShown(True)`,
+  `setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)`,
+  `setDefaultDropAction(Qt.DropAction.MoveAction)`.
+- Calls `tab.model.attach_view(tab.view)` so
+  `JsonTreeModel.dropMimeData` can dispatch to
+  `tree_actions/dnd.py::handle_drop(view, ...)`.
+- Attaches delegates, wires shortcuts (including `Alt+Up/Down`,
+  `Ctrl+Alt+Up/Down` move-out, `Ctrl+Shift+V` paste-insert-zip,
+  `Ctrl+Alt+V` paste-replace-zip), search proxy, font-zoom helpers,
+  and column-resize tracking.
 
 ### `documents/tab_paths.py`
 
@@ -563,16 +641,67 @@ truth for one document.
 ## 11) Tree actions / clipboard — `tree_actions/`
 
 - `selection.py`: `_resolve_model`, `_to_source_index`, `_to_view_index`,
-  `_index_path`, `_is_ancestor`, `_top_level_selected_rows`.
-- `clipboard.py`: `copy_selection`, `copy_selection_with_name`,
-  `copy_selection_value_only`. MIME type `application/x-json-tree`
-  with text fallback for cross-app paste.
-- `paste.py`: `paste_from_clipboard` with collision avoidance.
+  `_index_path`, `_is_ancestor`.
+  **Public helpers (Step 1):** `selected_source_rows(view)`,
+  `top_level_source_rows(view)` (ancestor-pruned), and
+  `selection_spans_multiple_parents(rows) -> bool`.
+  Private-underscore aliases kept for back-compat one release.
+- `clipboard.py`: **Canonical MIME (de)serializer (Step 2):**
+  `build_tree_mime(model, source_rows) -> QMimeData | None` — builds the
+  wire payload (binary `application/x-json-tree` + `text/plain` fallback,
+  sorted by `_index_path`).
+  `entries_from_mime(mime) -> list[dict] | None` — pure decoder (no
+  clipboard access).  `_clipboard_entries()` wraps it for system clipboard.
+  `copy_selection`, `copy_selection_with_name`, `copy_selection_value_only`
+  are thin orchestrators that call `build_tree_mime` and push to the
+  clipboard. MIME type constant `MIME_JSON_TREE = "application/x-json-tree"`.
+  All three public names re-exported from `tree_actions/__init__.py`.
+- `paste.py`: `paste_from_clipboard` with collision avoidance and reusable
+  `paste_entries_at(...)` for decoded payload insertion.
+  **Multi-aware paste dispatchers (Steps 9–10):** `paste_auto(view)`
+  is the Ctrl+V entry point — single selection ⇒ legacy
+  `paste_from_clipboard`, multi-selection ⇒ `paste_clones_at_targets`
+  (every selected row receives a clone of the entire clipboard payload).
+  `paste_insert_after_zip(view)` (Ctrl+Shift+V) and
+  `paste_replace_zip(view)` (Ctrl+Alt+V) zip-pair the top-level
+  clipboard entries with the top-level selection (no deep scan,
+  truncated to `min(len(entries), len(targets))`).
+- `dnd.py`: `can_drop(...)` / `handle_drop(...)`.
+  - Reads `source_paths_from_mime(mime)` to enforce a **cycle guard**:
+    no source path may be a prefix of `target_parent`'s path.
+  - `_resolve_drop_target(model, row, parent)`: `row >= 0` →
+    `(parent, clamp(row))`; `row == -1` on OBJECT/ARRAY → append at end;
+    `row == -1` on a leaf → sibling-after (`parent.parent()`,
+    `parent.row()+1`); `row == -1` on the invalid root index → append
+    at root.
+  - `MoveAction`: drains `model.consume_drag_source_rows()` (set by
+    `JsonTreeModel.mimeData`, top-level-only), routes to
+    `tab.push_move_rows(...)` for a single undo step, then calls
+    `view.mark_drag_handled_internally()` so `JsonTreeView.startDrag`
+    skips Qt's default post-drag row removal.
+  - `CopyAction` / cross-tab: routes to `paste_entries_at(...)`.
+  - Pushes a transient status message
+    (`"Moved N rows under $.foo"` / `"Copied N rows under $.bar"`).
+- `anchors.py` (Step 9): single move primitive shared by Alt+Up/Down,
+  Ctrl+Alt+Up/Down move-out, drag-drop, paste, and duplicate.
+  `MoveAnchor(parent_path, before_path, after_path)` describes the gap
+  *between* two siblings (or end-of-parent); helpers
+  `anchor_at_end / anchor_before_index / anchor_after_index` build
+  them, `resolve_anchor_target` / `resolve_anchor_insert_row` /
+  `pre_pop_target_row_to_anchor` convert them to a pre-pop
+  `target_row` after the sources are removed, and
+  `anchor_is_cycle` / `anchor_is_no_op` short-circuit invalid moves.
 - `structure.py`: `insert_sibling_before/after`, `insert_child_current`,
   `delete_selection`, `cut_selection`, `duplicate_selection`,
-  `move_selection_up/down`, `sort_selection_keys(recursive)`,
-  `expand_all`, `collapse_all`.
+  `move_selection_up/down`, `move_selection_out_up/out_down`
+  (Ctrl+Alt+Up/Down bubble-out — promote selection to the grandparent
+  level, before/after the original parent), `sort_selection_keys(recursive)`,
+  `expand_all`, `collapse_all`. All move callers feed `MoveAnchor`s
+  into `JsonTab.push_move_rows_anchor`.
 - `context_menu.py`: column-aware menu (see § 5).
+  **Selection preservation (Step 10):** when the right-click hit is
+  *inside* an existing multi-selection, the menu keeps the whole
+  selection; right-click *outside* collapses to the single hit row.
 
 Each action routes through `JsonTab.push_*` typed helpers when the
 view's ancestor is a `JsonTab`, else falls back to `model_actions.py`
@@ -604,6 +733,9 @@ direct mutators (headless tests).
 - `restore(tab)` returns `True` when state was found and applied;
   callers fall back to defaults (`expandAll` +
   `resizeColumnToContents`) on `False`.
+- `iter_expanded_relative_paths(view, source_index)` and
+  `apply_expanded_relative_paths(view, source_index, paths)` support
+  move-time subtree expansion preservation.
 - `discard(path)` removes the group on `Save As` to a new path.
 - Hard cap `MAX_EXPANDED_PATHS = 5000`.
 
@@ -669,7 +801,13 @@ direct mutators (headless tests).
 ## 15) Undo system — `undo/`
 
 Typed `QUndoCommand` subclasses (`undo/commands.py`):
-`_MoveRowCmd`, `_RenameCmd`, `_EditValueCmd`, `_ChangeTypeCmd`,
+`_MoveRowCmd` (kept for import compatibility), `_MoveRowsCmd` (Steps 3
++ 9 — anchor-based N-row atomic cross-parent move; `mergeWith` always
+`False`; internal `_select_placed_rows` helper rebuilds the
+`QItemSelection` for every placed row using
+`ClearAndSelect | Rows` so the multi-selection survives both `redo`
+and `undo`),
+`_RenameCmd`, `_EditValueCmd`, `_ChangeTypeCmd`,
 `_InsertRowsCmd`, `_RemoveRowsCmd`, `_SortKeysCmd`. Path-based
 addressing avoids `QModelIndex` invalidation across mutations.
 
@@ -690,7 +828,7 @@ valid current index.
 
 ## 16) Tests
 
-`tests/` collects **576 tests** as of 2026-05-08; **573 pass, 3 fail**
+`tests/` collects **779 tests** as of 2026-05-13; **776 pass, 3 fail**
 under `QT_QPA_PLATFORM=offscreen`. The failing ones —
 `test_app_color_scheme.py::test_light_theme_sets_light_color_scheme`,
 `test_app_color_scheme.py::test_dark_theme_sets_dark_color_scheme`,
@@ -698,6 +836,46 @@ under `QT_QPA_PLATFORM=offscreen`. The failing ones —
 fail because Qt's offscreen QPA platform reports
 `Qt.ColorScheme.Unknown` after `setColorScheme`. Not a code bug; runs
 green on real platforms.
+
+**Drag-and-drop / multi-action suites (Steps 1–10):**
+- `test_multiselect_foundation.py` — Step 1: public
+  `selected_source_rows` / `top_level_source_rows` /
+  `selection_spans_multiple_parents` + ancestor pruning + round-trip
+  copy/paste.
+- `test_mime_payload.py` — Step 2: `build_tree_mime` /
+  `entries_from_mime` round-trip, order stability, malformed-JSON
+  guards, MIME constant check.
+- `test_undo_multimove.py` — Step 3: 8-case `_MoveRowsCmd` matrix
+  (same-parent forward/backward block move, cross-parent move,
+  cycle guard, no-merge, single-row delegation, forward/backward
+  block invariants).
+- `test_keyboard_multimove.py` + `test_keyboard_multimove_app_mode.py`
+  — Step 4: Alt+Up/Down on multi-selection under both
+  `SelectRows` and live `SelectItems` modes, bubble-out at parent
+  boundary, multi-selection preserved across the move
+  (`_select_placed_rows`).
+- `test_move_preserves_expansion.py` — Step 5: subtree expansion +
+  current/selection state round-trip across redo/undo.
+- `test_drag_drop_internal.py` — Step 6: model-level `mimeData` →
+  `dropMimeData` pipeline (no synthetic mouse events) for same-parent
+  / cross-parent / cross-tab moves, copy via `CopyAction`, single
+  undo step.
+- `test_drag_drop_matrix.py` + `test_drag_drop_property.py` — extra
+  matrix and property-style coverage on the resolved-target/cycle
+  matrix.
+- `test_drop_policies.py` — Step 7: self-into-descendant cycle guard,
+  on-leaf drop becomes sibling-after, empty-viewport drop policy,
+  Ctrl-drag copy vs no-Ctrl move, status callback receives
+  `"Moved N rows"` / `"Copied N rows"`.
+- `test_anchor_move.py` — Step 9: `MoveAnchor` primitive, anchor
+  resolution / cycle / no-op detection,
+  `pre_pop_target_row_to_anchor` arithmetic.
+- `test_multi_action_semantics.py` — Step 9–10: `paste_auto`
+  multi-dispatch, `paste_clones_at_targets`, `paste_insert_after_zip`,
+  `paste_replace_zip`.
+- `test_context_menu_multiselect.py` — Step 10: right-click inside
+  the selection preserves it; right-click outside collapses to the
+  single hit row.
 
 Notable suites:
 - Phase-3 coercion: `test_kind_switch_coercion.py` (bool→str
@@ -708,8 +886,10 @@ Notable suites:
 - Phase-5 app color scheme: `test_app_color_scheme.py` +
   `test_theme_switching::test_color_scheme_follows_selected_theme`.
 - Theme stack: `test_theme_loader.py`, `test_theme_registry.py`,
-  `test_icon_provider.py`, `test_value_delegate_theme.py`,
-  `test_icons_in_view.py`, `test_theme_switching.py`.
+  `test_icon_provider.py`, `test_value_delegate_theme.py`
+  (includes the bigint-overflow regression on
+  `ValueDelegate.initStyleOption`), `test_icons_in_view.py`,
+  `test_theme_switching.py`.
 - Editor / phase suites: `test_smoke_model.py`,
   `test_smoke_mainwindow.py`, `test_tree_correctness.py`,
   `test_type_editing.py`, `test_tree_actions_clipboard.py`,

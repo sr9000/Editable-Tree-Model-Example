@@ -3,23 +3,14 @@ from typing import Any
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoStack
-from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QTreeView, QVBoxLayout
+from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QVBoxLayout
 
 from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from tree.model import JsonTreeModel
-from tree_actions.clipboard import copy_selection
+from tree.view import JsonTreeView
 from tree_actions.context_menu import show_context_menu
-from tree_actions.paste import paste_from_clipboard
-from tree_actions.structure import (
-    cut_selection,
-    delete_selection,
-    duplicate_selection,
-    move_selection_down,
-    move_selection_up,
-    sort_selection_keys,
-)
 from tree_filter_proxy import TreeFilterProxy
 
 
@@ -29,7 +20,7 @@ def init_layout(tab) -> None:
     tab.search_edit = QLineEdit(tab)
     tab.search_edit.setPlaceholderText("Filter (Ctrl+F)")
 
-    tab.view = QTreeView(tab)
+    tab.view = JsonTreeView(tab)
     tab.view.setUniformRowHeights(True)
     tab.view.setAlternatingRowColors(True)
     tab.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -37,6 +28,11 @@ def init_layout(tab) -> None:
     tab.view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
     tab.view.setAnimated(False)
     tab.view.setAllColumnsShowFocus(True)
+    tab.view.setDragEnabled(True)
+    tab.view.setAcceptDrops(True)
+    tab.view.setDropIndicatorShown(True)
+    tab.view.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+    tab.view.setDefaultDropAction(Qt.DropAction.MoveAction)
     tab.view.installEventFilter(tab)
     tab.view.viewport().installEventFilter(tab)
     initial_pt = tab.view.font().pointSize()
@@ -57,6 +53,7 @@ def init_model(tab, model_data: Any, show_root: bool) -> None:
     tab.undo_stack = QUndoStack(tab)
 
     tab.model = JsonTreeModel(model_data, tab.view, show_root=show_root, icon_provider=tab._icon_provider)
+    tab.model.attach_view(tab.view)
     tab.proxy = TreeFilterProxy(tab)
     tab.proxy.setSourceModel(tab.model)
 
@@ -99,8 +96,17 @@ def init_shortcuts(tab) -> None:
     tab._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, tab.view)
     tab._paste_shortcut.activated.connect(lambda: tab._run_tree_action("Pasted JSON", paste=True))
 
-    tab._delete_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), tab.view)
-    tab._delete_shortcut.activated.connect(lambda: tab._run_tree_action("Deleted selection", delete=True))
+    # Step 10: Ctrl+Shift+V = multi-insert after each paired selected target.
+    tab._paste_zip_shortcut = QShortcut(QKeySequence("Ctrl+Shift+V"), tab.view)
+    tab._paste_zip_shortcut.activated.connect(lambda: tab._run_tree_action("Inserted at selection", paste_zip=True))
+
+    tab._replace_zip_shortcut = QShortcut(QKeySequence("Ctrl+Alt+V"), tab.view)
+    tab._replace_zip_shortcut.activated.connect(
+        lambda: tab._run_tree_action("Replaced values at selection", replace_zip=True)
+    )
+
+    # Delete is owned by MainWindow's rowRemoveAction (Del). Keeping a second
+    # per-tab Delete shortcut causes ambiguous shortcut warnings.
 
     tab._duplicate_shortcut = QShortcut(QKeySequence("Ctrl+D"), tab.view)
     tab._duplicate_shortcut.activated.connect(lambda: tab._run_tree_action("Duplicated selection", duplicate=True))
@@ -110,6 +116,14 @@ def init_shortcuts(tab) -> None:
 
     tab._move_down_shortcut = QShortcut(QKeySequence("Alt+Down"), tab.view)
     tab._move_down_shortcut.activated.connect(lambda: tab._run_tree_action("Moved down", move_down=True))
+
+    tab._move_out_up_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Up"), tab.view)
+    tab._move_out_up_shortcut.activated.connect(lambda: tab._run_tree_action("Moved out of parent", move_out_up=True))
+
+    tab._move_out_down_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Down"), tab.view)
+    tab._move_out_down_shortcut.activated.connect(
+        lambda: tab._run_tree_action("Moved out of parent", move_out_down=True)
+    )
 
     tab._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), tab.view)
     tab._sort_shortcut.activated.connect(lambda: tab._run_tree_action("Sorted keys", sort_keys=True))

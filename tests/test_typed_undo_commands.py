@@ -12,7 +12,7 @@ from documents.tab import (
     _ChangeTypeCmd,
     _EditValueCmd,
     _InsertRowsCmd,
-    _MoveRowCmd,
+    _MoveRowsCmd,
     _RemoveRowsCmd,
     _RenameCmd,
     _SortKeysCmd,
@@ -87,11 +87,11 @@ def test_tree_actions_use_typed_commands(qtbot):
     # Move up / move down.
     _select_row0(tab, 1)
     assert move_selection_up(view)
-    assert isinstance(_last_command(tab), _MoveRowCmd)
+    assert isinstance(_last_command(tab), _MoveRowsCmd)
 
     _select_row0(tab, 0)
     assert move_selection_down(view)
-    assert isinstance(_last_command(tab), _MoveRowCmd)
+    assert isinstance(_last_command(tab), _MoveRowsCmd)
 
     # Duplicate.
     _select_row0(tab, 0)
@@ -139,7 +139,6 @@ def test_large_leaf_edit_does_not_store_full_document(qtbot):
     qtbot.addWidget(tab)
 
     # Replace the model with a huge array containing one tiny leaf to edit.
-    from tree.model import JsonTreeModel
 
     big = list(range(3000))
     big[7] = "before"
@@ -219,17 +218,34 @@ def test_sort_stores_sorted_subtree_only(qtbot):
 
 
 def test_move_row_command_is_o1(qtbot):
-    """Move row command should store only parent path + 2 row indices."""
+    """Move rows command should store paths, not a full snapshot."""
     tab = JsonTab(lambda *_: None)
     qtbot.addWidget(tab)
 
     _select_row0(tab, 1)
     assert move_selection_up(tab.view)
     cmd = _last_command(tab)
-    assert isinstance(cmd, _MoveRowCmd)
+    assert isinstance(cmd, _MoveRowsCmd)
     # Compact state only — no snapshot fields.
-    assert cmd._src == 1
-    assert cmd._dst == 0
-    assert isinstance(cmd._parent_path, tuple)
+    assert isinstance(cmd._sources, list) and len(cmd._sources) == 1
+    # Step 9: anchor-based addressing replaces target_parent_path / target_row.
+    from tree_actions.anchors import MoveAnchor
+
+    assert isinstance(cmd._anchor, MoveAnchor)
+    assert isinstance(cmd._anchor.parent_path, tuple)
     assert not hasattr(cmd, "_before")
     assert not hasattr(cmd, "_after")
+
+
+def test_insert_child_on_empty_root_container(qtbot):
+    tab = JsonTab(lambda *_: None, data={}, show_root=True)
+    qtbot.addWidget(tab)
+
+    root_src = tab.model.index(0, 0, QModelIndex())
+    root_view = tab._source_to_view(root_src)
+    tab.view.setCurrentIndex(root_view)
+    tab.view.selectionModel().select(root_view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+
+    assert insert_child_current(tab.view)
+    assert tab.model.root_item.to_json() == {"new_key": None}
+    assert isinstance(_last_command(tab), _InsertRowsCmd)

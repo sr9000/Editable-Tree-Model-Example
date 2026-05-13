@@ -1,14 +1,37 @@
 import time
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QItemSelection, QItemSelectionModel, Qt
 from PySide6.QtGui import QUndoCommand
 
+from tree.item_names import unique_child_name
 from tree.types import JsonType
 
 _CMD_ID_RENAME = 0x0E71_0001
 _CMD_ID_EDIT_VALUE = 0x0E71_0002
 _MERGE_WINDOW_SECONDS = 0.5
+
+
+def _select_placed_rows(tab, placed: list[tuple[tuple, int]]) -> None:
+    """Select every (parent_path, row) entry in the view after a move."""
+    if not placed:
+        return
+    model = tab.model
+    sm = tab.view.selectionModel()
+    selection = QItemSelection()
+    first_view_idx = None
+    for parent_path, row in placed:
+        p = tab._index_from_path(parent_path)
+        src_idx = model.index(row, 0, p)
+        view_idx = tab._source_to_view(src_idx)
+        if view_idx.isValid():
+            selection.select(view_idx, view_idx)
+            if first_view_idx is None:
+                first_view_idx = view_idx
+    sm.select(selection, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows)
+    # Update current index WITHOUT touching the selection (NoUpdate keeps it intact).
+    if first_view_idx is not None:
+        sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
 
 class _MoveRowCmd(QUndoCommand):
@@ -191,6 +214,154 @@ class _RemoveRowsCmd(QUndoCommand):
             p = self._tab._index_from_path(rec["parent_path"])
             parent_item = self._tab.model.get_item(p)
             self._tab._insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec["name"])
+
+
+class _MoveRowsCmd(QUndoCommand):
+    """Move N rows (possibly cross-parent) as a single undo step.
+
+    Anchor-based variant (Step 9). ``sources`` is a list of
+    ``(parent_path, row)`` tuples captured *before* the command runs.
+    ``anchor`` is a ``MoveAnchor`` that names the destination gap by
+    reference to a non-moving sibling (or end-of-parent sentinel).
+
+    Selection restore is **not** performed inside redo/undo; the
+    action-layer caller reads ``placed_paths`` / ``source_paths`` and
+    drives the selection model itself.
+
+    Algorithm (redo):
+    1. Sort sources descending by ``(parent_path, row)`` so each
+       removal leaves the remaining source indexes valid.
+    2. For each removed item, record the detached ``JsonTreeItem`` and
+       its origin ``(parent_path, row)``.
+    3. Resolve the anchor to a post-pop ``insert_row`` via
+       ``resolve_anchor_insert_row`` (subtracts the count of removed
+       siblings ahead of the anchor sibling in the same parent).
+    4. Insert the detached items in original ascending order at the
+       resolved insert row.
+    """
+
+    def __init__(
+        self,
+        tab: "JsonTab",
+        text: str,
+        sources: list[tuple[tuple, int]],
+        anchor,
+    ):
+        super().__init__(text)
+        self._tab = tab
+        self._sources = sources  # list of (parent_path, row), original positions
+        self._anchor = anchor
+        # Populated during redo; used by undo and by the post-hook to drive selection.
+        self._placed: list[tuple[tuple, int]] = []
+
+    # ------------------------------------------------------------------
+    # Public accessors — used by the action layer for post-redo hooks
+    # ------------------------------------------------------------------
+
+    @property
+    def placed_paths(self) -> list[tuple[tuple, int]]:
+        return list(self._placed)
+
+    @property
+    def source_paths(self) -> list[tuple[tuple, int]]:
+        return list(self._sources)
+
+    # ------------------------------------------------------------------
+    # mergeWith: always False — every move is its own undo step
+    # ------------------------------------------------------------------
+
+    def mergeWith(self, _other: QUndoCommand) -> bool:  # type: ignore[override]
+        return False
+
+    # ------------------------------------------------------------------
+    # redo / undo
+    # ------------------------------------------------------------------
+
+    def redo(self) -> None:
+        from tree_actions.anchors import resolve_anchor_target
+
+        tab = self._tab
+        model = tab.model
+
+        # 1. Descending source order: removals don't invalidate remaining sources.
+        sorted_sources = sorted(self._sources, key=lambda p: (p[0], p[1]), reverse=True)
+
+        detached: list[tuple[tuple, int, object]] = []
+        for parent_path, row in sorted_sources:
+            p = tab._index_from_path(parent_path)
+            parent_item = model.get_item(p)
+            item = parent_item.child_items[row]
+            with model.rows_removal(p, row, 1):
+                parent_item.child_items.pop(row)
+                parent_item.mark_children_dirty()
+            detached.append((parent_path, row, item))
+
+        detached.reverse()  # restore ascending source order
+
+        # 2. Resolve the anchor to the current (parent_path, insert_row) AFTER
+        # removing sources. The anchor's parent path itself may have shifted
+        # if any source sat in an ancestor at a lower row — without this
+        # adjustment a drop onto a sibling that lives after the dragged
+        # source(s) would land in the WRONG container.
+        adjusted_parent_path, insert_row = resolve_anchor_target(model, tab, self._anchor, self._sources)
+        t_parent = tab._index_from_path(adjusted_parent_path)
+        t_parent_item = model.get_item(t_parent)
+        used_names = {c.name for c in t_parent_item.child_items if isinstance(c.name, str)}
+
+        # Clamp defensively (out-of-range insert rows should never reach here,
+        # but list.insert silently clamps so guarding against drift is cheap).
+        insert_row = max(0, min(insert_row, t_parent_item.child_count()))
+
+        self._placed = []
+        for offset, (_sp, _sr, item) in enumerate(detached):
+            ins_row = insert_row + offset
+            item.parent_item = t_parent_item
+            if t_parent_item.json_type is JsonType.OBJECT:
+                base = item.name.strip() if isinstance(item.name, str) and item.name.strip() else "new_key"
+                item.name = unique_child_name(t_parent_item.child_items, base=base, used_names=used_names)
+                used_names.add(item.name)
+            with model.rows_insertion(t_parent, ins_row, 1):
+                t_parent_item.child_items.insert(ins_row, item)
+                t_parent_item.mark_children_dirty()
+            self._placed.append((adjusted_parent_path, ins_row))
+
+    def undo(self) -> None:
+        tab = self._tab
+        model = tab.model
+
+        if not self._placed:
+            return
+
+        sorted_placed = sorted(self._placed, key=lambda p: (p[0], p[1]), reverse=True)
+        detached: list[object] = []
+        for parent_path, row in sorted_placed:
+            p = tab._index_from_path(parent_path)
+            parent_item = model.get_item(p)
+            item = parent_item.child_items[row]
+            with model.rows_removal(p, row, 1):
+                parent_item.child_items.pop(row)
+                parent_item.mark_children_dirty()
+            detached.append(item)
+
+        detached.reverse()
+
+        sorted_sources_asc = sorted(self._sources, key=lambda p: (p[0], p[1]))
+        used_by_parent: dict[tuple, set[str]] = {}
+        for (parent_path, row), item in zip(sorted_sources_asc, detached):
+            p = tab._index_from_path(parent_path)
+            parent_item = model.get_item(p)
+            item.parent_item = parent_item
+            if parent_item.json_type is JsonType.OBJECT:
+                used = used_by_parent.setdefault(
+                    parent_path,
+                    {c.name for c in parent_item.child_items if isinstance(c.name, str)},
+                )
+                base = item.name.strip() if isinstance(item.name, str) and item.name.strip() else "new_key"
+                item.name = unique_child_name(parent_item.child_items, base=base, used_names=used)
+                used.add(item.name)
+            with model.rows_insertion(p, row, 1):
+                parent_item.child_items.insert(row, item)
+                parent_item.mark_children_dirty()
 
 
 class _SortKeysCmd(QUndoCommand):

@@ -12,16 +12,10 @@ from model_actions import (
     action_sort_keys,
 )
 from tree.types import JsonType
+from tree_actions.anchors import MoveAnchor, anchor_after_index, anchor_before_index
 from tree_actions.clipboard import copy_selection
-from tree_actions.selection import (
-    _index_path,
-    _is_root_index,
-    _resolve_model,
-    _row0,
-    _to_source_index,
-    _to_view_index,
-    _top_level_selected_rows,
-)
+from tree_actions.selection import _index_path, _is_root_index, _resolve_model, _row0, _to_source_index, _to_view_index
+from tree_actions.selection import top_level_source_rows as _top_level_selected_rows
 
 
 def _tab_of(tree_view: QTreeView):
@@ -105,10 +99,16 @@ def insert_child_current(tree_view: QTreeView) -> bool:
         return False
 
     current = _to_source_index(tree_view.currentIndex())
-    if not current.isValid():
+    if current.isValid():
+        parent_row0 = _row0(model, current)
+    elif model.show_root:
+        parent_row0 = model.index(0, 0, QModelIndex())
+    else:
+        parent_row0 = QModelIndex()
+
+    if not parent_row0.isValid() and model.get_item(parent_row0).json_type not in (JsonType.OBJECT, JsonType.ARRAY):
         return False
 
-    parent_row0 = _row0(model, current)
     parent_item = model.get_item(parent_row0)
     if parent_item.json_type not in (JsonType.OBJECT, JsonType.ARRAY):
         return False
@@ -203,7 +203,154 @@ def duplicate_selection(tree_view: QTreeView) -> bool:
     return changed
 
 
+def _ordered_non_root_rows(tree_view: QTreeView):
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return None, []
+    rows = [idx for idx in _top_level_selected_rows(tree_view) if idx.isValid() and not _is_root_index(model, idx)]
+    return model, sorted(rows, key=_index_path)
+
+
+def _status_partial_move(tab) -> None:
+    callback = getattr(tab, "_status_message_callback", None)
+    if callback is not None:
+        callback("Moved part of the selection", 2000)
+
+
+def _status_cannot_move_out_of_root(tab) -> None:
+    callback = getattr(tab, "_status_message_callback", None)
+    if callback is not None:
+        callback("Cannot move root-level rows out of parent", 2000)
+
+
+# ---------------------------------------------------------------------------
+# Step 9 — Anchor-based move (one algorithm, no per-shape branching)
+# ---------------------------------------------------------------------------
+
+
+def _group_rows_by_parent(model, rows: list) -> dict[tuple, list]:
+    """Group source rows by their parent's source-model path."""
+    groups: dict[tuple, list] = {}
+    for idx in rows:
+        row0 = _row0(model, idx)
+        parent_path = _index_path(row0.parent())
+        groups.setdefault(parent_path, []).append(row0)
+    for plist in groups.values():
+        plist.sort(key=lambda i: i.row())
+    return groups
+
+
+def _anchor_for_block(
+    tab,
+    model,
+    parent_path: tuple,
+    block_rows: list,
+    *,
+    up: bool,
+) -> MoveAnchor | None:
+    """Return the destination anchor for a same-parent contiguous *block*.
+
+    If the block already touches the parent's boundary, bubble out to
+    the grandparent. Returns ``None`` when the block is already at the
+    top-level edge of the document (no place to bubble to).
+    """
+    parent_index = tab._index_from_path(parent_path)
+    parent_count = model.rowCount(parent_index)
+    first_row = block_rows[0].row()
+    last_row = block_rows[-1].row()
+
+    if up:
+        if first_row > 0:
+            # Land before the row currently sitting at first_row - 1.
+            sibling_idx = model.index(first_row - 1, 0, parent_index)
+            return anchor_before_index(sibling_idx, tab)
+        # Boundary: bubble out to grandparent.
+        parent_row0 = _row0(model, parent_index)
+        if not parent_row0.isValid() or _is_root_index(model, parent_row0):
+            return None
+        return anchor_before_index(parent_row0, tab)
+
+    # down
+    if last_row < parent_count - 1:
+        sibling_idx = model.index(last_row + 1, 0, parent_index)
+        return anchor_after_index(sibling_idx, tab)
+    parent_row0 = _row0(model, parent_index)
+    if not parent_row0.isValid() or _is_root_index(model, parent_row0):
+        return None
+    return anchor_after_index(parent_row0, tab)
+
+
+def _move_selection_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
+    """Single algorithm: group by parent → one anchor move per block.
+
+    For each parent's contiguous group of selected siblings we compute
+    *one* anchor and dispatch *one* ``push_move_rows_anchor`` call. All
+    such calls in a multi-parent selection are wrapped in a single
+    ``QUndoStack`` macro so undo restores the full selection in one step.
+    """
+    model, rows = _ordered_non_root_rows(tree_view)
+    if model is None or not rows:
+        return False
+
+    tab = _tab_of(tree_view)
+    if tab is None:
+        return False
+
+    groups = _group_rows_by_parent(model, rows)
+    if not groups:
+        return False
+
+    # Per-group: capture (anchor, source_indexes). Re-resolution before each
+    # push happens inside push_move_rows_anchor (paths are captured at push time).
+    planned: list[tuple[tuple, MoveAnchor, list]] = []
+    for parent_path, block_rows in groups.items():
+        anchor = _anchor_for_block(tab, model, parent_path, block_rows, up=up)
+        if anchor is None:
+            continue
+        planned.append((parent_path, anchor, list(block_rows)))
+
+    if not planned:
+        return False
+
+    label = "move up" if up else "move down"
+
+    # Single-block fast path — no macro overhead.
+    if len(planned) == 1:
+        _parent_path, anchor, block_rows = planned[0]
+        return tab.push_move_rows_anchor(block_rows, anchor, label=label)
+
+    # Multi-parent: macro of per-parent moves. Each child push captures source
+    # paths AT push time, so earlier moves never leave later sources stale.
+    placed_total: list[tuple[tuple, int]] = []
+    moved = 0
+    tab.undo_stack.beginMacro(label)
+    try:
+        for parent_path, anchor, block_rows in planned:
+            # Re-resolve indexes from paths so any prior mutation is reflected.
+            live_rows = [tab._index_from_path(parent_path + (idx.row(),)) for idx in block_rows]
+            live_rows = [r for r in live_rows if r.isValid()]
+            if not live_rows:
+                continue
+            if tab.push_move_rows_anchor(live_rows, anchor, label=label):
+                placed_total.extend(getattr(tab, "_last_move_placed", []))
+                moved += 1
+    finally:
+        tab.undo_stack.endMacro()
+
+    if 0 < moved < len(planned):
+        _status_partial_move(tab)
+
+    if placed_total:
+        tab._restore_selection_at_paths(placed_total)
+
+    return moved > 0
+
+
 def move_selection_up(tree_view: QTreeView) -> bool:
+    tab = _tab_of(tree_view)
+    if tab is not None:
+        return _move_selection_with_tab(tree_view, up=True)
+
     model, _proxy = _resolve_model(tree_view)
     if model is None:
         return False
@@ -211,21 +358,15 @@ def move_selection_up(tree_view: QTreeView) -> bool:
     current = _to_source_index(tree_view.currentIndex())
     if not current.isValid():
         return False
-
-    row0 = _row0(model, current)
-    if _is_root_index(model, row0):
-        return False
-    if row0.row() <= 0:
-        return False
-
-    tab = _tab_of(tree_view)
-    if tab is not None:
-        return tab.push_move_row(row0.parent(), row0.row(), row0.row() - 1, label="move up")
 
     return action_move_up(tree_view, current, model)
 
 
 def move_selection_down(tree_view: QTreeView) -> bool:
+    tab = _tab_of(tree_view)
+    if tab is not None:
+        return _move_selection_with_tab(tree_view, up=False)
+
     model, _proxy = _resolve_model(tree_view)
     if model is None:
         return False
@@ -234,18 +375,68 @@ def move_selection_down(tree_view: QTreeView) -> bool:
     if not current.isValid():
         return False
 
-    row0 = _row0(model, current)
-    if _is_root_index(model, row0):
-        return False
-    parent = row0.parent()
-    if row0.row() >= model.rowCount(parent) - 1:
+    return action_move_down(tree_view, current, model)
+
+
+def _move_selection_out_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
+    model, rows = _ordered_non_root_rows(tree_view)
+    if model is None or not rows:
         return False
 
     tab = _tab_of(tree_view)
-    if tab is not None:
-        return tab.push_move_row(parent, row0.row(), row0.row() + 1, label="move down")
+    if tab is None:
+        return False
 
-    return action_move_down(tree_view, current, model)
+    groups = _group_rows_by_parent(model, rows)
+    planned: list[tuple[tuple, MoveAnchor, list]] = []
+    skipped_root = False
+    for parent_path, block_rows in groups.items():
+        parent_index = tab._index_from_path(parent_path)
+        parent_row0 = _row0(model, parent_index)
+        if not parent_row0.isValid() or _is_root_index(model, parent_row0):
+            skipped_root = True
+            continue
+        anchor = anchor_before_index(parent_row0, tab) if up else anchor_after_index(parent_row0, tab)
+        planned.append((parent_path, anchor, list(block_rows)))
+
+    if not planned:
+        if skipped_root:
+            _status_cannot_move_out_of_root(tab)
+        return False
+
+    label = "move out up" if up else "move out down"
+    if len(planned) == 1:
+        _parent_path, anchor, block_rows = planned[0]
+        return tab.push_move_rows_anchor(block_rows, anchor, label=label)
+
+    placed_total: list[tuple[tuple, int]] = []
+    moved = 0
+    tab.undo_stack.beginMacro(label)
+    try:
+        for parent_path, anchor, block_rows in planned:
+            live_rows = [tab._index_from_path(parent_path + (idx.row(),)) for idx in block_rows]
+            live_rows = [r for r in live_rows if r.isValid()]
+            if not live_rows:
+                continue
+            if tab.push_move_rows_anchor(live_rows, anchor, label=label):
+                placed_total.extend(getattr(tab, "_last_move_placed", []))
+                moved += 1
+    finally:
+        tab.undo_stack.endMacro()
+
+    if skipped_root or 0 < moved < len(planned):
+        _status_partial_move(tab)
+    if placed_total:
+        tab._restore_selection_at_paths(placed_total)
+    return moved > 0
+
+
+def move_selection_out_up(tree_view: QTreeView) -> bool:
+    return _move_selection_out_with_tab(tree_view, up=True)
+
+
+def move_selection_out_down(tree_view: QTreeView) -> bool:
+    return _move_selection_out_with_tab(tree_view, up=False)
 
 
 def sort_selection_keys(tree_view: QTreeView, recursive: bool = False) -> bool:

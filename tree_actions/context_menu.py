@@ -1,4 +1,4 @@
-from PySide6.QtCore import QPoint, Qt, QTimer
+from PySide6.QtCore import QItemSelectionModel, QPoint, Qt, QTimer
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QComboBox, QMenu, QTreeView
 
@@ -8,11 +8,14 @@ from tree_actions.paste import (
     has_clipboard_entries,
     paste_after,
     paste_as_child,
+    paste_auto,
     paste_before,
-    paste_from_clipboard,
+    paste_clones_at_targets,
+    paste_insert_after_zip,
     paste_replace_value,
+    paste_replace_zip,
 )
-from tree_actions.selection import _resolve_model, _to_source_index
+from tree_actions.selection import _index_path, _resolve_model, _row0, _to_source_index, selected_source_rows
 from tree_actions.structure import (
     collapse_all,
     cut_selection,
@@ -23,6 +26,8 @@ from tree_actions.structure import (
     insert_sibling_after,
     insert_sibling_before,
     move_selection_down,
+    move_selection_out_down,
+    move_selection_out_up,
     move_selection_up,
     sort_selection_keys,
 )
@@ -80,13 +85,46 @@ def _trigger_type_combo_from_context_menu(tree_view: QTreeView, index) -> bool:
     return True
 
 
-def show_context_menu(tree_view: QTreeView, position: QPoint):
+def _clicked_row_is_selected(tree_view: QTreeView, index) -> bool:
+    source_model, _proxy = _resolve_model(tree_view)
+    if source_model is None or not index.isValid():
+        return False
+    source_index = _to_source_index(index)
+    if not source_index.isValid():
+        return False
+    clicked_row = _row0(source_model, source_index)
+    if not clicked_row.isValid():
+        return False
+    clicked_path = _index_path(clicked_row)
+    for row in selected_source_rows(tree_view):
+        if not row.isValid():
+            continue
+        if _index_path(_row0(source_model, row)) == clicked_path:
+            return True
+    return False
+
+
+def _prepare_context_selection(tree_view: QTreeView, index) -> None:
+    """Keep multi-selection when right-clicking inside it; otherwise select the
+    clicked row (legacy behavior)."""
+    if not index.isValid():
+        return
+    sm = tree_view.selectionModel()
+    if sm is None:
+        return
+    if _clicked_row_is_selected(tree_view, index):
+        sm.setCurrentIndex(index, QItemSelectionModel.SelectionFlag.NoUpdate)
+        return
+    sm.select(index, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    sm.setCurrentIndex(index, QItemSelectionModel.SelectionFlag.NoUpdate)
+
+
+def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool = True):
     context_menu = QMenu(tree_view)
 
     index = tree_view.indexAt(position)
     source_model, _proxy = _resolve_model(tree_view)
-    if index.isValid():
-        tree_view.setCurrentIndex(index)
+    _prepare_context_selection(tree_view, index)
 
     col = index.column()
 
@@ -96,28 +134,43 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
             return
         _add(context_menu, "Expand All", lambda: expand_all(tree_view))
         _add(context_menu, "Collapse All", lambda: collapse_all(tree_view))
-        context_menu.exec(tree_view.mapToGlobal(position))
-        return
+        if execute:
+            context_menu.exec(tree_view.mapToGlobal(position))
+        return context_menu
 
     # ------------------------------------------------------------------
     # Capability flags driven by current selection
     # ------------------------------------------------------------------
-    has_selection = source_model is not None and index.isValid()
+    selected_rows = (
+        [idx for idx in selected_source_rows(tree_view) if idx.isValid()] if source_model is not None else []
+    )
+    has_selection = bool(selected_rows)
+    selection_count = len(selected_rows)
     is_container = False
     can_sort_keys = False
     can_move_up = False
     can_move_down = False
-    is_root = False
+    can_move_out = False
+    has_non_root = False
+    can_insert_child = False
 
     if has_selection:
-        source_index = _to_source_index(index)
-        row0 = source_model.index(source_index.row(), 0, source_index.parent())
-        item = source_model.get_item(row0)
-        is_container = item.json_type in (JsonType.OBJECT, JsonType.ARRAY)
-        can_sort_keys = item.json_type is JsonType.OBJECT
-        can_move_up = row0.row() > 0
-        can_move_down = row0.row() < source_model.rowCount(row0.parent()) - 1
-        is_root = item is source_model.root_item
+        assert source_model is not None
+        for row in selected_rows:
+            row0 = _row0(source_model, row)
+            item = source_model.get_item(row0)
+            if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
+                can_insert_child = True
+            if item is source_model.root_item:
+                continue
+            has_non_root = True
+            is_container = is_container or item.json_type in (JsonType.OBJECT, JsonType.ARRAY)
+            can_sort_keys = can_sort_keys or item.json_type is JsonType.OBJECT
+            parent_index = row0.parent()
+            if parent_index.isValid() and source_model.get_item(parent_index) is not source_model.root_item:
+                can_move_out = True
+        can_move_up = has_non_root
+        can_move_down = has_non_root
 
     clipboard_has = has_clipboard_entries()
 
@@ -136,7 +189,7 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
         context_menu,
         "Cut",
         lambda: cut_selection(tree_view),
-        enabled=has_selection and not is_root,
+        enabled=has_non_root,
         shortcut="Ctrl+X",
     )
 
@@ -148,22 +201,42 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     _add(
         paste_menu,
         "Paste (auto)",
-        lambda: paste_from_clipboard(tree_view),
+        lambda: paste_auto(tree_view),
         enabled=clipboard_has,
         shortcut="Ctrl+V",
+    )
+    _add(
+        paste_menu,
+        "Paste at All Selected",
+        lambda: paste_clones_at_targets(tree_view),
+        enabled=clipboard_has and selection_count > 1,
+    )
+    _add(
+        paste_menu,
+        "Paste Each After Selected",
+        lambda: paste_insert_after_zip(tree_view),
+        enabled=clipboard_has and selection_count > 1,
+        shortcut="Ctrl+Shift+V",
+    )
+    _add(
+        paste_menu,
+        "Replace Each Selected Value",
+        lambda: paste_replace_zip(tree_view),
+        enabled=clipboard_has and selection_count > 1,
+        shortcut="Ctrl+Alt+V",
     )
     paste_menu.addSeparator()
     _add(
         paste_menu,
         "Paste Before",
         lambda: paste_before(tree_view),
-        enabled=clipboard_has and has_selection and not is_root,
+        enabled=clipboard_has and has_non_root,
     )
     _add(
         paste_menu,
         "Paste After",
         lambda: paste_after(tree_view),
-        enabled=clipboard_has and has_selection and not is_root,
+        enabled=clipboard_has and has_non_root,
     )
     _add(
         paste_menu,
@@ -176,7 +249,7 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
         paste_menu,
         "Paste — Replace Value",
         lambda: paste_replace_value(tree_view),
-        enabled=clipboard_has and has_selection and not is_root,
+        enabled=clipboard_has and has_non_root,
     )
 
     # ------------------------------------------------------------------
@@ -187,19 +260,21 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
         insert_menu,
         "Insert Before",
         lambda: insert_sibling_before(tree_view),
-        enabled=has_selection and not is_root,
+        enabled=has_non_root,
+        shortcut="Ctrl+I",
     )
     _add(
         insert_menu,
         "Insert After",
         lambda: insert_sibling_after(tree_view),
-        enabled=has_selection and not is_root,
+        enabled=has_non_root,
+        shortcut="Ctrl+Shift+I",
     )
     _add(
         insert_menu,
         "Insert as Child",
         lambda: insert_child_current(tree_view),
-        enabled=is_container,
+        enabled=can_insert_child,
     )
 
     context_menu.addSeparator()
@@ -208,13 +283,14 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
         context_menu,
         "Duplicate",
         lambda: duplicate_selection(tree_view),
-        enabled=has_selection and not is_root,
+        enabled=has_non_root,
+        shortcut="Ctrl+D",
     )
     _add(
         context_menu,
         "Delete",
         lambda: delete_selection(tree_view),
-        enabled=has_selection and not is_root,
+        enabled=has_non_root,
         shortcut="Del",
     )
 
@@ -223,13 +299,28 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     # ------------------------------------------------------------------
     # Arrange group: move / sort
     # ------------------------------------------------------------------
-    _add(context_menu, "Move Up", lambda: move_selection_up(tree_view), enabled=can_move_up)
-    _add(context_menu, "Move Down", lambda: move_selection_down(tree_view), enabled=can_move_down)
+    _add(context_menu, "Move Up", lambda: move_selection_up(tree_view), enabled=can_move_up, shortcut="Alt+Up")
+    _add(context_menu, "Move Down", lambda: move_selection_down(tree_view), enabled=can_move_down, shortcut="Alt+Down")
+    _add(
+        context_menu,
+        "Move Out of Parent (Up)",
+        lambda: move_selection_out_up(tree_view),
+        enabled=can_move_out,
+        shortcut="Ctrl+Alt+Up",
+    )
+    _add(
+        context_menu,
+        "Move Out of Parent (Down)",
+        lambda: move_selection_out_down(tree_view),
+        enabled=can_move_out,
+        shortcut="Ctrl+Alt+Down",
+    )
     _add(
         context_menu,
         "Sort Keys",
         lambda: sort_selection_keys(tree_view, recursive=False),
         enabled=can_sort_keys,
+        shortcut="Ctrl+Alt+S",
     )
     _add(
         context_menu,
@@ -243,4 +334,6 @@ def show_context_menu(tree_view: QTreeView, position: QPoint):
     _add(context_menu, "Expand All", lambda: expand_all(tree_view))
     _add(context_menu, "Collapse All", lambda: collapse_all(tree_view))
 
-    context_menu.exec(tree_view.mapToGlobal(position))
+    if execute:
+        context_menu.exec(tree_view.mapToGlobal(position))
+    return context_menu

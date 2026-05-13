@@ -1,13 +1,15 @@
 # JSON Editor — Pros & Cons
 
-_Last analysis: **2026-05-08**. The six `plans/` phases (context-menu
-polish → zoom-column preservation → kind-switch coercion → display &
-preview → app color-scheme theming → cross-phase tests) have all
-shipped; the `plans/` folder is gone. Earlier Phases 0–6 plus the
-package refactor remain green. Test surface: **576 collected, 573
-passing** under `QT_QPA_PLATFORM=offscreen`. The 3 failures are
-platform-specific (Qt offscreen ignores
-`QStyleHints.setColorScheme`); they pass on real platforms._
+_Last analysis: **2026-05-13**. The six original `plans/` phases plus
+the full drag-and-drop / multi-action plan (Steps 1–10 — multiselect
+foundation, MIME helpers, atomic multi-row undo, keyboard multimove,
+expansion preservation, native QTreeView drag-and-drop, drop policies,
+shortcuts/menu, anchor-based move primitive, multi-action paste
+semantics) have all shipped. Earlier Phases 0–6 plus the package
+refactor remain green. Test surface: **779 collected, 776 passing**
+under `QT_QPA_PLATFORM=offscreen`. The 3 failures are platform-specific
+(Qt offscreen ignores `QStyleHints.setColorScheme`); they pass on real
+platforms._
 
 This document evaluates the **current** state of the editor across
 the canonical package layout: `app/`, `documents/`, `tree/`,
@@ -102,6 +104,40 @@ See `repo-map.md` for the full module breakdown.
   applied, so menus / dialogs / toolbars match the active theme's
   mode without any custom stylesheet (per-type cell colouring stays
   in delegates).
+- **Native drag-and-drop with multi-selection** (Steps 1–10) —
+  mouse-driven move/copy of any selection between OBJECT/ARRAY
+  containers; Ctrl-drag = copy, plain drag = move; `JsonTreeView`
+  overrides `startDrag` so the model fully owns internal moves and
+  Qt's default `clearOrRemove` doesn't delete the freshly-placed
+  destination rows; drop-on-leaf becomes sibling-after; self-into-
+  descendant cycles are rejected via the MIME `source_paths`
+  envelope; transient status feedback (`"Moved N rows under $.foo"`).
+- **Anchor-based move primitive** (Step 9) — every move caller
+  (`Alt+Up/Down`, `Ctrl+Alt+Up/Down` move-out, drag-drop,
+  duplicate/paste cleanup) now feeds a single `MoveAnchor` into
+  `JsonTab.push_move_rows_anchor`. The three pre-existing branches
+  (same-parent, common-grandparent, multi-parent fallback) and their
+  four overlapping `target_row` formulas were collapsed into one
+  helper, removing a whole class of off-by-one bugs.
+- **Multi-action paste semantics** (Step 10) — `Ctrl+V` routes
+  through `paste_auto` (single ⇒ legacy paste, multi-selection ⇒
+  `paste_clones_at_targets`, every selected row receives a clone of
+  the entire clipboard payload). `Ctrl+Shift+V` is
+  `paste_insert_after_zip` (zip-pair clipboard top-level entries
+  with top-level selected targets, insert as sibling-after each
+  target). `Ctrl+Alt+V` is `paste_replace_zip` (same pairing,
+  in-place value replace).
+- **Keyboard multimove with bubble-out** (Steps 3–4) —
+  `Alt+Up/Down` move any selection by one row, including disjoint
+  multi-selections under `SelectItems`; at the parent boundary the
+  selection promotes/demotes across the parent.
+  `Ctrl+Alt+Up/Down` is a one-shot promote-out-of-parent.
+  `_select_placed_rows` keeps the multi-selection highlighted
+  through both redo and undo.
+- **Expansion preservation across moves** (Step 5) — moved
+  subtrees keep their open/closed state at the destination, and
+  redo/undo restores the same shape. Current index and selection
+  follow the moved rows.
 
 ### Theming stack
 - **Self-contained `themes/` package** — immutable, hashable
@@ -140,11 +176,17 @@ See `repo-map.md` for the full module breakdown.
 - **Synthetic root row** — `JsonTreeModel.show_root` lets the user
   edit the root container without breaking legacy fixtures
   (`show_root=False`).
-- **Substantial test coverage** — 576 tests; the new Phase 1–5
+- **Substantial test coverage** — 779 tests; the new Phase 1–5
   surfaces are covered by `test_kind_switch_coercion.py`,
   `test_container_preview.py`, `test_app_color_scheme.py`, the
   existing 50-test theming surface, and the Phase-5 broader UX
-  suites.
+  suites. The drag-and-drop sweep adds another **11 dedicated
+  suites** (`test_multiselect_foundation`, `test_mime_payload`,
+  `test_undo_multimove`, `test_keyboard_multimove[_app_mode]`,
+  `test_move_preserves_expansion`, `test_drag_drop_internal`,
+  `test_drag_drop_matrix`, `test_drag_drop_property`,
+  `test_drop_policies`, `test_anchor_move`,
+  `test_multi_action_semantics`, `test_context_menu_multiselect`).
 - **Reusable widget stack** — `qhexedit`, `qmultiline_editor`,
   `datetime_editor`, `qbigint_spinbox`, `qmpq_spinbox` are
   independently useful packages.
@@ -170,6 +212,16 @@ See `repo-map.md` for the full module breakdown.
   `QStyleHints.setColorScheme` and reports `Qt.ColorScheme.Unknown`.
   These tests should either skip on the offscreen platform or
   monkey-patch `setColorScheme`. Code is correct on real platforms.
+
+### Drag-and-drop caveats (low priority)
+- `drag-n-drop.patch` is still committed at repo root as an
+  ~328 kB historical archive of the full Step 1–10 work. Harmless,
+  but could be removed once the plan is officially closed.
+- `state.view_state` still persists expanded paths as positional
+  `(int,…)` tuples; drag-drop reorders survive within the session
+  thanks to Step 5 (in-memory snapshot+replay), but a save→reload
+  on a moved subtree can still land on a different node.
+  Mitigation is the same as before — key by name where available.
 
 ### Test / tooling gaps
 - **Full delegate matrix** is still missing
@@ -267,6 +319,15 @@ The editor is **functionally complete for daily use**:
   bundled type icons, follow-system mode, opt-in hot reload, and
   app-level `Qt.ColorScheme` sync so menus / dialogs match the
   active theme.
+- Multi-selection (`Shift+Click` contiguous, `Ctrl+Click` disjoint)
+  with full copy/cut/paste/duplicate/delete coverage; multi-action
+  paste dispatchers (`paste_auto`, `paste_insert_after_zip`,
+  `paste_replace_zip`); keyboard multimove with parent-boundary
+  bubble-out and one-shot promote-out (`Ctrl+Alt+Up/Down`); and
+  full native QTreeView drag-and-drop with cycle guard, leaf
+  fallback, copy modifier, indicator visuals and transient status
+  feedback — all backed by a single anchor-based move primitive
+  and a single undo step per move.
 
 Outstanding work is contributor-facing rather than user-facing:
 broader QA (full delegate matrix, round-trip property tests,

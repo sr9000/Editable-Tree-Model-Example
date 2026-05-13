@@ -13,7 +13,7 @@ import time
 
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
 
-from documents.tab import JsonTab, _EditValueCmd, _MoveRowCmd, _RemoveRowsCmd
+from documents.tab import JsonTab, _EditValueCmd, _MoveRowsCmd, _RemoveRowsCmd
 from tree.item import JsonTreeItem
 from tree_actions.structure import delete_selection, move_selection_up
 
@@ -69,10 +69,10 @@ def test_move_undo_redo_is_o1_on_huge_array(qtbot):
     for _ in range(moves):
         assert move_selection_up(tab.view)
 
-    # Every recorded command is a typed move-row command.
+    # Every recorded command is a typed move-rows command.
     for i in range(tab.undo_stack.count()):
         cmd = tab.undo_stack.command(i)
-        assert isinstance(cmd, _MoveRowCmd), f"step {i}: got {type(cmd).__name__}"
+        assert isinstance(cmd, _MoveRowsCmd), f"step {i}: got {type(cmd).__name__}"
 
     # Time undo + redo round trip.
     start = time.perf_counter()
@@ -104,10 +104,10 @@ def test_move_command_state_is_bounded_constant(qtbot):
 
     cmd_small = tab_small.undo_stack.command(0)
     cmd_huge = tab_huge.undo_stack.command(0)
-    assert isinstance(cmd_small, _MoveRowCmd)
-    assert isinstance(cmd_huge, _MoveRowCmd)
+    assert isinstance(cmd_small, _MoveRowsCmd)
+    assert isinstance(cmd_huge, _MoveRowsCmd)
 
-    # parent path is the same length (1 = root parent has no path), src/dst are ints.
+    # parent path is the same length, sources list has one entry.
     s_small = _deep_size(cmd_small.__dict__)
     s_huge = _deep_size(cmd_huge.__dict__)
     # Both should be tiny and independent of document size — assert the

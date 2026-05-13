@@ -1,6 +1,5 @@
 import base64
 import gzip
-import time
 import zlib
 from datetime import datetime
 from typing import Any, Callable
@@ -21,13 +20,15 @@ from documents.tab_setup import (
     init_shortcuts,
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
+from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
-from tree_actions.paste import paste_from_clipboard
+from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
+from tree_actions.selection import selected_source_rows
 from tree_actions.structure import (
     cut_selection,
     delete_selection,
@@ -36,6 +37,8 @@ from tree_actions.structure import (
     insert_sibling_after,
     insert_sibling_before,
     move_selection_down,
+    move_selection_out_down,
+    move_selection_out_up,
     move_selection_up,
     sort_selection_keys,
 )
@@ -43,7 +46,7 @@ from undo.commands import (
     _ChangeTypeCmd,
     _EditValueCmd,
     _InsertRowsCmd,
-    _MoveRowCmd,
+    _MoveRowsCmd,
     _RemoveRowsCmd,
     _RenameCmd,
     _SortKeysCmd,
@@ -196,6 +199,9 @@ class JsonTab(QWidget):
         self._diff_applier = DiffApplier(self)
 
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
+        self._move_view_state_by_cmd_id: dict[int, dict[str, Any]] = {}
+        self._last_undo_index = self.undo_stack.index()
+        self.undo_stack.indexChanged.connect(self._on_undo_index_changed)
         self.undo_stack.setClean()
         self._set_dirty(False)
 
@@ -505,6 +511,115 @@ class JsonTab(QWidget):
         visit(QModelIndex())
         return paths
 
+    def _capture_move_view_state(self, sources: list) -> dict[str, Any]:
+        roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]] = {}
+        for idx in sources:
+            row0 = self.model.index(idx.row(), 0, idx.parent())
+            if not row0.isValid():
+                continue
+            key = (self._index_path(row0.parent()), row0.row())
+            view_idx = self._source_to_view(row0)
+            roots_state[key] = {
+                "expanded_root": bool(view_idx.isValid() and self.view.isExpanded(view_idx)),
+                "expanded_rel": list(iter_expanded_relative_paths(self.view, row0)),
+            }
+
+        selected_paths = [self._index_path(idx) for idx in selected_source_rows(self.view) if idx.isValid()]
+        current_src = self._proxy_to_source(self.view.currentIndex())
+        if current_src.isValid():
+            current_src = self.model.index(current_src.row(), 0, current_src.parent())
+        current_path = self._index_path(current_src) if current_src.isValid() else None
+        return {
+            "roots": roots_state,
+            "selection_before": selected_paths,
+            "current_before": current_path,
+        }
+
+    @staticmethod
+    def _sort_move_paths(paths: list[tuple[tuple[int, ...], int]]) -> list[tuple[tuple[int, ...], int]]:
+        return sorted(paths, key=lambda p: (p[0], p[1]))
+
+    def _apply_relative_expansion_mapping(
+        self,
+        source_roots: list[tuple[tuple[int, ...], int]],
+        target_roots: list[tuple[tuple[int, ...], int]],
+        roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]],
+    ) -> None:
+        ordered_sources = self._sort_move_paths(source_roots)
+        for source_root, target_root in zip(ordered_sources, target_roots):
+            state = roots_state.get(source_root)
+            if state is None:
+                continue
+            target_parent_path, target_row = target_root
+            target_parent = self._index_from_path(target_parent_path)
+            target_index = self.model.index(target_row, 0, target_parent)
+            if not target_index.isValid():
+                continue
+            target_view = self._source_to_view(target_index)
+            if target_view.isValid():
+                self.view.setExpanded(target_view, bool(state.get("expanded_root", False)))
+            apply_expanded_relative_paths(self.view, target_index, state.get("expanded_rel", []))
+
+    def _restore_selection_paths(self, paths: list[tuple[int, ...]], current_path: tuple[int, ...] | None) -> None:
+        from PySide6.QtCore import QItemSelection, QItemSelectionModel
+
+        sm = self.view.selectionModel()
+        if sm is None:
+            return
+        selection = QItemSelection()
+        first_view_idx = None
+        for path in paths:
+            src_idx = self._index_from_path(path)
+            view_idx = self._source_to_view(src_idx)
+            if not view_idx.isValid():
+                continue
+            selection.select(view_idx, view_idx)
+            if first_view_idx is None:
+                first_view_idx = view_idx
+        sm.select(
+            selection,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+        )
+        if current_path is not None:
+            src_current = self._index_from_path(current_path)
+            view_current = self._source_to_view(src_current)
+            if view_current.isValid():
+                sm.setCurrentIndex(view_current, QItemSelectionModel.SelectionFlag.NoUpdate)
+                return
+        if first_view_idx is not None:
+            sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
+
+    def _apply_move_view_state(self, cmd: _MoveRowsCmd, *, undo: bool) -> None:
+        state = self._move_view_state_by_cmd_id.get(id(cmd))
+        if state is None:
+            return
+        roots_state = state.get("roots", {})
+        if undo:
+            self._apply_relative_expansion_mapping(
+                cmd.source_paths, self._sort_move_paths(cmd.source_paths), roots_state
+            )
+            self._restore_selection_paths(state.get("selection_before", []), state.get("current_before"))
+            return
+        self._apply_relative_expansion_mapping(cmd.source_paths, cmd.placed_paths, roots_state)
+        self._restore_selection_at_paths(cmd.placed_paths)
+
+    def _on_undo_index_changed(self, new_index: int) -> None:
+        old_index = self._last_undo_index
+        if new_index == old_index:
+            return
+
+        if new_index > old_index:
+            for i in range(old_index, new_index):
+                cmd = self.undo_stack.command(i)
+                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in self._move_view_state_by_cmd_id:
+                    self._apply_move_view_state(cmd, undo=False)
+        else:
+            for i in range(old_index - 1, new_index - 1, -1):
+                cmd = self.undo_stack.command(i)
+                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in self._move_view_state_by_cmd_id:
+                    self._apply_move_view_state(cmd, undo=True)
+        self._last_undo_index = new_index
+
     # ------------------------------------------------------------------
     # Smart-restore diff helpers
     # ------------------------------------------------------------------
@@ -572,10 +687,127 @@ class JsonTab(QWidget):
         n = parent_item.child_count()
         if not (0 <= src < n and 0 <= dst < n):
             return False
-        target_qname = self._qualified_name(self.model.index(src, 0, parent_index))
-        cmd = _MoveRowCmd(self, _make_label(label, target_qname), self._index_path(parent_index), src, dst)
+        source_idx = self.model.index(src, 0, parent_index)
+        # push_move_rows uses pre-pop target_row; dst is post-pop.
+        # Forward move (src < dst): removing src shifts later rows down by 1,
+        # so pre-pop target = dst + 1 to land at the same final position.
+        # Backward move (src > dst): no shift needed, pre-pop target = dst.
+        pre_pop_target = dst + 1 if src < dst else dst
+        return self.push_move_rows(
+            [source_idx],
+            parent_index,
+            pre_pop_target,
+            label=label,
+        )
+
+    def push_move_rows_anchor(
+        self,
+        sources: list,
+        anchor: "MoveAnchor",  # noqa: F821 — imported lazily below
+        *,
+        label: str = "move rows",
+    ) -> bool:
+        """Move *sources* (list of source ``QModelIndex``) to the gap
+        described by ``anchor`` as a single undo command.
+
+        Returns ``False`` when:
+        - *sources* is empty,
+        - any source would become an ancestor of ``anchor.parent_path``
+          (cycle guard), or
+        - the move is a no-op (block already lands at the anchor).
+        """
+        from tree_actions.anchors import anchor_is_cycle, anchor_is_no_op, resolve_anchor_insert_row
+
+        if not sources:
+            return False
+
+        # Snapshot every source's (parent_path, row) BEFORE any mutation.
+        source_paths: list[tuple[tuple, int]] = []
+        for idx in sources:
+            row0 = self.model.index(idx.row(), 0, idx.parent())
+            source_paths.append((self._index_path(row0.parent()), row0.row()))
+
+        # Cycle guard.
+        if anchor_is_cycle(anchor, source_paths):
+            if self._status_message_callback is not None:
+                self._status_message_callback("Cannot move a parent into its own descendant", 3000)
+            return False
+
+        # No-op guard (path-only). For at_end, resolve to a concrete row first
+        # and compare against the would-be insert position.
+        if anchor_is_no_op(anchor, source_paths):
+            return False
+        if anchor.is_at_end:
+            insert_row = resolve_anchor_insert_row(self.model, self, anchor, source_paths)
+            same_parent_sources = sorted(r for p, r in source_paths if p == anchor.parent_path)
+            if same_parent_sources:
+                parent_index = self._index_from_path(anchor.parent_path)
+                parent_count = self.model.rowCount(parent_index)
+                last_src = same_parent_sources[-1]
+                is_contiguous = all(b - a == 1 for a, b in zip(same_parent_sources, same_parent_sources[1:]))
+                # If the block is contiguous and already sits as the suffix,
+                # at_end is a no-op.
+                if is_contiguous and last_src == parent_count - 1 and len(same_parent_sources) == len(source_paths):
+                    return False
+
+        # Build the command.
+        move_view_state = self._capture_move_view_state(sources)
+        target_qname = self._qualified_name(self.model.index(sources[0].row(), 0, sources[0].parent()))
+        cmd = _MoveRowsCmd(self, _make_label(label, target_qname), source_paths, anchor)
         self.undo_stack.push(cmd)
+        self._move_view_state_by_cmd_id[id(cmd)] = move_view_state
+        # Expose placed paths for action-layer post-hooks (esp. macros).
+        self._last_move_placed = cmd.placed_paths
+        self._apply_move_view_state(cmd, undo=False)
         return True
+
+    def push_move_rows(
+        self,
+        sources: list,
+        target_parent: QModelIndex,
+        target_row: int,
+        *,
+        label: str = "move rows",
+    ) -> bool:
+        """Legacy pre-Step-9 API. Translates ``(target_parent, target_row)``
+        (pre-pop convention) into a ``MoveAnchor`` and delegates."""
+        from tree_actions.anchors import pre_pop_target_row_to_anchor
+
+        if not sources:
+            return False
+        anchor = pre_pop_target_row_to_anchor(self, target_parent, target_row)
+        return self.push_move_rows_anchor(sources, anchor, label=label)
+
+    def _restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
+        """Drive the view's selectionModel so the rows at the given
+        ``(parent_path, row)`` tuples are all selected after a move.
+
+        Lifted out of ``_MoveRowsCmd`` so that the undo command stays
+        decoupled from the view.
+        """
+        if not placed:
+            return
+        from PySide6.QtCore import QItemSelection, QItemSelectionModel
+
+        sm = self.view.selectionModel()
+        if sm is None:
+            return
+        selection = QItemSelection()
+        first_view_idx = None
+        for parent_path, row in placed:
+            p = self._index_from_path(parent_path)
+            src_idx = self.model.index(row, 0, p)
+            view_idx = self._source_to_view(src_idx)
+            if view_idx.isValid():
+                selection.select(view_idx, view_idx)
+                if first_view_idx is None:
+                    first_view_idx = view_idx
+        sm.select(
+            selection,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+        )
+        if first_view_idx is not None:
+            sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
         if not name_index.isValid() or name_index.column() != 0:
@@ -700,10 +932,14 @@ class JsonTab(QWidget):
         copy_only: bool = False,
         cut: bool = False,
         paste: bool = False,
+        paste_zip: bool = False,
+        replace_zip: bool = False,
         delete: bool = False,
         duplicate: bool = False,
         move_up: bool = False,
         move_down: bool = False,
+        move_out_up: bool = False,
+        move_out_down: bool = False,
         sort_keys: bool = False,
     ) -> None:
         changed = False
@@ -712,7 +948,11 @@ class JsonTab(QWidget):
         elif cut:
             changed = cut_selection(self.view)
         elif paste:
-            changed = paste_from_clipboard(self.view)
+            changed = paste_auto(self.view)
+        elif paste_zip:
+            changed = paste_insert_after_zip(self.view)
+        elif replace_zip:
+            changed = paste_replace_zip(self.view)
         elif delete:
             changed = delete_selection(self.view)
         elif duplicate:
@@ -721,6 +961,10 @@ class JsonTab(QWidget):
             changed = move_selection_up(self.view)
         elif move_down:
             changed = move_selection_down(self.view)
+        elif move_out_up:
+            changed = move_selection_out_up(self.view)
+        elif move_out_down:
+            changed = move_selection_out_down(self.view)
         elif sort_keys:
             changed = sort_selection_keys(self.view, recursive=False)
 

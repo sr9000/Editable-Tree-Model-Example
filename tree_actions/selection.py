@@ -1,3 +1,5 @@
+from typing import cast
+
 from PySide6.QtCore import QModelIndex, QSortFilterProxyModel
 from PySide6.QtWidgets import QTreeView
 
@@ -9,7 +11,7 @@ def _resolve_model(tree_view: QTreeView) -> tuple[JsonTreeModel | None, QSortFil
     if isinstance(model, JsonTreeModel):
         return model, None
     if isinstance(model, QSortFilterProxyModel) and isinstance(model.sourceModel(), JsonTreeModel):
-        return model.sourceModel(), model
+        return cast(JsonTreeModel, model.sourceModel()), model
     return None, None
 
 
@@ -28,6 +30,25 @@ def _to_view_index(tree_view: QTreeView, index: QModelIndex) -> QModelIndex:
 
 
 def _index_path(index) -> tuple[int, ...]:
+    model = index.model() if index.isValid() else None
+    source_model = None
+    if isinstance(model, JsonTreeModel):
+        source_model = model
+    elif isinstance(model, QSortFilterProxyModel) and isinstance(model.sourceModel(), JsonTreeModel):
+        index = model.mapToSource(index)
+        source_model = model.sourceModel()
+
+    if source_model is not None:
+        root_item = source_model.root_item
+        if source_model.get_item(index) is root_item:
+            return ()
+        path: list[int] = []
+        cursor = index
+        while cursor.isValid() and source_model.get_item(cursor) is not root_item:
+            path.append(cursor.row())
+            cursor = cursor.parent()
+        return tuple(reversed(path))
+
     path: list[int] = []
     cursor = index
     while cursor.isValid():
@@ -54,9 +75,28 @@ def _selected_rows(tree_view: QTreeView) -> list:
     if selection is None:
         return []
 
+    # ``selectedRows(0)`` only returns full rows under SelectRows behaviour.
+    # The live app uses SelectItems, so we additionally consider every
+    # selected cell and collapse them to one entry per (row, parent).
     rows = selection.selectedRows(0)
     if rows:
         return [_to_source_index(idx) for idx in rows]
+
+    selected = selection.selectedIndexes()
+    if selected:
+        seen: set[tuple[int, object]] = set()
+        result = []
+        for idx in selected:
+            src = _to_source_index(idx)
+            if not src.isValid():
+                continue
+            key = (src.row(), src.internalPointer())
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(source_model.index(src.row(), 0, src.parent()))
+        if result:
+            return result
 
     current = selection.currentIndex()
     if not current.isValid():
@@ -68,6 +108,58 @@ def _selected_rows(tree_view: QTreeView) -> list:
 def _top_level_selected_rows(tree_view: QTreeView) -> list:
     rows = [idx for idx in _selected_rows(tree_view) if idx.isValid()]
     return [idx for idx in rows if not any(_is_ancestor(other, idx) for other in rows if other != idx)]
+
+
+# Public API (promoted from private names)
+def selected_source_rows(tree_view: QTreeView) -> list:
+    """Return source-model indexes for every selected row (or the current row)."""
+    return _selected_rows(tree_view)
+
+
+def top_level_source_rows(tree_view: QTreeView) -> list:
+    """Return source-model indexes pruned so no index is a descendant of another."""
+    return _top_level_selected_rows(tree_view)
+
+
+def selection_spans_multiple_parents(rows: list) -> bool:
+    """Return True when *rows* contains indexes with more than one distinct parent."""
+    if not rows:
+        return False
+    first_parent = rows[0].parent()
+    return any(idx.parent() != first_parent for idx in rows[1:])
+
+
+def deepest_selected_rows(tree_view: QTreeView) -> list:
+    """Inverse of :func:`top_level_source_rows` — when both an ancestor and one
+    of its descendants are selected, **the ancestor is dropped** and the
+    descendants are kept.
+
+    Use for *projection* operations (multi-copy filter mode) where the
+    selection acts as a mask over each top-level ancestor's subtree.
+    Rows whose subtree contains no other selected row are passed through
+    unchanged.
+    """
+    rows = [idx for idx in _selected_rows(tree_view) if idx.isValid()]
+    return [idx for idx in rows if not any(_is_ancestor(idx, other) for other in rows if other != idx)]
+
+
+def selection_shape(rows: list) -> str:
+    """Classify a selection as one of:
+
+    - ``"single"`` — exactly one selected row.
+    - ``"filter"`` — at least one (ancestor, descendant) pair within the
+      selection. Multi-copy treats this as a projection mask.
+    - ``"disjoint"`` — multiple rows with no ancestor/descendant pairs.
+    """
+    if len(rows) <= 1:
+        return "single"
+    for idx in rows:
+        for other in rows:
+            if other is idx:
+                continue
+            if _is_ancestor(idx, other):
+                return "filter"
+    return "disjoint"
 
 
 def _row0(model: JsonTreeModel, index: QModelIndex) -> QModelIndex:
