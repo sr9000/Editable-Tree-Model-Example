@@ -16,8 +16,13 @@ def compile_schema(schema: Mapping[str, Any]) -> CompiledValidator:
     Calls ``check_schema`` eagerly so invalid meta-schema usage is caught at
     compile time rather than silently ignored.
 
-    The returned validator exposes ``iter_errors(instance)`` and supports
-    ``from jsonschema.exceptions import best_match`` for oneOf/anyOf issues.
+    Format validation is enabled via ``jsonschema.FormatChecker``.  All
+    formats that have a checker registered in the current environment are
+    active (e.g. ``date-time``, ``email``, ``uri``, ``ipv4``/``ipv6``, …).
+    Extra format support can be gained by installing optional dependencies
+    such as *jsonschema[format]* (which pulls in ``fqdn``, ``idna``, etc.).
+
+    The returned validator exposes ``iter_errors(instance)``.
     """
     try:
         import jsonschema
@@ -27,4 +32,4 @@ def compile_schema(schema: Mapping[str, Any]) -> CompiledValidator:
 
     validator_cls = jsonschema.validators.validator_for(schema)
     validator_cls.check_schema(schema)  # raises SchemaError for invalid schemas
-    return validator_cls(schema)
+    return validator_cls(schema, format_checker=jsonschema.FormatChecker())
