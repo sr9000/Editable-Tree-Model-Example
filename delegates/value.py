@@ -133,7 +133,7 @@ class ValueDelegate(_TextEditorDelegateBase):
         super().paint(painter, option, index)
         severity = index.data(VALIDATION_SEVERITY_ROLE)
         if severity is not None:
-            draw_severity_badge(painter, option.rect, severity, self._theme)
+            draw_severity_badge(painter, option, severity, self._theme)
 
     @staticmethod
     def _color_swatch_icon(value: str, option: QStyleOptionViewItem) -> QIcon | None:

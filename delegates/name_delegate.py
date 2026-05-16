@@ -63,7 +63,7 @@ class NameDelegate(_TextEditorDelegateBase):
         super().paint(painter, option, index)
         severity = index.data(VALIDATION_SEVERITY_ROLE)
         if severity is not None:
-            draw_severity_badge(painter, option.rect, severity, self._theme)
+            draw_severity_badge(painter, option, severity, self._theme)
 
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         editor = _CapsLockSafeLineEdit(parent)
