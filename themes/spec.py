@@ -33,7 +33,7 @@ class ValidationStyle:
 
     error_fg: QColor | None = None
     warning_fg: QColor | None = None
-    error_badge: QColor | None = None    # drawn circle; falls back to hard-coded red
+    error_badge: QColor | None = None  # drawn circle; falls back to hard-coded red
     warning_badge: QColor | None = None  # drawn circle; falls back to hard-coded amber
 
     def __hash__(self) -> int:

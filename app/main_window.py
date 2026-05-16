@@ -4,7 +4,17 @@ from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QModelIndex, QSettings, Qt
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
-from PySide6.QtWidgets import QDialog, QFileDialog, QFontDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
+from PySide6.QtWidgets import (
+    QDialog,
+    QFileDialog,
+    QFontDialog,
+    QLabel,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QTreeView,
+    QUndoView,
+)
 
 import state.view_state as view_state
 from app.close_confirm import confirm_close
@@ -84,11 +94,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setup_connections()
 
     def _setup_validation_dock(self) -> None:
+        from state.validation_settings import auto_rescan_enabled
+
         self.validation_dock = ValidationDock(self)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.validation_dock)
         self.validation_dock.issueActivated.connect(
             lambda issue, edit: self._on_validation_issue_activated(issue, edit=edit)
         )
+        self.validation_dock.rescanRequested.connect(self._on_rescan_requested)
+        self.validation_dock.autoRescanToggled.connect(self._on_auto_rescan_toggled)
+        self.validation_dock.clearSchemaRequested.connect(self._on_clear_schema_requested)
+
+        # Initialise checkbox from the persisted global setting.
+        self.validation_dock.set_auto_rescan_checked(auto_rescan_enabled())
+
+        # Permanent right-aligned label on the status bar for validation summary.
+        self._validation_status_label = QLabel("", self)
+        self._validation_status_label.setVisible(False)
+        self.statusBar.addPermanentWidget(self._validation_status_label)
+        self._bound_validation_tab = None
 
         self.viewValidationPanelAction = QAction(self.tr("Validation Panel"), self)
         self.viewValidationPanelAction.setCheckable(True)
@@ -104,6 +128,51 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         visible = self._coerce_bool(self._settings.value("validation/dock_visible", True), default=True)
         self.validation_dock.setVisible(visible)
         self.viewValidationPanelAction.setChecked(visible)
+
+    # ── validation dock handlers ──────────────────────────────────────────
+
+    def _on_rescan_requested(self) -> None:
+        tab = self._current_tab()
+        if tab is not None:
+            tab.revalidate()
+
+    def _on_auto_rescan_toggled(self, enabled: bool) -> None:
+        from state.validation_settings import set_auto_rescan_enabled
+
+        set_auto_rescan_enabled(enabled)
+        for tab in self._theme_tabs():
+            tab.set_auto_rescan(enabled)
+
+    def _on_clear_schema_requested(self) -> None:
+        tab = self._current_tab()
+        if tab is not None:
+            tab.clear_schema()
+
+    def _bind_validation_status(self, tab) -> None:
+        """Connect/disconnect the permanent validation status label to *tab*."""
+        if self._bound_validation_tab is not None:
+            try:
+                self._bound_validation_tab.validationChanged.disconnect(self._on_tab_validation_changed)
+            except (RuntimeError, TypeError):
+                pass
+        self._bound_validation_tab = tab
+        if tab is not None:
+            tab.validationChanged.connect(self._on_tab_validation_changed)
+            self._on_tab_validation_changed(tab.issue_index)
+        else:
+            self._validation_status_label.setVisible(False)
+
+    def _on_tab_validation_changed(self, issue_index) -> None:
+        from documents.tab_status import format_validation_status
+
+        text = format_validation_status(issue_index)
+        if text:
+            self._validation_status_label.setText(text)
+            self._validation_status_label.setVisible(True)
+        else:
+            self._validation_status_label.setVisible(False)
+
+    # ─────────────────────────────────────────────────────────────────────
 
     def _on_validation_issue_activated(self, issue, *, edit: bool = False) -> None:
         tab = self._current_tab()
@@ -198,6 +267,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _on_tab_changed(self, _index: int) -> None:
         tab = self._current_tab()
         self._bind_undo_signals(tab)
+        self._bind_validation_status(tab)
         self.validation_dock.attach_tab(tab)
         if tab is not None:
             tab.resize_key_columns()
@@ -207,6 +277,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.update_actions()
 
     def _add_tab(self, *, data=None, file_path: str | None = None) -> JsonTab | None:
+        from state.validation_settings import auto_rescan_enabled
+
         try:
             tab = JsonTab(
                 self.update_actions,
@@ -222,6 +294,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except Exception as exc:
             QMessageBox.critical(self, "Error", f"Failed to create tab:\n{exc}")
             return None
+
+        # Apply the global auto-rescan setting to the new tab.
+        tab.set_auto_rescan(auto_rescan_enabled())
 
         tab_index = self.tabWidget.addTab(tab, tab.display_name())
         self.tabWidget.setCurrentIndex(tab_index)
@@ -323,6 +398,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Re-bind to whatever tab is now current (if any).
         current = self._current_tab()
         self._bind_undo_signals(current)
+        self._bind_validation_status(current)
         self.validation_dock.attach_tab(current)
 
     def insert_child(self):

@@ -1,12 +1,10 @@
 """Integration tests for in-tree severity badge painting via JsonTab."""
-import pytest
+
 from PySide6.QtCore import QModelIndex
 from pytestqt.qtbot import QtBot
 
 from documents.tab import JsonTab
-from themes._defaults import LIGHT_DEFAULT
 from tree.model_roles import VALIDATION_SEVERITY_ROLE
-from validation.issue import ValidationIssue
 from validation.schema_source import SchemaRef
 
 
@@ -19,6 +17,7 @@ def _make_tab(qtbot: QtBot, data: dict) -> JsonTab:
 # ---------------------------------------------------------------------------
 # Provider is wired — role returns severity from the issue index
 # ---------------------------------------------------------------------------
+
 
 def test_validation_role_after_revalidate(qtbot):
     """After revalidate() the model returns the correct severity via the role."""
@@ -73,6 +72,7 @@ def test_clear_schema_removes_badges(qtbot):
 # dataChanged is emitted for VALIDATION_SEVERITY_ROLE on revalidate
 # ---------------------------------------------------------------------------
 
+
 def test_validation_changed_emits_data_changed(qtbot):
     """_on_validation_changed must emit model.dataChanged with VALIDATION_SEVERITY_ROLE."""
     data = {"a": 1}
@@ -95,6 +95,7 @@ def test_validation_changed_emits_data_changed(qtbot):
 # ---------------------------------------------------------------------------
 # Ancestor rows also receive a severity
 # ---------------------------------------------------------------------------
+
 
 def test_ancestor_gets_severity(qtbot):
     """A parent row whose child has an error should also show 'error'."""

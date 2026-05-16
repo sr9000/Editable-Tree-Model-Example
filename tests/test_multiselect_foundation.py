@@ -4,9 +4,8 @@ Tests for the promoted public helpers in tree_actions/selection.py and their
 behaviour with multi-row selections.
 """
 
-import pytest
 from PySide6.QtCore import QItemSelectionModel, QModelIndex
-from PySide6.QtWidgets import QAbstractItemView, QApplication, QTreeView
+from PySide6.QtWidgets import QAbstractItemView, QTreeView
 
 from documents.tab import JsonTab
 from tree.model import JsonTreeModel

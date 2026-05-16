@@ -1,4 +1,5 @@
 """Shared helper for drawing a small severity badge in a cell corner."""
+
 from __future__ import annotations
 
 from PySide6.QtCore import QRect, Qt

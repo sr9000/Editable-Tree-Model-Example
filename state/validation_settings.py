@@ -24,3 +24,25 @@ def read_schema_path(doc_path: Path) -> Path | None:
 
 def write_schema_path(doc_path: Path, schema_path: Path) -> None:
     _settings().setValue(_schema_key(doc_path), str(schema_path))
+
+
+# ---------------------------------------------------------------------------
+# Global auto-rescan toggle
+# ---------------------------------------------------------------------------
+
+_AUTO_RESCAN_KEY = "validation/auto_rescan"
+
+
+def auto_rescan_enabled() -> bool:
+    """Return the persisted auto-rescan setting (default ``False``)."""
+    raw = _settings().value(_AUTO_RESCAN_KEY, False)
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        return raw.strip().casefold() in {"1", "true", "yes", "on"}
+    return False
+
+
+def set_auto_rescan_enabled(enabled: bool) -> None:
+    """Persist the auto-rescan setting."""
+    _settings().setValue(_AUTO_RESCAN_KEY, bool(enabled))

@@ -205,6 +205,24 @@ class JsonTab(QWidget):
         self._issue_index = IssueIndex([], model_data)
 
         init_model(self, model_data, show_root=show_root)
+
+        # ── auto-rescan debouncer ──────────────────────────────────────────
+        # Gate flag; toggled by set_auto_rescan().  Connections are kept alive
+        # permanently to avoid Qt-disconnect quirks — the gate is cheap.
+        self._auto_rescan: bool = False
+        self._mutation_debounce_timer = QTimer(self)
+        self._mutation_debounce_timer.setSingleShot(True)
+        self._mutation_debounce_timer.setInterval(250)
+        self._mutation_debounce_timer.timeout.connect(self.revalidate)
+        # dataChanged carries roles — we must ignore our own validation-repaint
+        # emissions to avoid an infinite loop.
+        self.model.dataChanged.connect(self._on_data_changed_mutation)
+        self.model.rowsInserted.connect(self._schedule_debounced_revalidation)
+        self.model.rowsRemoved.connect(self._schedule_debounced_revalidation)
+        self.model.rowsMoved.connect(self._schedule_debounced_revalidation)
+        self.model.modelReset.connect(self._schedule_debounced_revalidation)
+        # ──────────────────────────────────────────────────────────────────
+
         init_delegates_and_connections(self, update_actions_callback)
         self.set_monospace_fields_enabled(self._monospace_fields_enabled)
         init_shortcuts(self)
@@ -261,6 +279,46 @@ class JsonTab(QWidget):
             issues = validate_document(root_data, self._schema)
         self._issue_index = IssueIndex(issues, root_data)
         self.validationChanged.emit(self._issue_index)
+
+    # ── auto-rescan API ───────────────────────────────────────────────────
+
+    @property
+    def auto_rescan(self) -> bool:
+        """True when model mutations trigger debounced revalidation."""
+        return self._auto_rescan
+
+    def set_auto_rescan(self, enabled: bool) -> None:
+        """Enable or disable automatic revalidation on model mutations.
+
+        When *enabled*, any ``dataChanged``, ``rowsInserted``, ``rowsRemoved``,
+        ``rowsMoved``, or ``modelReset`` signal from the tree model arms a
+        250 ms trailing debounce timer that calls ``revalidate()``.
+        Disabling cancels any pending debounce.
+        """
+        enabled = bool(enabled)
+        if self._auto_rescan == enabled:
+            return
+        self._auto_rescan = enabled
+        if not enabled:
+            self._mutation_debounce_timer.stop()
+
+    def _on_data_changed_mutation(self, top_left, bottom_right, roles=None) -> None:  # noqa: ARG002
+        """Slot for ``model.dataChanged`` — ignores our own validation repaints."""
+        if not self._auto_rescan:
+            return
+        # Skip emissions that carry only VALIDATION_SEVERITY_ROLE; those are
+        # emitted by _on_validation_changed() itself and would cause a loop.
+        if roles is not None and len(roles) > 0 and all(r == VALIDATION_SEVERITY_ROLE for r in roles):
+            return
+        self._mutation_debounce_timer.start()
+
+    def _schedule_debounced_revalidation(self, *_args) -> None:
+        """Slot for structural model signals (rows inserted/removed/moved/reset)."""
+        if not self._auto_rescan:
+            return
+        self._mutation_debounce_timer.start()
+
+    # ─────────────────────────────────────────────────────────────────────
 
     def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
         root_data = self.model.root_item.to_json()
