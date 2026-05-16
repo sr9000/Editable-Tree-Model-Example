@@ -80,3 +80,87 @@ def test_is_schema_valid_reports_invalid_schema():
 
 def test_jsonschema_dependency_is_available_for_validation_step():
     assert jsonschema is not None
+
+
+# ── best_match / oneOf / anyOf unwrapping ─────────────────────────────────
+
+
+def test_oneof_error_is_unwrapped_to_concrete_cause():
+    """A oneOf schema violation should surface the most relevant leaf error,
+    not the generic "is not valid under any of the given schemas" message."""
+    schema = {
+        "oneOf": [
+            {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}},
+            {"type": "object", "required": ["id"],   "properties": {"id":   {"type": "integer"}}},
+        ]
+    }
+    # name is present but has the wrong type — the first branch is the best match
+    data = {"name": 42}
+
+    issues = validate_document(data, schema)
+
+    assert issues, "Expected at least one issue for invalid oneOf data"
+    # None of the reported issues should be the opaque oneOf wrapper
+    for issue in issues:
+        assert issue.kind != "oneOf", (
+            f"Got a raw 'oneOf' wrapper error instead of a concrete cause: {issue.message!r}"
+        )
+
+
+def test_anyof_error_is_unwrapped_to_concrete_cause():
+    """An anyOf schema violation should surface the most relevant leaf error."""
+    schema = {
+        "anyOf": [
+            {"type": "string", "minLength": 3},
+            {"type": "integer", "minimum": 0},
+        ]
+    }
+    data = "ab"  # string but too short; not an integer either
+
+    issues = validate_document(data, schema)
+
+    assert issues, "Expected at least one issue"
+    for issue in issues:
+        assert issue.kind != "anyOf", (
+            f"Got a raw 'anyOf' wrapper error instead of a concrete cause: {issue.message!r}"
+        )
+
+
+def test_nested_oneof_unwraps_to_leaf():
+    """Nested oneOf/anyOf should be unwrapped all the way to a leaf error."""
+    schema = {
+        "oneOf": [
+            {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "oneOf": [
+                            {"type": "integer", "minimum": 10},
+                            {"type": "string",  "minLength": 5},
+                        ]
+                    }
+                },
+                "required": ["value"],
+            }
+        ]
+    }
+    data = {"value": 3}  # integer but below minimum
+
+    issues = validate_document(data, schema)
+
+    assert issues
+    for issue in issues:
+        assert issue.kind not in ("oneOf", "anyOf"), (
+            f"Wrapper error leaked through: kind={issue.kind!r}, message={issue.message!r}"
+        )
+
+
+def test_valid_oneof_produces_no_issues():
+    schema = {
+        "oneOf": [
+            {"type": "string"},
+            {"type": "integer"},
+        ]
+    }
+    assert validate_document("hello", schema) == []
+    assert validate_document(7, schema) == []

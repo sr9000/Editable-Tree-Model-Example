@@ -57,6 +57,113 @@ def _error_kind(err: Any) -> str:
     return "validation_error"
 
 
+def _is_combinator(err: Any) -> bool:
+    return getattr(err, "validator", None) in ("oneOf", "anyOf") and bool(getattr(err, "context", None))
+
+
+def _branch_index(err: Any) -> int:
+    """Return the index of the ``oneOf``/``anyOf`` sub-schema this error belongs to.
+
+    For errors emitted inside a combinator's ``context``, the first element of
+    ``schema_path`` is the integer branch index in the parent ``oneOf``/``anyOf``
+    array.
+    """
+    sp = list(getattr(err, "schema_path", ()) or ())
+    if sp and isinstance(sp[0], int):
+        return sp[0]
+    return -1
+
+
+def _branch_cost(errors: Sequence[Any]) -> int:
+    """Approximate the number of edits needed to satisfy a single branch.
+
+    Each "leaf" validation error in the branch counts as one required fix.
+    Nested ``oneOf``/``anyOf`` errors are recursively reduced to the
+    cheapest sub-branch (because the user only needs to satisfy one of them),
+    matching how a human would patch the document.
+    """
+    total = 0
+    for err in errors:
+        if _is_combinator(err):
+            best = _pick_cheapest_branch(err.context)
+            total += _branch_cost(best) if best else 1
+        else:
+            total += 1
+    return total
+
+
+def _pick_cheapest_branch(context: Sequence[Any]) -> list[Any]:
+    """Group *context* errors by branch index and return the cheapest one."""
+    branches: dict[int, list[Any]] = {}
+    for err in context:
+        branches.setdefault(_branch_index(err), []).append(err)
+
+    # Lowest cost wins; tie-break by branch index for determinism.
+    best_idx = min(branches, key=lambda i: (_branch_cost(branches[i]), i))
+    return branches[best_idx]
+
+
+def _most_specific(errors: Sequence[Any]) -> Any | None:
+    """Pick the most informative error inside a single chosen branch.
+
+    Prefers concrete (non-``oneOf``/``anyOf``) errors over combinator wrappers,
+    then prefers the deepest instance path (closest to the actual bad value),
+    then the longest schema path. This points the UI at the specific field
+    that must change, instead of a generic "is not valid under any of …".
+    """
+    if not errors:
+        return None
+
+    def score(err: Any) -> tuple[int, int, int]:
+        concrete = 0 if _is_combinator(err) else 1
+        instance_depth = len(list(getattr(err, "path", ()) or ()))
+        schema_depth = len(list(getattr(err, "schema_path", ()) or ()))
+        return (concrete, instance_depth, schema_depth)
+
+    return max(errors, key=score)
+
+
+def _unwrap_best(err: Any) -> Any:
+    """Recursively replace a ``oneOf``/``anyOf`` error with its best sub-match.
+
+    When a schema uses ``oneOf`` or ``anyOf``, jsonschema emits a single
+    top-level error ("… is not valid under any of the given schemas") whose
+    ``context`` contains one ``ValidationError`` per failing sub-schema.
+    That top-level message is almost never the *useful* one, and it also
+    points at the parent container rather than the offending field.
+
+    The heuristic here picks the branch whose document is **closest to
+    valid**, i.e. the one that would require the fewest individual fixes
+    (leaf errors) to satisfy. This is a better proxy for "what did the
+    author mean?" than jsonschema's built-in ``best_match``, which simply
+    descends to the deepest error and can latch onto an unrelated branch
+    that happens to have a long path.
+
+    Within the chosen branch we then surface the most specific concrete
+    error so the reported ``instance_path`` points at the actual bad field.
+
+    Sub-errors inside ``context`` carry ``path``/``schema_path`` *relative*
+    to the combinator's position in the document, so we re-prepend the
+    parent's paths to keep absolute coordinates pointing at the real field.
+    """
+    if not _is_combinator(err):
+        return err
+
+    branch = _pick_cheapest_branch(err.context)
+    chosen = _most_specific(branch)
+    if chosen is None:
+        return err
+
+    # Re-attach absolute coordinates: child paths in .context are relative.
+    parent_path = list(getattr(err, "path", ()) or ())
+    parent_schema_path = list(getattr(err, "schema_path", ()) or ())
+    from collections import deque  # noqa: PLC0415
+
+    chosen.path = deque(parent_path + list(chosen.path))
+    chosen.schema_path = deque(parent_schema_path + list(chosen.schema_path))
+    return _unwrap_best(chosen)
+
+
 def _to_issue(err: Any) -> ValidationIssue:
     # jsonschema uses .path (deque); legacy jsonschema-rs used .instance_path
     raw_instance_path = getattr(err, "instance_path", None)
@@ -90,7 +197,7 @@ def validate_document(data: Any, schema: Mapping[str, Any], *, max_issues: int =
 
     issues: list[ValidationIssue] = []
     for err in compiled.iter_errors(data):
-        issues.append(_to_issue(err))
+        issues.append(_to_issue(_unwrap_best(err)))
         if len(issues) >= max_issues:
             break
 
