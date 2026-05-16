@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-jsonschema_rs = pytest.importorskip("jsonschema_rs")
 
 from pathlib import Path
 

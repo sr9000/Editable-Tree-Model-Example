@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import pytest
 
-jsonschema_rs = pytest.importorskip("jsonschema_rs")
 
 from validation.json_pointer import instance_path_to_model_path
 from validation.yaml_validate import validate_yaml_documents

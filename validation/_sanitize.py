@@ -1,4 +1,4 @@
-"""validation/_sanitize.py — coerce mpq/Decimal/datetime/bytes to jsonschema-rs primitives.
+"""validation/_sanitize.py — coerce mpq/Decimal/datetime/bytes to jsonschema primitives.
 
 Precision loss is intentional and validation-only; the original data stored
 in ``JsonTreeItem`` is never modified.  Call ``to_jsonschema_input`` before
@@ -17,7 +17,7 @@ _log = logging.getLogger(__name__)
 
 
 def to_jsonschema_input(value: Any, *, _lossy: list[bool] | None = None) -> Any:
-    """Recursively coerce *value* to JSON-schema-rs-friendly primitives.
+    """Recursively coerce *value* to jsonschema-friendly primitives.
 
     Coercion rules:
 

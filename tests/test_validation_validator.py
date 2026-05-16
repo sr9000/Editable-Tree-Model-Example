@@ -1,6 +1,6 @@
+import jsonschema
 import pytest
 
-jsonschema_rs = pytest.importorskip("jsonschema_rs")
 
 from validation.validator import is_schema_valid, validate_document
 
@@ -78,5 +78,5 @@ def test_is_schema_valid_reports_invalid_schema():
     assert error
 
 
-def test_jsonschema_rs_dependency_is_available_for_validation_step():
-    assert jsonschema_rs is not None
+def test_jsonschema_dependency_is_available_for_validation_step():
+    assert jsonschema is not None

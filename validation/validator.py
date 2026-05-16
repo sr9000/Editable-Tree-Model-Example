@@ -48,7 +48,7 @@ def _error_kind(err: Any) -> str:
             if isinstance(value, str):
                 return value
 
-            # jsonschema-rs exposes rich enum objects for .kind;
+            # jsonschema exposes rich enum objects for .kind;
             # use the class suffix for a stable machine-friendly key.
             class_name = value.__class__.__name__
             if "_" in class_name:
@@ -58,11 +58,15 @@ def _error_kind(err: Any) -> str:
 
 
 def _to_issue(err: Any) -> ValidationIssue:
+    # jsonschema uses .path (deque); legacy jsonschema-rs used .instance_path
+    raw_instance_path = getattr(err, "instance_path", None)
+    if raw_instance_path is None:
+        raw_instance_path = getattr(err, "path", ())
     return ValidationIssue(
         severity="error",
         message=str(getattr(err, "message", err)),
-        instance_path=_normalize_path(getattr(err, "instance_path", ())),
-        schema_path=_normalize_path(getattr(err, "schema_path", ())),
+        instance_path=_normalize_path(list(raw_instance_path)),
+        schema_path=_normalize_path(list(getattr(err, "schema_path", ()))),
         kind=_error_kind(err),
     )
 
@@ -70,7 +74,7 @@ def _to_issue(err: Any) -> ValidationIssue:
 def is_schema_valid(schema: Mapping[str, Any]) -> tuple[bool, str | None]:
     try:
         _engine.compile_schema(schema)
-    except Exception as exc:  # pragma: no cover - depends on jsonschema-rs internals
+    except Exception as exc:  # pragma: no cover - depends on jsonschema internals
         return False, str(exc)
     return True, None
 

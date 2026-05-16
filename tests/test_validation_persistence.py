@@ -74,7 +74,6 @@ def test_overwrite_replaces_existing_binding(tmp_path):
 
 def test_tab_restores_persisted_schema_on_open(tmp_path, qtbot):
     """If a schema was previously attached, a new tab for the same file restores it."""
-    pytest.importorskip("jsonschema_rs")
 
     schema_path = tmp_path / "schema.json"
     schema_path.write_text(
@@ -116,7 +115,6 @@ def test_tab_no_error_when_persisted_schema_is_missing(tmp_path, qtbot):
 
 def test_tab_does_not_override_inline_schema_with_persistence(tmp_path, qtbot):
     """An inline ``$schema`` in the document takes priority over persistence."""
-    pytest.importorskip("jsonschema_rs")
 
     inline_schema_path = tmp_path / "inline.json"
     inline_schema_path.write_text('{"type": "object"}', encoding="utf-8")

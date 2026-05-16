@@ -9,16 +9,22 @@ class CompiledValidator(Protocol):
 
 
 def compile_schema(schema: Mapping[str, Any]) -> CompiledValidator:
-    """Compile *schema* using jsonschema-rs with light version compatibility."""
+    """Compile *schema* using jsonschema.
+
+    Picks the validator class via ``jsonschema.validators.validator_for`` so
+    that ``$schema`` keywords (draft-04 through draft-2020-12) are honoured.
+    Calls ``check_schema`` eagerly so invalid meta-schema usage is caught at
+    compile time rather than silently ignored.
+
+    The returned validator exposes ``iter_errors(instance)`` and supports
+    ``from jsonschema.exceptions import best_match`` for oneOf/anyOf issues.
+    """
     try:
-        import jsonschema_rs
+        import jsonschema
+        import jsonschema.validators
     except ImportError as exc:  # pragma: no cover - exercised in integration envs
-        raise RuntimeError("jsonschema-rs is not installed") from exc
+        raise RuntimeError("jsonschema is not installed") from exc
 
-    if hasattr(jsonschema_rs, "validator_for"):
-        return jsonschema_rs.validator_for(schema)
-
-    if hasattr(jsonschema_rs, "JSONSchema"):
-        return jsonschema_rs.JSONSchema(schema)
-
-    raise RuntimeError("Unsupported jsonschema-rs API: expected validator_for() or JSONSchema")
+    validator_cls = jsonschema.validators.validator_for(schema)
+    validator_cls.check_schema(schema)  # raises SchemaError for invalid schemas
+    return validator_cls(schema)
