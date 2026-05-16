@@ -258,22 +258,28 @@ class JsonTab(QWidget):
         return self._issue_index
 
     def _init_validation_state(self, model_data: Any) -> None:
-        from state.validation_settings import read_schema_path
+        from state.validation_settings import _is_url, read_schema_ref_str
 
         doc_path = Path(self.file_path).expanduser() if self.file_path else None
         ref = discover_schema(doc_path, model_data)
 
         # Fall back to any previously persisted manual binding.
         if ref.origin == "none" and doc_path is not None:
-            persisted = read_schema_path(doc_path)
+            persisted = read_schema_ref_str(doc_path)
             if persisted is not None:
-                candidate = SchemaRef(path=persisted, inline=None, origin="manual")
+                if _is_url(persisted):
+                    candidate = SchemaRef(path=None, inline=None, origin="manual", url=persisted)
+                else:
+                    candidate = SchemaRef(path=Path(persisted), inline=None, origin="manual")
                 try:
                     loaded = load_schema(candidate)
                 except Exception:
                     loaded = None
                 if loaded is not None:
-                    ref = SchemaRef(path=persisted, inline=dict(loaded), origin="manual")
+                    if _is_url(persisted):
+                        ref = SchemaRef(path=None, inline=dict(loaded), origin="manual", url=persisted)
+                    else:
+                        ref = SchemaRef(path=Path(persisted), inline=dict(loaded), origin="manual")
 
         self._schema_ref = ref
         loaded = load_schema(ref)

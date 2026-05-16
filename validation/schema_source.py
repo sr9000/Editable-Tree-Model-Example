@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -13,6 +14,7 @@ class SchemaRef:
     path: Path | None
     inline: Mapping[str, Any] | None
     origin: Literal["inline", "sibling", "manual", "none"]
+    url: str | None = field(default=None)
 
 
 def _is_remote_ref(value: str) -> bool:
@@ -43,9 +45,41 @@ def _sibling_schema_path(doc_path: Path | None) -> Path | None:
     return None
 
 
+def load_schema_from_url(url: str, *, timeout: int = 10) -> Mapping[str, Any] | None:
+    """Fetch a JSON/YAML schema from *url* and return it as a mapping."""
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            raw = resp.read()
+    except Exception:
+        return None
+
+    # Try JSON first, then YAML
+    try:
+        data = json.loads(raw)
+        if isinstance(data, Mapping):
+            return data
+        return None
+    except Exception:
+        pass
+
+    try:
+        import yaml
+
+        data = yaml.safe_load(raw)
+        if isinstance(data, Mapping):
+            return data
+        return None
+    except Exception:
+        return None
+
+
 def load_schema(ref: SchemaRef) -> Mapping[str, Any] | None:
     if ref.inline is not None:
         return ref.inline
+    if ref.url is not None:
+        return load_schema_from_url(ref.url)
     if ref.path is None:
         return None
     data, _fmt = load_file_with_format(str(ref.path))

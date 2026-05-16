@@ -158,39 +158,114 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab.clear_schema()
 
     def _on_attach_schema_requested(self) -> None:
-        from state.validation_settings import write_schema_path
-        from validation.schema_source import SchemaRef, load_schema
+        from state.validation_settings import write_schema_ref_str
+        from validation.schema_source import SchemaRef, load_schema, load_schema_from_url
 
         tab = self._current_tab()
         if tab is None:
             return
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            self.tr("Attach JSON Schema"),
-            tab.file_path or "",
-            "JSON Schema (*.json *.yaml *.yml);;All files (*)",
+
+        from PySide6.QtWidgets import (
+            QDialog,
+            QDialogButtonBox,
+            QHBoxLayout,
+            QLabel as _QLabel,
+            QLineEdit,
+            QPushButton as _QPushButton,
+            QVBoxLayout,
         )
-        if not path:
+
+        class _AttachDialog(QDialog):
+            def __init__(self, parent=None, start_dir=""):
+                super().__init__(parent)
+                self.setWindowTitle(self.tr("Attach JSON Schema"))
+                self.resize(540, 110)
+                lbl = _QLabel(self.tr("Schema file path or URL (http/https):"))
+                self._edit = QLineEdit()
+                self._edit.setPlaceholderText("https://…  or  /path/to/schema.json")
+                browse = _QPushButton(self.tr("Browse…"))
+                browse.clicked.connect(self._browse)
+                self._start_dir = start_dir
+                row = QHBoxLayout()
+                row.addWidget(self._edit, 1)
+                row.addWidget(browse)
+                buttons = QDialogButtonBox(
+                    QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+                )
+                buttons.accepted.connect(self.accept)
+                buttons.rejected.connect(self.reject)
+                layout = QVBoxLayout(self)
+                layout.addWidget(lbl)
+                layout.addLayout(row)
+                layout.addWidget(buttons)
+
+            def _browse(self):
+                p, _ = QFileDialog.getOpenFileName(
+                    self,
+                    self.tr("Select Schema File"),
+                    self._start_dir,
+                    "JSON Schema (*.json *.yaml *.yml);;All files (*)",
+                )
+                if p:
+                    self._edit.setText(p)
+
+            def value(self) -> str:
+                return self._edit.text().strip()
+
+        dlg = _AttachDialog(self, tab.file_path or "")
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        ref = SchemaRef(path=Path(path), inline=None, origin="manual")
-        loaded = load_schema(ref)
-        if loaded is None:
-            self.statusBar.showMessage(self.tr(f"Could not load schema: {path}"), 3000)
+        ref_str = dlg.value()
+        if not ref_str:
             return
-        tab.set_schema(SchemaRef(path=Path(path), inline=dict(loaded), origin="manual"))
+
+        lo = ref_str.lower()
+        is_url = lo.startswith("http://") or lo.startswith("https://")
+
+        if is_url:
+            loaded = load_schema_from_url(ref_str)
+            if loaded is None:
+                self.statusBar.showMessage(self.tr(f"Could not fetch schema: {ref_str}"), 3000)
+                return
+            ref = SchemaRef(path=None, inline=dict(loaded), origin="manual", url=ref_str)
+        else:
+            import os
+            if not os.path.exists(ref_str):
+                self.statusBar.showMessage(self.tr(f"File not found: {ref_str}"), 3000)
+                return
+            file_ref = SchemaRef(path=Path(ref_str), inline=None, origin="manual")
+            loaded = load_schema(file_ref)
+            if loaded is None:
+                self.statusBar.showMessage(self.tr(f"Could not load schema: {ref_str}"), 3000)
+                return
+            ref = SchemaRef(path=Path(ref_str), inline=dict(loaded), origin="manual")
+
+        tab.set_schema(ref)
         if tab.file_path:
-            write_schema_path(Path(tab.file_path), Path(path))
-        self.statusBar.showMessage(self.tr(f"Schema attached: {path}"), 2000)
+            write_schema_ref_str(Path(tab.file_path), ref_str)
+        self.statusBar.showMessage(self.tr(f"Schema attached: {ref_str}"), 2000)
 
     def _on_reload_schema_requested(self) -> None:
-        from validation.schema_source import SchemaRef, load_schema
+        from validation.schema_source import SchemaRef, load_schema, load_schema_from_url
 
         tab = self._current_tab()
-        if tab is None or tab.schema_ref.path is None:
+        if tab is None:
             return
-        origin = tab.schema_ref.origin
-        ref = SchemaRef(path=tab.schema_ref.path, inline=None, origin=origin)
-        loaded = load_schema(ref)
+        ref = tab.schema_ref
+        url = getattr(ref, "url", None)
+        if url is not None:
+            loaded = load_schema_from_url(url)
+            if loaded is None:
+                self.statusBar.showMessage(self.tr("Reload failed: could not fetch schema URL"), 3000)
+                return
+            tab.set_schema(SchemaRef(path=None, inline=dict(loaded), origin=ref.origin, url=url))
+            self.statusBar.showMessage(self.tr("Schema reloaded"), 2000)
+            return
+        if ref.path is None:
+            return
+        origin = ref.origin
+        new_ref = SchemaRef(path=ref.path, inline=None, origin=origin)
+        loaded = load_schema(new_ref)
         if loaded is None:
             self.statusBar.showMessage(self.tr("Reload failed: schema file not found"), 3000)
             return
@@ -199,7 +274,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _on_open_schema_file_requested(self) -> None:
         tab = self._current_tab()
-        if tab is None or tab.schema_ref.path is None:
+        if tab is None:
+            return
+        # URL-based schema: open in browser
+        url = getattr(tab.schema_ref, "url", None)
+        if url is not None:
+            from PySide6.QtGui import QDesktopServices
+            from PySide6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(url))
+            return
+        if tab.schema_ref.path is None:
             return
         path = str(tab.schema_ref.path)
         import os
@@ -212,7 +296,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _on_go_to_schema_rule_requested(self, issue) -> None:
         """Open the schema file and navigate to the schema rule that triggered *issue*."""
         tab = self._current_tab()
-        if tab is None or tab.schema_ref.path is None:
+        if tab is None:
+            return
+        url = getattr(tab.schema_ref, "url", None)
+        if url is not None:
+            # Can't navigate inside a URL schema in-editor; open in browser
+            from PySide6.QtGui import QDesktopServices
+            from PySide6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(url))
+            return
+        if tab.schema_ref.path is None:
             return
         import os
 

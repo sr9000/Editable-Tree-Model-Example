@@ -74,7 +74,7 @@ class ValidationDock(QDockWidget):
         schema_menu = QMenu(self)
         self._act_attach = schema_menu.addAction(self.tr("Attach schema…"))
         self._act_reload = schema_menu.addAction(self.tr("Reload schema"))
-        self._act_open = schema_menu.addAction(self.tr("Open schema file"))
+        self._act_open = schema_menu.addAction(self.tr("Open schema file / URL"))
         self._act_attach.triggered.connect(self.attachSchemaRequested)
         self._act_reload.triggered.connect(self.reloadSchemaRequested)
         self._act_open.triggered.connect(self.openSchemaFileRequested)
@@ -180,9 +180,10 @@ class ValidationDock(QDockWidget):
     def _on_schema_changed(self, ref: "SchemaRef") -> None:
         has_schema = ref.origin != "none"
         has_path = ref.path is not None
+        has_url = getattr(ref, "url", None) is not None
         self._btn_rescan.setEnabled(has_schema)
         self._btn_clear_schema.setVisible(ref.origin in ("inline", "sibling", "manual"))
-        self._act_reload.setEnabled(has_path)
+        self._act_reload.setEnabled(has_path or has_url)
         self._act_open.setEnabled(has_path)
 
     def _on_index_clicked(self, index) -> None:

@@ -24,16 +24,43 @@ def _schema_key(doc_path: Path) -> str:
 
 
 def read_schema_path(doc_path: Path) -> Path | None:
-    """Return the last manually attached schema path for *doc_path*, or ``None``."""
-    raw = _settings().value(_schema_key(doc_path))
-    if isinstance(raw, str) and raw.strip():
-        return Path(raw.strip())
+    """Return the last manually attached schema path for *doc_path*, or ``None``.
+
+    Returns ``None`` if the persisted binding is a URL (use
+    ``read_schema_ref_str`` to retrieve URLs as well).
+    """
+    raw = read_schema_ref_str(doc_path)
+    if raw is not None and not _is_url(raw):
+        return Path(raw)
     return None
 
 
+def read_schema_ref_str(doc_path: Path) -> str | None:
+    """Return the raw persisted binding (path string or URL) for *doc_path*."""
+    raw = _settings().value(_schema_key(doc_path))
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return None
+
+
+def _is_url(value: str) -> bool:
+    lo = value.lower()
+    return lo.startswith("http://") or lo.startswith("https://")
+
+
 def write_schema_path(doc_path: Path, schema_path: Path) -> None:
-    """Persist the manual schema binding for *doc_path*."""
-    _settings().setValue(_schema_key(doc_path), str(schema_path))
+    """Persist the manual schema binding for *doc_path* (file path variant)."""
+    write_schema_ref_str(doc_path, str(schema_path))
+
+
+def write_schema_url(doc_path: Path, url: str) -> None:
+    """Persist the manual schema binding for *doc_path* (URL variant)."""
+    write_schema_ref_str(doc_path, url)
+
+
+def write_schema_ref_str(doc_path: Path, ref_str: str) -> None:
+    """Persist *ref_str* (path or URL) as the schema binding for *doc_path*."""
+    _settings().setValue(_schema_key(doc_path), ref_str)
 
 
 def clear_schema_path(doc_path: Path) -> None:
