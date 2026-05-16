@@ -104,6 +104,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.validation_dock.rescanRequested.connect(self._on_rescan_requested)
         self.validation_dock.autoRescanToggled.connect(self._on_auto_rescan_toggled)
         self.validation_dock.clearSchemaRequested.connect(self._on_clear_schema_requested)
+        self.validation_dock.attachSchemaRequested.connect(self._on_attach_schema_requested)
+        self.validation_dock.reloadSchemaRequested.connect(self._on_reload_schema_requested)
+        self.validation_dock.openSchemaFileRequested.connect(self._on_open_schema_file_requested)
 
         # Initialise checkbox from the persisted global setting.
         self.validation_dock.set_auto_rescan_checked(auto_rescan_enabled())
@@ -144,9 +147,66 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             tab.set_auto_rescan(enabled)
 
     def _on_clear_schema_requested(self) -> None:
+        from state.validation_settings import clear_schema_path
+
         tab = self._current_tab()
-        if tab is not None:
-            tab.clear_schema()
+        if tab is None:
+            return
+        if tab.file_path:
+            clear_schema_path(Path(tab.file_path))
+        tab.clear_schema()
+
+    def _on_attach_schema_requested(self) -> None:
+        from state.validation_settings import write_schema_path
+        from validation.schema_source import SchemaRef, load_schema
+
+        tab = self._current_tab()
+        if tab is None:
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Attach JSON Schema"),
+            tab.file_path or "",
+            "JSON Schema (*.json *.yaml *.yml);;All files (*)",
+        )
+        if not path:
+            return
+        ref = SchemaRef(path=Path(path), inline=None, origin="manual")
+        loaded = load_schema(ref)
+        if loaded is None:
+            self.statusBar.showMessage(self.tr(f"Could not load schema: {path}"), 3000)
+            return
+        tab.set_schema(SchemaRef(path=Path(path), inline=dict(loaded), origin="manual"))
+        if tab.file_path:
+            write_schema_path(Path(tab.file_path), Path(path))
+        self.statusBar.showMessage(self.tr(f"Schema attached: {path}"), 2000)
+
+    def _on_reload_schema_requested(self) -> None:
+        from validation.schema_source import SchemaRef, load_schema
+
+        tab = self._current_tab()
+        if tab is None or tab.schema_ref.path is None:
+            return
+        origin = tab.schema_ref.origin
+        ref = SchemaRef(path=tab.schema_ref.path, inline=None, origin=origin)
+        loaded = load_schema(ref)
+        if loaded is None:
+            self.statusBar.showMessage(self.tr("Reload failed: schema file not found"), 3000)
+            return
+        tab.set_schema(SchemaRef(path=ref.path, inline=dict(loaded), origin=origin))
+        self.statusBar.showMessage(self.tr("Schema reloaded"), 2000)
+
+    def _on_open_schema_file_requested(self) -> None:
+        tab = self._current_tab()
+        if tab is None or tab.schema_ref.path is None:
+            return
+        path = str(tab.schema_ref.path)
+        import os
+
+        if not os.path.exists(path):
+            self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
+            return
+        self._open_path(path)
 
     def _bind_validation_status(self, tab) -> None:
         """Connect/disconnect the permanent validation status label to *tab*."""
@@ -276,7 +336,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self._history_view.setStack(tab.undo_stack)
         self.update_actions()
 
-    def _add_tab(self, *, data=None, file_path: str | None = None) -> JsonTab | None:
+    def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> JsonTab | None:
         from state.validation_settings import auto_rescan_enabled
 
         try:
@@ -290,6 +350,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 permanent_message_callback=lambda msg: self.statusBar.showMessage(msg, 0),
                 theme=self._theme,
                 icon_provider=self._icon_provider,
+                save_format=save_format,
             )
         except Exception as exc:
             QMessageBox.critical(self, "Error", f"Failed to create tab:\n{exc}")
@@ -333,21 +394,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QMessageBox.critical(self, "Open failed", f"Could not open {resolved}:\n{exc}")
             return False
 
-        tab = self._add_tab(data=data, file_path=resolved)
+        tab = self._add_tab(data=data, file_path=resolved, save_format=source_format)
         if tab is None:
             return False
-        tab.save_format = source_format
         push_recent(self, resolved)
         self.statusBar.showMessage(f"Opened: {resolved}", 2000)
         return True
 
     def _save_tab(self, tab: JsonTab, *, save_as: bool = False) -> bool:
+        from state.validation_settings import clear_schema_path
+
         old_path = tab.file_path
         ok = tab.save_as() if save_as else tab.save()
         if not ok:
             return False
         if save_as and isinstance(old_path, str) and tab.file_path and old_path != tab.file_path:
             view_state.discard(old_path)
+            clear_schema_path(Path(old_path))
         view_state.save(tab)
         if tab.file_path:
             push_recent(self, tab.file_path)

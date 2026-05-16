@@ -1,7 +1,25 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
+
+# Matches the synthetic '[doc N]' prefix emitted by validate_yaml_documents.
+_DOC_TOKEN_RE = re.compile(r"^\[doc\s+(\d+)\]$")
+
+
+def _list_index_from_token(token: str | int) -> int | None:
+    """Return the integer list index for *token*, or ``None`` if not valid.
+
+    Accepts plain ``int`` values and the synthetic ``'[doc N]'`` strings
+    emitted by :func:`~validation.yaml_validate.validate_yaml_documents`.
+    """
+    if isinstance(token, int):
+        return token
+    m = _DOC_TOKEN_RE.match(str(token))
+    if m:
+        return int(m.group(1))
+    return None
 
 
 def instance_path_to_model_path(root_data: Any, instance_path: Sequence[str | int]) -> tuple[int, ...] | None:
@@ -23,12 +41,11 @@ def instance_path_to_model_path(root_data: Any, instance_path: Sequence[str | in
             continue
 
         if isinstance(current, list):
-            if not isinstance(token, int):
+            idx = _list_index_from_token(token)
+            if idx is None or idx < 0 or idx >= len(current):
                 return None
-            if token < 0 or token >= len(current):
-                return None
-            model_path.append(token)
-            current = current[token]
+            model_path.append(idx)
+            current = current[idx]
             continue
 
         return None

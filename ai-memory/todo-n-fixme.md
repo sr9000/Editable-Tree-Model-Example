@@ -1,6 +1,6 @@
 # TODO & FIXME
 
-_Last updated: **2026-05-13**._
+_Last updated: **2026-05-16**._
 
 Tracks **missing/incomplete features** (TODO) and **bugs/issues**
 (FIXME) discovered while auditing the editor codebase.
@@ -8,7 +8,7 @@ Cross-reference with `pros-n-cons.md` and `repo-map.md` for context.
 
 Format: `- [ ] [scope] description — file:symbol`
 
-> **Status (2026-05-13)** — All historical phases (0–6 + package
+> **Status (2026-05-16)** — All historical phases (0–6 + package
 > refactor + the six former-`plans/` phases on context-menu polish,
 > zoom-column preservation, kind-switch coercion, container preview,
 > app-color-scheme theming, and tests/memory) are shipped, **and** the
@@ -21,9 +21,16 @@ Format: `- [ ] [scope] description — file:symbol`
 > cycle guards, the anchor-based move primitive (`tree_actions/anchors.py`),
 > and multi-action paste dispatchers
 > (`paste_auto` / `paste_clones_at_targets` /
-> `paste_insert_after_zip` / `paste_replace_zip`). The current tree
-> collects **779 tests**; **776 pass and 3 fail** under
-> `QT_QPA_PLATFORM=offscreen` (the 3 failures are platform-only — Qt's
+> `paste_insert_after_zip` / `paste_replace_zip`).
+> **Step 7 (validation: YAML schemas, multi-doc, schema picker UI,
+> persistence, sanitization) is now complete**: `validation._sanitize`,
+> `validation.yaml_validate`, `validation.json_pointer` `[doc N]`
+> support, `state.validation_settings.clear_schema_path`,
+> `app.validation_dock` schema picker toolbar, `JsonTab._init_validation_state`
+> persistence lookup, `JsonTab.revalidate` routing via sanitize +
+> yaml multi. 3 new test suites (28 tests).
+> The current tree collects **807 tests**; **804 pass and 3 fail**
+> under `QT_QPA_PLATFORM=offscreen` (the 3 failures are platform-only — Qt's
 > offscreen QPA ignores `QStyleHints.setColorScheme`). Production code
 > still contains **zero `TODO` / `FIXME` / `XXX` / `HACK` markers**.
 
@@ -115,7 +122,21 @@ Format: `- [ ] [scope] description — file:symbol`
 
 ## TODO — open items
 
-### Test / tooling gaps
+### Validation follow-ups (deferred from Step 7)
+- [ ] [feature] Remote `$ref` resolution against `http(s)://` — currently remote
+      `$schema` URLs are silently ignored; implement via a configurable HTTP resolver
+      passed to jsonschema-rs or a pre-fetch cache.
+      — `validation/schema_source.py`, `validation/_engine.py`
+- [ ] [ux] Schema-authoring UX — "JSON Schema Draft picker" (Draft 7 ↔ Draft
+      2020-12) combo in the dock; per-tab draft override for validation.
+      — `app/validation_dock.py`, `validation/_engine.py`
+- [ ] [ux] Per-issue quick-fix actions — context menu on a validation issue in
+      the dock list (e.g., "Add missing required key", "Change type to string").
+      — `app/validation_dock.py`, `tree_actions/structure.py`
+- [ ] [tests] WCAG snapshot tests for validation-badge theme colours
+      (`themes/_contrast.py` is available; `VALIDATION_SEVERITY_ROLE` paints
+      cells, but no accessibility regression suite exists yet).
+
 - [ ] [tests] `tests/test_value_delegate.py`: full editor matrix.
       - editor widget class per `JsonType`
       - `setEditorData` / `setModelData` round-trip for INTEGER, mpq
@@ -245,6 +266,35 @@ the repo root.
 
 The following bugs/features were fixed or delivered in past phases;
 listed once here so future audits don't reopen them.
+
+### Step 7 — YAML support, multi-doc, schema picker, persistence (shipped 2026-05-16)
+- **`validation/_sanitize.py`** — `to_jsonschema_input` coerces `mpq`/`Decimal`/
+  `datetime`/`date`/`time`/`bytes` to jsonschema-rs primitives; precision loss is
+  validation-only, never stored.
+- **`validation/yaml_validate.py`** — `validate_yaml_documents(docs, schema)`
+  validates each doc separately and prefixes issue `instance_path` with `'[doc N]'`.
+- **`validation/json_pointer.py`** — `instance_path_to_model_path` extended to
+  accept `'[doc N]'` string tokens (via `_list_index_from_token`) in addition to
+  plain `int` tokens when traversing a list.
+- **`state/validation_settings.py`** — `clear_schema_path` added; key format
+  updated to `validation/<sha1[:16]>` (was raw path string).
+- **`documents/tab.py`** — `JsonTab.__init__` accepts `save_format=None` so the
+  first `revalidate()` during construction already knows the format; `_init_validation_state`
+  falls back to persisted manual binding when `discover_schema` returns `origin=="none"`;
+  `revalidate()` routes through `to_jsonschema_input` sanitization and dispatches to
+  `validate_yaml_documents` when `save_format == SAVE_FORMAT_YAML_MULTI`.
+- **`app/validation_dock.py`** — New signals `attachSchemaRequested`,
+  `reloadSchemaRequested`, `openSchemaFileRequested`; new "Schema ▸" `QToolButton`
+  with `QMenu` (Attach / Reload / Open); `_on_schema_changed` enables/disables
+  Reload and Open based on `ref.path`.
+- **`app/main_window.py`** — Wires new dock signals; `_on_attach_schema_requested`
+  opens `QFileDialog` and calls `write_schema_path`; `_on_clear_schema_requested`
+  calls `clear_schema_path` before `tab.clear_schema()`; `_save_tab` calls
+  `clear_schema_path(old_path)` on Save As to a new path; `_open_path` passes
+  `save_format` directly to `_add_tab` / `JsonTab.__init__`.
+- **3 new test suites**: `test_validation_yaml` (7), `test_validation_yaml_multi`
+  (11), `test_validation_persistence` (10).
+- **`README.md`** and **`ai-memory/`** documents updated.
 
 ### Drag-and-drop / multi-action plan — Steps 1–10 (shipped 2026-05-13)
 - **Step 1 — multiselect foundation.** Promoted

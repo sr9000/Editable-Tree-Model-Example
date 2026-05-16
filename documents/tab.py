@@ -55,11 +55,14 @@ from undo.commands import (
     _SortKeysCmd,
 )
 from undo.diff import DiffApplier
+from io_formats.detect import SAVE_FORMAT_YAML_MULTI
+from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
 from validation.schema_source import SchemaRef, discover_schema, load_schema
 from validation.validator import validate_document
+from validation.yaml_validate import validate_yaml_documents
 
 
 def _make_label(text: str, target_qname: str) -> str:
@@ -175,6 +178,7 @@ class JsonTab(QWidget):
         permanent_message_callback: Callable[[str], None] | None = None,
         theme: ThemeSpec | None = None,
         icon_provider: IconProvider | None = None,
+        save_format: str | None = None,
     ):
         super().__init__(parent)
 
@@ -198,7 +202,7 @@ class JsonTab(QWidget):
             model_data = data if data is not None else {}
 
         self.file_path = file_path
-        self.save_format: str | None = None
+        self.save_format: str | None = save_format
         self._dirty = False
         self._schema_ref = SchemaRef(path=None, inline=None, origin="none")
         self._schema: dict[str, Any] | None = None
@@ -254,8 +258,23 @@ class JsonTab(QWidget):
         return self._issue_index
 
     def _init_validation_state(self, model_data: Any) -> None:
+        from state.validation_settings import read_schema_path
+
         doc_path = Path(self.file_path).expanduser() if self.file_path else None
         ref = discover_schema(doc_path, model_data)
+
+        # Fall back to any previously persisted manual binding.
+        if ref.origin == "none" and doc_path is not None:
+            persisted = read_schema_path(doc_path)
+            if persisted is not None:
+                candidate = SchemaRef(path=persisted, inline=None, origin="manual")
+                try:
+                    loaded = load_schema(candidate)
+                except Exception:
+                    loaded = None
+                if loaded is not None:
+                    ref = SchemaRef(path=persisted, inline=dict(loaded), origin="manual")
+
         self._schema_ref = ref
         loaded = load_schema(ref)
         self._schema = dict(loaded) if loaded is not None else None
@@ -274,9 +293,13 @@ class JsonTab(QWidget):
 
     def revalidate(self) -> None:
         root_data = self.model.root_item.to_json()
-        issues = []
+        issues: list[ValidationIssue] = []
         if self._schema is not None:
-            issues = validate_document(root_data, self._schema)
+            sanitized = to_jsonschema_input(root_data)
+            if self.save_format == SAVE_FORMAT_YAML_MULTI and isinstance(sanitized, list):
+                issues = validate_yaml_documents(sanitized, self._schema)
+            else:
+                issues = validate_document(sanitized, self._schema)
         self._issue_index = IssueIndex(issues, root_data)
         self.validationChanged.emit(self._issue_index)
 

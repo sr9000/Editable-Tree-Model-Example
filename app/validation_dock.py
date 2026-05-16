@@ -3,7 +3,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QCheckBox, QDockWidget, QHBoxLayout, QLabel, QListView, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QDockWidget,
+    QHBoxLayout,
+    QLabel,
+    QListView,
+    QMenu,
+    QPushButton,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.validation_panel_model import IssueListModel
 
@@ -18,6 +29,10 @@ class ValidationDock(QDockWidget):
     rescanRequested = Signal()
     autoRescanToggled = Signal(bool)
     clearSchemaRequested = Signal()
+    # Schema picker signals — connected to MainWindow handlers
+    attachSchemaRequested = Signal()
+    reloadSchemaRequested = Signal()
+    openSchemaFileRequested = Signal()
 
     ALLOWED_AREAS = (
         Qt.DockWidgetArea.LeftDockWidgetArea
@@ -51,12 +66,28 @@ class ValidationDock(QDockWidget):
         self._btn_clear_schema.setVisible(False)
         self._btn_clear_schema.clicked.connect(self.clearSchemaRequested)
 
+        # Schema picker overflow menu button
+        self._schema_btn = QToolButton(self)
+        self._schema_btn.setText(self.tr("Schema ▸"))
+        self._schema_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        schema_menu = QMenu(self)
+        self._act_attach = schema_menu.addAction(self.tr("Attach schema…"))
+        self._act_reload = schema_menu.addAction(self.tr("Reload schema"))
+        self._act_open = schema_menu.addAction(self.tr("Open schema file"))
+        self._act_attach.triggered.connect(self.attachSchemaRequested)
+        self._act_reload.triggered.connect(self.reloadSchemaRequested)
+        self._act_open.triggered.connect(self.openSchemaFileRequested)
+        self._act_reload.setEnabled(False)
+        self._act_open.setEnabled(False)
+        self._schema_btn.setMenu(schema_menu)
+
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setContentsMargins(0, 0, 0, 0)
         toolbar_layout.setSpacing(6)
         toolbar_layout.addWidget(self._btn_rescan)
         toolbar_layout.addWidget(self._chk_auto)
         toolbar_layout.addWidget(self._lbl_status, 1)
+        toolbar_layout.addWidget(self._schema_btn)
         toolbar_layout.addWidget(self._btn_clear_schema)
 
         toolbar_widget = QWidget()
@@ -122,6 +153,8 @@ class ValidationDock(QDockWidget):
             self._btn_rescan.setEnabled(False)
             self._btn_clear_schema.setVisible(False)
             self._lbl_status.setText(self.tr("Up to date"))
+            self._act_reload.setEnabled(False)
+            self._act_open.setEnabled(False)
             return
 
         tab.validationChanged.connect(self._on_validation_changed)
@@ -137,8 +170,11 @@ class ValidationDock(QDockWidget):
 
     def _on_schema_changed(self, ref: "SchemaRef") -> None:
         has_schema = ref.origin != "none"
+        has_path = ref.path is not None
         self._btn_rescan.setEnabled(has_schema)
         self._btn_clear_schema.setVisible(ref.origin in ("inline", "sibling", "manual"))
+        self._act_reload.setEnabled(has_path)
+        self._act_open.setEnabled(has_path)
 
     def _on_index_clicked(self, index) -> None:
         issue = self.model.issue_at(index.row())

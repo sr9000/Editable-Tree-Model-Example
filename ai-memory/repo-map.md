@@ -1,6 +1,6 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-13**. PySide6 desktop **structured-data
+_Last scanned: **2026-05-16**. PySide6 desktop **structured-data
 editor** (originated from Qt's "Editable Tree Model" example).
 **Drag-and-drop plan is fully shipped**: Steps 1–10 (multiselect
 foundation → MIME helpers → atomic multi-row undo move → keyboard
@@ -10,8 +10,10 @@ guards → shortcuts/menu/docs → move-mechanics + multi-action redesign
 on anchors → multi-action context-menu paste/zip fixes) are all in
 mainline. The tree gained a `JsonTreeView` subclass that owns
 `startDrag` so the model can fully own internal moves without Qt's
-default post-drag row removal. Tests: **776 passing, 3 known
-offscreen-only failures** (color-scheme sync — see `todo-n-fixme.md`).
+default post-drag row removal. **Step 7 (validation: YAML schemas,
+multi-doc, schema picker, persistence, sanitization) has shipped.**
+Tests: **807 passing, 3 known offscreen-only failures**
+(color-scheme sync — see `todo-n-fixme.md`).
 
 ---
 
@@ -41,6 +43,7 @@ offscreen-only failures** (color-scheme sync — see `todo-n-fixme.md`).
 | Theme menu + follow-system + hot reload + scheme sync | `app/theme_controller.py`                                            |
 | Per-tab status / breadcrumb                           | `documents/tab_status.py`                                            |
 | Custom widgets                                        | `qhexedit/`, `qmultiline_editor.py`, `datetime_editor/`, `qbigint_spinbox/`, `qmpq_spinbox/` |
+| **Validation / schema**                               | `validation/`, `app/validation_dock.py`, `state/validation_settings.py` |
 
 ---
 
@@ -205,7 +208,7 @@ mpq2py/                       # mpq_serialization, mpq_json_default, MpqSafeLoad
 jsontream/                    # streaming JSON encoder (iterables)
 units/                        # bits, format_bytes
 coalesce/, binary/, qt2py/    # small utility packages
-tests/                        # 576 collected
+tests/                        # 807 collected
 ai-memory/                    # this folder
 ```
 
@@ -828,7 +831,7 @@ valid current index.
 
 ## 16) Tests
 
-`tests/` collects **779 tests** as of 2026-05-13; **776 pass, 3 fail**
+`tests/` collects **807 tests** as of 2026-05-16; **804 pass, 3 fail**
 under `QT_QPA_PLATFORM=offscreen`. The failing ones —
 `test_app_color_scheme.py::test_light_theme_sets_light_color_scheme`,
 `test_app_color_scheme.py::test_dark_theme_sets_dark_color_scheme`,
@@ -967,6 +970,95 @@ mainwindow.py`. No `make test` / `themes-check` target.
   - multiline → `qmultiline_editor.py` + `dialogs/qmultiline_dlg.py`
   - exact numerics → `qbigint_spinbox/`, `qmpq_spinbox/`, `mpq2py/`
 - **Theming** — `themes/` + `app/theme_controller.py` (delegate
+
+---
+
+## 20) Validation system — `validation/` + `app/validation_dock.py`
+
+### `validation/` package
+
+| Module | Responsibility |
+|---|---|
+| `_engine.py` | Thin adapter over `jsonschema-rs`: `compile_schema(schema)` → `CompiledValidator` |
+| `validator.py` | `validate_document(data, schema)` + `is_schema_valid(schema)` |
+| `yaml_validate.py` | `validate_yaml_documents(docs, schema)` — validates each doc in a multi-doc YAML stream separately; prefixes issues with `'[doc N]'` in `instance_path` |
+| `_sanitize.py` | `to_jsonschema_input(value)` — recursively coerces `mpq`→`float`, `Decimal`→`float`, `datetime`/`date`/`time`→ISO string, `bytes`→Base64; precision loss is validation-only, never stored |
+| `issue.py` | `ValidationIssue(severity, message, instance_path, schema_path, kind)` frozen dataclass |
+| `index.py` | `IssueIndex` — maps issues to model paths via `instance_path_to_model_path`; `severity_at`, `ancestor_severity`, `issues_for`, `all_issues` |
+| `json_pointer.py` | `instance_path_to_model_path` / `model_path_to_instance_path` — handles plain `int` list tokens and the synthetic `'[doc N]'` string tokens emitted by `yaml_validate` |
+| `schema_source.py` | `SchemaRef(path, inline, origin)` · `discover_schema(doc_path, data)` — auto-detects inline `$schema`, sibling `.schema.json`; `load_schema(ref)` supports JSON + YAML files |
+
+### `app/validation_dock.py` — `ValidationDock`
+
+Qt `QDockWidget` embedded at the bottom of the main window.
+
+**Signals emitted:**
+
+| Signal | Triggered by |
+|---|---|
+| `issueActivated(issue, edit)` | Click or Enter on a list item |
+| `rescanRequested` | "🔄 Rescan now" button |
+| `autoRescanToggled(bool)` | Auto-rescan checkbox |
+| `clearSchemaRequested` | "🚫 Clear schema" button (visible only for inline/sibling/manual) |
+| `attachSchemaRequested` | Schema ▸ → "Attach schema…" |
+| `reloadSchemaRequested` | Schema ▸ → "Reload schema" |
+| `openSchemaFileRequested` | Schema ▸ → "Open schema file" |
+
+**Public API:**
+
+- `attach_tab(tab)` — subscribe to `tab.validationChanged` / `schemaChanged`;
+  resets controls when `None`.
+- `update_status(issue_index)` — refreshes the status label.
+- `set_auto_rescan_checked(bool)` — updates checkbox without emitting `autoRescanToggled`.
+
+### `state/validation_settings.py`
+
+Per-file manual schema binding, persisted via `QSettings(APPLICATION_ID, "validation")`.
+Key format: `validation/<sha1[:16]>` of the resolved absolute doc path — matches
+the pattern used by `state.view_state.state_key`.
+
+```python
+read_schema_path(doc_path: Path) -> Path | None
+write_schema_path(doc_path: Path, schema_path: Path) -> None
+clear_schema_path(doc_path: Path) -> None        # wipes the QSettings entry
+auto_rescan_enabled() -> bool
+set_auto_rescan_enabled(enabled: bool) -> None
+```
+
+### Schema discovery order (in `JsonTab._init_validation_state`)
+
+1. `discover_schema(doc_path, model_data)` — inline `$schema` key, then sibling file.
+2. If `origin=="none"` and `doc_path` is known, check `read_schema_path(doc_path)` for
+   a persisted manual binding → loads the schema file; falls back silently on
+   missing files.
+
+### YAML multi-doc validation (in `JsonTab.revalidate`)
+
+When `tab.save_format == SAVE_FORMAT_YAML_MULTI` and the root data is a list,
+`revalidate()` calls `validate_yaml_documents(sanitized, schema)` instead of
+`validate_document`. Issues carry the `'[doc N]'` prefix. The `IssueIndex`
+resolves these to model paths via the updated `instance_path_to_model_path`.
+
+### `app/main_window.py` — schema picker handlers
+
+| Method | Action |
+|---|---|
+| `_on_attach_schema_requested()` | `QFileDialog` → `tab.set_schema(SchemaRef(..., origin="manual"))` + `write_schema_path` |
+| `_on_reload_schema_requested()` | Re-reads schema file → `tab.set_schema(...)` |
+| `_on_open_schema_file_requested()` | Opens schema file as new editor tab via `_open_path` |
+| `_on_clear_schema_requested()` | `clear_schema_path(doc_path)` + `tab.clear_schema()` |
+| `_save_tab(..., save_as=True)` | Also calls `clear_schema_path(old_path)` on path change |
+
+### New test suites
+
+- `tests/test_validation_yaml.py` (7 tests) — YAML schema files: inline `$schema`
+  discovery, load, validate-ok, type violation, sibling detection, mpq sanitization.
+- `tests/test_validation_yaml_multi.py` (11 tests) — `validate_yaml_documents`:
+  `[doc N]` prefix semantics, path resolution to correct tree row, `max_issues` cap;
+  `json_pointer` handling of `[doc N]` tokens (plain int, out-of-bounds, multi-level).
+- `tests/test_validation_persistence.py` (10 tests) — `read/write/clear_schema_path`
+  round-trips, tab restores persisted schema on open, missing-file silent fallback,
+  inline schema wins over persistence, idempotent clear.
   styling + app-level `Qt.ColorScheme` sync)
 - **Utilities / tests** — `jsontream/`, `units/`, `qt2py/`,
   `coalesce/`, `binary/`, `tests/`
