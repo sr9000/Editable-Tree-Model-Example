@@ -66,7 +66,7 @@ def init_validation_state(tab, model_data: Any) -> None:
 
 
 def init_delegates_and_connections(tab, update_actions_callback) -> None:
-    tab.name_delegate = NameDelegate(tab)
+    tab.name_delegate = NameDelegate(tab, theme=tab._theme)
     tab.type_delegate = JsonTypeDelegate(tab, theme=tab._theme, icon_provider=tab._icon_provider)
     tab.value_delegate = ValueDelegate(tab, theme=tab._theme)
 

@@ -11,6 +11,7 @@ from datetime_editor.enums import DateTimeCategory
 from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.color_codec import color_to_html, parse_color
+from delegates.validation_badge import draw_severity_badge
 from delegates.value_formatting import _apply_type_style, format_default, format_with_type
 from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
@@ -19,7 +20,7 @@ from qmpq_spinbox import QMpqSpinBox
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
-from tree.model_roles import JSON_TYPE_ROLE
+from tree.model_roles import JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType
 
 
@@ -127,6 +128,12 @@ class ValueDelegate(_TextEditorDelegateBase):
                 allow_background=True,
             )
         option.font = self._apply_monospace_font(option.font)
+
+    def paint(self, painter, option, index) -> None:  # type: ignore[override]
+        super().paint(painter, option, index)
+        severity = index.data(VALIDATION_SEVERITY_ROLE)
+        if severity is not None:
+            draw_severity_badge(painter, option.rect, severity, self._theme)
 
     @staticmethod
     def _color_swatch_icon(value: str, option: QStyleOptionViewItem) -> QIcon | None:

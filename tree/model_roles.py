@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Final
 
 import gmpy2
 from PySide6.QtCore import Qt
@@ -8,6 +8,7 @@ from mpq2py import mpq_serialization
 from tree.types import JsonType
 
 JSON_TYPE_ROLE = Qt.ItemDataRole.UserRole + 1
+VALIDATION_SEVERITY_ROLE: Final = Qt.ItemDataRole.UserRole + 2  # "error" | "warning" | None
 
 
 def font_role_for_name(item, is_root_item: bool) -> QFont | None:

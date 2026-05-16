@@ -27,6 +27,7 @@ from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
+from tree.model_roles import VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
@@ -208,6 +209,10 @@ class JsonTab(QWidget):
         self.set_monospace_fields_enabled(self._monospace_fields_enabled)
         init_shortcuts(self)
         init_search_filter(self)
+        # Plug the severity provider before init_validation_state so the first
+        # revalidate() → dataChanged repaint already has the provider ready.
+        self.model.set_issue_index_provider(self._severity_provider)
+        self.validationChanged.connect(self._on_validation_changed)
         init_validation_state(self, model_data)
         self._diff_applier = DiffApplier(self)
 
@@ -305,9 +310,32 @@ class JsonTab(QWidget):
         self.view.edit(view_value)
         return True
 
+    def _severity_provider(self, model_path: tuple[int, ...]) -> str | None:
+        """Lazily queried by the model for VALIDATION_SEVERITY_ROLE."""
+        exact = self._issue_index.severity_at(model_path)
+        if exact is not None:
+            return exact
+        return self._issue_index.ancestor_severity(model_path)
+
+    def _on_validation_changed(self, _index: IssueIndex) -> None:
+        """Emit recursive dataChanged so all visible rows repaint their badges."""
+
+        def _emit_ranges(parent: QModelIndex) -> None:
+            rows = self.model.rowCount(parent)
+            if rows <= 0:
+                return
+            top_left = self.model.index(0, 0, parent)
+            bottom_right = self.model.index(rows - 1, self.model.columnCount(parent) - 1, parent)
+            self.model.dataChanged.emit(top_left, bottom_right, [VALIDATION_SEVERITY_ROLE])
+            for row in range(rows):
+                _emit_ranges(self.model.index(row, 0, parent))
+
+        _emit_ranges(QModelIndex())
+
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
         self._theme = theme
         self._icon_provider = icon_provider or self._icon_provider
+        self.name_delegate.set_theme(theme)
         self.value_delegate.set_theme(theme)
         self.type_delegate.set_theme(theme)
         self.type_delegate.set_icon_provider(self._icon_provider)

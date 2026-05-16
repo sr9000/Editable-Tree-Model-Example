@@ -1,5 +1,6 @@
 # Ported from: https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/editabletreemodel
 
+from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Any, Optional, cast
 
@@ -9,6 +10,7 @@ from themes.icon_provider import IconProvider, StubIconProvider
 from tree.item import JsonTreeItem
 from tree.model_roles import (
     JSON_TYPE_ROLE,
+    VALIDATION_SEVERITY_ROLE,
     display_role_value,
     edit_role_value,
     font_role_for_name,
@@ -35,6 +37,7 @@ class JsonTreeModel(QAbstractItemModel):
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
         self._attached_view = None
         self._drag_source_rows: list[QModelIndex] = []
+        self._issue_index_provider: Callable[[tuple[int, ...]], str | None] | None = None
 
     def attach_view(self, view) -> None:
         self._attached_view = view
@@ -57,6 +60,18 @@ class JsonTreeModel(QAbstractItemModel):
         if next_provider is self._icon_provider:
             return
         self._icon_provider = next_provider
+
+    def set_issue_index_provider(
+        self,
+        provider: Callable[[tuple[int, ...]], str | None] | None,
+    ) -> None:
+        """Plug in a callable that maps a model path to a severity string.
+
+        The provider is called lazily (only when ``VALIDATION_SEVERITY_ROLE``
+        is actually requested), so no per-row copying of validation state is
+        done inside the model.
+        """
+        self._issue_index_provider = provider
 
     def _root_index(self) -> QModelIndex:
         if not self.show_root:
@@ -154,6 +169,10 @@ class JsonTreeModel(QAbstractItemModel):
 
         if role == Qt.ItemDataRole.DisplayRole:
             return display_role_value(item, index.column(), is_root_item=(item is self.root_item))
+
+        if role == VALIDATION_SEVERITY_ROLE and self._issue_index_provider is not None:
+            path = self._index_path(index)
+            return self._issue_index_provider(path)
 
         return None
 

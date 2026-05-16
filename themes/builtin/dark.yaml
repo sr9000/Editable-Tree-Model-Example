@@ -6,6 +6,11 @@ palette:
   selection_fg: '#1a1b26'
   selection_bg: '#7aa2f7'
   accent: '#e0af68'
+  validation:
+    error_fg: '#ff6b6b'
+    warning_fg: '#ffb84d'
+    error_badge: '#ff6b6b'
+    warning_badge: '#ffb84d'
 types:
   integer:
     fg: '#7aa2f7'

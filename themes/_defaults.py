@@ -5,7 +5,7 @@ from typing import Literal
 
 from PySide6.QtGui import QColor
 
-from themes.spec import Palette, ThemeSpec, TypeStyle
+from themes.spec import Palette, ThemeSpec, TypeStyle, ValidationStyle
 from tree.types import JsonType
 
 
@@ -87,6 +87,12 @@ LIGHT_DEFAULT = _theme(
         selection_fg=_c("#fdf6e3"),
         selection_bg=_c("#268bd2"),
         accent=_c("#b58900"),
+        validation=ValidationStyle(
+            error_fg=_c("#d13438"),
+            warning_fg=_c("#bf6900"),
+            error_badge=_c("#d13438"),
+            warning_badge=_c("#bf6900"),
+        ),
     ),
     styles=_LIGHT_TYPES,
 )
@@ -100,6 +106,12 @@ DARK_DEFAULT = _theme(
         selection_fg=_c("#1a1b26"),
         selection_bg=_c("#7aa2f7"),
         accent=_c("#e0af68"),
+        validation=ValidationStyle(
+            error_fg=_c("#ff6b6b"),
+            warning_fg=_c("#ffb84d"),
+            error_badge=_c("#ff6b6b"),
+            warning_badge=_c("#ffb84d"),
+        ),
     ),
     styles=_DARK_TYPES,
 )
