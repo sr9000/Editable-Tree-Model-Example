@@ -10,6 +10,7 @@ Verifies:
 - ``instance_path_to_model_path`` handles the ``'[doc N]'`` token in
   the new json_pointer implementation.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -52,8 +53,7 @@ def test_only_failing_doc_emits_issues():
     # All issues should reference doc 1 (the only failing document)
     for issue in issues:
         assert issue.instance_path[0] == "[doc 1]", (
-            f"Expected '[doc 1]', got '{issue.instance_path[0]}' — "
-            f"message: {issue.message}"
+            f"Expected '[doc 1]', got '{issue.instance_path[0]}' — " f"message: {issue.message}"
         )
 
 

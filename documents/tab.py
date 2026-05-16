@@ -22,6 +22,7 @@ from documents.tab_setup import (
     init_validation_state,
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
+from io_formats.detect import SAVE_FORMAT_YAML_MULTI
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
@@ -55,7 +56,6 @@ from undo.commands import (
     _SortKeysCmd,
 )
 from undo.diff import DiffApplier
-from io_formats.detect import SAVE_FORMAT_YAML_MULTI
 from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue

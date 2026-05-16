@@ -6,6 +6,7 @@ identify the source document.  The ``instance_path_to_model_path`` helper in
 ``validation/json_pointer.py`` understands this prefix and translates it to
 the N-th row of the root array in the tree model.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence

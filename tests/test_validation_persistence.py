@@ -9,6 +9,7 @@ Verifies:
 - Clearing the schema via ``clear_schema_path`` wipes the QSettings entry.
 - Saving to a new path via Save As does not carry the old binding forward.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,7 +17,6 @@ from pathlib import Path
 import pytest
 
 from state.validation_settings import clear_schema_path, read_schema_path, write_schema_path
-
 
 # ── state.validation_settings round-trips ────────────────────────────────
 

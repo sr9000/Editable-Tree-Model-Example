@@ -4,6 +4,7 @@ Precision loss is intentional and validation-only; the original data stored
 in ``JsonTreeItem`` is never modified.  Call ``to_jsonschema_input`` before
 passing tree data to any validation engine.
 """
+
 from __future__ import annotations
 
 import base64

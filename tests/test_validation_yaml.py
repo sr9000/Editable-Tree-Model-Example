@@ -5,6 +5,7 @@ Verifies:
 - An inline ``$schema: ./my.yaml`` key is discovered and applied.
 - A YAML document that violates its YAML schema produces the right issues.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -16,7 +17,6 @@ from pathlib import Path
 from io_formats.load import load_file_with_format
 from validation.schema_source import SchemaRef, discover_schema, load_schema
 from validation.validator import validate_document
-
 
 # ── helpers ──────────────────────────────────────────────────────────────
 
