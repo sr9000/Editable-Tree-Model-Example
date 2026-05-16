@@ -294,39 +294,64 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._open_path(path)
 
     def _on_go_to_schema_rule_requested(self, issue) -> None:
-        """Open the schema file and navigate to the schema rule that triggered *issue*."""
+        """Open the schema and navigate to the rule that triggered *issue*."""
         tab = self._current_tab()
         if tab is None:
             return
+
+        from validation.issue import ValidationIssue
+
+        def _navigate(schema_tab):
+            if schema_tab is None or not issue.schema_path:
+                return
+            fake_issue = ValidationIssue(
+                severity="error",
+                message="",
+                instance_path=issue.schema_path,
+                schema_path=(),
+                kind="",
+            )
+            schema_tab.goto_validation_issue(fake_issue)
+
         url = getattr(tab.schema_ref, "url", None)
         if url is not None:
-            # Can't navigate inside a URL schema in-editor; open in browser
-            from PySide6.QtGui import QDesktopServices
-            from PySide6.QtCore import QUrl
-            QDesktopServices.openUrl(QUrl(url))
+            # Check if we already have this URL open as a tab
+            for i in range(self.tabWidget.count()):
+                widget = self.tabWidget.widget(i)
+                if isinstance(widget, JsonTab) and getattr(widget, "_schema_url_source", None) == url:
+                    self.tabWidget.setCurrentIndex(i)
+                    _navigate(widget)
+                    return
+            # Download and open in a new in-memory tab
+            from validation.schema_source import load_schema_from_url
+            loaded = load_schema_from_url(url)
+            if loaded is None:
+                self.statusBar.showMessage(self.tr("Could not fetch schema for navigation"), 3000)
+                return
+            schema_tab = self._add_tab(data=dict(loaded), file_path=None)
+            if schema_tab is None:
+                return
+            # Tag so we can reuse this tab next time
+            schema_tab._schema_url_source = url
+            # Give it a readable title
+            short = url.rstrip("/").rsplit("/", 1)[-1] or url
+            idx = self.tabWidget.indexOf(schema_tab)
+            if idx >= 0:
+                self.tabWidget.setTabText(idx, short)
+                self.tabWidget.setTabToolTip(idx, url)
+            _navigate(schema_tab)
             return
+
         if tab.schema_ref.path is None:
             return
         import os
-
         path = str(tab.schema_ref.path)
         if not os.path.exists(path):
             self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
             return
         self._open_path(path)
         schema_tab = self._current_tab()
-        if schema_tab is None or not issue.schema_path:
-            return
-        from validation.issue import ValidationIssue
-
-        fake_issue = ValidationIssue(
-            severity="error",
-            message="",
-            instance_path=issue.schema_path,
-            schema_path=(),
-            kind="",
-        )
-        schema_tab.goto_validation_issue(fake_issue)
+        _navigate(schema_tab)
 
     def _bind_validation_status(self, tab) -> None:
         """Connect/disconnect the permanent validation status label to *tab*."""

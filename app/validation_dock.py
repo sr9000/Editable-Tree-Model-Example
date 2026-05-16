@@ -184,7 +184,7 @@ class ValidationDock(QDockWidget):
         self._btn_rescan.setEnabled(has_schema)
         self._btn_clear_schema.setVisible(ref.origin in ("inline", "sibling", "manual"))
         self._act_reload.setEnabled(has_path or has_url)
-        self._act_open.setEnabled(has_path)
+        self._act_open.setEnabled(has_path or has_url)
 
     def _on_index_clicked(self, index) -> None:
         issue = self.model.issue_at(index.row())
@@ -215,7 +215,10 @@ class ValidationDock(QDockWidget):
             return
         menu = QMenu(self)
         act_schema = menu.addAction(self.tr("Go to schema rule"))
-        has_schema = self._tab is not None and self._tab.schema_ref.path is not None
+        has_schema = self._tab is not None and (
+            self._tab.schema_ref.path is not None
+            or getattr(self._tab.schema_ref, "url", None) is not None
+        )
         act_schema.setEnabled(has_schema and bool(issue.schema_path))
         chosen = menu.exec(self.list_view.viewport().mapToGlobal(QPoint(pos)))
         if chosen is act_schema:
