@@ -130,10 +130,14 @@ class ValueDelegate(_TextEditorDelegateBase):
         option.font = self._apply_monospace_font(option.font)
 
     def paint(self, painter, option, index) -> None:  # type: ignore[override]
-        super().paint(painter, option, index)
         severity = index.data(VALIDATION_SEVERITY_ROLE)
         if severity is not None:
-            draw_severity_badge(painter, option, severity, self._theme)
+            idx = self._to_index(index)
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, idx)
+            draw_severity_badge(painter, opt, severity, self._theme)
+            return
+        super().paint(painter, option, index)
 
     @staticmethod
     def _color_swatch_icon(value: str, option: QStyleOptionViewItem) -> QIcon | None:
