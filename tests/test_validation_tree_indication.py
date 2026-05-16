@@ -8,8 +8,8 @@ from tree.model_roles import VALIDATION_SEVERITY_ROLE
 from validation.schema_source import SchemaRef
 
 
-def _make_tab(qtbot: QtBot, data: dict) -> JsonTab:
-    tab = JsonTab(lambda: None, data=data)
+def _make_tab(qtbot: QtBot, data: dict, *, show_root: bool = False) -> JsonTab:
+    tab = JsonTab(lambda: None, data=data, show_root=show_root)
     qtbot.addWidget(tab)
     return tab
 
@@ -119,3 +119,38 @@ def test_ancestor_gets_severity(qtbot):
 
     severity = tab.model.data(parent_idx, VALIDATION_SEVERITY_ROLE)
     assert severity == "error"
+
+
+# ---------------------------------------------------------------------------
+# Regression: show_root=True must not offset model paths (real-app default)
+# ---------------------------------------------------------------------------
+
+
+def test_severity_with_show_root(qtbot):
+    """With show_root=True the virtual root row must not shift model paths.
+
+    Before the fix, _index_path included the root item's own row (0), so
+    every data path was off by one level and severity was never returned.
+    """
+    schema = {
+        "type": "object",
+        "properties": {"age": {"type": "integer", "minimum": 18}},
+    }
+    data = {"firstName": "Indra", "lastName": "Sen", "age": 17}
+
+    tab = _make_tab(qtbot, data, show_root=True)
+    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+
+    assert len(tab.issue_index) == 1, "expected one minimum-violation issue"
+
+    # With show_root=True the visible tree is: root(0) → firstName(0), lastName(1), age(2)
+    root_idx = tab.model.index(0, 0, QModelIndex())
+    age_idx = tab.model.index(2, 0, root_idx)
+    assert age_idx.isValid()
+
+    # _index_path must return (2,) — the data-relative path — not (0, 2)
+    assert tab.model._index_path(age_idx) == (2,)
+
+    # Both the exact row and its ancestor (the root) must carry severity
+    assert tab.model.data(age_idx, VALIDATION_SEVERITY_ROLE) == "error"
+    assert tab.model.data(root_idx, VALIDATION_SEVERITY_ROLE) == "error"

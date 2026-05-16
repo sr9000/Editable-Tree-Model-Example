@@ -48,9 +48,15 @@ class JsonTreeModel(QAbstractItemModel):
         return rows
 
     def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
+        """Return the data-relative row path for *index*.
+
+        Stops walking at ``root_item`` so the result is independent of
+        ``show_root``: the returned path enters the document data exactly as
+        ``instance_path_to_model_path`` / ``IssueIndex`` expect.
+        """
         path: list[int] = []
         cursor = index
-        while cursor.isValid():
+        while cursor.isValid() and self.get_item(cursor) is not self.root_item:
             path.append(cursor.row())
             cursor = cursor.parent()
         return tuple(reversed(path))
