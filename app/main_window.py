@@ -107,6 +107,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.validation_dock.attachSchemaRequested.connect(self._on_attach_schema_requested)
         self.validation_dock.reloadSchemaRequested.connect(self._on_reload_schema_requested)
         self.validation_dock.openSchemaFileRequested.connect(self._on_open_schema_file_requested)
+        self.validation_dock.goToSchemaRuleRequested.connect(self._on_go_to_schema_rule_requested)
 
         # Initialise checkbox from the persisted global setting.
         self.validation_dock.set_auto_rescan_checked(auto_rescan_enabled())
@@ -207,6 +208,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
             return
         self._open_path(path)
+
+    def _on_go_to_schema_rule_requested(self, issue) -> None:
+        """Open the schema file and navigate to the schema rule that triggered *issue*."""
+        tab = self._current_tab()
+        if tab is None or tab.schema_ref.path is None:
+            return
+        import os
+
+        path = str(tab.schema_ref.path)
+        if not os.path.exists(path):
+            self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
+            return
+        self._open_path(path)
+        schema_tab = self._current_tab()
+        if schema_tab is None or not issue.schema_path:
+            return
+        from validation.issue import ValidationIssue
+
+        fake_issue = ValidationIssue(
+            severity="error",
+            message="",
+            instance_path=issue.schema_path,
+            schema_path=(),
+            kind="",
+        )
+        schema_tab.goto_validation_issue(fake_issue)
 
     def _bind_validation_status(self, tab) -> None:
         """Connect/disconnect the permanent validation status label to *tab*."""

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt
 
-from documents.tab_paths import index_from_path, qualified_name
+from documents.tab_paths import index_from_path, proxy_to_source, qualified_name, source_to_view
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
 
@@ -70,8 +70,6 @@ class IssueListModel(QAbstractListModel):
             return self._display[row]
         if role == Qt.ItemDataRole.ToolTipRole:
             return issue.message
-        if role == Qt.ItemDataRole.DecorationRole:
-            return "X" if issue.severity == "error" else "!"
         return None
 
     def _rebuild_display_cache(self) -> None:
@@ -79,7 +77,7 @@ class IssueListModel(QAbstractListModel):
 
     def _format_issue(self, issue: ValidationIssue) -> str:
         path_text = self._format_issue_path(issue)
-        return f"[{issue.severity}] {path_text} - {issue.message} ({issue.kind})"
+        return f"🔶 [{issue.kind}] {path_text} — {issue.message}"
 
     def _format_issue_path(self, issue: ValidationIssue) -> str:
         if self._tab is not None:
@@ -89,3 +87,19 @@ class IssueListModel(QAbstractListModel):
                 if index.isValid():
                     return qualified_name(self._tab, index)
         return _instance_path_to_json_path(issue.instance_path)
+
+    def find_row_for_view_index(self, view_index: "QModelIndex") -> int | None:
+        """Return the first issue row whose instance_path resolves to *view_index*, or None."""
+        if self._tab is None or not view_index.isValid():
+            return None
+        src_index = proxy_to_source(view_index).siblingAtColumn(0)
+        for row, issue in enumerate(self._issues):
+            model_path = instance_path_to_model_path(self._root_data, issue.instance_path)
+            if model_path is None:
+                continue
+            idx = index_from_path(self._tab, model_path)
+            if not idx.isValid():
+                continue
+            if source_to_view(self._tab, idx.siblingAtColumn(0)) == view_index.siblingAtColumn(0):
+                return row
+        return None

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QDockWidget,
@@ -33,6 +33,7 @@ class ValidationDock(QDockWidget):
     attachSchemaRequested = Signal()
     reloadSchemaRequested = Signal()
     openSchemaFileRequested = Signal()
+    goToSchemaRuleRequested = Signal(object)  # ValidationIssue
 
     ALLOWED_AREAS = (
         Qt.DockWidgetArea.LeftDockWidgetArea
@@ -99,6 +100,8 @@ class ValidationDock(QDockWidget):
         self.list_view.setModel(self.model)
         self.list_view.clicked.connect(self._on_index_clicked)
         self.list_view.activated.connect(self._on_index_activated)
+        self.list_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list_view.customContextMenuRequested.connect(self._on_context_menu)
 
         container = QWidget(self)
         layout = QVBoxLayout(container)
@@ -121,17 +124,11 @@ class ValidationDock(QDockWidget):
     def update_status(self, issue_index: "IssueIndex") -> None:
         """Refresh the status label from *issue_index*."""
         issues = issue_index.all_issues()
-        errors = sum(1 for i in issues if i.severity == "error")
-        warnings = sum(1 for i in issues if i.severity == "warning")
-        if errors == 0 and warnings == 0:
+        count = len(issues)
+        if count == 0:
             self._lbl_status.setText(self.tr("Up to date"))
         else:
-            parts: list[str] = []
-            if errors:
-                parts.append(f"{errors} error{'s' if errors != 1 else ''}")
-            if warnings:
-                parts.append(f"{warnings} warning{'s' if warnings != 1 else ''}")
-            self._lbl_status.setText(" · ".join(parts))
+            self._lbl_status.setText(f"{count} issue{'s' if count != 1 else ''}")
 
     def attach_tab(self, tab: "JsonTab | None") -> None:
         if self._tab is tab:
@@ -144,6 +141,13 @@ class ValidationDock(QDockWidget):
                     )
                 except (RuntimeError, TypeError):
                     pass
+            # Disconnect tree selection sync
+            try:
+                sm = self._tab.view.selectionModel()
+                if sm is not None:
+                    sm.currentChanged.disconnect(self._on_tree_selection_changed)
+            except (RuntimeError, TypeError):
+                pass
 
         self._tab = tab
         self.model.set_tab(tab)
@@ -161,6 +165,11 @@ class ValidationDock(QDockWidget):
         tab.schemaChanged.connect(self._on_schema_changed)
         self._on_schema_changed(tab.schema_ref)
         self._on_validation_changed(tab.issue_index)
+
+        # Sync tree selection → dock highlight
+        sm = tab.view.selectionModel()
+        if sm is not None:
+            sm.currentChanged.connect(self._on_tree_selection_changed)
 
     # ── private slots ─────────────────────────────────────────────────────
 
@@ -185,3 +194,28 @@ class ValidationDock(QDockWidget):
         issue = self.model.issue_at(index.row())
         if issue is not None:
             self.issueActivated.emit(issue, True)
+
+    def _on_tree_selection_changed(self, current, previous) -> None:
+        """Highlight the dock issue that corresponds to the selected tree item."""
+        row = self.model.find_row_for_view_index(current)
+        if row is None:
+            self.list_view.clearSelection()
+            return
+        model_index = self.model.index(row, 0)
+        self.list_view.setCurrentIndex(model_index)
+        self.list_view.scrollTo(model_index)
+
+    def _on_context_menu(self, pos) -> None:
+        index = self.list_view.indexAt(pos)
+        if not index.isValid():
+            return
+        issue = self.model.issue_at(index.row())
+        if issue is None:
+            return
+        menu = QMenu(self)
+        act_schema = menu.addAction(self.tr("Go to schema rule"))
+        has_schema = self._tab is not None and self._tab.schema_ref.path is not None
+        act_schema.setEnabled(has_schema and bool(issue.schema_path))
+        chosen = menu.exec(self.list_view.viewport().mapToGlobal(QPoint(pos)))
+        if chosen is act_schema:
+            self.goToSchemaRuleRequested.emit(issue)
