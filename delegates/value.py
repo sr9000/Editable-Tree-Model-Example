@@ -4,7 +4,16 @@ import zlib
 from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QFont, QFontDatabase, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import QColorDialog, QComboBox, QLineEdit, QStyle, QStyleOptionViewItem, QTreeView, QWidget
+from PySide6.QtWidgets import (
+    QColorDialog,
+    QComboBox,
+    QLineEdit,
+    QMessageBox,
+    QStyle,
+    QStyleOptionViewItem,
+    QTreeView,
+    QWidget,
+)
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
@@ -17,6 +26,7 @@ from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
+from settings import BINARY_EDIT_WARNING_LIMIT_BYTES
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
@@ -207,6 +217,21 @@ class ValueDelegate(_TextEditorDelegateBase):
             except Exception:
                 pass
 
+    @staticmethod
+    def _confirm_large_binary_edit(host, payload_size: int) -> bool:
+        if payload_size <= BINARY_EDIT_WARNING_LIMIT_BYTES:
+            return True
+        size_kb = payload_size / 1024
+        limit_kb = BINARY_EDIT_WARNING_LIMIT_BYTES / 1024
+        answer = QMessageBox.warning(
+            host,
+            "Large binary value",
+            f"Binary value is {size_kb:.1f} KB (limit: {limit_kb:.0f} KB).\\nContinue editing?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget | None:
         source_index = self._source_index(index)
         item: JsonTreeItem = source_index.internalPointer()
@@ -271,6 +296,10 @@ class ValueDelegate(_TextEditorDelegateBase):
                     decoded = decode_bytes(item.value, item.json_type)
                 except (ValueError, OSError, zlib.error, binascii.Error) as exc:
                     self._notify_status(parent, f"Decode failed: {exc}", 4000)
+                    return None
+
+                if not self._confirm_large_binary_edit(parent, len(decoded)):
+                    self._notify_status(parent, "Binary edit cancelled", 2000)
                     return None
 
                 pidx = QPersistentModelIndex(index)

@@ -9,10 +9,13 @@ Covers:
   the status callback instead of escaping ``ValueDelegate.createEditor``.
 """
 
+import base64
+
 from PySide6.QtCore import QModelIndex, Qt
-from PySide6.QtWidgets import QStyleOptionViewItem, QWidget
+from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem, QWidget
 
 from documents.tab import _CMD_ID_EDIT_VALUE, _CMD_ID_RENAME, _MERGE_WINDOW_SECONDS, JsonTab
+from settings import BINARY_EDIT_WARNING_LIMIT_BYTES
 from tree.types import JsonType
 
 
@@ -112,6 +115,78 @@ def test_malformed_bytes_payload_does_not_raise_in_create_editor(qtbot):
     editor = delegate.createEditor(parent, opt, value_idx)
     assert editor is None
     assert any("Decode failed" in msg for msg, _ in captured)
+
+
+def test_large_bytes_manual_edit_warns_and_can_cancel(qtbot, monkeypatch):
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+
+    type_idx = tab.model.index(0, 1, QModelIndex())
+    value_idx = tab.model.index(0, 2, QModelIndex())
+    name_idx = tab.model.index(0, 0, QModelIndex())
+    assert tab.model.setData(type_idx, JsonType.BYTES, Qt.ItemDataRole.EditRole)
+
+    payload = b"x" * (BINARY_EDIT_WARNING_LIMIT_BYTES + 1)
+    tab.model.get_item(name_idx).value = base64.b64encode(payload).decode("ascii")
+
+    warned: list[str] = []
+
+    def _warn(*_args, **_kwargs):
+        warned.append("warned")
+        return QMessageBox.StandardButton.No
+
+    opened: list[str] = []
+
+    def _open(self):
+        opened.append("opened")
+
+    monkeypatch.setattr("delegates.value.QMessageBox.warning", _warn)
+    monkeypatch.setattr("dialogs.qhexedit_dlg.QHexDialog.open", _open)
+
+    delegate = tab.value_delegate
+    parent = QWidget(tab)
+    qtbot.addWidget(parent)
+
+    editor = delegate.createEditor(parent, QStyleOptionViewItem(), value_idx)
+    assert editor is None
+    assert warned == ["warned"]
+    assert opened == []
+
+
+def test_large_bytes_manual_edit_warns_and_opens_on_confirm(qtbot, monkeypatch):
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+
+    type_idx = tab.model.index(0, 1, QModelIndex())
+    value_idx = tab.model.index(0, 2, QModelIndex())
+    name_idx = tab.model.index(0, 0, QModelIndex())
+    assert tab.model.setData(type_idx, JsonType.BYTES, Qt.ItemDataRole.EditRole)
+
+    payload = b"x" * (BINARY_EDIT_WARNING_LIMIT_BYTES + 1)
+    tab.model.get_item(name_idx).value = base64.b64encode(payload).decode("ascii")
+
+    warned: list[str] = []
+
+    def _warn(*_args, **_kwargs):
+        warned.append("warned")
+        return QMessageBox.StandardButton.Yes
+
+    opened: list[str] = []
+
+    def _open(self):
+        opened.append("opened")
+
+    monkeypatch.setattr("delegates.value.QMessageBox.warning", _warn)
+    monkeypatch.setattr("dialogs.qhexedit_dlg.QHexDialog.open", _open)
+
+    delegate = tab.value_delegate
+    parent = QWidget(tab)
+    qtbot.addWidget(parent)
+
+    editor = delegate.createEditor(parent, QStyleOptionViewItem(), value_idx)
+    assert editor is None
+    assert warned == ["warned"]
+    assert opened == ["opened"]
 
 
 # ---------------------------------------------------------------------------

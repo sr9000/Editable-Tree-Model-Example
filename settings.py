@@ -4,6 +4,10 @@ APPLICATION_ID = "org.jeditor.204b2a8a-e956-4c62-911d-cfb29a4fe257"
 MODAL_WINDOW_SIZE = (600, 440)
 WINDOW_DEFAULT_SIZE = (800, 600)
 
+# Warn before importing or manually editing large binary payloads.
+BINARY_ATTACH_WARNING_LIMIT_BYTES = 100 * 1024
+BINARY_EDIT_WARNING_LIMIT_BYTES = 100 * 1024
+
 
 class IntegerInfo(StrEnum):
     NONE = "none"

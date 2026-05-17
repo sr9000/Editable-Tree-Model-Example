@@ -6,6 +6,7 @@ from PySide6.QtCore import QItemSelectionModel
 from PySide6.QtWidgets import QMessageBox
 
 from documents.tab import JsonTab
+from settings import BINARY_ATTACH_WARNING_LIMIT_BYTES
 from tree_actions.context_menu import attach_base64_from_file, save_base64_as_file
 
 
@@ -51,7 +52,7 @@ def test_attach_base64_from_file_warns_and_can_cancel_large_file(qtbot, tmp_path
     _select_value_cell(tab, (0,))
 
     large = tmp_path / "large.bin"
-    large.write_bytes(b"x" * (100 * 1024 + 1))
+    large.write_bytes(b"x" * (BINARY_ATTACH_WARNING_LIMIT_BYTES + 1))
 
     monkeypatch.setattr(
         "tree_actions.context_menu.QFileDialog.getOpenFileName",
