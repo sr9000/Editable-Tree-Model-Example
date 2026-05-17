@@ -1,6 +1,17 @@
 # JSON Editor — Pros & Cons
 
-_Last analysis: **2026-05-16**. The six original `plans/` phases plus
+_Last analysis: **2026-05-17**. All previous plans (drag-and-drop
+Steps 1–10 + jsonschema Steps 1–7) are merged on `master`
+(`cb7cca8`)._
+
+> **Active plan (branch `schema-registry`)** — `plans/00-overview.md`
+> through `plans/07-docs-and-memory.md` introduce a shared
+> `SchemaRegistry`, identity-tracked `SchemaSource(kind="file"|"url")`,
+> `QFileSystemWatcher`-driven hot reload, and a persisted
+> "recent schemas" picker. Plan is unmerged — current `cons` list
+> below still reflects the gaps it intends to fix.
+
+_The six original `plans/` phases plus
 the full drag-and-drop / multi-action plan (Steps 1–10 — multiselect
 foundation, MIME helpers, atomic multi-row undo, keyboard multimove,
 expansion preservation, native QTreeView drag-and-drop, drop policies,
@@ -229,6 +240,21 @@ See `repo-map.md` for the full module breakdown.
   `QStyleHints.setColorScheme` and reports `Qt.ColorScheme.Unknown`.
   These tests should either skip on the offscreen platform or
   monkey-patch `setColorScheme`. Code is correct on real platforms.
+
+### Schema validation (targeted by branch `schema-registry`)
+- **Per-tab schema duplication** — `documents/tab.py::set_schema`
+  copies the loaded schema (`self._schema = dict(loaded)`); two tabs
+  on the same schema hold two independent dicts and trigger two
+  separate `load_schema` calls.
+- **No file-change awareness** — local `.schema.json` edits are
+  ignored until the user explicitly clicks `Schema ▸ Reload`; there
+  is no `QFileSystemWatcher` anywhere in the validation stack.
+- **No recents for schemas** — `app/recent_files.py` covers
+  documents only (cap 8); reattaching a known schema requires
+  retyping or browsing.
+- **Ad-hoc URL identity** — URL-as-tab widgets are tagged with a
+  free-floating `_schema_url_source` attribute in `app/main_window.py`
+  (L322, L341) instead of a typed field on `JsonTab`.
 
 ### Drag-and-drop caveats (low priority)
 - `drag-n-drop.patch` is still committed at repo root as an

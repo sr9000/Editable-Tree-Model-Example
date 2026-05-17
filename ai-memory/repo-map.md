@@ -1,6 +1,6 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-16**. PySide6 desktop **structured-data
+_Last scanned: **2026-05-17**. PySide6 desktop **structured-data
 editor** (originated from Qt's "Editable Tree Model" example).
 **Drag-and-drop plan is fully shipped**: Steps 1–10 (multiselect
 foundation → MIME helpers → atomic multi-row undo move → keyboard
@@ -13,7 +13,16 @@ mainline. The tree gained a `JsonTreeView` subclass that owns
 default post-drag row removal. **Step 7 (validation: YAML schemas,
 multi-doc, schema picker, persistence, sanitization) has shipped.**
 Tests: **807 passing, 3 known offscreen-only failures**
-(color-scheme sync — see `todo-n-fixme.md`).
+(color-scheme sync — see `todo-n-fixme.md`)._
+
+> **Active plan (branch `schema-registry`, `HEAD = cb7cca8`)** —
+> `plans/00-overview.md` … `plans/07-docs-and-memory.md` introduce a
+> shared `validation/schema_registry.py` so each schema source
+> (`kind="file"|"url"`) is loaded once across all bound tabs, gain a
+> `QFileSystemWatcher`-driven hot reload for local files, and persist
+> a 12-entry "recent schemas" list under
+> `QSettings(APPLICATION_ID, "validation")/recent_schemas`. Plan is
+> unmerged at the time of this scan.
 
 ---
 

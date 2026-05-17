@@ -1,12 +1,57 @@
 # TODO & FIXME
 
-_Last updated: **2026-05-16**._
+_Last updated: **2026-05-17**._
 
 Tracks **missing/incomplete features** (TODO) and **bugs/issues**
 (FIXME) discovered while auditing the editor codebase.
 Cross-reference with `pros-n-cons.md` and `repo-map.md` for context.
 
 Format: `- [ ] [scope] description — file:symbol`
+
+> **Active plan (branch `schema-registry`)** — `plans/00-overview.md`
+> through `plans/07-docs-and-memory.md` cover the schema-registry
+> refactor: one shared `SchemaEntry` per source identity,
+> `QFileSystemWatcher`-driven hot reload for local schemas, and a
+> persisted "recent schemas" picker. None of these steps are merged
+> yet; `plans/` was reset on this branch (verified via
+> `git log -- plans/`, last touching commit `c7b94ba`, all eight
+> files staged for delete in `HEAD = cb7cca8`).
+
+## TODO — schema-registry plan (open)
+
+- [ ] [validation] **No shared schema instance across tabs.**
+      `documents/tab.py::set_schema` does
+      `self._schema = dict(loaded)` (verified L292), so each tab
+      duplicates the same JSON Schema dict. → `plans/02-tab-integration.md`.
+- [ ] [validation] **`load_schema` is called every time** a tab attaches
+      or reloads a schema; no in-memory cache.
+      → `plans/01-schema-source-model.md`.
+- [ ] [validation] **Local schema file edits are not noticed.** Tabs
+      keep validating against the stale dict until the user clicks
+      `Schema ▸ Reload`. No `QFileSystemWatcher` exists under
+      `validation/`, `documents/`, or `state/` (verified by grep).
+      → `plans/04-file-watcher.md`.
+- [ ] [validation] **No recent-schemas list.** Only document recents
+      exist (`app/recent_files.py`, cap 8). Schemas have to be
+      retyped or browsed for every attach.
+      → `plans/05-recent-schemas-persistence.md` +
+      `plans/06-recent-schemas-ui.md`.
+- [ ] [validation, cleanup] **Ad-hoc `_schema_url_source` attribute**
+      tags URL-as-tab widgets in `app/main_window.py` L322 / L341.
+      Replace with `JsonTab.schema_source.key`.
+      → `plans/03-mainwindow-handlers-and-dialog.md`.
+- [ ] [validation, cleanup] **`_AttachDialog` is defined inside a
+      MainWindow method** (`app/main_window.py` L178–213). Extract
+      to `dialogs/attach_schema_dlg.py`.
+      → `plans/03-mainwindow-handlers-and-dialog.md`.
+
+## Deferred (post-registry, not in current plan)
+
+- [ ] [validation] URL schema staleness — no `ETag` /
+      `If-Modified-Since` on `reload()`; always re-fetched.
+- [ ] [validation] Inline `$schema` blocks (origins `"inline"` /
+      `"sibling"`) bypass the registry and are never deduplicated
+      across tabs.
 
 > **Status (2026-05-16)** — All historical phases (0–6 + package
 > refactor + the six former-`plans/` phases on context-menu polish,
