@@ -32,7 +32,7 @@ from dialogs.attach_schema_dlg import AttachSchemaDialog
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
-from settings import APPLICATION_ID
+from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
 from state.edit_limits import (
     get_attach_file_warning_limit_bytes,
     get_binary_edit_warning_limit_bytes,
@@ -113,6 +113,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         setup_history_menu(self)
         self.setup_model(yaml_filename)
         self.setup_connections()
+        self._restore_window_geometry()
+
+    def _restore_window_geometry(self) -> None:
+        geometry = self._settings.value("window/geometry")
+        restored = False
+        if isinstance(geometry, QByteArray):
+            restored = self.restoreGeometry(geometry)
+        elif isinstance(geometry, (bytes, bytearray)):
+            restored = self.restoreGeometry(QByteArray(bytes(geometry)))
+
+        if not restored:
+            self.resize(*WINDOW_DEFAULT_SIZE)
+
+        if self._coerce_bool(self._settings.value("window/fullscreen", False), default=False):
+            self.showFullScreen()
+            return
+        if self._coerce_bool(self._settings.value("window/maximized", False), default=False):
+            self.showMaximized()
 
     @staticmethod
     def _local_paths_from_mime(mime: QMimeData) -> list[str]:
@@ -870,6 +888,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 return
             if isinstance(widget, JsonTab):
                 view_state.save(widget)
+        self._settings.setValue("window/geometry", self.saveGeometry())
+        self._settings.setValue("window/fullscreen", self.isFullScreen())
+        self._settings.setValue("window/maximized", self.isMaximized())
         self._settings.setValue("validation/dock_state", self.saveState())
         self._settings.setValue("validation/dock_visible", self.validation_dock.isVisible())
         super().closeEvent(event)

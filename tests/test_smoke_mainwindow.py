@@ -6,7 +6,7 @@ QMainWindow.statusBar() method that broke "Create new file").
 """
 
 import pytest
-from PySide6.QtCore import (QMimeData, QModelIndex, Qt, QUrl,
+from PySide6.QtCore import (QByteArray, QMimeData, QModelIndex, QSettings, Qt, QUrl,
                             qInstallMessageHandler)
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QStatusBar
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QApplication, QStatusBar
 import app.main_window as main_window_module
 from app.main_window import MainWindow
 from documents.tab import JsonTab
+from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
 from tree.types import JsonType
 
 
@@ -89,6 +90,143 @@ def test_mainwindow_constructs(main_window):
     assert main_window is not None
     assert main_window.tabWidget is not None
     assert main_window.tabWidget.count() == 0
+
+
+def test_mainwindow_uses_default_size_without_saved_geometry(qapp):
+    settings = QSettings(APPLICATION_ID, "app")
+    previous_geometry = settings.value("window/geometry")
+    settings.remove("window/geometry")
+
+    try:
+        win = MainWindow(yaml_filename="")
+        assert (win.width(), win.height()) == WINDOW_DEFAULT_SIZE
+        win.close()
+        win.deleteLater()
+    finally:
+        if previous_geometry is None:
+            settings.remove("window/geometry")
+        else:
+            settings.setValue("window/geometry", previous_geometry)
+
+
+def test_mainwindow_restores_geometry_from_settings(qapp, monkeypatch):
+    settings = QSettings(APPLICATION_ID, "app")
+    previous_geometry = settings.value("window/geometry")
+    expected = QByteArray(b"test-geometry")
+    settings.setValue("window/geometry", expected)
+    restored: dict[str, QByteArray] = {}
+
+    def _fake_restore_geometry(self, geometry):
+        restored["value"] = geometry
+        return True
+
+    monkeypatch.setattr(MainWindow, "restoreGeometry", _fake_restore_geometry)
+
+    try:
+        win = MainWindow(yaml_filename="")
+        assert restored["value"] == expected
+        win.close()
+        win.deleteLater()
+    finally:
+        if previous_geometry is None:
+            settings.remove("window/geometry")
+        else:
+            settings.setValue("window/geometry", previous_geometry)
+
+
+def test_mainwindow_restores_fullscreen_mode_from_settings(qapp, monkeypatch):
+    settings = QSettings(APPLICATION_ID, "app")
+    previous_fullscreen = settings.value("window/fullscreen")
+    previous_maximized = settings.value("window/maximized")
+    settings.setValue("window/fullscreen", True)
+    settings.setValue("window/maximized", True)
+    calls = {"fullscreen": 0, "maximized": 0}
+
+    def _fake_show_fullscreen(self):
+        calls["fullscreen"] += 1
+
+    def _fake_show_maximized(self):
+        calls["maximized"] += 1
+
+    monkeypatch.setattr(MainWindow, "showFullScreen", _fake_show_fullscreen)
+    monkeypatch.setattr(MainWindow, "showMaximized", _fake_show_maximized)
+
+    try:
+        win = MainWindow(yaml_filename="")
+        assert calls["fullscreen"] == 1
+        assert calls["maximized"] == 0
+        win.close()
+        win.deleteLater()
+    finally:
+        if previous_fullscreen is None:
+            settings.remove("window/fullscreen")
+        else:
+            settings.setValue("window/fullscreen", previous_fullscreen)
+        if previous_maximized is None:
+            settings.remove("window/maximized")
+        else:
+            settings.setValue("window/maximized", previous_maximized)
+
+
+def test_mainwindow_restores_maximized_mode_from_settings(qapp, monkeypatch):
+    settings = QSettings(APPLICATION_ID, "app")
+    previous_fullscreen = settings.value("window/fullscreen")
+    previous_maximized = settings.value("window/maximized")
+    settings.setValue("window/fullscreen", False)
+    settings.setValue("window/maximized", True)
+    calls = {"fullscreen": 0, "maximized": 0}
+
+    def _fake_show_fullscreen(self):
+        calls["fullscreen"] += 1
+
+    def _fake_show_maximized(self):
+        calls["maximized"] += 1
+
+    monkeypatch.setattr(MainWindow, "showFullScreen", _fake_show_fullscreen)
+    monkeypatch.setattr(MainWindow, "showMaximized", _fake_show_maximized)
+
+    try:
+        win = MainWindow(yaml_filename="")
+        assert calls["fullscreen"] == 0
+        assert calls["maximized"] == 1
+        win.close()
+        win.deleteLater()
+    finally:
+        if previous_fullscreen is None:
+            settings.remove("window/fullscreen")
+        else:
+            settings.setValue("window/fullscreen", previous_fullscreen)
+        if previous_maximized is None:
+            settings.remove("window/maximized")
+        else:
+            settings.setValue("window/maximized", previous_maximized)
+
+
+def test_mainwindow_persists_window_mode_on_close(qapp, monkeypatch):
+    settings = QSettings(APPLICATION_ID, "app")
+    previous_fullscreen = settings.value("window/fullscreen")
+    previous_maximized = settings.value("window/maximized")
+    settings.remove("window/fullscreen")
+    settings.remove("window/maximized")
+
+    try:
+        win = MainWindow(yaml_filename="")
+        monkeypatch.setattr(win, "isFullScreen", lambda: False)
+        monkeypatch.setattr(win, "isMaximized", lambda: True)
+        win.close()
+        win.deleteLater()
+
+        assert MainWindow._coerce_bool(settings.value("window/fullscreen"), default=True) is False
+        assert MainWindow._coerce_bool(settings.value("window/maximized"), default=False) is True
+    finally:
+        if previous_fullscreen is None:
+            settings.remove("window/fullscreen")
+        else:
+            settings.setValue("window/fullscreen", previous_fullscreen)
+        if previous_maximized is None:
+            settings.remove("window/maximized")
+        else:
+            settings.setValue("window/maximized", previous_maximized)
 
 
 def test_mainwindow_status_bar_is_usable(main_window):
