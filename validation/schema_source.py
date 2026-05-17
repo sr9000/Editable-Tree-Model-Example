@@ -17,6 +17,13 @@ class SchemaRef:
     url: str | None = field(default=None)
 
 
+def schema_source_from_ref(ref: SchemaRef):
+    """Convert a SchemaRef into a SchemaSource when possible."""
+    from validation.schema_registry import SchemaSource
+
+    return SchemaSource.from_ref(ref)
+
+
 def _is_remote_ref(value: str) -> bool:
     lowered = value.strip().lower()
     return lowered.startswith("http://") or lowered.startswith("https://")
