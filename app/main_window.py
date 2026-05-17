@@ -44,6 +44,7 @@ from state.edit_limits import (
     set_string_edit_warning_limit_chars,
 )
 from state.recent_schemas import recent_schemas
+from units import counts, format_bytes
 from tree_actions.clipboard import copy_selection
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 from validation.schema_registry import SchemaSource, open_in_browser, schema_registry
@@ -405,15 +406,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         binary_limit = get_binary_edit_warning_limit_bytes()
         attach_limit = get_attach_file_warning_limit_bytes()
 
-        self._limit_string_action.setText(self.tr("String edit limit... ({value:,} chars)").format(value=string_limit))
+        self._limit_string_action.setText(
+            self.tr("String edit limit... ({value} chars)").format(value=counts(string_limit))
+        )
         self._limit_multiline_action.setText(
-            self.tr("Multiline text limit... ({value:,} chars)").format(value=multiline_limit)
+            self.tr("Multiline text limit... ({value} chars)").format(value=counts(multiline_limit))
         )
         self._limit_binary_action.setText(
-            self.tr("Bytes edit limit... ({value:,} bytes)").format(value=binary_limit)
+            self.tr("Bytes edit limit... ({value})").format(value=format_bytes(binary_limit))
         )
         self._limit_attach_action.setText(
-            self.tr("Attach file size limit... ({value:,} bytes)").format(value=attach_limit)
+            self.tr("Attach file size limit... ({value})").format(value=format_bytes(attach_limit))
         )
 
     def _prompt_limit_value(self, *, title: str, label: str, current: int) -> int | None:
