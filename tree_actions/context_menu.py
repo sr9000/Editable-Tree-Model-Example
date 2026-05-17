@@ -5,7 +5,7 @@ from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QComboBox, QFileDialog, QMenu, QMessageBox, QTreeView
 
 from delegates.bytes_codec import decode_bytes, encode_bytes
-from settings import BINARY_ATTACH_WARNING_LIMIT_BYTES
+from state.edit_limits import get_attach_file_warning_limit_bytes
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection, copy_selection_value_only, copy_selection_with_name
 from tree_actions.paste import (
@@ -37,7 +37,6 @@ from tree_actions.structure import (
 )
 
 _BASE64_TYPES = {JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP}
-_LARGE_OPEN_WARNING_THRESHOLD = BINARY_ATTACH_WARNING_LIMIT_BYTES
 
 
 def _add(menu: QMenu, text: str, slot, *, enabled: bool = True, shortcut: str | None = None):
@@ -148,6 +147,7 @@ def _selected_base64_value_index(tree_view: QTreeView):
 
 
 def _warn_large_open_file(tree_view: QTreeView, path: Path) -> bool:
+    warning_limit = get_attach_file_warning_limit_bytes()
     try:
         size = path.stat().st_size
     except OSError as exc:
@@ -155,11 +155,11 @@ def _warn_large_open_file(tree_view: QTreeView, path: Path) -> bool:
         QMessageBox.warning(tree_view, "Open failed", f"Could not read file size for:\n{path}\n\n{exc}")
         return False
 
-    if size <= _LARGE_OPEN_WARNING_THRESHOLD:
+    if size <= warning_limit:
         return True
 
     size_kb = size / 1024
-    limit_kb = _LARGE_OPEN_WARNING_THRESHOLD / 1024
+    limit_kb = warning_limit / 1024
     answer = QMessageBox.warning(
         tree_view,
         "Large file warning",

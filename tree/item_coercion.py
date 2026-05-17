@@ -433,9 +433,7 @@ def compute_editable(json_type: JsonType, value: Any, editable_blob_limit: int) 
 
     try:
         match json_type:
-            case JsonType.STRING | JsonType.UNICODE:
-                return len(value) <= editable_blob_limit
-            case JsonType.MULTILINE | JsonType.TEXT:
+            case JsonType.STRING | JsonType.UNICODE | JsonType.MULTILINE | JsonType.TEXT:
                 return True
             case JsonType.BYTES:
                 base64.b64decode(value, validate=True)

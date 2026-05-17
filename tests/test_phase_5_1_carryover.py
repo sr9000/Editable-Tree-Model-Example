@@ -189,6 +189,67 @@ def test_large_bytes_manual_edit_warns_and_opens_on_confirm(qtbot, monkeypatch):
     assert opened == ["opened"]
 
 
+def test_large_string_manual_edit_warns_and_can_cancel(qtbot, monkeypatch):
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+
+    value_idx = tab.model.index(0, 2, QModelIndex())
+    name_idx = tab.model.index(0, 0, QModelIndex())
+    item = tab.model.get_item(name_idx)
+    item._apply_typed_value(JsonType.STRING, "x" * 200)
+
+    monkeypatch.setattr("delegates.value.get_string_edit_warning_limit_chars", lambda: 100)
+
+    warned: list[str] = []
+
+    def _warn(*_args, **_kwargs):
+        warned.append("warned")
+        return QMessageBox.StandardButton.No
+
+    monkeypatch.setattr("delegates.value.QMessageBox.warning", _warn)
+
+    delegate = tab.value_delegate
+    parent = QWidget(tab)
+    qtbot.addWidget(parent)
+    editor = delegate.createEditor(parent, QStyleOptionViewItem(), value_idx)
+    assert editor is None
+    assert warned == ["warned"]
+
+
+def test_large_multiline_manual_edit_warns_and_opens_on_confirm(qtbot, monkeypatch):
+    tab = JsonTab(lambda *_: None)
+    qtbot.addWidget(tab)
+
+    value_idx = tab.model.index(0, 2, QModelIndex())
+    name_idx = tab.model.index(0, 0, QModelIndex())
+    item = tab.model.get_item(name_idx)
+    item._apply_typed_value(JsonType.MULTILINE, "line\\n" + ("x" * 500))
+
+    monkeypatch.setattr("delegates.value.get_multiline_edit_warning_limit_chars", lambda: 100)
+
+    warned: list[str] = []
+
+    def _warn(*_args, **_kwargs):
+        warned.append("warned")
+        return QMessageBox.StandardButton.Yes
+
+    opened: list[str] = []
+
+    def _open(self):
+        opened.append("opened")
+
+    monkeypatch.setattr("delegates.value.QMessageBox.warning", _warn)
+    monkeypatch.setattr("dialogs.qmultiline_dlg.QMultilineDialog.open", _open)
+
+    delegate = tab.value_delegate
+    parent = QWidget(tab)
+    qtbot.addWidget(parent)
+    editor = delegate.createEditor(parent, QStyleOptionViewItem(), value_idx)
+    assert editor is None
+    assert warned == ["warned"]
+    assert opened == ["opened"]
+
+
 # ---------------------------------------------------------------------------
 # Auto-reopen / interactive flag wiring
 # ---------------------------------------------------------------------------

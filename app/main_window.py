@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFontDialog,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMenu,
@@ -32,6 +33,16 @@ from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID
+from state.edit_limits import (
+    get_attach_file_warning_limit_bytes,
+    get_binary_edit_warning_limit_bytes,
+    get_multiline_edit_warning_limit_chars,
+    get_string_edit_warning_limit_chars,
+    set_attach_file_warning_limit_bytes,
+    set_binary_edit_warning_limit_bytes,
+    set_multiline_edit_warning_limit_chars,
+    set_string_edit_warning_limit_chars,
+)
 from state.recent_schemas import recent_schemas
 from tree_actions.clipboard import copy_selection
 from tree_actions.structure import collapse_all, delete_selection, expand_all
@@ -92,6 +103,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
+        self._setup_edit_limits_menu()
         refresh_recent_menu(self)
         self._setup_schemas_menu()
         self._setup_validation_dock()
@@ -364,6 +376,103 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         has_source = source is not None
         self._schemas_open_current_action.setEnabled(has_source)
         self._schemas_copy_path_action.setEnabled(has_source)
+
+    def _setup_edit_limits_menu(self) -> None:
+        self._limits_menu = QMenu(self.tr("Edit Warning Limits"), self)
+        self._limit_string_action = QAction(self)
+        self._limit_multiline_action = QAction(self)
+        self._limit_binary_action = QAction(self)
+        self._limit_attach_action = QAction(self)
+
+        self._limit_string_action.triggered.connect(self._set_string_warning_limit)
+        self._limit_multiline_action.triggered.connect(self._set_multiline_warning_limit)
+        self._limit_binary_action.triggered.connect(self._set_binary_warning_limit)
+        self._limit_attach_action.triggered.connect(self._set_attach_warning_limit)
+
+        self._limits_menu.addAction(self._limit_string_action)
+        self._limits_menu.addAction(self._limit_multiline_action)
+        self._limits_menu.addAction(self._limit_binary_action)
+        self._limits_menu.addAction(self._limit_attach_action)
+        self._limits_menu.aboutToShow.connect(self._refresh_edit_limits_menu_entries)
+        self._refresh_edit_limits_menu_entries()
+
+        self.fileMenu.insertMenu(self.appExitAction, self._limits_menu)
+        self.fileMenu.insertSeparator(self.appExitAction)
+
+    def _refresh_edit_limits_menu_entries(self) -> None:
+        string_limit = get_string_edit_warning_limit_chars()
+        multiline_limit = get_multiline_edit_warning_limit_chars()
+        binary_limit = get_binary_edit_warning_limit_bytes()
+        attach_limit = get_attach_file_warning_limit_bytes()
+
+        self._limit_string_action.setText(self.tr("String edit limit... ({value:,} chars)").format(value=string_limit))
+        self._limit_multiline_action.setText(
+            self.tr("Multiline text limit... ({value:,} chars)").format(value=multiline_limit)
+        )
+        self._limit_binary_action.setText(
+            self.tr("Bytes edit limit... ({value:,} bytes)").format(value=binary_limit)
+        )
+        self._limit_attach_action.setText(
+            self.tr("Attach file size limit... ({value:,} bytes)").format(value=attach_limit)
+        )
+
+    def _prompt_limit_value(self, *, title: str, label: str, current: int) -> int | None:
+        value, ok = QInputDialog.getInt(self, title, label, current, 1, 2_147_483_647, 1)
+        if not ok:
+            return None
+        return int(value)
+
+    def _set_string_warning_limit(self) -> None:
+        current = get_string_edit_warning_limit_chars()
+        value = self._prompt_limit_value(
+            title=self.tr("String Edit Warning Limit"),
+            label=self.tr("Warn when string length exceeds (chars):"),
+            current=current,
+        )
+        if value is None:
+            return
+        set_string_edit_warning_limit_chars(value)
+        self._refresh_edit_limits_menu_entries()
+        self.statusBar.showMessage(self.tr("Updated string edit warning limit"), 2000)
+
+    def _set_multiline_warning_limit(self) -> None:
+        current = get_multiline_edit_warning_limit_chars()
+        value = self._prompt_limit_value(
+            title=self.tr("Multiline Edit Warning Limit"),
+            label=self.tr("Warn when multiline length exceeds (chars):"),
+            current=current,
+        )
+        if value is None:
+            return
+        set_multiline_edit_warning_limit_chars(value)
+        self._refresh_edit_limits_menu_entries()
+        self.statusBar.showMessage(self.tr("Updated multiline edit warning limit"), 2000)
+
+    def _set_binary_warning_limit(self) -> None:
+        current = get_binary_edit_warning_limit_bytes()
+        value = self._prompt_limit_value(
+            title=self.tr("Bytes Edit Warning Limit"),
+            label=self.tr("Warn when binary size exceeds (bytes):"),
+            current=current,
+        )
+        if value is None:
+            return
+        set_binary_edit_warning_limit_bytes(value)
+        self._refresh_edit_limits_menu_entries()
+        self.statusBar.showMessage(self.tr("Updated bytes edit warning limit"), 2000)
+
+    def _set_attach_warning_limit(self) -> None:
+        current = get_attach_file_warning_limit_bytes()
+        value = self._prompt_limit_value(
+            title=self.tr("Attach File Warning Limit"),
+            label=self.tr("Warn when attaching file larger than (bytes):"),
+            current=current,
+        )
+        if value is None:
+            return
+        set_attach_file_warning_limit_bytes(value)
+        self._refresh_edit_limits_menu_entries()
+        self.statusBar.showMessage(self.tr("Updated attach file warning limit"), 2000)
 
     def _bind_validation_status(self, tab) -> None:
         """Connect/disconnect the permanent validation status label to *tab*."""

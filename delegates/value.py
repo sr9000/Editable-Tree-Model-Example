@@ -26,7 +26,11 @@ from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
-from settings import BINARY_EDIT_WARNING_LIMIT_BYTES
+from state.edit_limits import (
+    get_binary_edit_warning_limit_bytes,
+    get_multiline_edit_warning_limit_chars,
+    get_string_edit_warning_limit_chars,
+)
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
@@ -219,14 +223,28 @@ class ValueDelegate(_TextEditorDelegateBase):
 
     @staticmethod
     def _confirm_large_binary_edit(host, payload_size: int) -> bool:
-        if payload_size <= BINARY_EDIT_WARNING_LIMIT_BYTES:
+        limit = get_binary_edit_warning_limit_bytes()
+        if payload_size <= limit:
             return True
         size_kb = payload_size / 1024
-        limit_kb = BINARY_EDIT_WARNING_LIMIT_BYTES / 1024
+        limit_kb = limit / 1024
         answer = QMessageBox.warning(
             host,
             "Large binary value",
             f"Binary value is {size_kb:.1f} KB (limit: {limit_kb:.0f} KB).\\nContinue editing?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    @staticmethod
+    def _confirm_large_text_edit(host, *, text_len: int, limit: int, title: str, kind: str) -> bool:
+        if text_len <= limit:
+            return True
+        answer = QMessageBox.warning(
+            host,
+            title,
+            f"{kind} is {text_len:,} chars (limit: {limit:,}).\\nContinue editing?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -255,10 +273,32 @@ class ValueDelegate(_TextEditorDelegateBase):
                 editor.addItem("true", True)
                 editor.addItem("false", False)
             case JsonType.STRING | JsonType.UNICODE:
+                text_len = len(str(item.value or ""))
+                limit = get_string_edit_warning_limit_chars()
+                if not self._confirm_large_text_edit(
+                    parent,
+                    text_len=text_len,
+                    limit=limit,
+                    title="Large string value",
+                    kind="String value",
+                ):
+                    self._notify_status(parent, "String edit cancelled", 2000)
+                    return None
                 editor = _CapsLockSafeLineEdit(parent)
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
                 editor = BetterDateTimeEditor(parent)
             case JsonType.MULTILINE | JsonType.TEXT:
+                text_len = len(str(item.value or ""))
+                limit = get_multiline_edit_warning_limit_chars()
+                if not self._confirm_large_text_edit(
+                    parent,
+                    text_len=text_len,
+                    limit=limit,
+                    title="Large multiline text",
+                    kind="Multiline value",
+                ):
+                    self._notify_status(parent, "Multiline edit cancelled", 2000)
+                    return None
                 pidx = QPersistentModelIndex(index)
 
                 def _save_multiline(text: str) -> None:
