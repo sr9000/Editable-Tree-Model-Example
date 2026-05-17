@@ -57,6 +57,11 @@ class SchemaSource:
             return cls.for_url(ref.url)
         return None
 
+    def as_ref(self, *, origin: Literal["inline", "sibling", "manual", "none"] = "manual") -> SchemaRef:
+        if self.kind == "file":
+            return SchemaRef(path=Path(self.key), inline=None, origin=origin)
+        return SchemaRef(path=None, inline=None, origin=origin, url=self.key)
+
 
 @dataclass(slots=True)
 class SchemaEntry:
@@ -94,6 +99,12 @@ class SchemaRegistry(QObject):
             tabs.add(tab)
             entry.ref_count += 1
         return entry
+
+    def acquire_ref(self, ref: SchemaRef, tab: object) -> tuple[SchemaSource | None, SchemaEntry | None]:
+        source = SchemaSource.from_ref(ref)
+        if source is None:
+            return None, None
+        return source, self.acquire(source, tab)
 
     def release(self, source: SchemaSource, tab: object) -> None:
         entry = self._entries.get(source)

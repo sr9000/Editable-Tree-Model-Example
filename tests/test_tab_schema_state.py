@@ -45,6 +45,19 @@ def test_tab_set_schema_emits_signals_and_revalidates(qtbot):
     assert len(tab.issue_index) == 1
 
 
+def test_tab_set_schema_path_sets_file_schema_source(qtbot, tmp_path):
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_text('{"type":"object","properties":{"value":{"type":"integer"}}}', encoding="utf-8")
+
+    tab = JsonTab(lambda *_: None, data={"value": 10}, show_root=True)
+    qtbot.addWidget(tab)
+
+    tab.set_schema(SchemaRef(path=schema_path, inline=None, origin="manual"))
+
+    assert tab.schema_source is not None
+    assert tab.schema_source.kind == "file"
+
+
 def test_tab_clear_schema_resets_to_none_and_clears_issue_index(qtbot):
     tab = JsonTab(lambda *_: None, data={"value": 10}, show_root=True)
     qtbot.addWidget(tab)

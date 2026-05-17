@@ -60,6 +60,7 @@ from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
+from validation.schema_registry import SchemaSource, schema_registry
 from validation.schema_source import SchemaRef, discover_schema, load_schema
 from validation.validator import validate_document
 from validation.yaml_validate import validate_yaml_documents
@@ -205,6 +206,7 @@ class JsonTab(QWidget):
         self.save_format: str | None = save_format
         self._dirty = False
         self._schema_ref = SchemaRef(path=None, inline=None, origin="none")
+        self._schema_source: SchemaSource | None = None
         self._schema: dict[str, Any] | None = None
         self._issue_index = IssueIndex([], model_data)
 
@@ -254,13 +256,18 @@ class JsonTab(QWidget):
         return self._schema_ref
 
     @property
+    def schema_source(self) -> SchemaSource | None:
+        return self._schema_source
+
+    @property
     def issue_index(self) -> IssueIndex:
         return self._issue_index
 
-    def _init_validation_state(self, model_data: Any) -> None:
+    def _init_validation_state(self, model_data: Any, *, doc_path: Path | None = None) -> None:
         from state.validation_settings import _is_url, read_schema_ref_str
 
-        doc_path = Path(self.file_path).expanduser() if self.file_path else None
+        if doc_path is None and self.file_path:
+            doc_path = Path(self.file_path).expanduser().resolve()
         ref = discover_schema(doc_path, model_data)
 
         # Fall back to any previously persisted manual binding.
@@ -281,21 +288,37 @@ class JsonTab(QWidget):
                     else:
                         ref = SchemaRef(path=Path(persisted), inline=dict(loaded), origin="manual")
 
-        self._schema_ref = ref
-        loaded = load_schema(ref)
-        self._schema = dict(loaded) if loaded is not None else None
-        self.schemaChanged.emit(self._schema_ref)
-        self.revalidate()
+        self.set_schema(ref)
 
     def set_schema(self, ref: SchemaRef) -> None:
+        self._swap_source(SchemaSource.from_ref(ref), ref)
+
+    def set_schema_from_source(self, source: SchemaSource) -> None:
+        self._swap_source(source, source.as_ref())
+
+    def _swap_source(self, source: SchemaSource | None, ref: SchemaRef) -> None:
+        if self._schema_source is not None:
+            schema_registry.release(self._schema_source, self)
+
+        entry = schema_registry.acquire(source, self) if source is not None else None
+
+        self._schema_source = source
         self._schema_ref = ref
-        loaded = load_schema(ref)
-        self._schema = dict(loaded) if loaded is not None else None
+        if source is None and ref.inline is not None:
+            self._schema = dict(ref.inline)
+        else:
+            self._schema = entry.inline if entry is not None else None
         self.schemaChanged.emit(self._schema_ref)
         self.revalidate()
 
     def clear_schema(self) -> None:
         self.set_schema(SchemaRef(path=None, inline=None, origin="none"))
+
+    def closeEvent(self, event):  # type: ignore[override]
+        if self._schema_source is not None:
+            schema_registry.release(self._schema_source, self)
+            self._schema_source = None
+        super().closeEvent(event)
 
     def revalidate(self) -> None:
         root_data = self.model.root_item.to_json()
