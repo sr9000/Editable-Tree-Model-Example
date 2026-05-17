@@ -3,7 +3,7 @@
 Verifies:
 - Clear schema button hidden when origin=="none";
 - Rescan button disabled when schema absent;
-- Status label text matches "N errors · M warnings";
+- Status label text matches "N issues";
 - Rescan-now button enabled when schema is attached;
 - set_auto_rescan_checked() does not emit autoRescanToggled.
 """
@@ -117,8 +117,7 @@ def test_status_label_shows_error_count(qtbot):
     issues = [_issue("error"), _issue("error"), _issue("error")]
     idx = IssueIndex(issues, {})
     dock.update_status(idx)
-    assert "3 errors" in dock._lbl_status.text()
-    assert "warning" not in dock._lbl_status.text()
+    assert "3 issues" in dock._lbl_status.text()
 
 
 def test_status_label_shows_warning_count(qtbot):
@@ -127,7 +126,7 @@ def test_status_label_shows_warning_count(qtbot):
     issues = [_issue("warning")]
     idx = IssueIndex(issues, {})
     dock.update_status(idx)
-    assert "1 warning" in dock._lbl_status.text()
+    assert "1 issue" in dock._lbl_status.text()
 
 
 def test_status_label_shows_errors_and_warnings(qtbot):
@@ -137,9 +136,7 @@ def test_status_label_shows_errors_and_warnings(qtbot):
     idx = IssueIndex(issues, {})
     dock.update_status(idx)
     text = dock._lbl_status.text()
-    assert "2 errors" in text
-    assert "1 warning" in text
-    assert "·" in text
+    assert "3 issues" in text
 
 
 def test_status_label_singular_error(qtbot):
@@ -147,9 +144,9 @@ def test_status_label_singular_error(qtbot):
     dock = _make_dock(qtbot)
     idx = IssueIndex([_issue("error")], {})
     dock.update_status(idx)
-    assert "1 error" in dock._lbl_status.text()
-    # Must not say "1 errors"
-    assert "1 errors" not in dock._lbl_status.text()
+    assert "1 issue" in dock._lbl_status.text()
+    # Must not say "1 issues"
+    assert "1 issues" not in dock._lbl_status.text()
 
 
 # ── auto-rescan checkbox ──────────────────────────────────────────────────

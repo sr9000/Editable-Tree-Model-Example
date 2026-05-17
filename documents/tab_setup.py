@@ -144,6 +144,6 @@ def init_shortcuts(tab) -> None:
 def init_search_filter(tab) -> None:
     tab._filter_timer = QTimer(tab)
     tab._filter_timer.setSingleShot(True)
-    tab._filter_timer.setInterval(150)
+    tab._filter_timer.setInterval(300)
     tab._filter_timer.timeout.connect(tab._apply_filter)
     tab.search_edit.textChanged.connect(lambda _text: tab._filter_timer.start())
