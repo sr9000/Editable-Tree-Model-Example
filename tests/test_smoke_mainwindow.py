@@ -6,7 +6,7 @@ QMainWindow.statusBar() method that broke "Create new file").
 """
 
 import pytest
-from PySide6.QtCore import QModelIndex, Qt, qInstallMessageHandler
+from PySide6.QtCore import QMimeData, QModelIndex, Qt, QUrl, qInstallMessageHandler
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QStatusBar
 
@@ -268,3 +268,61 @@ def test_cycling_inline_types_does_not_log_edit_failed(main_window, qt_messages,
 
     failed = [m for m in qt_messages if "edit: editing failed" in m]
     assert not failed, f"Unexpected 'edit: editing failed' warnings: {failed}"
+
+
+def test_local_paths_from_mime_filters_non_local_and_deduplicates(main_window, tmp_path):
+    one = tmp_path / "one.json"
+    one.write_text("{}", encoding="utf-8")
+    two = tmp_path / "two.yaml"
+    two.write_text("a: 1\n", encoding="utf-8")
+
+    mime = QMimeData()
+    mime.setUrls(
+        [
+            QUrl.fromLocalFile(str(one)),
+            QUrl("https://example.com/data.json"),
+            QUrl.fromLocalFile(str(two)),
+            QUrl.fromLocalFile(str(one)),
+        ]
+    )
+
+    assert main_window._local_paths_from_mime(mime) == [str(one.resolve()), str(two.resolve())]
+
+
+def test_drop_event_opens_each_local_file(main_window, monkeypatch, tmp_path):
+    first = tmp_path / "a.json"
+    first.write_text("{}", encoding="utf-8")
+    second = tmp_path / "b.json"
+    second.write_text("{}", encoding="utf-8")
+
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(first)), QUrl.fromLocalFile(str(second))])
+
+    opened: list[str] = []
+
+    def _fake_open_path(path: str) -> bool:
+        opened.append(path)
+        return True
+
+    monkeypatch.setattr(main_window, "_open_path", _fake_open_path)
+
+    class _DropEventStub:
+        def __init__(self):
+            self.accepted = False
+            self.ignored = False
+
+        def mimeData(self):
+            return mime
+
+        def acceptProposedAction(self):
+            self.accepted = True
+
+        def ignore(self):
+            self.ignored = True
+
+    event = _DropEventStub()
+    main_window.dropEvent(event)
+
+    assert opened == [str(first.resolve()), str(second.resolve())]
+    assert event.accepted is True
+    assert event.ignored is False

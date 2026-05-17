@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QModelIndex, QSettings, Qt
+from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, Qt
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -73,6 +73,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, yaml_filename: str, parent=None):
         super().__init__(parent)
         self.setupUi(self)
+        self.setAcceptDrops(True)
         self._history_dialog: QDialog | None = None
         self._history_view: QUndoView | None = None
         self._bound_undo_tab: JsonTab | None = None
@@ -99,6 +100,42 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         setup_history_menu(self)
         self.setup_model(yaml_filename)
         self.setup_connections()
+
+    @staticmethod
+    def _local_paths_from_mime(mime: QMimeData) -> list[str]:
+        """Return deduplicated absolute local file paths from a MIME payload."""
+        paths: list[str] = []
+        seen: set[str] = set()
+        for url in mime.urls():
+            if not url.isLocalFile():
+                continue
+            resolved = str(Path(url.toLocalFile()).resolve())
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            paths.append(resolved)
+        return paths
+
+    def dragEnterEvent(self, event) -> None:  # type: ignore[override]
+        if self._local_paths_from_mime(event.mimeData()):
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dropEvent(self, event) -> None:  # type: ignore[override]
+        paths = self._local_paths_from_mime(event.mimeData())
+        if not paths:
+            event.ignore()
+            return
+
+        opened_any = False
+        for path in paths:
+            opened_any = self._open_path(path) or opened_any
+
+        if opened_any:
+            event.acceptProposedAction()
+            return
+        event.ignore()
 
     def _setup_validation_dock(self) -> None:
         from state.validation_settings import auto_rescan_enabled
