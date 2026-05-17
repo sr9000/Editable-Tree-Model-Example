@@ -44,9 +44,9 @@ from state.edit_limits import (
     set_string_edit_warning_limit_chars,
 )
 from state.recent_schemas import recent_schemas
-from units import counts, format_bytes
 from tree_actions.clipboard import copy_selection
 from tree_actions.structure import collapse_all, delete_selection, expand_all
+from units import counts, format_bytes
 from validation.schema_registry import SchemaSource, open_in_browser, schema_registry
 
 
