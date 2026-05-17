@@ -5,6 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QByteArray, QModelIndex, QSettings, Qt
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QFileDialog,
     QFontDialog,
@@ -23,6 +24,7 @@ from app.history import bind_undo_signals, setup_history_menu
 from app.main_window_actions import setup_connections as setup_main_window_connections
 from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, refresh_recent_menu
+from app.schema_tab_pool import SchemaTabPool
 from app.theme_controller import ThemeController
 from app.validation_dock import ValidationDock
 from dialogs.attach_schema_dlg import AttachSchemaDialog
@@ -30,6 +32,7 @@ from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID
+from state.recent_schemas import recent_schemas
 from tree_actions.clipboard import copy_selection
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 from validation.schema_registry import SchemaSource, open_in_browser, schema_registry
@@ -83,11 +86,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._theme_registry = self._theme_controller.registry
         self._theme = self._theme_controller.theme
         self._icon_provider = self._theme_controller.icon_provider
+        self._schema_tab_pool = SchemaTabPool(self)
         self._theme_follow_action = self._theme_controller.follow_action
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
         refresh_recent_menu(self)
+        self._setup_schemas_menu()
         self._setup_validation_dock()
         self._setup_font_actions()
         self._setup_monospace_action()
@@ -242,55 +247,86 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             schema_tab.goto_validation_issue(fake_issue)
 
         source = tab.schema_source
-        if source is not None and source.kind == "url":
-            url = source.key
-
-            def _is_schema_tab(widget: object) -> bool:
-                return isinstance(widget, JsonTab) and widget.schema_source == source and widget.schema is None
-
-            # Check if we already have this URL open as a tab
-            for i in range(self.tabWidget.count()):
-                widget = self.tabWidget.widget(i)
-                if _is_schema_tab(widget):
-                    self.tabWidget.setCurrentIndex(i)
-                    _navigate(widget)
-                    return
-            # Open the URL schema as an in-memory tab. Prefer the schema that
-            # was already loaded for validation; this keeps navigation working
-            # offline and guarantees we jump within the exact schema version
-            # that produced the issue. Fetch only as a fallback for older refs.
-            loaded = tab.schema
-            if loaded is None:
-                entry = schema_registry.lookup(source)
-                loaded = entry.inline if entry is not None else None
-            if loaded is None:
+        if source is None:
+            return
+        schema_tab = self._schema_tab_pool.open_or_focus(self, source)
+        if schema_tab is None:
+            if source.kind == "file":
+                self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
+            else:
                 self.statusBar.showMessage(self.tr("Could not fetch schema for navigation"), 3000)
-                return
-            schema_tab = self._add_tab(data=dict(loaded), file_path=None)
-            if schema_tab is None:
-                return
-            # Tag this in-memory schema viewer tab so we can reuse it next time.
-            schema_tab._schema_source = source
-            # Give it a readable title
-            short = url.rstrip("/").rsplit("/", 1)[-1] or url
-            idx = self.tabWidget.indexOf(schema_tab)
-            if idx >= 0:
-                self.tabWidget.setTabText(idx, short)
-                self.tabWidget.setTabToolTip(idx, url)
-            _navigate(schema_tab)
             return
-
-        if source is None or source.kind != "file":
-            return
-        import os
-
-        path = source.key
-        if not os.path.exists(path):
-            self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
-            return
-        self._open_path(path)
-        schema_tab = self._current_tab()
         _navigate(schema_tab)
+
+    def _setup_schemas_menu(self) -> None:
+        self.schemasMenu = QMenu(self.tr("Schemas"), self)
+        self.menuBar.insertMenu(self.viewMenu.menuAction(), self.schemasMenu)
+
+        self._schemas_attach_action = QAction(self.tr("Attach schema…"), self)
+        self._schemas_attach_action.triggered.connect(self._on_attach_schema_requested)
+        self._schemas_recent_menu = QMenu(self.tr("Recent"), self)
+        self._schemas_open_current_action = QAction(self.tr("Open current schema"), self)
+        self._schemas_open_current_action.triggered.connect(
+            lambda: (
+                self._open_schema_source(self._current_tab().schema_source) if self._current_tab() is not None else None
+            )
+        )
+        self._schemas_copy_path_action = QAction(self.tr("Copy full path"), self)
+        self._schemas_copy_path_action.triggered.connect(
+            lambda: (
+                self._copy_schema_source_key(self._current_tab().schema_source)
+                if self._current_tab() is not None
+                else None
+            )
+        )
+
+        self.schemasMenu.aboutToShow.connect(self._rebuild_schemas_menu)
+
+    def _open_schema_source(self, source: SchemaSource | None) -> None:
+        if source is None:
+            return
+        tab = self._schema_tab_pool.open_or_focus(self, source)
+        if tab is None:
+            if source.kind == "file":
+                self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
+            else:
+                self.statusBar.showMessage(self.tr("Could not open schema URL"), 3000)
+
+    def _copy_schema_source_key(self, source: SchemaSource | None) -> None:
+        if source is None:
+            return
+        QApplication.clipboard().setText(source.key)
+        self.statusBar.showMessage(self.tr("Copied schema path"), 1500)
+
+    def _rebuild_schemas_menu(self) -> None:
+        self.schemasMenu.clear()
+        self.schemasMenu.addAction(self._schemas_attach_action)
+        self.schemasMenu.addMenu(self._schemas_recent_menu)
+        self.schemasMenu.addSeparator()
+        self.schemasMenu.addAction(self._schemas_open_current_action)
+        self.schemasMenu.addAction(self._schemas_copy_path_action)
+
+        self._schemas_recent_menu.clear()
+        for source in recent_schemas()[:8]:
+            label = (
+                self.tr("Local — {name}").format(name=source.display)
+                if source.kind == "file"
+                else self.tr("URL — {name}").format(name=source.display)
+            )
+            action = self._schemas_recent_menu.addAction(label)
+            if source.kind == "file":
+                action.setEnabled(Path(source.key).exists())
+            action.triggered.connect(lambda _checked=False, s=source: self._open_schema_source(s))
+
+        if not self._schemas_recent_menu.actions():
+            empty = self._schemas_recent_menu.addAction(self.tr("<empty>"))
+            empty.setEnabled(False)
+
+        tab = self._current_tab()
+        source = tab.schema_source if tab is not None else None
+        has_source = source is not None
+        self._schemas_open_current_action.setEnabled(has_source)
+        self._schemas_copy_path_action.setEnabled(has_source)
 
     def _bind_validation_status(self, tab) -> None:
         """Connect/disconnect the permanent validation status label to *tab*."""
@@ -488,6 +524,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _save_tab(self, tab: JsonTab, *, save_as: bool = False) -> bool:
         from state.validation_settings import clear_schema_path
 
+        if tab.is_read_only:
+            return False
         old_path = tab.file_path
         ok = tab.save_as() if save_as else tab.save()
         if not ok:
@@ -535,6 +573,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if isinstance(widget, JsonTab) and not self._confirm_close(widget):
             return
         if isinstance(widget, JsonTab):
+            self._schema_tab_pool.unregister(widget)
             view_state.save(widget)
         if widget is self._bound_undo_tab:
             self._bind_undo_signals(None)

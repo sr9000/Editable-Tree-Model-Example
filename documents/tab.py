@@ -188,11 +188,16 @@ class JsonTab(QWidget):
         self._permanent_message_callback = permanent_message_callback
         self._theme = theme or LIGHT_DEFAULT
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
+        self._read_only = False
         self._monospace_fields_enabled = False
         self._regular_font_family: str | None = None
         self._monospace_font_family: str | None = None
 
         init_layout(self)
+        self._editable_view_edit_triggers = self.view.editTriggers()
+        self._editable_drag_enabled = self.view.dragEnabled()
+        self._editable_accept_drops = self.view.acceptDrops()
+        self._editable_drag_drop_mode = self.view.dragDropMode()
         self._sync_icon_size_with_font()
 
         # option to edit headers is not needed
@@ -260,6 +265,35 @@ class JsonTab(QWidget):
     @property
     def schema_source(self) -> SchemaSource | None:
         return self._schema_source
+
+    @property
+    def is_read_only(self) -> bool:
+        return self._read_only
+
+    def set_read_only(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if self._read_only == enabled:
+            return
+        self._read_only = enabled
+        self.model.set_read_only(enabled)
+        if enabled:
+            self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+            self.view.setDragEnabled(False)
+            self.view.setAcceptDrops(False)
+            self.view.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
+        else:
+            self.view.setEditTriggers(self._editable_view_edit_triggers)
+            self.view.setDragEnabled(self._editable_drag_enabled)
+            self.view.setAcceptDrops(self._editable_accept_drops)
+            self.view.setDragDropMode(self._editable_drag_drop_mode)
+
+    def set_schema_view_source(self, source: SchemaSource | None) -> None:
+        """Tag this tab as representing *source* for navigation/pool reuse."""
+        self._schema_source = source
+        self._schema_ref = (
+            source.as_ref(origin="manual") if source is not None else SchemaRef(path=None, inline=None, origin="none")
+        )
+        self.schemaChanged.emit(self._schema_ref)
 
     @property
     def issue_index(self) -> IssueIndex:
@@ -909,6 +943,8 @@ class JsonTab(QWidget):
         return self._diff_applier.diff_array(item, target_list, item_index)
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
+        if self._read_only:
+            return False
         if role != Qt.ItemDataRole.EditRole or not index.isValid():
             return False
         index = self._proxy_to_source(index)
@@ -926,6 +962,8 @@ class JsonTab(QWidget):
     # ------------------------------------------------------------------
 
     def push_move_row(self, parent_index: QModelIndex, src: int, dst: int, *, label: str = "move row") -> bool:
+        if self._read_only:
+            return False
         if src == dst:
             return False
         parent_item = self.model.get_item(parent_index)
@@ -963,6 +1001,8 @@ class JsonTab(QWidget):
         """
         from tree_actions.anchors import anchor_is_cycle, anchor_is_no_op, resolve_anchor_insert_row
 
+        if self._read_only:
+            return False
         if not sources:
             return False
 
@@ -1018,6 +1058,8 @@ class JsonTab(QWidget):
         (pre-pop convention) into a ``MoveAnchor`` and delegates."""
         from tree_actions.anchors import pre_pop_target_row_to_anchor
 
+        if self._read_only:
+            return False
         if not sources:
             return False
         anchor = pre_pop_target_row_to_anchor(self, target_parent, target_row)
@@ -1055,6 +1097,8 @@ class JsonTab(QWidget):
             sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
+        if self._read_only:
+            return False
         if not name_index.isValid() or name_index.column() != 0:
             return False
         item = self.model.get_item(name_index)
@@ -1075,6 +1119,8 @@ class JsonTab(QWidget):
         return True
 
     def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
+        if self._read_only:
+            return False
         if not value_index.isValid() or value_index.column() != 2:
             return False
         name_idx = self.model.index(value_index.row(), 0, value_index.parent())
@@ -1097,6 +1143,8 @@ class JsonTab(QWidget):
         return True
 
     def push_change_type(self, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
+        if self._read_only:
+            return False
         if not type_index.isValid() or type_index.column() != 1:
             return False
         try:
@@ -1123,6 +1171,8 @@ class JsonTab(QWidget):
 
     def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
         """``inserts`` is a list of ``{parent_path, row, value, name}``."""
+        if self._read_only:
+            return False
         if not inserts:
             return False
         qname = (
@@ -1135,6 +1185,8 @@ class JsonTab(QWidget):
         return True
 
     def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
+        if self._read_only:
+            return False
         if not indexes:
             return False
         ordered = sorted(indexes, key=lambda i: (self._index_path(i.parent()), i.row()), reverse=True)
@@ -1156,6 +1208,8 @@ class JsonTab(QWidget):
         return True
 
     def push_sort_keys(self, index: QModelIndex, *, recursive: bool = False, label: str | None = None) -> bool:
+        if self._read_only:
+            return False
         if not index.isValid():
             return False
         item = self.model.get_item(index)
@@ -1187,6 +1241,8 @@ class JsonTab(QWidget):
         move_out_down: bool = False,
         sort_keys: bool = False,
     ) -> None:
+        if self._read_only:
+            return
         changed = False
         if copy_only:
             changed = copy_selection(self.view)
@@ -1217,10 +1273,16 @@ class JsonTab(QWidget):
             self._status_message_callback(success_message, 1500)
 
     def insert_sibling_before(self) -> bool:
+        if self._read_only:
+            return False
         return insert_sibling_before(self.view)
 
     def insert_sibling_after(self) -> bool:
+        if self._read_only:
+            return False
         return insert_sibling_after(self.view)
 
     def insert_child(self) -> bool:
+        if self._read_only:
+            return False
         return insert_child_current(self.view)
