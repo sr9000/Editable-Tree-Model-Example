@@ -114,3 +114,36 @@ def test_schema_source_for_url_normalizes_scheme_and_trailing_slash():
     assert source.kind == "url"
     assert source.key == "https://Example.com/path/to/schema"
     assert source.display == "example.com/schema"
+
+
+def test_acquire_pushes_recent_schema_only_on_success(monkeypatch):
+    registry = SchemaRegistry()
+    source = SchemaSource.for_url("https://example.com/schema")
+
+    pushed: list[SchemaSource] = []
+    monkeypatch.setattr(schema_registry_module, "push_recent_schema", lambda s: pushed.append(s))
+
+    monkeypatch.setattr(schema_registry_module, "load_schema", lambda _ref: None)
+    assert registry.acquire(source, _Tab()) is None
+    assert pushed == []
+
+    monkeypatch.setattr(schema_registry_module, "load_schema", lambda _ref: {"type": "object"})
+    assert registry.acquire(source, _Tab()) is not None
+    assert pushed == [source]
+
+
+def test_reload_pushes_recent_schema_on_success(monkeypatch):
+    registry = SchemaRegistry()
+    source = SchemaSource.for_url("https://example.com/schema")
+
+    payloads = [{"v": 1}, {"v": 2}]
+    monkeypatch.setattr(schema_registry_module, "load_schema", lambda _ref: payloads.pop(0))
+
+    pushed: list[SchemaSource] = []
+    monkeypatch.setattr(schema_registry_module, "push_recent_schema", lambda s: pushed.append(s))
+
+    assert registry.acquire(source, _Tab()) is not None
+    assert pushed == [source]
+
+    assert registry.reload(source) is not None
+    assert pushed == [source, source]

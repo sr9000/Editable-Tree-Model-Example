@@ -11,6 +11,7 @@ from weakref import WeakSet
 from PySide6.QtCore import QFileSystemWatcher, QObject, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 
+from state.recent_schemas import push_recent_schema
 from validation.schema_source import SchemaRef, load_schema
 
 _LOG = logging.getLogger(__name__)
@@ -118,6 +119,7 @@ class SchemaRegistry(QObject):
             entry.ref_count += 1
             if source.kind == "file":
                 self._watch_file_source(source)
+        push_recent_schema(source)
         return entry
 
     def acquire_ref(self, ref: SchemaRef, tab: object) -> tuple[SchemaSource | None, SchemaEntry | None]:
@@ -157,6 +159,7 @@ class SchemaRegistry(QObject):
         entry.inline.update(loaded)
         entry.mtime_ns = self._file_mtime_ns(source)
         self.schemaReloaded.emit(source)
+        push_recent_schema(source)
         return entry
 
     def lookup(self, source: SchemaSource) -> SchemaEntry | None:
