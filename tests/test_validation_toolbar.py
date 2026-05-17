@@ -40,9 +40,8 @@ def _make_dock(qtbot) -> ValidationDock:
     return dock
 
 
-def _issue(severity: str, message: str = "test") -> ValidationIssue:
+def _issue(message: str = "test") -> ValidationIssue:
     return ValidationIssue(
-        severity=severity,
         message=message,
         kind="test",
         instance_path=(),
@@ -114,7 +113,7 @@ def test_status_label_shows_up_to_date_when_no_issues(qtbot):
 def test_status_label_shows_error_count(qtbot):
     _qapp()
     dock = _make_dock(qtbot)
-    issues = [_issue("error"), _issue("error"), _issue("error")]
+    issues = [_issue(), _issue(), _issue()]
     idx = IssueIndex(issues, {})
     dock.update_status(idx)
     assert "3 issues" in dock._lbl_status.text()
@@ -123,7 +122,7 @@ def test_status_label_shows_error_count(qtbot):
 def test_status_label_shows_warning_count(qtbot):
     _qapp()
     dock = _make_dock(qtbot)
-    issues = [_issue("warning")]
+    issues = [_issue()]
     idx = IssueIndex(issues, {})
     dock.update_status(idx)
     assert "1 issue" in dock._lbl_status.text()
@@ -132,7 +131,7 @@ def test_status_label_shows_warning_count(qtbot):
 def test_status_label_shows_errors_and_warnings(qtbot):
     _qapp()
     dock = _make_dock(qtbot)
-    issues = [_issue("error"), _issue("error"), _issue("warning")]
+    issues = [_issue(), _issue(), _issue()]
     idx = IssueIndex(issues, {})
     dock.update_status(idx)
     text = dock._lbl_status.text()
@@ -142,7 +141,7 @@ def test_status_label_shows_errors_and_warnings(qtbot):
 def test_status_label_singular_error(qtbot):
     _qapp()
     dock = _make_dock(qtbot)
-    idx = IssueIndex([_issue("error")], {})
+    idx = IssueIndex([_issue()], {})
     dock.update_status(idx)
     assert "1 issue" in dock._lbl_status.text()
     # Must not say "1 issues"

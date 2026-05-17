@@ -51,7 +51,6 @@ def validate_yaml_documents(
         for issue in validate_document(doc, schema, max_issues=remaining):
             issues.append(
                 ValidationIssue(
-                    severity=issue.severity,
                     message=issue.message,
                     instance_path=prefix + issue.instance_path,
                     schema_path=issue.schema_path,

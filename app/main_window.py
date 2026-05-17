@@ -288,7 +288,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if schema_tab is None or not issue.schema_path:
                 return
             fake_issue = ValidationIssue(
-                severity="error",
                 message="",
                 instance_path=issue.schema_path,
                 schema_path=(),

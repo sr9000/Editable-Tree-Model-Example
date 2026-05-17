@@ -30,11 +30,11 @@ class IssueIndex:
             if model_path is None:
                 continue
             self._exact[model_path].append(issue)
-            self._severity[model_path] = _max_severity(self._severity.get(model_path), issue.severity)
+            self._severity[model_path] = "error"
 
             for i in range(len(model_path)):
                 ancestor = model_path[:i]
-                self._ancestor[ancestor] = _max_severity(self._ancestor.get(ancestor), issue.severity)
+                self._ancestor[ancestor] = "error"
 
     def severity_at(self, model_path: tuple[int, ...]) -> str | None:
         return self._severity.get(model_path)
@@ -50,11 +50,3 @@ class IssueIndex:
 
     def __len__(self) -> int:
         return self._count
-
-
-def _max_severity(left: str | None, right: str | None) -> str | None:
-    if left is None:
-        return right
-    if right is None:
-        return left
-    return left if _SEVERITY_RANK.get(left, 0) >= _SEVERITY_RANK.get(right, 0) else right

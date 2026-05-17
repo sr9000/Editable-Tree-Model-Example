@@ -19,11 +19,10 @@ def _path_index(model, *rows):
     return idx
 
 
-def _issue(instance_path: tuple, severity: str = "error") -> "ValidationIssue":
+def _issue(instance_path: tuple) -> "ValidationIssue":
     from validation.issue import ValidationIssue
 
     return ValidationIssue(
-        severity=severity,  # type: ignore[arg-type]
         message="test",
         instance_path=instance_path,
         schema_path=(),
@@ -49,7 +48,7 @@ def test_no_provider_returns_none():
 
 def test_exact_error():
     data = {"a": {"b": 1}}
-    issues = [_issue(("a", "b"), "error")]
+    issues = [_issue(("a", "b"))]
     index = IssueIndex(issues, data)
 
     model = _build_model(data)
@@ -62,7 +61,7 @@ def test_exact_error():
 
 def test_exact_warning():
     data = {"x": 42}
-    issues = [_issue(("x",), "warning")]
+    issues = [_issue(("x",))]
     index = IssueIndex(issues, data)
 
     model = _build_model(data)
@@ -79,7 +78,7 @@ def test_exact_warning():
 
 def test_ancestor_severity_propagates():
     data = {"a": {"b": {"c": 1}}}
-    issues = [_issue(("a", "b", "c"), "error")]
+    issues = [_issue(("a", "b", "c"))]
     index = IssueIndex(issues, data)
 
     model = _build_model(data)
@@ -97,7 +96,7 @@ def test_ancestor_severity_propagates():
 
 def test_provider_removal():
     data = {"k": 1}
-    issues = [_issue(("k",), "error")]
+    issues = [_issue(("k",))]
     index = IssueIndex(issues, data)
 
     model = _build_model(data)
