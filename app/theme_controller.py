@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QFileSystemWatcher, Qt, QTimer, QUrl
+from PySide6.QtCore import QFileSystemWatcher, QObject, Qt, QTimer, QUrl, Slot
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import QMenu, QWidget
 
@@ -30,6 +30,23 @@ from state.theme_settings import (
 from themes import ThemeRegistry
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
+
+
+class _ColorSchemeProxy(QObject):
+    """Thin QObject shim that owns the colorSchemeChanged connection.
+
+    Because its Qt parent is the main window, Qt automatically destroys this
+    object (and disconnects all its connections) when the window is destroyed —
+    no manual ``disconnect()`` call is ever needed.
+    """
+
+    def __init__(self, parent: QObject, controller: "ThemeController") -> None:
+        super().__init__(parent)
+        self._controller = controller
+
+    @Slot()
+    def on_changed(self, *args) -> None:
+        self._controller.on_system_color_scheme_changed(*args)
 
 
 class ThemeController:
@@ -60,13 +77,15 @@ class ThemeController:
         self._theme_fs_watcher.fileChanged.connect(self.on_theme_fs_event)
 
         self._suppress_scheme_signal: bool = False
+        self._scheme_proxy: _ColorSchemeProxy | None = None
 
         app = QGuiApplication.instance()
         if isinstance(app, QGuiApplication):
             self._theme = resolve_active_theme(self._theme_registry, app)
             style_hints = app.styleHints()
             if hasattr(style_hints, "colorSchemeChanged"):
-                style_hints.colorSchemeChanged.connect(self.on_system_color_scheme_changed)
+                self._scheme_proxy = _ColorSchemeProxy(parent, self)
+                style_hints.colorSchemeChanged.connect(self._scheme_proxy.on_changed)
         else:
             self._theme = self._theme_registry.default_for_mode("light")
         self._icon_provider = self._theme_registry.build_icon_provider(self._theme)
@@ -279,12 +298,23 @@ class ThemeController:
         self.apply_theme(resolve_active_theme(self._theme_registry, app))
 
     def shutdown(self) -> None:
-        """Disconnect app-level signals so this controller stops responding after window close."""
+        """Detach the color-scheme proxy so this controller stops responding after window close.
+
+        Disconnects the signal immediately (synchronously) so that any deferred
+        ``deleteLater()`` processing of the old window cannot trigger callbacks on
+        a ``signals`` dict that has already been replaced in the next iteration.
+        ``proxy.on_changed`` is a proper ``@Slot()`` on a ``QObject`` subclass, so
+        ``disconnect()`` is clean and raises no warnings.
+        """
+        if self._scheme_proxy is None:
+            return
         app = QGuiApplication.instance()
         if isinstance(app, QGuiApplication):
             style_hints = app.styleHints()
             if hasattr(style_hints, "colorSchemeChanged"):
                 try:
-                    style_hints.colorSchemeChanged.disconnect(self.on_system_color_scheme_changed)
+                    style_hints.colorSchemeChanged.disconnect(self._scheme_proxy.on_changed)
                 except (RuntimeError, TypeError):
-                    pass
+                    pass  # already disconnected or proxy partially torn down
+        self._scheme_proxy.deleteLater()
+        self._scheme_proxy = None

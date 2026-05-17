@@ -19,6 +19,8 @@ def setup_connections(window):
     window.viewSelectRegularFontAction.triggered.connect(window.select_regular_font)
     window.viewSelectMonospaceFontAction.triggered.connect(window.select_monospace_font)
     window.viewMonospaceFieldsAction.toggled.connect(window.toggle_monospace_fields)
+    window.viewValidationPanelAction.toggled.connect(window.validation_dock.setVisible)
+    window.validation_dock.visibilityChanged.connect(window.viewValidationPanelAction.setChecked)
 
     window._setup_theme_menu()
 

@@ -9,7 +9,7 @@ import yaml
 from PySide6.QtGui import QColor
 
 from themes._defaults import DARK_DEFAULT, LIGHT_DEFAULT
-from themes.spec import Palette, ThemeSpec, TypeStyle
+from themes.spec import Palette, ThemeSpec, TypeStyle, ValidationStyle
 from tree.types import JsonType
 
 LOGGER = logging.getLogger(__name__)
@@ -76,7 +76,22 @@ def _pick_base_default(mode: Literal["light", "dark"], mode_default: ThemeSpec) 
     return DARK_DEFAULT if mode == "dark" else LIGHT_DEFAULT
 
 
+def _merge_validation_style(val_data: dict[str, Any], base: ValidationStyle) -> ValidationStyle:
+    def _opt(key: str, base_val: QColor | None) -> QColor | None:
+        if key in val_data:
+            return _parse_color(val_data[key], key=f"palette.validation.{key}")
+        return _copy_color(base_val)
+
+    return ValidationStyle(
+        error_fg=_opt("error_fg", base.error_fg),
+        warning_fg=_opt("warning_fg", base.warning_fg),
+        error_badge=_opt("error_badge", base.error_badge),
+        warning_badge=_opt("warning_badge", base.warning_badge),
+    )
+
+
 def _merge_palette(palette_data: dict[str, Any], base: Palette) -> Palette:
+    val_data = _as_mapping(palette_data.get("validation"), key="palette.validation")
     return Palette(
         base_fg=(
             _parse_color(palette_data["base_fg"], key="palette.base_fg")
@@ -103,6 +118,7 @@ def _merge_palette(palette_data: dict[str, Any], base: Palette) -> Palette:
             if "accent" in palette_data
             else QColor(base.accent)
         ),
+        validation=_merge_validation_style(val_data, base.validation),
     )
 
 

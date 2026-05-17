@@ -2,10 +2,11 @@ import base64
 import gzip
 import zlib
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QEvent, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QItemSelectionModel, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.tab_io import save as tab_save
@@ -18,13 +19,16 @@ from documents.tab_setup import (
     init_model,
     init_search_filter,
     init_shortcuts,
+    init_validation_state,
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
+from io_formats.detect import SAVE_FORMAT_YAML_MULTI
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
+from tree.model_roles import VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
@@ -52,6 +56,13 @@ from undo.commands import (
     _SortKeysCmd,
 )
 from undo.diff import DiffApplier
+from validation._sanitize import to_jsonschema_input
+from validation.index import IssueIndex
+from validation.issue import ValidationIssue
+from validation.json_pointer import instance_path_to_model_path
+from validation.schema_source import SchemaRef, discover_schema, load_schema
+from validation.validator import validate_document
+from validation.yaml_validate import validate_yaml_documents
 
 
 def _make_label(text: str, target_qname: str) -> str:
@@ -101,6 +112,8 @@ def _demo_data() -> dict[str, Any]:
 
 class JsonTab(QWidget):
     dirtyChanged = Signal(bool)
+    schemaChanged = Signal(object)
+    validationChanged = Signal(object)
 
     def eventFilter(self, watched, event):  # type: ignore[override]
         view = getattr(self, "view", None)
@@ -165,6 +178,7 @@ class JsonTab(QWidget):
         permanent_message_callback: Callable[[str], None] | None = None,
         theme: ThemeSpec | None = None,
         icon_provider: IconProvider | None = None,
+        save_format: str | None = None,
     ):
         super().__init__(parent)
 
@@ -188,14 +202,40 @@ class JsonTab(QWidget):
             model_data = data if data is not None else {}
 
         self.file_path = file_path
-        self.save_format: str | None = None
+        self.save_format: str | None = save_format
         self._dirty = False
+        self._schema_ref = SchemaRef(path=None, inline=None, origin="none")
+        self._schema: dict[str, Any] | None = None
+        self._issue_index = IssueIndex([], model_data)
 
         init_model(self, model_data, show_root=show_root)
+
+        # ── auto-rescan debouncer ──────────────────────────────────────────
+        # Gate flag; toggled by set_auto_rescan().  Connections are kept alive
+        # permanently to avoid Qt-disconnect quirks — the gate is cheap.
+        self._auto_rescan: bool = False
+        self._mutation_debounce_timer = QTimer(self)
+        self._mutation_debounce_timer.setSingleShot(True)
+        self._mutation_debounce_timer.setInterval(250)
+        self._mutation_debounce_timer.timeout.connect(self.revalidate)
+        # dataChanged carries roles — we must ignore our own validation-repaint
+        # emissions to avoid an infinite loop.
+        self.model.dataChanged.connect(self._on_data_changed_mutation)
+        self.model.rowsInserted.connect(self._schedule_debounced_revalidation)
+        self.model.rowsRemoved.connect(self._schedule_debounced_revalidation)
+        self.model.rowsMoved.connect(self._schedule_debounced_revalidation)
+        self.model.modelReset.connect(self._schedule_debounced_revalidation)
+        # ──────────────────────────────────────────────────────────────────
+
         init_delegates_and_connections(self, update_actions_callback)
         self.set_monospace_fields_enabled(self._monospace_fields_enabled)
         init_shortcuts(self)
         init_search_filter(self)
+        # Plug the severity provider before init_validation_state so the first
+        # revalidate() → dataChanged repaint already has the provider ready.
+        self.model.set_issue_index_provider(self._severity_provider)
+        self.validationChanged.connect(self._on_validation_changed)
+        init_validation_state(self, model_data)
         self._diff_applier = DiffApplier(self)
 
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
@@ -205,9 +245,184 @@ class JsonTab(QWidget):
         self.undo_stack.setClean()
         self._set_dirty(False)
 
+    @property
+    def schema(self) -> dict[str, Any] | None:
+        return self._schema
+
+    @property
+    def schema_ref(self) -> SchemaRef:
+        return self._schema_ref
+
+    @property
+    def issue_index(self) -> IssueIndex:
+        return self._issue_index
+
+    def _init_validation_state(self, model_data: Any) -> None:
+        from state.validation_settings import _is_url, read_schema_ref_str
+
+        doc_path = Path(self.file_path).expanduser() if self.file_path else None
+        ref = discover_schema(doc_path, model_data)
+
+        # Fall back to any previously persisted manual binding.
+        if ref.origin == "none" and doc_path is not None:
+            persisted = read_schema_ref_str(doc_path)
+            if persisted is not None:
+                if _is_url(persisted):
+                    candidate = SchemaRef(path=None, inline=None, origin="manual", url=persisted)
+                else:
+                    candidate = SchemaRef(path=Path(persisted), inline=None, origin="manual")
+                try:
+                    loaded = load_schema(candidate)
+                except Exception:
+                    loaded = None
+                if loaded is not None:
+                    if _is_url(persisted):
+                        ref = SchemaRef(path=None, inline=dict(loaded), origin="manual", url=persisted)
+                    else:
+                        ref = SchemaRef(path=Path(persisted), inline=dict(loaded), origin="manual")
+
+        self._schema_ref = ref
+        loaded = load_schema(ref)
+        self._schema = dict(loaded) if loaded is not None else None
+        self.schemaChanged.emit(self._schema_ref)
+        self.revalidate()
+
+    def set_schema(self, ref: SchemaRef) -> None:
+        self._schema_ref = ref
+        loaded = load_schema(ref)
+        self._schema = dict(loaded) if loaded is not None else None
+        self.schemaChanged.emit(self._schema_ref)
+        self.revalidate()
+
+    def clear_schema(self) -> None:
+        self.set_schema(SchemaRef(path=None, inline=None, origin="none"))
+
+    def revalidate(self) -> None:
+        root_data = self.model.root_item.to_json()
+        issues: list[ValidationIssue] = []
+        if self._schema is not None:
+            sanitized = to_jsonschema_input(root_data)
+            if self.save_format == SAVE_FORMAT_YAML_MULTI and isinstance(sanitized, list):
+                issues = validate_yaml_documents(sanitized, self._schema)
+            else:
+                issues = validate_document(sanitized, self._schema)
+        self._issue_index = IssueIndex(issues, root_data)
+        self.validationChanged.emit(self._issue_index)
+
+    # ── auto-rescan API ───────────────────────────────────────────────────
+
+    @property
+    def auto_rescan(self) -> bool:
+        """True when model mutations trigger debounced revalidation."""
+        return self._auto_rescan
+
+    def set_auto_rescan(self, enabled: bool) -> None:
+        """Enable or disable automatic revalidation on model mutations.
+
+        When *enabled*, any ``dataChanged``, ``rowsInserted``, ``rowsRemoved``,
+        ``rowsMoved``, or ``modelReset`` signal from the tree model arms a
+        250 ms trailing debounce timer that calls ``revalidate()``.
+        Disabling cancels any pending debounce.
+        """
+        enabled = bool(enabled)
+        if self._auto_rescan == enabled:
+            return
+        self._auto_rescan = enabled
+        if not enabled:
+            self._mutation_debounce_timer.stop()
+
+    def _on_data_changed_mutation(self, top_left, bottom_right, roles=None) -> None:  # noqa: ARG002
+        """Slot for ``model.dataChanged`` — ignores our own validation repaints."""
+        if not self._auto_rescan:
+            return
+        # Skip emissions that carry only VALIDATION_SEVERITY_ROLE; those are
+        # emitted by _on_validation_changed() itself and would cause a loop.
+        if roles is not None and len(roles) > 0 and all(r == VALIDATION_SEVERITY_ROLE for r in roles):
+            return
+        self._mutation_debounce_timer.start()
+
+    def _schedule_debounced_revalidation(self, *_args) -> None:
+        """Slot for structural model signals (rows inserted/removed/moved/reset)."""
+        if not self._auto_rescan:
+            return
+        self._mutation_debounce_timer.start()
+
+    # ─────────────────────────────────────────────────────────────────────
+
+    def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
+        root_data = self.model.root_item.to_json()
+        model_path = instance_path_to_model_path(root_data, issue.instance_path)
+        if model_path is None:
+            if self._status_message_callback is not None:
+                self._status_message_callback("Validation issue path no longer exists", 2000)
+            return False
+
+        source_row = self._index_from_path(model_path)
+        if not source_row.isValid():
+            if self._status_message_callback is not None:
+                self._status_message_callback("Validation issue path no longer exists", 2000)
+            return False
+
+        source_row = source_row.siblingAtColumn(0)
+        view_row = self._source_to_view(source_row)
+        if not view_row.isValid():
+            if self._status_message_callback is not None:
+                self._status_message_callback("Validation issue path no longer exists", 2000)
+            return False
+
+        sm = self.view.selectionModel()
+        if sm is not None:
+            sm.select(
+                view_row,
+                QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+            )
+            sm.setCurrentIndex(view_row, QItemSelectionModel.SelectionFlag.NoUpdate)
+
+        self.view.setCurrentIndex(view_row)
+        self.view.scrollTo(view_row, QAbstractItemView.ScrollHint.PositionAtCenter)
+
+        if not edit:
+            return True
+
+        source_value = source_row.siblingAtColumn(2)
+        if not source_value.isValid():
+            return True
+        if not (self.model.flags(source_value) & Qt.ItemFlag.ItemIsEditable):
+            return True
+
+        view_value = self._source_to_view(source_value)
+        if not view_value.isValid():
+            return True
+        self.view.setCurrentIndex(view_value)
+        self.view.edit(view_value)
+        return True
+
+    def _severity_provider(self, model_path: tuple[int, ...]) -> str | None:
+        """Lazily queried by the model for VALIDATION_SEVERITY_ROLE."""
+        exact = self._issue_index.severity_at(model_path)
+        if exact is not None:
+            return exact
+        return self._issue_index.ancestor_severity(model_path)
+
+    def _on_validation_changed(self, _index: IssueIndex) -> None:
+        """Emit recursive dataChanged so all visible rows repaint their badges."""
+
+        def _emit_ranges(parent: QModelIndex) -> None:
+            rows = self.model.rowCount(parent)
+            if rows <= 0:
+                return
+            top_left = self.model.index(0, 0, parent)
+            bottom_right = self.model.index(rows - 1, self.model.columnCount(parent) - 1, parent)
+            self.model.dataChanged.emit(top_left, bottom_right, [VALIDATION_SEVERITY_ROLE])
+            for row in range(rows):
+                _emit_ranges(self.model.index(row, 0, parent))
+
+        _emit_ranges(QModelIndex())
+
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
         self._theme = theme
         self._icon_provider = icon_provider or self._icon_provider
+        self.name_delegate.set_theme(theme)
         self.value_delegate.set_theme(theme)
         self.type_delegate.set_theme(theme)
         self.type_delegate.set_icon_provider(self._icon_provider)

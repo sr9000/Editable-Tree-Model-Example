@@ -3,6 +3,10 @@ from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QLineEdit, QStyleOptionViewItem, QWidget
 
 from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase
+from delegates.validation_badge import draw_severity_badge
+from themes import LIGHT_DEFAULT
+from themes.spec import ThemeSpec
+from tree.model_roles import VALIDATION_SEVERITY_ROLE
 
 
 def _find_tab(host) -> object | None:
@@ -26,10 +30,14 @@ def _commit(index: QModelIndex, value, role: Qt.ItemDataRole, host=None) -> bool
 
 
 class NameDelegate(_TextEditorDelegateBase):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, theme: ThemeSpec | None = None):
         super().__init__(parent)
+        self._theme = theme or LIGHT_DEFAULT
         self._monospace_fields_enabled = False
         self._mono_family = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
+
+    def set_theme(self, theme: ThemeSpec) -> None:
+        self._theme = theme
 
     def set_monospace_fields_enabled(self, enabled: bool) -> None:
         self._monospace_fields_enabled = bool(enabled)
@@ -50,6 +58,15 @@ class NameDelegate(_TextEditorDelegateBase):
     def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex) -> None:  # type: ignore[override]
         super().initStyleOption(option, index)
         option.font = self._apply_monospace_font(option.font)
+
+    def paint(self, painter, option, index) -> None:  # type: ignore[override]
+        severity = index.data(VALIDATION_SEVERITY_ROLE)
+        if severity is not None:
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, index)
+            draw_severity_badge(painter, opt, severity, self._theme)
+            return
+        super().paint(painter, option, index)
 
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         editor = _CapsLockSafeLineEdit(parent)

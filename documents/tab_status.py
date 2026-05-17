@@ -6,6 +6,26 @@ from tree.types import JsonType
 from units import format_bytes
 
 
+def format_validation_status(issue_index) -> str:
+    """Return a short human-readable summary of *issue_index* for status bars.
+
+    Returns an empty string when there are no issues (caller should hide the
+    widget).  Example non-empty returns: ``"Validation: 3 errors · 1 warning"``.
+    """
+    n = len(issue_index)
+    if n == 0:
+        return ""
+    issues = issue_index.all_issues()
+    errors = sum(1 for i in issues if i.severity == "error")
+    warnings = n - errors
+    parts: list[str] = []
+    if errors:
+        parts.append(f"{errors} error{'s' if errors != 1 else ''}")
+    if warnings:
+        parts.append(f"{warnings} warning{'s' if warnings != 1 else ''}")
+    return "Validation: " + " · ".join(parts)
+
+
 def size_hint_for_item(item: JsonTreeItem) -> str | None:
     if item.json_type in (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT):
         return f"{len(str(item.value or ''))} chars"

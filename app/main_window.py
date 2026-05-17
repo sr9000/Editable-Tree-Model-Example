@@ -2,9 +2,19 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QModelIndex, QSettings
+from PySide6.QtCore import QByteArray, QModelIndex, QSettings, Qt
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
-from PySide6.QtWidgets import QDialog, QFileDialog, QFontDialog, QMainWindow, QMenu, QMessageBox, QTreeView, QUndoView
+from PySide6.QtWidgets import (
+    QDialog,
+    QFileDialog,
+    QFontDialog,
+    QLabel,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QTreeView,
+    QUndoView,
+)
 
 import state.view_state as view_state
 from app.close_confirm import confirm_close
@@ -14,6 +24,7 @@ from app.main_window_actions import setup_connections as setup_main_window_conne
 from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, refresh_recent_menu
 from app.theme_controller import ThemeController
+from app.validation_dock import ValidationDock
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
@@ -23,6 +34,18 @@ from tree_actions.structure import collapse_all, delete_selection, expand_all
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
+    @staticmethod
+    def _coerce_bool(value, *, default: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lowered = value.strip().casefold()
+            if lowered in {"1", "true", "yes", "on"}:
+                return True
+            if lowered in {"0", "false", "no", "off"}:
+                return False
+        return default
+
     @staticmethod
     def _normalize_font_for_dialog(seed: QFont) -> QFont:
         font = QFont(seed)
@@ -63,11 +86,310 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
         refresh_recent_menu(self)
+        self._setup_validation_dock()
         self._setup_font_actions()
         self._setup_monospace_action()
         setup_history_menu(self)
         self.setup_model(yaml_filename)
         self.setup_connections()
+
+    def _setup_validation_dock(self) -> None:
+        from state.validation_settings import auto_rescan_enabled
+
+        self.validation_dock = ValidationDock(self)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.validation_dock)
+        self.validation_dock.issueActivated.connect(
+            lambda issue, edit: self._on_validation_issue_activated(issue, edit=edit)
+        )
+        self.validation_dock.rescanRequested.connect(self._on_rescan_requested)
+        self.validation_dock.autoRescanToggled.connect(self._on_auto_rescan_toggled)
+        self.validation_dock.clearSchemaRequested.connect(self._on_clear_schema_requested)
+        self.validation_dock.attachSchemaRequested.connect(self._on_attach_schema_requested)
+        self.validation_dock.reloadSchemaRequested.connect(self._on_reload_schema_requested)
+        self.validation_dock.openSchemaFileRequested.connect(self._on_open_schema_file_requested)
+        self.validation_dock.goToSchemaRuleRequested.connect(self._on_go_to_schema_rule_requested)
+
+        # Initialise checkbox from the persisted global setting.
+        self.validation_dock.set_auto_rescan_checked(auto_rescan_enabled())
+
+        # Permanent right-aligned label on the status bar for validation summary.
+        self._validation_status_label = QLabel("", self)
+        self._validation_status_label.setVisible(False)
+        self.statusBar.addPermanentWidget(self._validation_status_label)
+        self._bound_validation_tab = None
+
+        self.viewValidationPanelAction = QAction(self.tr("Validation Panel"), self)
+        self.viewValidationPanelAction.setCheckable(True)
+        self.viewMenu.addSeparator()
+        self.viewMenu.addAction(self.viewValidationPanelAction)
+
+        dock_state = self._settings.value("validation/dock_state")
+        if isinstance(dock_state, QByteArray):
+            self.restoreState(dock_state)
+        elif isinstance(dock_state, (bytes, bytearray)):
+            self.restoreState(QByteArray(dock_state))
+
+        visible = self._coerce_bool(self._settings.value("validation/dock_visible", True), default=True)
+        self.validation_dock.setVisible(visible)
+        self.viewValidationPanelAction.setChecked(visible)
+
+    # ── validation dock handlers ──────────────────────────────────────────
+
+    def _on_rescan_requested(self) -> None:
+        tab = self._current_tab()
+        if tab is not None:
+            tab.revalidate()
+
+    def _on_auto_rescan_toggled(self, enabled: bool) -> None:
+        from state.validation_settings import set_auto_rescan_enabled
+
+        set_auto_rescan_enabled(enabled)
+        for tab in self._theme_tabs():
+            tab.set_auto_rescan(enabled)
+
+    def _on_clear_schema_requested(self) -> None:
+        from state.validation_settings import clear_schema_path
+
+        tab = self._current_tab()
+        if tab is None:
+            return
+        if tab.file_path:
+            clear_schema_path(Path(tab.file_path))
+        tab.clear_schema()
+
+    def _on_attach_schema_requested(self) -> None:
+        from state.validation_settings import write_schema_ref_str
+        from validation.schema_source import SchemaRef, load_schema, load_schema_from_url
+
+        tab = self._current_tab()
+        if tab is None:
+            return
+
+        from PySide6.QtWidgets import (
+            QDialog,
+            QDialogButtonBox,
+            QHBoxLayout,
+            QLabel as _QLabel,
+            QLineEdit,
+            QPushButton as _QPushButton,
+            QVBoxLayout,
+        )
+
+        class _AttachDialog(QDialog):
+            def __init__(self, parent=None, start_dir=""):
+                super().__init__(parent)
+                self.setWindowTitle(self.tr("Attach JSON Schema"))
+                self.resize(540, 110)
+                lbl = _QLabel(self.tr("Schema file path or URL (http/https):"))
+                self._edit = QLineEdit()
+                self._edit.setPlaceholderText("https://…  or  /path/to/schema.json")
+                browse = _QPushButton(self.tr("Browse…"))
+                browse.clicked.connect(self._browse)
+                self._start_dir = start_dir
+                row = QHBoxLayout()
+                row.addWidget(self._edit, 1)
+                row.addWidget(browse)
+                buttons = QDialogButtonBox(
+                    QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+                )
+                buttons.accepted.connect(self.accept)
+                buttons.rejected.connect(self.reject)
+                layout = QVBoxLayout(self)
+                layout.addWidget(lbl)
+                layout.addLayout(row)
+                layout.addWidget(buttons)
+
+            def _browse(self):
+                p, _ = QFileDialog.getOpenFileName(
+                    self,
+                    self.tr("Select Schema File"),
+                    self._start_dir,
+                    "JSON Schema (*.json *.yaml *.yml);;All files (*)",
+                )
+                if p:
+                    self._edit.setText(p)
+
+            def value(self) -> str:
+                return self._edit.text().strip()
+
+        dlg = _AttachDialog(self, tab.file_path or "")
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        ref_str = dlg.value()
+        if not ref_str:
+            return
+
+        lo = ref_str.lower()
+        is_url = lo.startswith("http://") or lo.startswith("https://")
+
+        if is_url:
+            loaded = load_schema_from_url(ref_str)
+            if loaded is None:
+                self.statusBar.showMessage(self.tr(f"Could not fetch schema: {ref_str}"), 3000)
+                return
+            ref = SchemaRef(path=None, inline=dict(loaded), origin="manual", url=ref_str)
+        else:
+            import os
+            if not os.path.exists(ref_str):
+                self.statusBar.showMessage(self.tr(f"File not found: {ref_str}"), 3000)
+                return
+            file_ref = SchemaRef(path=Path(ref_str), inline=None, origin="manual")
+            loaded = load_schema(file_ref)
+            if loaded is None:
+                self.statusBar.showMessage(self.tr(f"Could not load schema: {ref_str}"), 3000)
+                return
+            ref = SchemaRef(path=Path(ref_str), inline=dict(loaded), origin="manual")
+
+        tab.set_schema(ref)
+        if tab.file_path:
+            write_schema_ref_str(Path(tab.file_path), ref_str)
+        self.statusBar.showMessage(self.tr(f"Schema attached: {ref_str}"), 2000)
+
+    def _on_reload_schema_requested(self) -> None:
+        from validation.schema_source import SchemaRef, load_schema, load_schema_from_url
+
+        tab = self._current_tab()
+        if tab is None:
+            return
+        ref = tab.schema_ref
+        url = getattr(ref, "url", None)
+        if url is not None:
+            loaded = load_schema_from_url(url)
+            if loaded is None:
+                self.statusBar.showMessage(self.tr("Reload failed: could not fetch schema URL"), 3000)
+                return
+            tab.set_schema(SchemaRef(path=None, inline=dict(loaded), origin=ref.origin, url=url))
+            self.statusBar.showMessage(self.tr("Schema reloaded"), 2000)
+            return
+        if ref.path is None:
+            return
+        origin = ref.origin
+        new_ref = SchemaRef(path=ref.path, inline=None, origin=origin)
+        loaded = load_schema(new_ref)
+        if loaded is None:
+            self.statusBar.showMessage(self.tr("Reload failed: schema file not found"), 3000)
+            return
+        tab.set_schema(SchemaRef(path=ref.path, inline=dict(loaded), origin=origin))
+        self.statusBar.showMessage(self.tr("Schema reloaded"), 2000)
+
+    def _on_open_schema_file_requested(self) -> None:
+        tab = self._current_tab()
+        if tab is None:
+            return
+        # URL-based schema: open in browser
+        url = getattr(tab.schema_ref, "url", None)
+        if url is not None:
+            from PySide6.QtGui import QDesktopServices
+            from PySide6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(url))
+            return
+        if tab.schema_ref.path is None:
+            return
+        path = str(tab.schema_ref.path)
+        import os
+
+        if not os.path.exists(path):
+            self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
+            return
+        self._open_path(path)
+
+    def _on_go_to_schema_rule_requested(self, issue) -> None:
+        """Open the schema and navigate to the rule that triggered *issue*."""
+        tab = self._current_tab()
+        if tab is None:
+            return
+
+        from validation.issue import ValidationIssue
+
+        def _navigate(schema_tab):
+            if schema_tab is None or not issue.schema_path:
+                return
+            fake_issue = ValidationIssue(
+                severity="error",
+                message="",
+                instance_path=issue.schema_path,
+                schema_path=(),
+                kind="",
+            )
+            schema_tab.goto_validation_issue(fake_issue)
+
+        url = getattr(tab.schema_ref, "url", None)
+        if url is not None:
+            url = str(url)
+            # Check if we already have this URL open as a tab
+            for i in range(self.tabWidget.count()):
+                widget = self.tabWidget.widget(i)
+                if isinstance(widget, JsonTab) and getattr(widget, "_schema_url_source", None) == url:
+                    self.tabWidget.setCurrentIndex(i)
+                    _navigate(widget)
+                    return
+            # Open the URL schema as an in-memory tab. Prefer the schema that
+            # was already loaded for validation; this keeps navigation working
+            # offline and guarantees we jump within the exact schema version
+            # that produced the issue. Fetch only as a fallback for older refs.
+            loaded = tab.schema_ref.inline
+            if loaded is None:
+                from validation.schema_source import load_schema_from_url
+                loaded = load_schema_from_url(url)
+            if loaded is None:
+                self.statusBar.showMessage(self.tr("Could not fetch schema for navigation"), 3000)
+                return
+            schema_tab = self._add_tab(data=dict(loaded), file_path=None)
+            if schema_tab is None:
+                return
+            # Tag so we can reuse this tab next time
+            schema_tab._schema_url_source = url
+            # Give it a readable title
+            short = url.rstrip("/").rsplit("/", 1)[-1] or url
+            idx = self.tabWidget.indexOf(schema_tab)
+            if idx >= 0:
+                self.tabWidget.setTabText(idx, short)
+                self.tabWidget.setTabToolTip(idx, url)
+            _navigate(schema_tab)
+            return
+
+        if tab.schema_ref.path is None:
+            return
+        import os
+        path = str(tab.schema_ref.path)
+        if not os.path.exists(path):
+            self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
+            return
+        self._open_path(path)
+        schema_tab = self._current_tab()
+        _navigate(schema_tab)
+
+    def _bind_validation_status(self, tab) -> None:
+        """Connect/disconnect the permanent validation status label to *tab*."""
+        if self._bound_validation_tab is not None:
+            try:
+                self._bound_validation_tab.validationChanged.disconnect(self._on_tab_validation_changed)
+            except (RuntimeError, TypeError):
+                pass
+        self._bound_validation_tab = tab
+        if tab is not None:
+            tab.validationChanged.connect(self._on_tab_validation_changed)
+            self._on_tab_validation_changed(tab.issue_index)
+        else:
+            self._validation_status_label.setVisible(False)
+
+    def _on_tab_validation_changed(self, issue_index) -> None:
+        from documents.tab_status import format_validation_status
+
+        text = format_validation_status(issue_index)
+        if text:
+            self._validation_status_label.setText(text)
+            self._validation_status_label.setVisible(True)
+        else:
+            self._validation_status_label.setVisible(False)
+
+    # ─────────────────────────────────────────────────────────────────────
+
+    def _on_validation_issue_activated(self, issue, *, edit: bool = False) -> None:
+        tab = self._current_tab()
+        if tab is None:
+            return
+        tab.goto_validation_issue(issue, edit=edit)
 
     def _setup_monospace_action(self) -> None:
         self.viewMonospaceFieldsAction = QAction("Monospace Names && Values", self)
@@ -156,6 +478,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _on_tab_changed(self, _index: int) -> None:
         tab = self._current_tab()
         self._bind_undo_signals(tab)
+        self._bind_validation_status(tab)
+        self.validation_dock.attach_tab(tab)
         if tab is not None:
             tab.resize_key_columns()
         if self._history_dialog is not None and self._history_dialog.isVisible():
@@ -163,7 +487,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self._history_view.setStack(tab.undo_stack)
         self.update_actions()
 
-    def _add_tab(self, *, data=None, file_path: str | None = None) -> JsonTab | None:
+    def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> JsonTab | None:
+        from state.validation_settings import auto_rescan_enabled
+
         try:
             tab = JsonTab(
                 self.update_actions,
@@ -175,10 +501,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 permanent_message_callback=lambda msg: self.statusBar.showMessage(msg, 0),
                 theme=self._theme,
                 icon_provider=self._icon_provider,
+                save_format=save_format,
             )
         except Exception as exc:
             QMessageBox.critical(self, "Error", f"Failed to create tab:\n{exc}")
             return None
+
+        # Apply the global auto-rescan setting to the new tab.
+        tab.set_auto_rescan(auto_rescan_enabled())
 
         tab_index = self.tabWidget.addTab(tab, tab.display_name())
         self.tabWidget.setCurrentIndex(tab_index)
@@ -215,21 +545,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QMessageBox.critical(self, "Open failed", f"Could not open {resolved}:\n{exc}")
             return False
 
-        tab = self._add_tab(data=data, file_path=resolved)
+        tab = self._add_tab(data=data, file_path=resolved, save_format=source_format)
         if tab is None:
             return False
-        tab.save_format = source_format
         push_recent(self, resolved)
         self.statusBar.showMessage(f"Opened: {resolved}", 2000)
         return True
 
     def _save_tab(self, tab: JsonTab, *, save_as: bool = False) -> bool:
+        from state.validation_settings import clear_schema_path
+
         old_path = tab.file_path
         ok = tab.save_as() if save_as else tab.save()
         if not ok:
             return False
         if save_as and isinstance(old_path, str) and tab.file_path and old_path != tab.file_path:
             view_state.discard(old_path)
+            clear_schema_path(Path(old_path))
         view_state.save(tab)
         if tab.file_path:
             push_recent(self, tab.file_path)
@@ -278,7 +610,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             widget.deleteLater()
         self.update_actions()
         # Re-bind to whatever tab is now current (if any).
-        self._bind_undo_signals(self._current_tab())
+        current = self._current_tab()
+        self._bind_undo_signals(current)
+        self._bind_validation_status(current)
+        self.validation_dock.attach_tab(current)
 
     def insert_child(self):
         tab = self._current_tab()
@@ -415,4 +750,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 return
             if isinstance(widget, JsonTab):
                 view_state.save(widget)
+        self._settings.setValue("validation/dock_state", self.saveState())
+        self._settings.setValue("validation/dock_visible", self.validation_dock.isVisible())
         super().closeEvent(event)
