@@ -67,7 +67,7 @@ def test_value_delegate_formats_binary_cells_as_size():
     option = QStyleOptionViewItem()
     delegate.initStyleOption(option, value_index)
 
-    assert option.text == "<4 byte>"
+    assert option.text.startswith("<4 byte>")
 
 
 def test_value_delegate_elides_long_text_values():

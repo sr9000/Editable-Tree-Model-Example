@@ -36,6 +36,7 @@ from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model_roles import JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType
+from units import counts, format_bytes
 
 
 class ValueDelegate(_TextEditorDelegateBase):
@@ -226,12 +227,13 @@ class ValueDelegate(_TextEditorDelegateBase):
         limit = get_binary_edit_warning_limit_bytes()
         if payload_size <= limit:
             return True
-        size_kb = payload_size / 1024
-        limit_kb = limit / 1024
+
         answer = QMessageBox.warning(
             host,
             "Large binary value",
-            f"Binary value is {size_kb:.1f} KB (limit: {limit_kb:.0f} KB).\\nContinue editing?",
+            f"Binary value is {format_bytes(payload_size)}!\n"
+            f"Limit is {format_bytes(limit)}.\n"
+            f"Continue editing?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -244,7 +246,7 @@ class ValueDelegate(_TextEditorDelegateBase):
         answer = QMessageBox.warning(
             host,
             title,
-            f"{kind} is {text_len:,} chars (limit: {limit:,}).\\nContinue editing?",
+            f"{kind} is {counts(text_len)} chars!\n" f"Limit is {counts(limit)}.\n" f"Continue editing?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
