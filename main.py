@@ -13,7 +13,7 @@ def main():
 
     app = QApplication(sys.argv)
     window = MainWindow(filename)
-    window.show()
+    window.show_with_restored_mode()
 
     sys.exit(app.exec())
 

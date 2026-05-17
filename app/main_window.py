@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, Qt
+from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -89,6 +89,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._history_dialog: QDialog | None = None
         self._history_view: QUndoView | None = None
         self._bound_undo_tab: JsonTab | None = None
+        self._startup_window_mode: str = "normal"
         self._settings = QSettings(APPLICATION_ID, "app")
         # All font preferences (regular family, monospace family, editor
         # point size, monospace-fields toggle) live in a single controller
@@ -127,10 +128,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.resize(*WINDOW_DEFAULT_SIZE)
 
         if self._coerce_bool(self._settings.value("window/fullscreen", False), default=False):
-            self.showFullScreen()
+            self._startup_window_mode = "fullscreen"
             return
+
         if self._coerce_bool(self._settings.value("window/maximized", False), default=False):
-            self.showMaximized()
+            self._startup_window_mode = "maximized"
+            return
+
+        self._startup_window_mode = "normal"
+
+    def show_with_restored_mode(self) -> None:
+        self.show()
+
+        if self._startup_window_mode == "fullscreen":
+            QTimer.singleShot(100, self.showFullScreen)
+            return
+
+        if self._startup_window_mode == "maximized":
+            QTimer.singleShot(100, self.showMaximized)
+            return
 
     @staticmethod
     def _local_paths_from_mime(mime: QMimeData) -> list[str]:

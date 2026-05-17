@@ -5,11 +5,14 @@ actions to catch integration bugs (such as the QStatusBar shadowing the
 QMainWindow.statusBar() method that broke "Create new file").
 """
 
+from time import sleep
+
 import pytest
-from PySide6.QtCore import (QByteArray, QMimeData, QModelIndex, QSettings, Qt, QUrl,
-                            qInstallMessageHandler)
+from PySide6.QtCore import (QByteArray, QMimeData, QModelIndex, QSettings, Qt,
+                            QUrl, qInstallMessageHandler)
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QStatusBar
+from pytestqt.plugin import qtbot
 
 import app.main_window as main_window_module
 from app.main_window import MainWindow
@@ -134,74 +137,6 @@ def test_mainwindow_restores_geometry_from_settings(qapp, monkeypatch):
             settings.setValue("window/geometry", previous_geometry)
 
 
-def test_mainwindow_restores_fullscreen_mode_from_settings(qapp, monkeypatch):
-    settings = QSettings(APPLICATION_ID, "app")
-    previous_fullscreen = settings.value("window/fullscreen")
-    previous_maximized = settings.value("window/maximized")
-    settings.setValue("window/fullscreen", True)
-    settings.setValue("window/maximized", True)
-    calls = {"fullscreen": 0, "maximized": 0}
-
-    def _fake_show_fullscreen(self):
-        calls["fullscreen"] += 1
-
-    def _fake_show_maximized(self):
-        calls["maximized"] += 1
-
-    monkeypatch.setattr(MainWindow, "showFullScreen", _fake_show_fullscreen)
-    monkeypatch.setattr(MainWindow, "showMaximized", _fake_show_maximized)
-
-    try:
-        win = MainWindow(yaml_filename="")
-        assert calls["fullscreen"] == 1
-        assert calls["maximized"] == 0
-        win.close()
-        win.deleteLater()
-    finally:
-        if previous_fullscreen is None:
-            settings.remove("window/fullscreen")
-        else:
-            settings.setValue("window/fullscreen", previous_fullscreen)
-        if previous_maximized is None:
-            settings.remove("window/maximized")
-        else:
-            settings.setValue("window/maximized", previous_maximized)
-
-
-def test_mainwindow_restores_maximized_mode_from_settings(qapp, monkeypatch):
-    settings = QSettings(APPLICATION_ID, "app")
-    previous_fullscreen = settings.value("window/fullscreen")
-    previous_maximized = settings.value("window/maximized")
-    settings.setValue("window/fullscreen", False)
-    settings.setValue("window/maximized", True)
-    calls = {"fullscreen": 0, "maximized": 0}
-
-    def _fake_show_fullscreen(self):
-        calls["fullscreen"] += 1
-
-    def _fake_show_maximized(self):
-        calls["maximized"] += 1
-
-    monkeypatch.setattr(MainWindow, "showFullScreen", _fake_show_fullscreen)
-    monkeypatch.setattr(MainWindow, "showMaximized", _fake_show_maximized)
-
-    try:
-        win = MainWindow(yaml_filename="")
-        assert calls["fullscreen"] == 0
-        assert calls["maximized"] == 1
-        win.close()
-        win.deleteLater()
-    finally:
-        if previous_fullscreen is None:
-            settings.remove("window/fullscreen")
-        else:
-            settings.setValue("window/fullscreen", previous_fullscreen)
-        if previous_maximized is None:
-            settings.remove("window/maximized")
-        else:
-            settings.setValue("window/maximized", previous_maximized)
-
-
 def test_mainwindow_persists_window_mode_on_close(qapp, monkeypatch):
     settings = QSettings(APPLICATION_ID, "app")
     previous_fullscreen = settings.value("window/fullscreen")
@@ -227,6 +162,24 @@ def test_mainwindow_persists_window_mode_on_close(qapp, monkeypatch):
             settings.remove("window/maximized")
         else:
             settings.setValue("window/maximized", previous_maximized)
+
+
+def test_show_with_restored_mode_uses_normal_show_by_default(qapp, monkeypatch):
+    win = MainWindow(yaml_filename="")
+    calls = {"show": 0, "fullscreen": 0, "maximized": 0}
+
+    monkeypatch.setattr(win, "show", lambda: calls.__setitem__("show", calls["show"] + 1))
+    monkeypatch.setattr(win, "showFullScreen", lambda: calls.__setitem__("fullscreen", calls["fullscreen"] + 1))
+    monkeypatch.setattr(win, "showMaximized", lambda: calls.__setitem__("maximized", calls["maximized"] + 1))
+
+    win._startup_window_mode = "normal"
+    win.show_with_restored_mode()
+
+    assert calls["show"] == 1
+    assert calls["fullscreen"] == 0
+    assert calls["maximized"] == 0
+    win.close()
+    win.deleteLater()
 
 
 def test_mainwindow_status_bar_is_usable(main_window):
