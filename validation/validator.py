@@ -243,7 +243,6 @@ def _to_issue(err: Any, root_schema: Mapping[str, Any]) -> ValidationIssue:
     if raw_instance_path is None:
         raw_instance_path = getattr(err, "path", ())
     return ValidationIssue(
-        severity="error",
         message=str(getattr(err, "message", err)),
         instance_path=_normalize_path(list(raw_instance_path)),
         schema_path=_schema_path_resolving_refs(root_schema, getattr(err, "schema_path", ())),

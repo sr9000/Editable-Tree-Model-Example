@@ -2,9 +2,8 @@ from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 
 
-def _issue(path, *, severity="error", kind="type"):
+def _issue(path, *, kind="type"):
     return ValidationIssue(
-        severity=severity,
         message="problem",
         instance_path=path,
         schema_path=("properties",),
@@ -14,7 +13,7 @@ def _issue(path, *, severity="error", kind="type"):
 
 def test_issue_index_exact_and_ancestor_severity():
     root_data = {"obj": {"leaf": 1}, "ok": 2}
-    idx = IssueIndex([_issue(("obj", "leaf"), severity="error")], root_data)
+    idx = IssueIndex([_issue(("obj", "leaf"))], root_data)
 
     assert idx.severity_at((0, 0)) == "error"
     assert idx.ancestor_severity((0,)) == "error"

@@ -434,16 +434,18 @@ def compute_editable(json_type: JsonType, value: Any, editable_blob_limit: int) 
     try:
         match json_type:
             case JsonType.STRING | JsonType.UNICODE | JsonType.MULTILINE | JsonType.TEXT:
-                return len(value) <= editable_blob_limit
+                return True
             case JsonType.BYTES:
-                raw = base64.b64decode(value, validate=True)
-                return len(raw) <= editable_blob_limit
+                base64.b64decode(value, validate=True)
+                return True
             case JsonType.ZLIB:
                 raw = base64.b64decode(value, validate=True)
-                return len(zlib.decompress(raw)) <= editable_blob_limit
+                zlib.decompress(raw)
+                return True
             case JsonType.GZIP:
                 raw = base64.b64decode(value, validate=True)
-                return len(gzip.decompress(raw)) <= editable_blob_limit
+                gzip.decompress(raw)
+                return True
             case _:
                 return True
     except (binascii.Error, zlib.error, OSError, ValueError, TypeError):

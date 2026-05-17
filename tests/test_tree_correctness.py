@@ -96,6 +96,18 @@ def test_flags_are_safe_for_malformed_binary_payloads():
     assert (flags & Qt.ItemFlag.ItemIsEditable) == Qt.ItemFlag.NoItemFlags
 
 
+def test_multiline_values_are_editable_even_when_large():
+    long_text = "line\n" + ("x" * 20_000)
+    model = JsonTreeModel({"blob": long_text})
+    value_index = model.index(0, 2, QModelIndex())
+
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.MULTILINE
+
+    flags = model.flags(value_index)
+    assert (flags & Qt.ItemFlag.ItemIsEditable) == Qt.ItemFlag.ItemIsEditable
+
+
 def test_column_api_returns_false_without_changing_model():
     model = JsonTreeModel({"a": 1})
     assert model.columnCount() == 3

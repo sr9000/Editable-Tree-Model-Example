@@ -33,7 +33,6 @@ def test_validate_document_missing_required_reports_required_kind():
     issues = validate_document(data, schema)
     assert len(issues) == 1
     assert issues[0].kind == "required"
-    assert issues[0].severity == "error"
 
 
 def test_validate_document_type_error_reports_type_kind():

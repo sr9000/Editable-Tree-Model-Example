@@ -2,13 +2,14 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QModelIndex, QSettings, Qt
+from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QFileDialog,
     QFontDialog,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMenu,
@@ -31,10 +32,21 @@ from dialogs.attach_schema_dlg import AttachSchemaDialog
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
-from settings import APPLICATION_ID
+from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
+from state.edit_limits import (
+    get_attach_file_warning_limit_bytes,
+    get_binary_edit_warning_limit_bytes,
+    get_multiline_edit_warning_limit_chars,
+    get_string_edit_warning_limit_chars,
+    set_attach_file_warning_limit_bytes,
+    set_binary_edit_warning_limit_bytes,
+    set_multiline_edit_warning_limit_chars,
+    set_string_edit_warning_limit_chars,
+)
 from state.recent_schemas import recent_schemas
 from tree_actions.clipboard import copy_selection
 from tree_actions.structure import collapse_all, delete_selection, expand_all
+from units import counts, format_bytes
 from validation.schema_registry import SchemaSource, open_in_browser, schema_registry
 
 
@@ -73,9 +85,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, yaml_filename: str, parent=None):
         super().__init__(parent)
         self.setupUi(self)
+        self.setAcceptDrops(True)
         self._history_dialog: QDialog | None = None
         self._history_view: QUndoView | None = None
         self._bound_undo_tab: JsonTab | None = None
+        self._startup_window_mode: str = "normal"
         self._settings = QSettings(APPLICATION_ID, "app")
         # All font preferences (regular family, monospace family, editor
         # point size, monospace-fields toggle) live in a single controller
@@ -91,6 +105,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
+        self._setup_edit_limits_menu()
         refresh_recent_menu(self)
         self._setup_schemas_menu()
         self._setup_validation_dock()
@@ -99,6 +114,75 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         setup_history_menu(self)
         self.setup_model(yaml_filename)
         self.setup_connections()
+        self._restore_window_geometry()
+
+    def _restore_window_geometry(self) -> None:
+        geometry = self._settings.value("window/geometry")
+        restored = False
+        if isinstance(geometry, QByteArray):
+            restored = self.restoreGeometry(geometry)
+        elif isinstance(geometry, (bytes, bytearray)):
+            restored = self.restoreGeometry(QByteArray(bytes(geometry)))
+
+        if not restored:
+            self.resize(*WINDOW_DEFAULT_SIZE)
+
+        if self._coerce_bool(self._settings.value("window/fullscreen", False), default=False):
+            self._startup_window_mode = "fullscreen"
+            return
+
+        if self._coerce_bool(self._settings.value("window/maximized", False), default=False):
+            self._startup_window_mode = "maximized"
+            return
+
+        self._startup_window_mode = "normal"
+
+    def show_with_restored_mode(self) -> None:
+        self.show()
+
+        if self._startup_window_mode == "fullscreen":
+            QTimer.singleShot(100, self.showFullScreen)
+            return
+
+        if self._startup_window_mode == "maximized":
+            QTimer.singleShot(100, self.showMaximized)
+            return
+
+    @staticmethod
+    def _local_paths_from_mime(mime: QMimeData) -> list[str]:
+        """Return deduplicated absolute local file paths from a MIME payload."""
+        paths: list[str] = []
+        seen: set[str] = set()
+        for url in mime.urls():
+            if not url.isLocalFile():
+                continue
+            resolved = str(Path(url.toLocalFile()).resolve())
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            paths.append(resolved)
+        return paths
+
+    def dragEnterEvent(self, event) -> None:  # type: ignore[override]
+        if self._local_paths_from_mime(event.mimeData()):
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dropEvent(self, event) -> None:  # type: ignore[override]
+        paths = self._local_paths_from_mime(event.mimeData())
+        if not paths:
+            event.ignore()
+            return
+
+        opened_any = False
+        for path in paths:
+            opened_any = self._open_path(path) or opened_any
+
+        if opened_any:
+            event.acceptProposedAction()
+            return
+        event.ignore()
 
     def _setup_validation_dock(self) -> None:
         from state.validation_settings import auto_rescan_enabled
@@ -238,7 +322,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if schema_tab is None or not issue.schema_path:
                 return
             fake_issue = ValidationIssue(
-                severity="error",
                 message="",
                 instance_path=issue.schema_path,
                 schema_path=(),
@@ -327,6 +410,105 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         has_source = source is not None
         self._schemas_open_current_action.setEnabled(has_source)
         self._schemas_copy_path_action.setEnabled(has_source)
+
+    def _setup_edit_limits_menu(self) -> None:
+        self._limits_menu = QMenu(self.tr("Edit Warning Limits"), self)
+        self._limit_string_action = QAction(self)
+        self._limit_multiline_action = QAction(self)
+        self._limit_binary_action = QAction(self)
+        self._limit_attach_action = QAction(self)
+
+        self._limit_string_action.triggered.connect(self._set_string_warning_limit)
+        self._limit_multiline_action.triggered.connect(self._set_multiline_warning_limit)
+        self._limit_binary_action.triggered.connect(self._set_binary_warning_limit)
+        self._limit_attach_action.triggered.connect(self._set_attach_warning_limit)
+
+        self._limits_menu.addAction(self._limit_string_action)
+        self._limits_menu.addAction(self._limit_multiline_action)
+        self._limits_menu.addAction(self._limit_binary_action)
+        self._limits_menu.addAction(self._limit_attach_action)
+        self._limits_menu.aboutToShow.connect(self._refresh_edit_limits_menu_entries)
+        self._refresh_edit_limits_menu_entries()
+
+        self.fileMenu.insertMenu(self.appExitAction, self._limits_menu)
+        self.fileMenu.insertSeparator(self.appExitAction)
+
+    def _refresh_edit_limits_menu_entries(self) -> None:
+        string_limit = get_string_edit_warning_limit_chars()
+        multiline_limit = get_multiline_edit_warning_limit_chars()
+        binary_limit = get_binary_edit_warning_limit_bytes()
+        attach_limit = get_attach_file_warning_limit_bytes()
+
+        self._limit_string_action.setText(
+            self.tr("String edit limit... ({value} chars)").format(value=counts(string_limit))
+        )
+        self._limit_multiline_action.setText(
+            self.tr("Multiline text limit... ({value} chars)").format(value=counts(multiline_limit))
+        )
+        self._limit_binary_action.setText(
+            self.tr("Bytes edit limit... ({value})").format(value=format_bytes(binary_limit))
+        )
+        self._limit_attach_action.setText(
+            self.tr("Attach file size limit... ({value})").format(value=format_bytes(attach_limit))
+        )
+
+    def _prompt_limit_value(self, *, title: str, label: str, current: int) -> int | None:
+        value, ok = QInputDialog.getInt(self, title, label, current, 1, 2_147_483_647, 1)
+        if not ok:
+            return None
+        return int(value)
+
+    def _set_string_warning_limit(self) -> None:
+        current = get_string_edit_warning_limit_chars()
+        value = self._prompt_limit_value(
+            title=self.tr("String Edit Warning Limit"),
+            label=self.tr("Warn when string length exceeds (chars):"),
+            current=current,
+        )
+        if value is None:
+            return
+        set_string_edit_warning_limit_chars(value)
+        self._refresh_edit_limits_menu_entries()
+        self.statusBar.showMessage(self.tr("Updated string edit warning limit"), 2000)
+
+    def _set_multiline_warning_limit(self) -> None:
+        current = get_multiline_edit_warning_limit_chars()
+        value = self._prompt_limit_value(
+            title=self.tr("Multiline Edit Warning Limit"),
+            label=self.tr("Warn when multiline length exceeds (chars):"),
+            current=current,
+        )
+        if value is None:
+            return
+        set_multiline_edit_warning_limit_chars(value)
+        self._refresh_edit_limits_menu_entries()
+        self.statusBar.showMessage(self.tr("Updated multiline edit warning limit"), 2000)
+
+    def _set_binary_warning_limit(self) -> None:
+        current = get_binary_edit_warning_limit_bytes()
+        value = self._prompt_limit_value(
+            title=self.tr("Bytes Edit Warning Limit"),
+            label=self.tr("Warn when binary size exceeds (bytes):"),
+            current=current,
+        )
+        if value is None:
+            return
+        set_binary_edit_warning_limit_bytes(value)
+        self._refresh_edit_limits_menu_entries()
+        self.statusBar.showMessage(self.tr("Updated bytes edit warning limit"), 2000)
+
+    def _set_attach_warning_limit(self) -> None:
+        current = get_attach_file_warning_limit_bytes()
+        value = self._prompt_limit_value(
+            title=self.tr("Attach File Warning Limit"),
+            label=self.tr("Warn when attaching file larger than (bytes):"),
+            current=current,
+        )
+        if value is None:
+            return
+        set_attach_file_warning_limit_bytes(value)
+        self._refresh_edit_limits_menu_entries()
+        self.statusBar.showMessage(self.tr("Updated attach file warning limit"), 2000)
 
     def _bind_validation_status(self, tab) -> None:
         """Connect/disconnect the permanent validation status label to *tab*."""
@@ -722,6 +904,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 return
             if isinstance(widget, JsonTab):
                 view_state.save(widget)
+        self._settings.setValue("window/geometry", self.saveGeometry())
+        self._settings.setValue("window/fullscreen", self.isFullScreen())
+        self._settings.setValue("window/maximized", self.isMaximized())
         self._settings.setValue("validation/dock_state", self.saveState())
         self._settings.setValue("validation/dock_visible", self.validation_dock.isVisible())
         super().closeEvent(event)

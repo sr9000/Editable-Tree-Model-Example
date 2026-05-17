@@ -3,7 +3,7 @@ from PySide6.QtCore import QModelIndex
 from delegates.bytes_codec import decode_bytes
 from tree.item import JsonTreeItem
 from tree.types import JsonType
-from units import format_bytes
+from units import counts, format_bytes
 
 
 def format_validation_status(issue_index) -> str:
@@ -15,22 +15,17 @@ def format_validation_status(issue_index) -> str:
     n = len(issue_index)
     if n == 0:
         return ""
-    issues = issue_index.all_issues()
-    errors = sum(1 for i in issues if i.severity == "error")
-    warnings = n - errors
-    parts: list[str] = []
-    if errors:
-        parts.append(f"{errors} error{'s' if errors != 1 else ''}")
-    if warnings:
-        parts.append(f"{warnings} warning{'s' if warnings != 1 else ''}")
-    return "Validation: " + " · ".join(parts)
+    count = len(issue_index.all_issues())
+    return "Validation: " + f"{count} issue{'s' if count != 1 else ''}"
 
 
 def size_hint_for_item(item: JsonTreeItem) -> str | None:
     if item.json_type in (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT):
-        return f"{len(str(item.value or ''))} chars"
-    if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
-        return f"{item.child_count()} items"
+        return f"{counts(len(str(item.value or '')))} chars"
+    if item.json_type is JsonType.ARRAY:
+        return f"{counts(item.child_count())} items"
+    if item.json_type is JsonType.OBJECT:
+        return f"{counts(item.child_count())} keys"
     if item.json_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
         try:
             raw = decode_bytes(str(item.value or ""), item.json_type)

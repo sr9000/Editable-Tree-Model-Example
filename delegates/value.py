@@ -4,7 +4,16 @@ import zlib
 from gmpy2 import mpq
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QFont, QFontDatabase, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import QColorDialog, QComboBox, QLineEdit, QStyle, QStyleOptionViewItem, QTreeView, QWidget
+from PySide6.QtWidgets import (
+    QColorDialog,
+    QComboBox,
+    QLineEdit,
+    QMessageBox,
+    QStyle,
+    QStyleOptionViewItem,
+    QTreeView,
+    QWidget,
+)
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
@@ -17,11 +26,17 @@ from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
+from state.edit_limits import (
+    get_binary_edit_warning_limit_bytes,
+    get_multiline_edit_warning_limit_chars,
+    get_string_edit_warning_limit_chars,
+)
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model_roles import JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType
+from units import counts, format_bytes
 
 
 class ValueDelegate(_TextEditorDelegateBase):
@@ -207,6 +222,36 @@ class ValueDelegate(_TextEditorDelegateBase):
             except Exception:
                 pass
 
+    @staticmethod
+    def _confirm_large_binary_edit(host, payload_size: int) -> bool:
+        limit = get_binary_edit_warning_limit_bytes()
+        if payload_size <= limit:
+            return True
+
+        answer = QMessageBox.warning(
+            host,
+            "Large binary value",
+            f"Binary value is {format_bytes(payload_size)}!\n"
+            f"Limit is {format_bytes(limit)}.\n"
+            f"Continue editing?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    @staticmethod
+    def _confirm_large_text_edit(host, *, text_len: int, limit: int, title: str, kind: str) -> bool:
+        if text_len <= limit:
+            return True
+        answer = QMessageBox.warning(
+            host,
+            title,
+            f"{kind} is {counts(text_len)} chars!\n" f"Limit is {counts(limit)}.\n" f"Continue editing?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget | None:
         source_index = self._source_index(index)
         item: JsonTreeItem = source_index.internalPointer()
@@ -230,10 +275,32 @@ class ValueDelegate(_TextEditorDelegateBase):
                 editor.addItem("true", True)
                 editor.addItem("false", False)
             case JsonType.STRING | JsonType.UNICODE:
+                text_len = len(str(item.value or ""))
+                limit = get_string_edit_warning_limit_chars()
+                if not self._confirm_large_text_edit(
+                    parent,
+                    text_len=text_len,
+                    limit=limit,
+                    title="Large string value",
+                    kind="String value",
+                ):
+                    self._notify_status(parent, "String edit cancelled", 2000)
+                    return None
                 editor = _CapsLockSafeLineEdit(parent)
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
                 editor = BetterDateTimeEditor(parent)
             case JsonType.MULTILINE | JsonType.TEXT:
+                text_len = len(str(item.value or ""))
+                limit = get_multiline_edit_warning_limit_chars()
+                if not self._confirm_large_text_edit(
+                    parent,
+                    text_len=text_len,
+                    limit=limit,
+                    title="Large multiline text",
+                    kind="Multiline value",
+                ):
+                    self._notify_status(parent, "Multiline edit cancelled", 2000)
+                    return None
                 pidx = QPersistentModelIndex(index)
 
                 def _save_multiline(text: str) -> None:
@@ -271,6 +338,10 @@ class ValueDelegate(_TextEditorDelegateBase):
                     decoded = decode_bytes(item.value, item.json_type)
                 except (ValueError, OSError, zlib.error, binascii.Error) as exc:
                     self._notify_status(parent, f"Decode failed: {exc}", 4000)
+                    return None
+
+                if not self._confirm_large_binary_edit(parent, len(decoded)):
+                    self._notify_status(parent, "Binary edit cancelled", 2000)
                     return None
 
                 pidx = QPersistentModelIndex(index)
