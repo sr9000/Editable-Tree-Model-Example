@@ -185,6 +185,7 @@ class ValidationDock(QDockWidget):
         self._btn_clear_schema.setVisible(ref.origin in ("inline", "sibling", "manual"))
         self._act_reload.setEnabled(has_path or has_url)
         self._act_open.setEnabled(has_path or has_url)
+        self._schema_btn.setToolTip(self.tr("URL schema - read-only") if has_url else "")
 
     def _on_index_clicked(self, index) -> None:
         issue = self.model.issue_at(index.row())

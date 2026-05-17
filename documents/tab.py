@@ -239,6 +239,7 @@ class JsonTab(QWidget):
         self.model.set_issue_index_provider(self._severity_provider)
         self.validationChanged.connect(self._on_validation_changed)
         init_validation_state(self, model_data)
+        schema_registry.schemaReloaded.connect(self._on_registry_schema_reloaded)
         self._diff_applier = DiffApplier(self)
 
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
@@ -321,6 +322,10 @@ class JsonTab(QWidget):
             schema_registry.release(self._schema_source, self)
             self._schema_source = None
         super().closeEvent(event)
+
+    def _on_registry_schema_reloaded(self, source: SchemaSource) -> None:
+        if source == self._schema_source:
+            self.revalidate()
 
     def revalidate(self) -> None:
         root_data = self.model.root_item.to_json()
