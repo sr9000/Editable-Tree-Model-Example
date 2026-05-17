@@ -315,6 +315,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         url = getattr(tab.schema_ref, "url", None)
         if url is not None:
+            url = str(url)
             # Check if we already have this URL open as a tab
             for i in range(self.tabWidget.count()):
                 widget = self.tabWidget.widget(i)
@@ -322,9 +323,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.tabWidget.setCurrentIndex(i)
                     _navigate(widget)
                     return
-            # Download and open in a new in-memory tab
-            from validation.schema_source import load_schema_from_url
-            loaded = load_schema_from_url(url)
+            # Open the URL schema as an in-memory tab. Prefer the schema that
+            # was already loaded for validation; this keeps navigation working
+            # offline and guarantees we jump within the exact schema version
+            # that produced the issue. Fetch only as a fallback for older refs.
+            loaded = tab.schema_ref.inline
+            if loaded is None:
+                from validation.schema_source import load_schema_from_url
+                loaded = load_schema_from_url(url)
             if loaded is None:
                 self.statusBar.showMessage(self.tr("Could not fetch schema for navigation"), 3000)
                 return

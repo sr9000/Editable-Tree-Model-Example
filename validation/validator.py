@@ -41,6 +41,79 @@ def _normalize_path(path: Any) -> tuple[str | int, ...]:
     return ()
 
 
+def _lookup_json_pointer(root: Any, pointer: str) -> tuple[tuple[str | int, ...], Any] | None:
+    """Resolve a local JSON pointer against *root*.
+
+    Returns both the decoded token path and the referenced object.  Only local
+    references (``#`` / ``#/...``) are handled here; remote references do not
+    have a stable location in the currently-open schema document to navigate
+    to.
+    """
+    if not pointer.startswith("#"):
+        return None
+
+    tokens = _decode_json_pointer(pointer[1:])
+    cursor = root
+    for token in tokens:
+        if isinstance(cursor, Mapping):
+            if not isinstance(token, str) or token not in cursor:
+                return None
+            cursor = cursor[token]
+            continue
+
+        if isinstance(cursor, Sequence) and not isinstance(cursor, (bytes, bytearray, str)):
+            if not isinstance(token, int) or token < 0 or token >= len(cursor):
+                return None
+            cursor = cursor[token]
+            continue
+
+        return None
+    return tokens, cursor
+
+
+def _schema_path_resolving_refs(root_schema: Mapping[str, Any], path: Any) -> tuple[str | int, ...]:
+    """Convert jsonschema's logical schema path into a document path.
+
+    ``jsonschema`` reports paths as if local ``$ref`` targets were inlined at
+    the reference site.  That is useful for validation, but it is not a real
+    path in the schema file, so UI navigation stops at the ``$ref`` owner (or
+    fails and lands on the root).  While walking the reported path, whenever
+    the next token is missing because the current schema node is a local
+    ``$ref``, jump to the referenced definition and continue from there.
+    """
+    raw_tokens = _normalize_path(list(path) if path is not None else ())
+    cursor: Any = root_schema
+    physical: tuple[str | int, ...] = ()
+
+    for token in raw_tokens:
+        while isinstance(cursor, Mapping) and token not in cursor:
+            ref = cursor.get("$ref")
+            if not isinstance(ref, str):
+                return raw_tokens
+            resolved = _lookup_json_pointer(root_schema, ref)
+            if resolved is None:
+                return raw_tokens
+            physical, cursor = resolved
+
+        if isinstance(cursor, Mapping):
+            if not isinstance(token, str) or token not in cursor:
+                return raw_tokens
+            cursor = cursor[token]
+            physical = physical + (token,)
+            continue
+
+        if isinstance(cursor, Sequence) and not isinstance(cursor, (bytes, bytearray, str)):
+            if not isinstance(token, int) or token < 0 or token >= len(cursor):
+                return raw_tokens
+            cursor = cursor[token]
+            physical = physical + (token,)
+            continue
+
+        return raw_tokens
+
+    return physical
+
+
 def _error_kind(err: Any) -> str:
     for attr in ("kind", "validator", "keyword", "rule"):
         value = getattr(err, attr, None)
@@ -164,7 +237,7 @@ def _unwrap_best(err: Any) -> Any:
     return _unwrap_best(chosen)
 
 
-def _to_issue(err: Any) -> ValidationIssue:
+def _to_issue(err: Any, root_schema: Mapping[str, Any]) -> ValidationIssue:
     # jsonschema uses .path (deque); legacy jsonschema-rs used .instance_path
     raw_instance_path = getattr(err, "instance_path", None)
     if raw_instance_path is None:
@@ -173,7 +246,7 @@ def _to_issue(err: Any) -> ValidationIssue:
         severity="error",
         message=str(getattr(err, "message", err)),
         instance_path=_normalize_path(list(raw_instance_path)),
-        schema_path=_normalize_path(list(getattr(err, "schema_path", ()))),
+        schema_path=_schema_path_resolving_refs(root_schema, getattr(err, "schema_path", ())),
         kind=_error_kind(err),
     )
 
@@ -197,7 +270,7 @@ def validate_document(data: Any, schema: Mapping[str, Any], *, max_issues: int =
 
     issues: list[ValidationIssue] = []
     for err in compiled.iter_errors(data):
-        issues.append(_to_issue(_unwrap_best(err)))
+        issues.append(_to_issue(_unwrap_best(err), schema))
         if len(issues) >= max_issues:
             break
 

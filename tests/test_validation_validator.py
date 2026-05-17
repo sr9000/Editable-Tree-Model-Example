@@ -1,8 +1,8 @@
 import jsonschema
-import pytest
 
 
 from validation.validator import is_schema_valid, validate_document
+from validation.json_pointer import instance_path_to_model_path
 
 
 def test_validate_document_ok_returns_empty_list():
@@ -164,3 +164,75 @@ def test_valid_oneof_produces_no_issues():
     }
     assert validate_document("hello", schema) == []
     assert validate_document(7, schema) == []
+
+
+def test_schema_path_resolves_local_ref_to_physical_definition():
+    schema = {
+        "type": "object",
+        "properties": {
+            "person": {"$ref": "#/definitions/person"},
+        },
+        "definitions": {
+            "person": {
+                "type": "object",
+                "properties": {
+                    "age": {"type": "integer", "minimum": 18},
+                },
+            }
+        },
+    }
+
+    issues = validate_document({"person": {"age": 15}}, schema)
+
+    assert len(issues) == 1
+    assert issues[0].instance_path == ("person", "age")
+    assert issues[0].schema_path == ("definitions", "person", "properties", "age", "minimum")
+    assert instance_path_to_model_path(schema, issues[0].schema_path) is not None
+
+
+def test_schema_path_resolves_nested_ref_inside_oneof_context():
+    schema = {
+        "type": "object",
+        "properties": {
+            "groups": {
+                "type": "array",
+                "items": {"$ref": "#/definitions/permission"},
+            },
+        },
+        "definitions": {
+            "permission": {
+                "oneOf": [
+                    {"type": "string", "enum": ["read", "edit"]},
+                    {
+                        "type": "object",
+                        "required": ["type"],
+                        "additionalProperties": False,
+                        "properties": {
+                            "type": {"const": "edit"},
+                            "allowedPaths": {
+                                "type": "array",
+                                "items": {"type": "string", "format": "regex"},
+                            },
+                        },
+                    },
+                ]
+            }
+        },
+    }
+
+    issues = validate_document({"groups": [{"type": "edit", "allowedPaths": ["[bad"]}]}, schema)
+
+    assert len(issues) == 1
+    assert issues[0].instance_path == ("groups", 0, "allowedPaths", 0)
+    assert issues[0].kind == "format"
+    assert issues[0].schema_path == (
+        "definitions",
+        "permission",
+        "oneOf",
+        1,
+        "properties",
+        "allowedPaths",
+        "items",
+        "format",
+    )
+    assert instance_path_to_model_path(schema, issues[0].schema_path) is not None
