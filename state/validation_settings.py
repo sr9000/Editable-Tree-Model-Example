@@ -72,6 +72,7 @@ def clear_schema_path(doc_path: Path) -> None:
     _settings().remove(_schema_key(doc_path))
 
 
+_RECENT_SCHEMAS_KEY = "validation/recent_schemas"
 _AUTO_RESCAN_KEY = "validation/auto_rescan"
 
 

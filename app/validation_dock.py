@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.validation_panel_model import IssueListModel
+from state.recent_schemas import recent_schemas
+from validation.schema_registry import SchemaSource, schema_registry
 
 if TYPE_CHECKING:
     from documents.tab import JsonTab
@@ -31,6 +33,7 @@ class ValidationDock(QDockWidget):
     clearSchemaRequested = Signal()
     # Schema picker signals — connected to MainWindow handlers
     attachSchemaRequested = Signal()
+    attachRecentSchemaRequested = Signal(object)  # SchemaSource
     reloadSchemaRequested = Signal()
     openSchemaFileRequested = Signal()
     goToSchemaRuleRequested = Signal(object)  # ValidationIssue
@@ -73,14 +76,17 @@ class ValidationDock(QDockWidget):
         self._schema_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         schema_menu = QMenu(self)
         self._act_attach = schema_menu.addAction(self.tr("Attach schema…"))
+        self._recent_menu = schema_menu.addMenu(self.tr("Recent"))
         self._act_reload = schema_menu.addAction(self.tr("Reload schema"))
         self._act_open = schema_menu.addAction(self.tr("Open schema file / URL"))
         self._act_attach.triggered.connect(self.attachSchemaRequested)
         self._act_reload.triggered.connect(self.reloadSchemaRequested)
         self._act_open.triggered.connect(self.openSchemaFileRequested)
+        schema_menu.aboutToShow.connect(self._rebuild_recent_menu)
         self._act_reload.setEnabled(False)
         self._act_open.setEnabled(False)
         self._schema_btn.setMenu(schema_menu)
+        self._rebuild_recent_menu()
 
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setContentsMargins(0, 0, 0, 0)
@@ -185,6 +191,7 @@ class ValidationDock(QDockWidget):
         self._btn_clear_schema.setVisible(ref.origin in ("inline", "sibling", "manual"))
         self._act_reload.setEnabled(has_path or has_url)
         self._act_open.setEnabled(has_path or has_url)
+        self._schema_btn.setToolTip(self.tr("URL schema - read-only") if has_url else "")
 
     def _on_index_clicked(self, index) -> None:
         issue = self.model.issue_at(index.row())
@@ -216,10 +223,28 @@ class ValidationDock(QDockWidget):
         menu = QMenu(self)
         act_schema = menu.addAction(self.tr("Go to schema rule"))
         has_schema = self._tab is not None and (
-            self._tab.schema_ref.path is not None
-            or getattr(self._tab.schema_ref, "url", None) is not None
+            self._tab.schema_ref.path is not None or getattr(self._tab.schema_ref, "url", None) is not None
         )
         act_schema.setEnabled(has_schema and bool(issue.schema_path))
         chosen = menu.exec(self.list_view.viewport().mapToGlobal(QPoint(pos)))
         if chosen is act_schema:
             self.goToSchemaRuleRequested.emit(issue)
+
+    def _rebuild_recent_menu(self) -> None:
+        self._recent_menu.clear()
+        recents = recent_schemas()[:8]
+        if not recents:
+            act_empty = self._recent_menu.addAction(self.tr("<empty>"))
+            act_empty.setEnabled(False)
+            return
+
+        for source in recents:
+            if source.kind == "file":
+                text = self.tr("📂 {name}").format(name=source.display)
+                enabled = schema_registry.exists(source)
+            else:
+                text = self.tr("🌐 {name}").format(name=source.display)
+                enabled = True
+            action = self._recent_menu.addAction(text)
+            action.setEnabled(enabled)
+            action.triggered.connect(lambda _checked=False, s=source: self.attachRecentSchemaRequested.emit(s))

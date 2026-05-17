@@ -35,7 +35,7 @@ def test_json_tab_filter_is_debounced(qtbot):
     qtbot.wait(50)
     assert tab.proxy.rowCount(QModelIndex()) == 2
 
-    qtbot.wait(160)
+    qtbot.wait(300)
     assert tab.proxy.rowCount(QModelIndex()) == 1
     assert tab.proxy.data(tab.proxy.index(0, 0, QModelIndex())) == "beta"
 
@@ -45,7 +45,7 @@ def test_delete_selection_targets_source_row_while_filtered(qtbot):
     qtbot.addWidget(tab)
 
     tab.search_edit.setText("needle")
-    qtbot.wait(180)
+    qtbot.wait(350)
 
     root = tab.proxy.index(0, 0, QModelIndex())
     arr = tab.proxy.index(0, 0, root)

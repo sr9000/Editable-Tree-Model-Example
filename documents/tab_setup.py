@@ -1,4 +1,5 @@
 import functools
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QTimer
@@ -62,7 +63,8 @@ def init_model(tab, model_data: Any, show_root: bool) -> None:
 
 
 def init_validation_state(tab, model_data: Any) -> None:
-    tab._init_validation_state(model_data)
+    doc_path = Path(tab.file_path).expanduser().resolve() if tab.file_path else None
+    tab._init_validation_state(model_data, doc_path=doc_path)
 
 
 def init_delegates_and_connections(tab, update_actions_callback) -> None:
@@ -142,6 +144,6 @@ def init_shortcuts(tab) -> None:
 def init_search_filter(tab) -> None:
     tab._filter_timer = QTimer(tab)
     tab._filter_timer.setSingleShot(True)
-    tab._filter_timer.setInterval(150)
+    tab._filter_timer.setInterval(300)
     tab._filter_timer.timeout.connect(tab._apply_filter)
     tab.search_edit.textChanged.connect(lambda _text: tab._filter_timer.start())

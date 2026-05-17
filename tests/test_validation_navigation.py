@@ -2,8 +2,8 @@ from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QApplication
 
 from app.main_window import MainWindow
-from validation.schema_source import SchemaRef
 from validation.json_pointer import instance_path_to_model_path
+from validation.schema_source import SchemaRef
 
 
 def _qapp() -> QApplication:
@@ -122,13 +122,59 @@ def test_go_to_schema_rule_works_for_url_backed_in_memory_schema(qtbot, monkeypa
     issue = tab.issue_index.all_issues()[0]
     assert issue.schema_path == ("properties", "age", "minimum")
 
+    before_count = window.tabWidget.count()
+    window._on_go_to_schema_rule_requested(issue)
+    app.processEvents()
+
+    first_schema_tab = window._current_tab()
+    assert first_schema_tab is not None
+    assert first_schema_tab.schema_source is not None
+    assert first_schema_tab.schema_source.key == schema_url
+    assert first_schema_tab.is_read_only
+    assert window.tabWidget.count() == before_count + 1
+
     window._on_go_to_schema_rule_requested(issue)
     app.processEvents()
 
     schema_tab = window._current_tab()
-    assert schema_tab is not None
-    assert getattr(schema_tab, "_schema_url_source", None) == schema_url
+    assert schema_tab is first_schema_tab
+    assert window.tabWidget.count() == before_count + 1
 
     current = schema_tab._proxy_to_source(schema_tab.view.currentIndex())
     assert current.isValid()
     assert schema_tab.model._index_path(current) == instance_path_to_model_path(schema, issue.schema_path)
+
+
+def test_go_to_schema_rule_focuses_existing_file_backed_schema_tab(qtbot, tmp_path):
+    app = _qapp()
+    schema_path = tmp_path / "person.schema.json"
+    schema_path.write_text(
+        '{"type":"object","properties":{"age":{"type":"integer","minimum":18}}}',
+        encoding="utf-8",
+    )
+
+    window = MainWindow(yaml_filename="")
+    qtbot.addWidget(window)
+    window.show()
+
+    tab = window._add_tab(data={"age": 15}, file_path=None)
+    assert tab is not None
+    tab.set_schema(SchemaRef(path=schema_path, inline=None, origin="manual"))
+
+    issue = tab.issue_index.all_issues()[0]
+    assert issue.schema_path == ("properties", "age", "minimum")
+
+    assert window._open_path(str(schema_path))
+    app.processEvents()
+    existing_schema_tab = window._current_tab()
+    assert existing_schema_tab is not None
+    assert existing_schema_tab.file_path == str(schema_path.resolve())
+
+    window.tabWidget.setCurrentWidget(tab)
+    before_count = window.tabWidget.count()
+
+    window._on_go_to_schema_rule_requested(issue)
+    app.processEvents()
+
+    assert window.tabWidget.count() == before_count
+    assert window._current_tab() is existing_schema_tab

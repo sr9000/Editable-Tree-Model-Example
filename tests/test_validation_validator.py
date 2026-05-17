@@ -1,8 +1,7 @@
 import jsonschema
 
-
-from validation.validator import is_schema_valid, validate_document
 from validation.json_pointer import instance_path_to_model_path
+from validation.validator import is_schema_valid, validate_document
 
 
 def test_validate_document_ok_returns_empty_list():
@@ -91,7 +90,7 @@ def test_oneof_error_is_unwrapped_to_concrete_cause():
     schema = {
         "oneOf": [
             {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}},
-            {"type": "object", "required": ["id"],   "properties": {"id":   {"type": "integer"}}},
+            {"type": "object", "required": ["id"], "properties": {"id": {"type": "integer"}}},
         ]
     }
     # name is present but has the wrong type — the first branch is the best match
@@ -102,9 +101,7 @@ def test_oneof_error_is_unwrapped_to_concrete_cause():
     assert issues, "Expected at least one issue for invalid oneOf data"
     # None of the reported issues should be the opaque oneOf wrapper
     for issue in issues:
-        assert issue.kind != "oneOf", (
-            f"Got a raw 'oneOf' wrapper error instead of a concrete cause: {issue.message!r}"
-        )
+        assert issue.kind != "oneOf", f"Got a raw 'oneOf' wrapper error instead of a concrete cause: {issue.message!r}"
 
 
 def test_anyof_error_is_unwrapped_to_concrete_cause():
@@ -121,9 +118,7 @@ def test_anyof_error_is_unwrapped_to_concrete_cause():
 
     assert issues, "Expected at least one issue"
     for issue in issues:
-        assert issue.kind != "anyOf", (
-            f"Got a raw 'anyOf' wrapper error instead of a concrete cause: {issue.message!r}"
-        )
+        assert issue.kind != "anyOf", f"Got a raw 'anyOf' wrapper error instead of a concrete cause: {issue.message!r}"
 
 
 def test_nested_oneof_unwraps_to_leaf():
@@ -136,7 +131,7 @@ def test_nested_oneof_unwraps_to_leaf():
                     "value": {
                         "oneOf": [
                             {"type": "integer", "minimum": 10},
-                            {"type": "string",  "minLength": 5},
+                            {"type": "string", "minLength": 5},
                         ]
                     }
                 },
@@ -150,9 +145,10 @@ def test_nested_oneof_unwraps_to_leaf():
 
     assert issues
     for issue in issues:
-        assert issue.kind not in ("oneOf", "anyOf"), (
-            f"Wrapper error leaked through: kind={issue.kind!r}, message={issue.message!r}"
-        )
+        assert issue.kind not in (
+            "oneOf",
+            "anyOf",
+        ), f"Wrapper error leaked through: kind={issue.kind!r}, message={issue.message!r}"
 
 
 def test_valid_oneof_produces_no_issues():

@@ -22,16 +22,31 @@ When a file is opened the editor looks for a schema in this order:
 ### Manual schema attachment
 
 Use the **Schema ▸** → **Attach schema…** toolbar button in the Validation
-dock to browse for any `.json`, `.yaml`, or `.yml` schema file.  The binding
-is persisted per file path so the schema is restored the next time the
-document is opened.
+dock to browse for any `.json`, `.yaml`, or `.yml` schema file, or paste an
+`http(s)://` schema URL.  The binding is persisted per file path so the schema
+is restored the next time the document is opened.
+
+### Schema registry
+
+Attached schemas are owned by a shared schema registry instead of being copied
+into each document tab.  A schema source is identified as either a resolved
+local file path or a normalised URL; tabs bound to the same source share one
+loaded `SchemaEntry` and revalidate from that shared schema.
+
+- **Local files** are watched with `QFileSystemWatcher`.  Editing a schema file
+  externally reloads it in place and all bound tabs revalidate automatically.
+- **URL schemas** use a normalised URL identity and are treated as read-only by
+  the UI.  Reload fetches the URL again; conditional HTTP caching (`ETag` /
+  `If-Modified-Since`) is not implemented yet.
+- **Recent schemas** are persisted globally (cap 12) and are available from the
+  attach dialog and the Validation dock's **Schema ▸ Recent** submenu.
 
 Additional schema actions:
 
 | Action | Description |
 |---|---|
-| **Reload schema** | Re-reads the schema file from disk without changing the binding. Useful after the schema is edited externally. |
-| **Open schema file** | Opens the attached schema file as a new editor tab. |
+| **Reload schema** | Re-reads a local schema from disk, or re-fetches a URL schema, without changing the binding. |
+| **Open schema file / URL** | Opens the attached local schema as a tab, or opens URL-backed schemas in the browser. |
 | **Clear schema** | Detaches the schema and removes the persisted binding. |
 
 ### YAML multi-document support

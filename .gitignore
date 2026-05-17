@@ -1,3 +1,65 @@
-/.venv/
-/.idea/
+### --- Python Core ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.python-version
+
+### --- Environments ---
+.venv/
+venv/
+ENV/
+env/
+# For cases where people name folders after the environment
+.env/
+# Poetry/Pipenv lock and environment files
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+### --- Distribution / Build ---
+dist/
+build/
+*.egg-info/
+*.egg
+.installed.cfg
+bin/
+include/
+lib/
+share/
+
+### --- Testing & Coverage ---
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.hypothesis/
+
+### --- Jupyter Notebooks ---
+.ipynb_checkpoints
+
+### --- IDEs & Editors ---
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+
+### --- Environment Variables (Security) ---
+# Never commit secrets!
+.env
+.env.local
+.env.*.local
+
+### --- OS Specific ---
+.DS_Store
+Thumbs.db
+
+### --- Project Specific ---
 /tmp/
+/logs/
+*.log

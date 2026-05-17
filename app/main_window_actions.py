@@ -33,13 +33,14 @@ def setup_connections(window):
 def update_actions(window):
     tab = window._current_tab()
     has_tab = tab is not None
+    can_edit = bool(tab and not tab.is_read_only)
     has_valid_index = bool(tab and tab.view.selectionModel().currentIndex().isValid())
 
-    window.fileSaveAction.setEnabled(has_tab)
-    window.fileSaveAsAction.setEnabled(has_tab)
-    window.rowInsertAction.setEnabled(has_valid_index)
-    window.rowInsertAfterAction.setEnabled(has_valid_index)
-    window.rowRemoveAction.setEnabled(has_valid_index)
+    window.fileSaveAction.setEnabled(has_tab and can_edit)
+    window.fileSaveAsAction.setEnabled(has_tab and can_edit)
+    window.rowInsertAction.setEnabled(has_valid_index and can_edit)
+    window.rowInsertAfterAction.setEnabled(has_valid_index and can_edit)
+    window.rowRemoveAction.setEnabled(has_valid_index and can_edit)
     window.viewExpandAllAction.setEnabled(has_tab)
     window.viewCollapseAllAction.setEnabled(has_tab)
     window.viewZoomInAction.setEnabled(has_tab)

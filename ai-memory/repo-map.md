@@ -1,6 +1,6 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-16**. PySide6 desktop **structured-data
+_Last scanned: **2026-05-17**. PySide6 desktop **structured-data
 editor** (originated from Qt's "Editable Tree Model" example).
 **Drag-and-drop plan is fully shipped**: Steps 1–10 (multiselect
 foundation → MIME helpers → atomic multi-row undo move → keyboard
@@ -10,10 +10,15 @@ guards → shortcuts/menu/docs → move-mechanics + multi-action redesign
 on anchors → multi-action context-menu paste/zip fixes) are all in
 mainline. The tree gained a `JsonTreeView` subclass that owns
 `startDrag` so the model can fully own internal moves without Qt's
-default post-drag row removal. **Step 7 (validation: YAML schemas,
-multi-doc, schema picker, persistence, sanitization) has shipped.**
-Tests: **807 passing, 3 known offscreen-only failures**
-(color-scheme sync — see `todo-n-fixme.md`).
+default post-drag row removal. **Validation Step 7 (YAML schemas,
+multi-doc, schema picker, persistence, sanitization) has shipped, and
+the `schema-registry` branch (`HEAD = a2b1acb`) has shipped registry
+Steps 1–7:** shared `validation/schema_registry.py` ownership,
+`SchemaSource(kind="file"|"url")` source identity, local-file hot reload,
+URL schema support, schema-tab pooling, and a cap-12 recent-schemas
+list, plus the docs/memory close-out. Tests: **906 collected** on this
+scan; known offscreen-only color-scheme failures remain tracked in
+`todo-n-fixme.md`._
 
 ---
 
@@ -44,6 +49,7 @@ Tests: **807 passing, 3 known offscreen-only failures**
 | Per-tab status / breadcrumb                           | `documents/tab_status.py`                                            |
 | Custom widgets                                        | `qhexedit/`, `qmultiline_editor.py`, `datetime_editor/`, `qbigint_spinbox/`, `qmpq_spinbox/` |
 | **Validation / schema**                               | `validation/`, `app/validation_dock.py`, `state/validation_settings.py` |
+| Schema registry / source identity                     | `validation/schema_registry.py`, `state/recent_schemas.py`, `dialogs/attach_schema_dlg.py` |
 
 ---
 
@@ -208,7 +214,7 @@ mpq2py/                       # mpq_serialization, mpq_json_default, MpqSafeLoad
 jsontream/                    # streaming JSON encoder (iterables)
 units/                        # bits, format_bytes
 coalesce/, binary/, qt2py/    # small utility packages
-tests/                        # 807 collected
+tests/                        # 906 collected
 ai-memory/                    # this folder
 ```
 
@@ -831,12 +837,12 @@ valid current index.
 
 ## 16) Tests
 
-`tests/` collects **807 tests** as of 2026-05-16; **804 pass, 3 fail**
-under `QT_QPA_PLATFORM=offscreen`. The failing ones —
+`tests/` collects **906 tests** as of 2026-05-17. The known
+offscreen-only failing ones are —
 `test_app_color_scheme.py::test_light_theme_sets_light_color_scheme`,
 `test_app_color_scheme.py::test_dark_theme_sets_dark_color_scheme`,
 `test_theme_switching.py::test_color_scheme_follows_selected_theme` —
-fail because Qt's offscreen QPA platform reports
+These fail because Qt's offscreen QPA platform reports
 `Qt.ColorScheme.Unknown` after `setColorScheme`. Not a code bug; runs
 green on real platforms.
 
@@ -970,6 +976,9 @@ mainwindow.py`. No `make test` / `themes-check` target.
   - multiline → `qmultiline_editor.py` + `dialogs/qmultiline_dlg.py`
   - exact numerics → `qbigint_spinbox/`, `qmpq_spinbox/`, `mpq2py/`
 - **Theming** — `themes/` + `app/theme_controller.py` (delegate
+  repaint + app-level color-scheme sync)
+- **Validation** — `validation/` + `app/validation_dock.py` +
+  `validation/schema_registry.py` + `state/recent_schemas.py`
 
 ---
 
@@ -986,7 +995,52 @@ mainwindow.py`. No `make test` / `themes-check` target.
 | `issue.py` | `ValidationIssue(severity, message, instance_path, schema_path, kind)` frozen dataclass |
 | `index.py` | `IssueIndex` — maps issues to model paths via `instance_path_to_model_path`; `severity_at`, `ancestor_severity`, `issues_for`, `all_issues` |
 | `json_pointer.py` | `instance_path_to_model_path` / `model_path_to_instance_path` — handles plain `int` list tokens and the synthetic `'[doc N]'` string tokens emitted by `yaml_validate` |
-| `schema_source.py` | `SchemaRef(path, inline, origin)` · `discover_schema(doc_path, data)` — auto-detects inline `$schema`, sibling `.schema.json`; `load_schema(ref)` supports JSON + YAML files |
+| `schema_source.py` | `SchemaRef(path, inline, origin, url=None)` · `discover_schema(doc_path, data)` — auto-detects local inline `$schema`, sibling `.schema.json`; `load_schema(ref)` supports JSON/YAML files and URL fetches |
+| `schema_registry.py` | Process-wide `schema_registry`; `SchemaSource(kind, key, display)` identity; `SchemaEntry(source, inline, mtime_ns, ref_count, bound_tabs)`; `SchemaRegistry.acquire/release/reload/lookup`; local-file `QFileSystemWatcher`; URL opener |
+
+### Schema registry / source identity
+
+- `SchemaSource.for_file(path)` resolves and stores an absolute file key;
+  `SchemaSource.for_url(url)` normalises the scheme and strips trailing
+  path slashes.  `display` is a short user-facing label.
+- `SchemaRegistry.acquire(source, tab, inline_hint=None)` loads a source
+  only once, stores one mutable `SchemaEntry.inline` dict, adds the tab
+  to a weak bound-tab set, increments `ref_count`, and pushes the source
+  into `state.recent_schemas` only after a successful load.
+- `JsonTab.set_schema(...)` / `set_schema_from_source(...)` release the
+  previous source, acquire the new one, and keep `tab.schema` pointing at
+  `SchemaEntry.inline`.  Two tabs attached to the same source therefore
+  share the same dict and see reloads in place.
+- Local file sources are watched by `QFileSystemWatcher`; changed files
+  reload in place, update `mtime_ns`, emit `schemaReloaded(source)`, and
+  every bound tab whose `schema_source` matches calls `revalidate()`.
+  This is independent of the dock's auto-rescan checkbox, which only
+  debounces document-tree mutations.
+- URL sources are read-only identities. Manual reload re-fetches the URL;
+  no `ETag` / `If-Modified-Since` conditional request is implemented yet.
+
+### `state/recent_schemas.py`
+
+- Persists under `QSettings(APPLICATION_ID, "validation")` key
+  `validation/recent_schemas` (shared constant in
+  `state.validation_settings`).
+- `push_recent_schema(source)` serialises as `"file:<path>"` or
+  `"url:<url>"`, moves duplicates to the front, and enforces
+  `RECENT_SCHEMAS_CAP = 12`.
+- `recent_schemas()` returns most-recent-first `SchemaSource` objects,
+  dropping malformed/duplicate entries; `clear_recent_schemas()` removes
+  the key.
+
+### `dialogs/attach_schema_dlg.py`
+
+- `AttachSchemaDialog.ask(...)` accepts a local schema file path or
+  `http(s)://` URL and returns a `SchemaSource`.
+- The dialog includes a recent-schemas combo populated from
+  `state.recent_schemas.recent_schemas()`; selecting an entry fills the
+  path/URL edit.
+- `parse_source(raw, start_dir="")` is pure enough for tests: relative
+  file paths resolve against the current document/start directory; URL
+  input becomes `SchemaSource.for_url(...)`.
 
 ### `app/validation_dock.py` — `ValidationDock`
 
@@ -1001,8 +1055,10 @@ Qt `QDockWidget` embedded at the bottom of the main window.
 | `autoRescanToggled(bool)` | Auto-rescan checkbox |
 | `clearSchemaRequested` | "🚫 Clear schema" button (visible only for inline/sibling/manual) |
 | `attachSchemaRequested` | Schema ▸ → "Attach schema…" |
+| `attachRecentSchemaRequested(source)` | Schema ▸ → Recent submenu item |
 | `reloadSchemaRequested` | Schema ▸ → "Reload schema" |
-| `openSchemaFileRequested` | Schema ▸ → "Open schema file" |
+| `openSchemaFileRequested` | Schema ▸ → "Open schema file / URL" |
+| `goToSchemaRuleRequested(issue)` | Validation issue context menu → "Go to schema rule" |
 
 **Public API:**
 
@@ -1017,9 +1073,12 @@ Per-file manual schema binding, persisted via `QSettings(APPLICATION_ID, "valida
 Key format: `validation/<sha1[:16]>` of the resolved absolute doc path — matches
 the pattern used by `state.view_state.state_key`.
 
-```python
+```text
 read_schema_path(doc_path: Path) -> Path | None
+read_schema_ref_str(doc_path: Path) -> str | None      # path or URL
 write_schema_path(doc_path: Path, schema_path: Path) -> None
+write_schema_url(doc_path: Path, url: str) -> None
+write_schema_ref_str(doc_path: Path, ref_str: str) -> None
 clear_schema_path(doc_path: Path) -> None        # wipes the QSettings entry
 auto_rescan_enabled() -> bool
 set_auto_rescan_enabled(enabled: bool) -> None
@@ -1027,10 +1086,15 @@ set_auto_rescan_enabled(enabled: bool) -> None
 
 ### Schema discovery order (in `JsonTab._init_validation_state`)
 
-1. `discover_schema(doc_path, model_data)` — inline `$schema` key, then sibling file.
-2. If `origin=="none"` and `doc_path` is known, check `read_schema_path(doc_path)` for
-   a persisted manual binding → loads the schema file; falls back silently on
-   missing files.
+1. `discover_schema(doc_path, model_data)` — local inline `$schema` key,
+   then sibling file; remote inline `$schema` URLs are still ignored by
+   discovery.
+2. If `origin=="none"` and `doc_path` is known, check
+   `read_schema_ref_str(doc_path)` for a persisted manual binding. The
+   binding may be a file path or URL; it is loaded before becoming the
+   active `SchemaRef`.
+3. `JsonTab.set_schema(ref)` converts the ref to `SchemaSource` and
+   acquires the shared registry entry.
 
 ### YAML multi-doc validation (in `JsonTab.revalidate`)
 
@@ -1043,11 +1107,35 @@ resolves these to model paths via the updated `instance_path_to_model_path`.
 
 | Method | Action |
 |---|---|
-| `_on_attach_schema_requested()` | `QFileDialog` → `tab.set_schema(SchemaRef(..., origin="manual"))` + `write_schema_path` |
-| `_on_reload_schema_requested()` | Re-reads schema file → `tab.set_schema(...)` |
-| `_on_open_schema_file_requested()` | Opens schema file as new editor tab via `_open_path` |
+| `_on_attach_schema_requested()` | `AttachSchemaDialog` → `_attach_schema_source(source)` |
+| `_on_attach_recent_schema_requested(source)` | Reattach a persisted `SchemaSource` from the dock Recent submenu |
+| `_attach_schema_source(source)` | `schema_registry.acquire` → `tab.set_schema_from_source(source)` + `write_schema_ref_str` |
+| `_on_reload_schema_requested()` | `schema_registry.reload(tab.schema_source)` then `tab.revalidate()` |
+| `_on_open_schema_file_requested()` | Opens local schema via `_open_path`; opens URL schemas via browser |
+| `_on_go_to_schema_rule_requested(issue)` | Uses `SchemaTabPool.open_or_focus` and navigates to `issue.schema_path` |
 | `_on_clear_schema_requested()` | `clear_schema_path(doc_path)` + `tab.clear_schema()` |
 | `_save_tab(..., save_as=True)` | Also calls `clear_schema_path(old_path)` on path change |
+
+### `app/schema_tab_pool.py`
+
+- `SchemaTabPool` keeps one open schema tab per `SchemaSource`.
+- Local schema sources reuse an already-open matching file tab or open
+  the path normally; URL sources materialise registry data into a
+  read-only `JsonTab` and title it with `source.display`.
+- `open_or_focus(window, source)` is used by schema-rule navigation so
+  repeated "Go to schema rule" actions focus the same schema tab.
+
+### Hot-reload contract
+
+1. `SchemaRegistry._on_file_changed(path)` reloads the local file into
+   the existing `SchemaEntry.inline` dict and emits `schemaReloaded(source)`.
+2. Every `JsonTab` connected to the singleton registry compares the
+   emitted source with `tab.schema_source` and calls `revalidate()` on a
+   match.
+3. `JsonTab.revalidate()` rebuilds the `IssueIndex` from the current
+   tree data and shared schema.
+4. `ValidationDock.attach_tab(tab)` listens to `validationChanged` and
+   refreshes the issue list/status when the tab emits the new index.
 
 ### New test suites
 
@@ -1059,6 +1147,19 @@ resolves these to model paths via the updated `instance_path_to_model_path`.
 - `tests/test_validation_persistence.py` (10 tests) — `read/write/clear_schema_path`
   round-trips, tab restores persisted schema on open, missing-file silent fallback,
   inline schema wins over persistence, idempotent clear.
-  styling + app-level `Qt.ColorScheme` sync)
+- `tests/test_schema_registry.py` — registry dedup, ref-counting,
+  reload signal, source normalisation, successful acquire/reload pushes
+  recents.
+- `tests/test_schema_registry_tab.py` — two `JsonTab`s share a single
+  registry entry and release it on close.
+- `tests/test_schema_registry_watch.py` — file-change reloads in place
+  and revalidates bound tabs; URL sources are not watched.
+- `tests/test_recent_schemas.py` — cap-12 MRU persistence,
+  deduplication, malformed-entry filtering, clear.
+- `tests/test_attach_schema_dialog.py` and
+  `tests/test_validation_recent_schemas_ui.py` — dialog parsing/recent
+  combo plus dock Recent submenu behaviour.
+- `tests/test_schemas_menu.py` — top-level Schemas menu recent/open/copy
+  actions.
 - **Utilities / tests** — `jsontream/`, `units/`, `qt2py/`,
   `coalesce/`, `binary/`, `tests/`

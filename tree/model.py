@@ -38,6 +38,13 @@ class JsonTreeModel(QAbstractItemModel):
         self._attached_view = None
         self._drag_source_rows: list[QModelIndex] = []
         self._issue_index_provider: Callable[[tuple[int, ...]], str | None] | None = None
+        self._read_only = False
+
+    def set_read_only(self, enabled: bool) -> None:
+        self._read_only = bool(enabled)
+
+    def is_read_only(self) -> bool:
+        return self._read_only
 
     def attach_view(self, view) -> None:
         self._attached_view = view
@@ -101,6 +108,8 @@ class JsonTreeModel(QAbstractItemModel):
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
+            if self._read_only:
+                return Qt.ItemFlag.NoItemFlags
             return Qt.ItemFlag.ItemIsDropEnabled
 
         default = QAbstractItemModel.flags(self, index)
@@ -126,6 +135,10 @@ class JsonTreeModel(QAbstractItemModel):
             edit_flags |= Qt.ItemFlag.ItemIsDragEnabled
         if item is self.root_item or item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
             edit_flags |= Qt.ItemFlag.ItemIsDropEnabled
+        if self._read_only:
+            edit_flags &= ~Qt.ItemFlag.ItemIsEditable
+            edit_flags &= ~Qt.ItemFlag.ItemIsDragEnabled
+            edit_flags &= ~Qt.ItemFlag.ItemIsDropEnabled
         return edit_flags
 
     def index(self, row: int, column: int, parent: QModelIndex = QModelIndex()) -> QModelIndex:
@@ -253,6 +266,8 @@ class JsonTreeModel(QAbstractItemModel):
         column: int,
         parent: QModelIndex,
     ) -> bool:
+        if self._read_only:
+            return False
         from tree_actions.dnd import can_drop
 
         return can_drop(self, data, action, row, column, parent)
@@ -265,6 +280,8 @@ class JsonTreeModel(QAbstractItemModel):
         column: int,
         parent: QModelIndex,
     ) -> bool:
+        if self._read_only:
+            return False
         from tree_actions.dnd import handle_drop
 
         return handle_drop(self._attached_view, self, data, action, row, column, parent)
@@ -278,6 +295,8 @@ class JsonTreeModel(QAbstractItemModel):
             self.endInsertRows()
 
     def insertRows(self, position: int, rows: int, parent: QModelIndex = QModelIndex()) -> bool:
+        if self._read_only:
+            return False
         if self.show_root and not parent.isValid():
             parent = self._root_index()
         if parent_item := self.get_item(parent):
@@ -294,6 +313,8 @@ class JsonTreeModel(QAbstractItemModel):
             self.endRemoveRows()
 
     def removeRows(self, position: int, rows: int, parent: QModelIndex = QModelIndex()) -> bool:
+        if self._read_only:
+            return False
         if self.show_root and not parent.isValid():
             parent = self._root_index()
         if parent_item := self.get_item(parent):
@@ -302,6 +323,8 @@ class JsonTreeModel(QAbstractItemModel):
         return False
 
     def setData(self, index: QModelIndex, value: Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
+        if self._read_only:
+            return False
         if role != Qt.ItemDataRole.EditRole or not index.isValid():
             return False
 
@@ -317,6 +340,8 @@ class JsonTreeModel(QAbstractItemModel):
         return False
 
     def change_type(self, index: QModelIndex, new_type: JsonType | str) -> bool:
+        if self._read_only:
+            return False
         if not index.isValid():
             return False
 
@@ -380,6 +405,8 @@ class JsonTreeModel(QAbstractItemModel):
         return True
 
     def move_row(self, parent: QModelIndex, src_row: int, dst_row: int) -> bool:
+        if self._read_only:
+            return False
         if src_row == dst_row:
             return False
 
@@ -400,6 +427,8 @@ class JsonTreeModel(QAbstractItemModel):
         return True
 
     def sort_keys(self, index: QModelIndex, recursive: bool = False) -> bool:
+        if self._read_only:
+            return False
         if not index.isValid() and self.show_root:
             index = self._root_index()
 
