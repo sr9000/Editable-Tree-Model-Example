@@ -7,13 +7,10 @@ from settings import WINDOW_DEFAULT_SIZE
 
 
 def main():
-    filename = "data.yaml"
+    filename = ""
 
     if len(sys.argv) == 2:
         filename = sys.argv[1]
-    elif not filename:
-        print("Usage: python main.py <file-name.yaml>")
-        sys.exit(1)
 
     app = QApplication(sys.argv)
     window = MainWindow(filename)
