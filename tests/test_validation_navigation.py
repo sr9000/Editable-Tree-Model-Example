@@ -127,7 +127,8 @@ def test_go_to_schema_rule_works_for_url_backed_in_memory_schema(qtbot, monkeypa
 
     schema_tab = window._current_tab()
     assert schema_tab is not None
-    assert getattr(schema_tab, "_schema_url_source", None) == schema_url
+    assert schema_tab.schema_source is not None
+    assert schema_tab.schema_source.key == schema_url
 
     current = schema_tab._proxy_to_source(schema_tab.view.currentIndex())
     assert current.isValid()

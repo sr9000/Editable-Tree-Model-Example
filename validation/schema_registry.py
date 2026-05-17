@@ -8,8 +8,16 @@ from urllib.parse import urlsplit, urlunsplit
 from weakref import WeakSet
 
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QUrl
 
 from validation.schema_source import SchemaRef, load_schema
+
+
+def open_in_browser(source: "SchemaSource") -> bool:
+    if source.kind != "url":
+        return False
+    return bool(QDesktopServices.openUrl(QUrl(source.key)))
 
 
 def _normalize_url(raw_url: str) -> str:
@@ -80,10 +88,16 @@ class SchemaRegistry(QObject):
         self._entries: dict[SchemaSource, SchemaEntry] = {}
         self._bound_tabs: dict[SchemaSource, WeakSet[object]] = {}
 
-    def acquire(self, source: SchemaSource, tab: object) -> SchemaEntry | None:
+    def acquire(
+        self,
+        source: SchemaSource,
+        tab: object,
+        *,
+        inline_hint: Mapping[str, Any] | None = None,
+    ) -> SchemaEntry | None:
         entry = self._entries.get(source)
         if entry is None:
-            loaded = self._load_for_source(source)
+            loaded = inline_hint if inline_hint is not None else self._load_for_source(source)
             if loaded is None:
                 return None
             entry = SchemaEntry(
@@ -104,7 +118,8 @@ class SchemaRegistry(QObject):
         source = SchemaSource.from_ref(ref)
         if source is None:
             return None, None
-        return source, self.acquire(source, tab)
+        inline_hint = ref.inline if isinstance(ref.inline, Mapping) else None
+        return source, self.acquire(source, tab, inline_hint=inline_hint)
 
     def release(self, source: SchemaSource, tab: object) -> None:
         entry = self._entries.get(source)

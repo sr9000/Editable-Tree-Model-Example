@@ -3,6 +3,7 @@ import gzip
 import zlib
 from datetime import datetime
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Any, Callable
 
 import gmpy2
@@ -300,7 +301,12 @@ class JsonTab(QWidget):
         if self._schema_source is not None:
             schema_registry.release(self._schema_source, self)
 
-        entry = schema_registry.acquire(source, self) if source is not None else None
+        inline_hint = ref.inline if isinstance(ref.inline, Mapping) else None
+        entry = (
+            schema_registry.acquire(source, self, inline_hint=inline_hint)
+            if source is not None
+            else None
+        )
 
         self._schema_source = source
         self._schema_ref = ref
