@@ -56,22 +56,22 @@ Today (branch `master`, audit dated 2026-05-16):
 
 ## Step map
 
-| # | File                                  | Theme                                                  |
-| - | ------------------------------------- | ------------------------------------------------------ |
-| 1 | `01-schema-source-model.md`           | `SchemaSource` + `SchemaRegistry` core (pure logic)    |
-| 2 | `02-tab-integration.md`               | `JsonTab` acquires/releases via registry               |
-| 3 | `03-mainwindow-handlers-and-dialog.md`| Collapse the four MainWindow handlers + extract dialog |
-| 4 | `04-file-watcher.md`                  | `QFileSystemWatcher` hot reload + dock read-only hint  |
-| 5 | `05-recent-schemas-persistence.md`    | `state/recent_schemas.py` + registry-side push         |
-| 6 | `06-recent-schemas-ui.md`             | Attach-dialog combo + dock "Recent ▸" submenu          |
-| 7 | `07-docs-and-memory.md`               | README + `ai-memory/*` updates                         |
+| # | File                                  | Status | Theme                                                  |
+| - | ------------------------------------- | ------ | ------------------------------------------------------ |
+| 1 | `01-schema-source-model.md`           | ✅     | `SchemaSource` + `SchemaRegistry` core (pure logic)    |
+| 2 | `02-tab-integration.md`               | ✅     | `JsonTab` acquires/releases via registry               |
+| 3 | `03-mainwindow-handlers-and-dialog.md`| ✅     | Collapse the four MainWindow handlers + extract dialog |
+| 4 | `04-file-watcher.md`                  | ✅     | `QFileSystemWatcher` hot reload + dock read-only hint  |
+| 5 | `05-recent-schemas-persistence.md`    | ✅     | `state/recent_schemas.py` + registry-side push         |
+| 6 | `06-recent-schemas-ui.md`             | ✅     | Attach-dialog combo + dock "Recent ▸" submenu          |
+| 7 | `07-docs-and-memory.md`               | ✅     | README + `ai-memory/*` updates                         |
 
 Each step file lists: scope, files touched, public API delta,
 tests, commit message template, and explicit "out-of-scope" notes.
 
 ## Public surface, after Step 6
 
-```python
+```text
 from validation.schema_registry import (
     SchemaSource,            # frozen: kind ("file"|"url"), key, display
     SchemaEntry,             # loaded inline + mtime/etag + bound tabs
@@ -84,11 +84,9 @@ from state.recent_schemas import (
     clear_recent_schemas,
 )
 
-# documents/tab.py gains:
-class JsonTab(QWidget):
-    @property
-    def schema_source(self) -> SchemaSource | None: ...
-    def set_schema_from_source(self, source: SchemaSource) -> None: ...
+documents/tab.py gains:
+- JsonTab.schema_source -> SchemaSource | None
+- JsonTab.set_schema_from_source(source: SchemaSource) -> None
 ```
 
 `ValidationDock` gains `attachRecentSchemaRequested = Signal(object)`.

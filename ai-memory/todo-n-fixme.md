@@ -8,50 +8,37 @@ Cross-reference with `pros-n-cons.md` and `repo-map.md` for context.
 
 Format: `- [ ] [scope] description — file:symbol`
 
-> **Active plan (branch `schema-registry`)** — `plans/00-overview.md`
-> through `plans/07-docs-and-memory.md` cover the schema-registry
-> refactor: one shared `SchemaEntry` per source identity,
-> `QFileSystemWatcher`-driven hot reload for local schemas, and a
-> persisted "recent schemas" picker. None of these steps are merged
-> yet; `plans/` was reset on this branch (verified via
-> `git log -- plans/`, last touching commit `c7b94ba`, all eight
-> files staged for delete in `HEAD = cb7cca8`).
+> **Schema-registry plan (branch `schema-registry`)** — Steps 1–7 of
+> `plans/00-overview.md` are implemented in `HEAD = a2b1acb`: one
+> shared `SchemaEntry` per `SchemaSource`, `QFileSystemWatcher`-driven
+> hot reload for local schemas, URL source identity, extracted attach
+> dialog, schema-tab pooling, persisted recent schemas, and the
+> docs/memory close-out.
 
-## TODO — schema-registry plan (open)
+## Schema-registry plan — closed items
 
-- [ ] [validation] **No shared schema instance across tabs.**
-      `documents/tab.py::set_schema` does
-      `self._schema = dict(loaded)` (verified L292), so each tab
-      duplicates the same JSON Schema dict. → `plans/02-tab-integration.md`.
-- [ ] [validation] **`load_schema` is called every time** a tab attaches
-      or reloads a schema; no in-memory cache.
-      → `plans/01-schema-source-model.md`.
-- [ ] [validation] **Local schema file edits are not noticed.** Tabs
-      keep validating against the stale dict until the user clicks
-      `Schema ▸ Reload`. No `QFileSystemWatcher` exists under
-      `validation/`, `documents/`, or `state/` (verified by grep).
-      → `plans/04-file-watcher.md`.
-- [ ] [validation] **No recent-schemas list.** Only document recents
-      exist (`app/recent_files.py`, cap 8). Schemas have to be
-      retyped or browsed for every attach.
-      → `plans/05-recent-schemas-persistence.md` +
-      `plans/06-recent-schemas-ui.md`.
-- [ ] [validation, cleanup] **Ad-hoc `_schema_url_source` attribute**
-      tags URL-as-tab widgets in `app/main_window.py` L322 / L341.
-      Replace with `JsonTab.schema_source.key`.
-      → `plans/03-mainwindow-handlers-and-dialog.md`.
-- [ ] [validation, cleanup] **`_AttachDialog` is defined inside a
-      MainWindow method** (`app/main_window.py` L178–213). Extract
-      to `dialogs/attach_schema_dlg.py`.
-      → `plans/03-mainwindow-handlers-and-dialog.md`.
-
-## Deferred (post-registry, not in current plan)
-
-- [ ] [validation] URL schema staleness — no `ETag` /
-      `If-Modified-Since` on `reload()`; always re-fetched.
-- [ ] [validation] Inline `$schema` blocks (origins `"inline"` /
-      `"sibling"`) bypass the registry and are never deduplicated
-      across tabs.
+- [x] [validation] **Shared schema instance across tabs.**
+      `documents/tab.py::set_schema` now delegates to
+      `SchemaSource.from_ref` + `schema_registry.acquire`, and tabs
+      bound to the same source share `SchemaEntry.inline`.
+- [x] [validation] **Schema loads are deduplicated.**
+      `validation/schema_registry.py::SchemaRegistry.acquire` loads a
+      source once, tracks bound tabs / `ref_count`, and releases the
+      entry when the last tab closes.
+- [x] [validation] **Local schema file edits hot-reload.**
+      `SchemaRegistry` owns a `QFileSystemWatcher`; changed local
+      schemas reload in place and emit `schemaReloaded`, causing bound
+      tabs to revalidate.
+- [x] [validation] **Recent schemas list.**
+      `state/recent_schemas.py` persists a cap-12 MRU list and the
+      attach dialog plus Validation dock expose recent pickers.
+- [x] [validation, cleanup] **Typed URL identity.**
+      URL-backed schemas use `SchemaSource(kind="url", key=...)`,
+      `JsonTab.schema_source`, and `SchemaTabPool`; no free-floating
+      `_schema_url_source` attribute remains.
+- [x] [validation, cleanup] **Attach dialog extracted.**
+      `dialogs/attach_schema_dlg.py::AttachSchemaDialog` handles file
+      paths, URLs, and recent-source selection outside `MainWindow`.
 
 > **Status (2026-05-16)** — All historical phases (0–6 + package
 > refactor + the six former-`plans/` phases on context-menu polish,
@@ -73,9 +60,10 @@ Format: `- [ ] [scope] description — file:symbol`
 > support, `state.validation_settings.clear_schema_path`,
 > `app.validation_dock` schema picker toolbar, `JsonTab._init_validation_state`
 > persistence lookup, `JsonTab.revalidate` routing via sanitize +
-> yaml multi. 3 new test suites (28 tests).
-> The current tree collects **807 tests**; **804 pass and 3 fail**
-> under `QT_QPA_PLATFORM=offscreen` (the 3 failures are platform-only — Qt's
+> yaml multi. The schema-registry branch adds registry/tab/watch/recents/UI
+> suites on top of those validation tests.
+> The current tree collects **906 tests**; the known offscreen failures are
+> platform-only — Qt's
 > offscreen QPA ignores `QStyleHints.setColorScheme`). Production code
 > still contains **zero `TODO` / `FIXME` / `XXX` / `HACK` markers**.
 
@@ -168,6 +156,14 @@ Format: `- [ ] [scope] description — file:symbol`
 ## TODO — open items
 
 ### Validation follow-ups (deferred from Step 7)
+- [ ] [validation] URL schema staleness — no `ETag` /
+      `If-Modified-Since` conditional request on `reload()`; URL
+      schemas are always re-fetched.
+      — `validation/schema_registry.py`, `validation/schema_source.py`
+- [ ] [validation] Inline `$schema` blocks / embedded schema literals
+      have no content-hash dedup yet; dedup currently keys file paths
+      and URLs only.
+      — `validation/schema_registry.py`, `validation/schema_source.py`
 - [ ] [feature] Remote `$ref` resolution against `http(s)://` — currently remote
       `$schema` URLs are silently ignored; implement via a configurable HTTP resolver
       passed to jsonschema-rs or a pre-fetch cache.

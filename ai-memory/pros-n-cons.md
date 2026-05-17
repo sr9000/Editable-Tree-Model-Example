@@ -2,14 +2,11 @@
 
 _Last analysis: **2026-05-17**. All previous plans (drag-and-drop
 Steps 1–10 + jsonschema Steps 1–7) are merged on `master`
-(`cb7cca8`)._
-
-> **Active plan (branch `schema-registry`)** — `plans/00-overview.md`
-> through `plans/07-docs-and-memory.md` introduce a shared
-> `SchemaRegistry`, identity-tracked `SchemaSource(kind="file"|"url")`,
-> `QFileSystemWatcher`-driven hot reload, and a persisted
-> "recent schemas" picker. Plan is unmerged — current `cons` list
-> below still reflects the gaps it intends to fix.
+(`cb7cca8`). The active `schema-registry` branch is at `a2b1acb` and
+has shipped Steps 1–7 of `plans/00-overview.md`: shared
+`SchemaRegistry`, identity-tracked `SchemaSource(kind="file"|"url")`,
+`QFileSystemWatcher`-driven hot reload, URL-backed schema sources, and
+a persisted recent-schemas picker plus this docs/memory close-out._
 
 _The six original `plans/` phases plus
 the full drag-and-drop / multi-action plan (Steps 1–10 — multiselect
@@ -19,8 +16,8 @@ shortcuts/menu, anchor-based move primitive, multi-action paste
 semantics) have all shipped.  **Step 7 — YAML schema support,
 multi-doc validation, schema picker UI, persistence, and sanitization
 — has also shipped.**  Earlier Phases 0–6 plus the package
-refactor remain green. Test surface: **807 collected, 804 passing**
-under `QT_QPA_PLATFORM=offscreen`. The 3 failures are platform-specific
+refactor remain green. Test surface: **906 collected** as of this
+memory pass. The known offscreen failures are platform-specific
 (Qt offscreen ignores `QStyleHints.setColorScheme`); they pass on real
 platforms._
 
@@ -173,6 +170,7 @@ See `repo-map.md` for the full module breakdown.
   disconnecting cleanly to avoid stale-signal crashes after window
   close.
 
+### Validation
 - **Schema validation** (Step 7) — JSON Schema validation via optional
   `jsonschema-rs`; schema auto-detection (inline `$schema`, sibling
   `.schema.json`); YAML schemas load via the same `load_file_with_format`
@@ -184,6 +182,15 @@ See `repo-map.md` for the full module breakdown.
   the ValidationDock toolbar (Attach / Reload / Open / Clear); "Clear
   schema" also wipes the persisted binding; "Save As" to a new path
   also clears the old binding.
+- **Centralised schema ownership** — one `SchemaEntry` per source
+  shared across all bound tabs, with `QFileSystemWatcher`-driven
+  hot reload for local files and a normalised URL identity for
+  remote schemas. `state.recent_schemas` (cap 12) backs the dock's
+  "Recent ▸" picker.
+- **Schema source navigation is identity-based** — `SchemaTabPool`
+  reuses an already-open schema tab for the same local path or URL;
+  URL schemas open as read-only materialised tabs for rule navigation
+  and as browser URLs from the dock's open action.
 
 - **CapsLock-safe inline editing** — `_TextEditorDelegateBase` and
   `_CapsLockSafeLineEdit` swallow lock-key key events and
@@ -201,7 +208,7 @@ See `repo-map.md` for the full module breakdown.
 - **Synthetic root row** — `JsonTreeModel.show_root` lets the user
   edit the root container without breaking legacy fixtures
   (`show_root=False`).
-- **Substantial test coverage** — 807 tests; the new Phase 1–5
+- **Substantial test coverage** — 906 tests collected; the new Phase 1–5
   surfaces are covered by `test_kind_switch_coercion.py`,
   `test_container_preview.py`, `test_app_color_scheme.py`, the
   existing 50-test theming surface, and the Phase-5 broader UX
@@ -212,9 +219,12 @@ See `repo-map.md` for the full module breakdown.
   `test_drag_drop_matrix`, `test_drag_drop_property`,
   `test_drop_policies`, `test_anchor_move`,
   `test_multi_action_semantics`, `test_context_menu_multiselect`).
-  **Step 7 validation suites** add 3 more dedicated test files:
+  **Step 7 validation suites** add 3 dedicated test files:
   `test_validation_yaml` (7), `test_validation_yaml_multi` (11),
-  `test_validation_persistence` (10).
+  `test_validation_persistence` (10). Schema-registry follow-up suites
+  cover registry dedup/reload/watch behaviour, tab sharing,
+  recent-schemas persistence, attach-dialog parsing, dock Recent UI,
+  and the top-level Schemas menu.
 - **Reusable widget stack** — `qhexedit`, `qmultiline_editor`,
   `datetime_editor`, `qbigint_spinbox`, `qmpq_spinbox` are
   independently useful packages.
@@ -241,20 +251,13 @@ See `repo-map.md` for the full module breakdown.
   These tests should either skip on the offscreen platform or
   monkey-patch `setColorScheme`. Code is correct on real platforms.
 
-### Schema validation (targeted by branch `schema-registry`)
-- **Per-tab schema duplication** — `documents/tab.py::set_schema`
-  copies the loaded schema (`self._schema = dict(loaded)`); two tabs
-  on the same schema hold two independent dicts and trigger two
-  separate `load_schema` calls.
-- **No file-change awareness** — local `.schema.json` edits are
-  ignored until the user explicitly clicks `Schema ▸ Reload`; there
-  is no `QFileSystemWatcher` anywhere in the validation stack.
-- **No recents for schemas** — `app/recent_files.py` covers
-  documents only (cap 8); reattaching a known schema requires
-  retyping or browsing.
-- **Ad-hoc URL identity** — URL-as-tab widgets are tagged with a
-  free-floating `_schema_url_source` attribute in `app/main_window.py`
-  (L322, L341) instead of a typed field on `JsonTab`.
+### Schema validation follow-ups
+- **URL schema staleness** — URL-backed schema `reload()` always
+  re-fetches; no `ETag` / `If-Modified-Since` conditional request is
+  persisted or sent yet.
+- **No content-hash dedup for embedded inline schemas** — source
+  identity deduplicates file paths and URLs. Literal inline schema
+  bodies embedded in documents are still not coalesced by hash.
 
 ### Drag-and-drop caveats (low priority)
 - `drag-n-drop.patch` is still committed at repo root as an
