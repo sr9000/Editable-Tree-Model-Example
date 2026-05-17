@@ -15,15 +15,8 @@ def format_validation_status(issue_index) -> str:
     n = len(issue_index)
     if n == 0:
         return ""
-    issues = issue_index.all_issues()
-    errors = sum(1 for i in issues if i.severity == "error")
-    warnings = n - errors
-    parts: list[str] = []
-    if errors:
-        parts.append(f"{errors} error{'s' if errors != 1 else ''}")
-    if warnings:
-        parts.append(f"{warnings} warning{'s' if warnings != 1 else ''}")
-    return "Validation: " + " · ".join(parts)
+    count = len(issue_index.all_issues())
+    return "Validation: " + f"{count} issue{'s' if count != 1 else ''}"
 
 
 def size_hint_for_item(item: JsonTreeItem) -> str | None:
