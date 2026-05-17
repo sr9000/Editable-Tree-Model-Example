@@ -7,11 +7,6 @@ from typing import Any
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
 
-_SEVERITY_RANK = {
-    "warning": 1,
-    "error": 2,
-}
-
 
 class IssueIndex:
     """Lookup index for validation issues by model path."""
