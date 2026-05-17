@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -11,13 +13,15 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
+from state.recent_schemas import recent_schemas
 from validation.schema_registry import SchemaSource
 
 
 class AttachSchemaDialog(QDialog):
-    def __init__(self, parent=None, *, start_dir: str = "") -> None:
+    def __init__(self, parent=None, *, start_dir: str = "", recent_sources: list[SchemaSource] | None = None) -> None:
         super().__init__(parent)
         self._start_dir = start_dir
 
@@ -27,6 +31,22 @@ class AttachSchemaDialog(QDialog):
         label = QLabel(self.tr("Schema file path or URL (http/https):"), self)
         self._edit = QLineEdit(self)
         self._edit.setPlaceholderText("https://...  or  /path/to/schema.json")
+
+        self._recent_label = QLabel(self.tr("Recent schemas:"), self)
+        self._recent_combo = QComboBox(self)
+        self._recent_combo.currentIndexChanged.connect(self._on_recent_selected)
+
+        recent_row = QHBoxLayout()
+        recent_row.setContentsMargins(0, 0, 0, 0)
+        recent_row.addWidget(self._recent_label)
+        recent_row.addWidget(self._recent_combo, 1)
+
+        self._recent_row_widget = QWidget(self)
+        self._recent_row_widget.setLayout(recent_row)
+
+        recents = list(recent_sources) if recent_sources is not None else recent_schemas()
+        self._populate_recent_combo(recents)
+        self._recent_row_widget.setVisible(bool(recents))
 
         browse = QPushButton(self.tr("Browse..."), self)
         browse.clicked.connect(self._browse)
@@ -43,16 +63,38 @@ class AttachSchemaDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.addWidget(self._recent_row_widget)
         layout.addWidget(label)
         layout.addLayout(row)
         layout.addWidget(buttons)
 
     @classmethod
-    def ask(cls, parent=None, *, start_dir: str = "") -> SchemaSource | None:
-        dlg = cls(parent, start_dir=start_dir)
+    def ask(
+        cls,
+        parent=None,
+        *,
+        start_dir: str = "",
+        recent_sources: list[SchemaSource] | None = None,
+    ) -> SchemaSource | None:
+        dlg = cls(parent, start_dir=start_dir, recent_sources=recent_sources)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return None
         return dlg.source()
+
+    def _populate_recent_combo(self, recents: list[SchemaSource]) -> None:
+        self._recent_combo.blockSignals(True)
+        self._recent_combo.clear()
+        for source in recents:
+            self._recent_combo.addItem(source.display, source)
+        self._recent_combo.setCurrentIndex(-1)
+        self._recent_combo.blockSignals(False)
+
+    def _on_recent_selected(self, index: int) -> None:
+        if index < 0:
+            return
+        source = self._recent_combo.itemData(index, Qt.ItemDataRole.UserRole)
+        if isinstance(source, SchemaSource):
+            self._edit.setText(source.key)
 
     @classmethod
     def parse_source(cls, raw: str, *, start_dir: str = "") -> SchemaSource | None:

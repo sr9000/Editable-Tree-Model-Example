@@ -168,6 +168,12 @@ class SchemaRegistry(QObject):
     def all_entries(self) -> list[SchemaEntry]:
         return list(self._entries.values())
 
+    def exists(self, source: SchemaSource) -> bool:
+        if source.kind == "url":
+            return True
+        path = Path(source.key)
+        return path.exists() and path.is_file()
+
     def _load_for_source(self, source: SchemaSource) -> dict[str, Any] | None:
         if source.kind == "file":
             ref = SchemaRef(path=Path(source.key), inline=None, origin="manual")

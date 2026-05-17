@@ -32,7 +32,7 @@ from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID
 from tree_actions.clipboard import copy_selection
 from tree_actions.structure import collapse_all, delete_selection, expand_all
-from validation.schema_registry import open_in_browser, schema_registry
+from validation.schema_registry import SchemaSource, open_in_browser, schema_registry
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -107,6 +107,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.validation_dock.autoRescanToggled.connect(self._on_auto_rescan_toggled)
         self.validation_dock.clearSchemaRequested.connect(self._on_clear_schema_requested)
         self.validation_dock.attachSchemaRequested.connect(self._on_attach_schema_requested)
+        self.validation_dock.attachRecentSchemaRequested.connect(self._on_attach_recent_schema_requested)
         self.validation_dock.reloadSchemaRequested.connect(self._on_reload_schema_requested)
         self.validation_dock.openSchemaFileRequested.connect(self._on_open_schema_file_requested)
         self.validation_dock.goToSchemaRuleRequested.connect(self._on_go_to_schema_rule_requested)
@@ -160,14 +161,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab.clear_schema()
 
     def _on_attach_schema_requested(self) -> None:
+        tab = self._current_tab()
+        if tab is None:
+            return
+        source = AttachSchemaDialog.ask(self, start_dir=tab.file_path or "")
+        if source is None:
+            return
+
+        self._attach_schema_source(source)
+
+    def _on_attach_recent_schema_requested(self, source: SchemaSource) -> None:
+        self._attach_schema_source(source)
+
+    def _attach_schema_source(self, source: SchemaSource) -> None:
         from state.validation_settings import write_schema_ref_str
 
         tab = self._current_tab()
         if tab is None:
-            return
-
-        source = AttachSchemaDialog.ask(self, start_dir=tab.file_path or "")
-        if source is None:
             return
 
         entry = schema_registry.acquire(source, tab)
