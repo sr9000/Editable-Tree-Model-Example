@@ -35,7 +35,7 @@ def test_schemas_menu_recent_entries_show_local_and_url_labels(qtbot, tmp_path):
     window._rebuild_schemas_menu()
 
     labels = [action.text() for action in window._schemas_recent_menu.actions()]
-    assert labels == [f"URL — {url_source.display}", f"Local — {local_source.display}"]
+    assert labels == [f"🌐 {url_source.display}", f"📂 {local_source.display}"]
 
 
 def test_schemas_menu_recent_url_opens_read_only_tab_and_disables_edit_actions(qtbot, monkeypatch):

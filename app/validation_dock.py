@@ -240,7 +240,7 @@ class ValidationDock(QDockWidget):
 
         for source in recents:
             if source.kind == "file":
-                text = self.tr("📄 {name}").format(name=source.display)
+                text = self.tr("📂 {name}").format(name=source.display)
                 enabled = schema_registry.exists(source)
             else:
                 text = self.tr("🌐 {name}").format(name=source.display)

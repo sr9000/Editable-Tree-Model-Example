@@ -13,6 +13,10 @@ if TYPE_CHECKING:
     from app.main_window import MainWindow
 
 
+class _RegistryBorrower:
+    __slots__ = ("__weakref__",)
+
+
 class SchemaTabPool(QObject):
     """Identity-based pool that keeps one open schema tab per SchemaSource."""
 
@@ -20,7 +24,7 @@ class SchemaTabPool(QObject):
         super().__init__(parent)
         self._tabs_by_source: dict[SchemaSource, JsonTab] = {}
         self._source_by_tab: dict[JsonTab, SchemaSource] = {}
-        self._registry_token = object()
+        self._registry_token = _RegistryBorrower()
 
     def find(self, source: SchemaSource) -> JsonTab | None:
         tab = self._tabs_by_source.get(source)

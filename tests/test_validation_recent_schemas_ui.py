@@ -37,7 +37,7 @@ def test_dock_recent_menu_shows_labels_and_enabled_state(qtbot, tmp_path):
 
     actions = dock._recent_menu.actions()
     texts = [a.text() for a in actions]
-    assert texts == [f"🌐 {url_source.display}", f"📄 {missing.display}"]
+    assert texts == [f"🌐 {url_source.display}", f"📂 {missing.display}"]
     assert actions[0].isEnabled()
     assert not actions[1].isEnabled()
 

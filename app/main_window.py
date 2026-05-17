@@ -309,9 +309,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._schemas_recent_menu.clear()
         for source in recent_schemas()[:8]:
             label = (
-                self.tr("Local — {name}").format(name=source.display)
+                self.tr("📂 {name}").format(name=source.display)
                 if source.kind == "file"
-                else self.tr("URL — {name}").format(name=source.display)
+                else self.tr("🌐 {name}").format(name=source.display)
             )
             action = self._schemas_recent_menu.addAction(label)
             if source.kind == "file":

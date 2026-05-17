@@ -25,7 +25,7 @@ tests/test_attach_schema_dialog.py      # extend with recents combo cases
 ## Behaviour spec
 
 - Dock submenu shows up to 8 most-recent entries:
-  - `📄 schema.json` for `kind="file"`, dimmed (action disabled) when
+  - `📂 schema.json` for `kind="file"`, dimmed (action disabled) when
     the file no longer exists;
   - `🌐 example.com/foo.json` for `kind="url"`;
   - `<empty>` placeholder action (disabled) when the list is empty.
