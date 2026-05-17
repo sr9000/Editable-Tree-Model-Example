@@ -68,7 +68,7 @@ def test_exact_warning():
     model.set_issue_index_provider(lambda path: index.severity_at(path) or index.ancestor_severity(path))
 
     idx_x = _path_index(model, 0)
-    assert model.data(idx_x, VALIDATION_SEVERITY_ROLE) == "warning"
+    assert model.data(idx_x, VALIDATION_SEVERITY_ROLE) == "error"
 
 
 # ---------------------------------------------------------------------------

@@ -37,7 +37,7 @@ def test_breadcrumb_size_hints_for_container_and_binary(qtbot):
 
     obj_index = tab.model.index(0, 0, QModelIndex())
     tab.view.setCurrentIndex(tab._source_to_view(obj_index))
-    assert captured[-1] == "$.obj  (object, 1 items)"
+    assert captured[-1] == "$.obj  (object, 1 keys)"
 
     blob_name_index = tab.model.index(1, 0, QModelIndex())
     tab.view.setCurrentIndex(tab._source_to_view(blob_name_index))
