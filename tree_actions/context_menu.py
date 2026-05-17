@@ -1,7 +1,10 @@
+from pathlib import Path
+
 from PySide6.QtCore import QItemSelectionModel, QPoint, Qt, QTimer
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QComboBox, QMenu, QTreeView
+from PySide6.QtWidgets import QComboBox, QFileDialog, QMenu, QMessageBox, QTreeView
 
+from delegates.bytes_codec import decode_bytes, encode_bytes
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection, copy_selection_value_only, copy_selection_with_name
 from tree_actions.paste import (
@@ -31,6 +34,9 @@ from tree_actions.structure import (
     move_selection_up,
     sort_selection_keys,
 )
+
+_BASE64_TYPES = {JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP}
+_LARGE_OPEN_WARNING_THRESHOLD = 100 * 1024
 
 
 def _add(menu: QMenu, text: str, slot, *, enabled: bool = True, shortcut: str | None = None):
@@ -119,6 +125,121 @@ def _prepare_context_selection(tree_view: QTreeView, index) -> None:
     sm.setCurrentIndex(index, QItemSelectionModel.SelectionFlag.NoUpdate)
 
 
+def _status_message(tree_view: QTreeView, text: str, timeout_ms: int = 3000) -> None:
+    tab = _find_enter_edit_target(tree_view)
+    cb = getattr(tab, "_status_message_callback", None) if tab is not None else None
+    if cb is not None:
+        cb(text, timeout_ms)
+
+
+def _selected_base64_value_index(tree_view: QTreeView):
+    source_model, _proxy = _resolve_model(tree_view)
+    if source_model is None:
+        return None
+    rows = [idx for idx in selected_source_rows(tree_view) if idx.isValid()]
+    if len(rows) != 1:
+        return None
+    row0 = _row0(source_model, rows[0])
+    item = source_model.get_item(row0)
+    if item is source_model.root_item or item.json_type not in _BASE64_TYPES:
+        return None
+    return row0.siblingAtColumn(2)
+
+
+def _warn_large_open_file(tree_view: QTreeView, path: Path) -> bool:
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        _status_message(tree_view, f"Open failed: {exc}", 4000)
+        QMessageBox.warning(tree_view, "Open failed", f"Could not read file size for:\n{path}\n\n{exc}")
+        return False
+
+    if size <= _LARGE_OPEN_WARNING_THRESHOLD:
+        return True
+
+    size_kb = size / 1024
+    answer = QMessageBox.warning(
+        tree_view,
+        "Large file warning",
+        f"Selected file is {size_kb:.1f} KB (over 100 KB).\nContinue importing?",
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.No,
+    )
+    return answer == QMessageBox.StandardButton.Yes
+
+
+def _set_value_from_context(tree_view: QTreeView, value_index, value: str) -> bool:
+    if not value_index.isValid():
+        return False
+    tab = _find_enter_edit_target(tree_view)
+    if tab is not None and hasattr(tab, "commit_set_data"):
+        return bool(tab.commit_set_data(value_index, value, Qt.ItemDataRole.EditRole))
+    model = value_index.model()
+    if model is None:
+        return False
+    return bool(model.setData(value_index, value, Qt.ItemDataRole.EditRole))
+
+
+def attach_base64_from_file(tree_view: QTreeView) -> bool:
+    value_index = _selected_base64_value_index(tree_view)
+    if value_index is None or not value_index.isValid():
+        return False
+
+    file_path, _selected_filter = QFileDialog.getOpenFileName(tree_view, "Attach from file")
+    if not file_path:
+        return False
+    path = Path(file_path)
+    if not _warn_large_open_file(tree_view, path):
+        return False
+
+    source_model, _proxy = _resolve_model(tree_view)
+    if source_model is None:
+        return False
+    row0 = _row0(source_model, value_index)
+    item = source_model.get_item(row0)
+
+    try:
+        raw = path.read_bytes()
+        encoded = encode_bytes(raw, item.json_type)
+    except OSError as exc:
+        _status_message(tree_view, f"Attach failed: {exc}", 4000)
+        QMessageBox.warning(tree_view, "Attach failed", f"Could not open file:\n{path}\n\n{exc}")
+        return False
+
+    ok = _set_value_from_context(tree_view, value_index, encoded)
+    if ok:
+        _status_message(tree_view, f"Attached file: {path.name}", 2000)
+    return ok
+
+
+def save_base64_as_file(tree_view: QTreeView) -> bool:
+    value_index = _selected_base64_value_index(tree_view)
+    if value_index is None or not value_index.isValid():
+        return False
+
+    source_model, _proxy = _resolve_model(tree_view)
+    if source_model is None:
+        return False
+    row0 = _row0(source_model, value_index)
+    item = source_model.get_item(row0)
+
+    file_path, _selected_filter = QFileDialog.getSaveFileName(tree_view, "Save binary as")
+    if not file_path:
+        return False
+    path = Path(file_path)
+
+    try:
+        raw = decode_bytes(item.value, item.json_type)
+        path.write_bytes(raw)
+    except Exception as exc:
+        _status_message(tree_view, f"Save failed: {exc}", 4000)
+        QMessageBox.warning(tree_view, "Save failed", f"Could not save file:\n{path}\n\n{exc}")
+        return False
+
+    _status_message(tree_view, f"Saved file: {path.name}", 2000)
+    return True
+
+
 def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool = True):
     context_menu = QMenu(tree_view)
 
@@ -191,6 +312,20 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
         lambda: cut_selection(tree_view),
         enabled=has_non_root,
         shortcut="Ctrl+X",
+    )
+
+    base64_value_index = _selected_base64_value_index(tree_view)
+    _add(
+        context_menu,
+        "Attach from...",
+        lambda: attach_base64_from_file(tree_view),
+        enabled=base64_value_index is not None,
+    )
+    _add(
+        context_menu,
+        "Save as...",
+        lambda: save_base64_as_file(tree_view),
+        enabled=base64_value_index is not None,
     )
 
     # ------------------------------------------------------------------
