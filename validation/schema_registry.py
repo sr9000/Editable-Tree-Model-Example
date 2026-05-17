@@ -7,9 +7,8 @@ from typing import Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 from weakref import WeakSet
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtCore import QUrl
 
 from validation.schema_source import SchemaRef, load_schema
 

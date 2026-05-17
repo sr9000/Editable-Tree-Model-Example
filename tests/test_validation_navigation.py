@@ -2,8 +2,8 @@ from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QApplication
 
 from app.main_window import MainWindow
-from validation.schema_source import SchemaRef
 from validation.json_pointer import instance_path_to_model_path
+from validation.schema_source import SchemaRef
 
 
 def _qapp() -> QApplication:

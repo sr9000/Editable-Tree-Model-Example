@@ -236,11 +236,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             url = source.key
 
             def _is_schema_tab(widget: object) -> bool:
-                return (
-                    isinstance(widget, JsonTab)
-                    and widget.schema_source == source
-                    and widget.schema is None
-                )
+                return isinstance(widget, JsonTab) and widget.schema_source == source and widget.schema is None
 
             # Check if we already have this URL open as a tab
             for i in range(self.tabWidget.count()):
@@ -277,6 +273,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if source is None or source.kind != "file":
             return
         import os
+
         path = source.key
         if not os.path.exists(path):
             self.statusBar.showMessage(self.tr("Schema file not found"), 3000)

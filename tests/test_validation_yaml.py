@@ -8,10 +8,9 @@ Verifies:
 
 from __future__ import annotations
 
-import pytest
-
-
 from pathlib import Path
+
+import pytest
 
 from io_formats.load import load_file_with_format
 from validation.schema_source import SchemaRef, discover_schema, load_schema

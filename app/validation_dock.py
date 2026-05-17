@@ -216,8 +216,7 @@ class ValidationDock(QDockWidget):
         menu = QMenu(self)
         act_schema = menu.addAction(self.tr("Go to schema rule"))
         has_schema = self._tab is not None and (
-            self._tab.schema_ref.path is not None
-            or getattr(self._tab.schema_ref, "url", None) is not None
+            self._tab.schema_ref.path is not None or getattr(self._tab.schema_ref, "url", None) is not None
         )
         act_schema.setEnabled(has_schema and bool(issue.schema_path))
         chosen = menu.exec(self.list_view.viewport().mapToGlobal(QPoint(pos)))
