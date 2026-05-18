@@ -14,7 +14,9 @@ from model_actions import (
 from tree.types import JsonType
 from tree_actions.anchors import MoveAnchor, anchor_after_index, anchor_before_index
 from tree_actions.clipboard import copy_selection
+from tree_actions.field_case import FieldCase, convert_field_name
 from tree_actions.selection import _index_path, _is_root_index, _resolve_model, _row0, _to_source_index, _to_view_index
+from tree_actions.selection import selected_source_rows as _selected_rows
 from tree_actions.selection import top_level_source_rows as _top_level_selected_rows
 
 
@@ -457,6 +459,121 @@ def sort_selection_keys(tree_view: QTreeView, recursive: bool = False) -> bool:
         return tab.push_sort_keys(row0, recursive=recursive)
 
     return action_sort_keys(current, model, recursive=recursive)
+
+
+def _iter_subtree_rows(model, root_index: QModelIndex):
+    stack = [_row0(model, root_index)]
+    while stack:
+        current = stack.pop()
+        if not current.isValid():
+            continue
+        yield current
+        child_count = model.rowCount(current)
+        for row in range(child_count - 1, -1, -1):
+            stack.append(model.index(row, 0, current))
+
+
+def _collect_case_renames(model, roots: list, *, case_style: FieldCase, recursive: bool) -> list[dict]:
+    renames: list[dict] = []
+    seen_paths: set[tuple[int, ...]] = set()
+    for source in roots:
+        for row0 in _iter_subtree_rows(model, source) if recursive else [_row0(model, source)]:
+            if not row0.isValid() or _is_root_index(model, row0):
+                continue
+            item = model.get_item(row0)
+            if not isinstance(item.name, str):
+                continue
+            parent_item = item.parent_item
+            if parent_item is None or parent_item.json_type is not JsonType.OBJECT:
+                continue
+            new_name = convert_field_name(item.name, case_style)
+            if new_name == item.name:
+                continue
+            path = _index_path(row0)
+            if path in seen_paths:
+                continue
+            seen_paths.add(path)
+            renames.append({"path": path, "old_name": item.name, "new_name": new_name})
+    return renames
+
+
+def _apply_case_renames_direct(model, renames: list[dict]) -> bool:
+    if not renames:
+        return False
+    by_parent: dict[tuple[int, ...], dict[int, str]] = {}
+    for rec in renames:
+        path = tuple(rec["path"])
+        by_parent.setdefault(path[:-1], {})[path[-1]] = rec["new_name"]
+
+    for parent_path, updates in by_parent.items():
+        parent_index = QModelIndex()
+        for row in parent_path:
+            parent_index = model.index(row, 0, parent_index)
+        parent_item = model.get_item(parent_index)
+        if parent_item.json_type is not JsonType.OBJECT:
+            continue
+        final_names: list[str] = []
+        for row, child in enumerate(parent_item.child_items):
+            if not isinstance(child.name, str):
+                continue
+            final_names.append(updates.get(row, child.name))
+        if len(set(final_names)) != len(final_names):
+            return False
+
+    changed = False
+    for rec in renames:
+        path = tuple(rec["path"])
+        idx = QModelIndex()
+        for row in path:
+            idx = model.index(row, 0, idx)
+        if not idx.isValid():
+            continue
+        changed = model.setData(idx, rec["new_name"]) or changed
+    return changed
+
+
+def switch_selection_case(tree_view: QTreeView, case_style: FieldCase, *, recursive: bool = False) -> bool:
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    rows = _top_level_selected_rows(tree_view) if recursive else _selected_rows(tree_view)
+    roots = [idx for idx in rows if idx.isValid() and not _is_root_index(model, idx)]
+    if not roots:
+        return False
+
+    renames = _collect_case_renames(model, roots, case_style=case_style, recursive=recursive)
+    if not renames:
+        return False
+
+    tab = _tab_of(tree_view)
+    label = "switch case recursive" if recursive else "switch case"
+    if tab is not None:
+        return tab.push_switch_field_case(renames, label=label)
+    return _apply_case_renames_direct(model, renames)
+
+
+def switch_document_case(tree_view: QTreeView, case_style: FieldCase) -> bool:
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+
+    roots: list[QModelIndex] = []
+    if model.show_root:
+        root = model.index(0, 0, QModelIndex())
+        if root.isValid():
+            roots.append(root)
+    else:
+        for row in range(model.rowCount(QModelIndex())):
+            roots.append(model.index(row, 0, QModelIndex()))
+
+    renames = _collect_case_renames(model, roots, case_style=case_style, recursive=True)
+    if not renames:
+        return False
+
+    tab = _tab_of(tree_view)
+    if tab is not None:
+        return tab.push_switch_field_case(renames, label="switch case document", target_qname="$")
+    return _apply_case_renames_direct(model, renames)
 
 
 def expand_all(tree_view: QTreeView) -> bool:

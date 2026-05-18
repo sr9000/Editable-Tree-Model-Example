@@ -8,6 +8,7 @@ from delegates.bytes_codec import decode_bytes, encode_bytes
 from state.edit_limits import get_attach_file_warning_limit_bytes
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection, copy_selection_value_only, copy_selection_with_name
+from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER
 from tree_actions.paste import (
     has_clipboard_entries,
     paste_after,
@@ -34,6 +35,7 @@ from tree_actions.structure import (
     move_selection_out_up,
     move_selection_up,
     sort_selection_keys,
+    switch_selection_case,
 )
 
 _BASE64_TYPES = {JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP}
@@ -144,6 +146,18 @@ def _selected_base64_value_index(tree_view: QTreeView):
     if item is source_model.root_item or item.json_type not in _BASE64_TYPES:
         return None
     return row0.siblingAtColumn(2)
+
+
+def _add_switch_case_submenu(menu: QMenu, title: str, tree_view: QTreeView, *, recursive: bool, enabled: bool) -> None:
+    sub = menu.addMenu(title)
+    sub.setEnabled(enabled)
+    for case_style in FIELD_CASE_ORDER:
+        _add(
+            sub,
+            FIELD_CASE_LABELS[case_style],
+            lambda _checked=False, s=case_style: switch_selection_case(tree_view, s, recursive=recursive),
+            enabled=enabled,
+        )
 
 
 def _warn_large_open_file(tree_view: QTreeView, path: Path) -> bool:
@@ -464,6 +478,20 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
         "Sort Keys (Recursive)",
         lambda: sort_selection_keys(tree_view, recursive=True),
         enabled=can_sort_keys,
+    )
+    _add_switch_case_submenu(
+        context_menu,
+        "Switch Case",
+        tree_view,
+        recursive=False,
+        enabled=has_non_root,
+    )
+    _add_switch_case_submenu(
+        context_menu,
+        "Switch Case (Recursive)",
+        tree_view,
+        recursive=True,
+        enabled=has_non_root,
     )
 
     context_menu.addSeparator()

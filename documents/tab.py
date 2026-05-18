@@ -55,6 +55,7 @@ from undo.commands import (
     _RemoveRowsCmd,
     _RenameCmd,
     _SortKeysCmd,
+    _SwitchFieldCaseCmd,
 )
 from undo.diff import DiffApplier
 from validation._sanitize import to_jsonschema_input
@@ -1221,6 +1222,62 @@ class JsonTab(QWidget):
         target_qname = self._qualified_name(index)
         text = label if label is not None else ("sort keys recursive" if recursive else "sort keys")
         cmd = _SortKeysCmd(self, _make_label(text, target_qname), self._index_path(index), old_subtree, recursive)
+        self.undo_stack.push(cmd)
+        return True
+
+    def push_switch_field_case(
+        self,
+        renames: list[dict[str, Any]],
+        *,
+        label: str = "switch field case",
+        target_qname: str | None = None,
+    ) -> bool:
+        if self._read_only:
+            return False
+        if not renames:
+            return False
+
+        normalized: list[dict[str, Any]] = []
+        by_parent: dict[tuple[int, ...], dict[int, str]] = {}
+
+        for rec in renames:
+            path = tuple(rec.get("path", ()))
+            old_name = rec.get("old_name")
+            new_name = rec.get("new_name")
+            if not path or not isinstance(old_name, str) or not isinstance(new_name, str):
+                continue
+            if old_name == new_name:
+                continue
+            idx = self._index_from_path(path)
+            if not idx.isValid():
+                continue
+            item = self.model.get_item(idx)
+            if item.name != old_name:
+                continue
+            parent = item.parent_item
+            if parent is None or parent.json_type is not JsonType.OBJECT:
+                continue
+            normalized.append({"path": path, "old_name": old_name, "new_name": new_name})
+            by_parent.setdefault(path[:-1], {})[path[-1]] = new_name
+
+        if not normalized:
+            return False
+
+        # Preflight: reject operations that would create duplicate sibling names.
+        for parent_path, updates in by_parent.items():
+            parent_index = self._index_from_path(parent_path)
+            parent_item = self.model.get_item(parent_index)
+            final_names: list[str] = []
+            for row, child in enumerate(parent_item.child_items):
+                if not isinstance(child.name, str):
+                    continue
+                final_names.append(updates.get(row, child.name))
+            if len(set(final_names)) != len(final_names):
+                return False
+
+        first_index = self._index_from_path(normalized[0]["path"])
+        qname = target_qname if target_qname is not None else self._qualified_name(first_index)
+        cmd = _SwitchFieldCaseCmd(self, _make_label(label, qname), normalized)
         self.undo_stack.push(cmd)
         return True
 

@@ -45,7 +45,9 @@ from state.edit_limits import (
 )
 from state.recent_schemas import recent_schemas
 from tree_actions.clipboard import copy_selection
+from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
 from tree_actions.structure import collapse_all, delete_selection, expand_all
+from tree_actions.structure import switch_document_case as switch_case_document
 from units import counts, format_bytes
 from validation.schema_registry import SchemaSource, open_in_browser, schema_registry
 
@@ -109,6 +111,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         refresh_recent_menu(self)
         self._setup_schemas_menu()
         self._setup_validation_dock()
+        self._setup_switch_case_actions_menu()
         self._setup_font_actions()
         self._setup_monospace_action()
         setup_history_menu(self)
@@ -551,6 +554,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.viewMonospaceFieldsAction)
 
+    def _setup_switch_case_actions_menu(self) -> None:
+        self.switchCaseMenu = QMenu(self.tr("Switch Case"), self)
+        self.actionsMenu.addSeparator()
+        self.actionsMenu.addMenu(self.switchCaseMenu)
+        self._switch_case_actions: dict[FieldCase, QAction] = {}
+        for case_style in FIELD_CASE_ORDER:
+            action = QAction(FIELD_CASE_LABELS[case_style], self)
+            action.setData(case_style)
+            self.switchCaseMenu.addAction(action)
+            self._switch_case_actions[case_style] = action
+
     def _setup_font_actions(self) -> None:
         self.viewSelectRegularFontAction = QAction("Select Regular Font...", self)
         self.viewSelectMonospaceFontAction = QAction("Select Monospace Font...", self)
@@ -826,6 +840,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
 
         if delete_selection(view):
+            self.update_actions()
+
+    def switch_document_case(self, case_style: FieldCase) -> None:
+        view = self._current_view()
+        if view is None:
+            return
+        if switch_case_document(view, case_style):
+            self.statusBar.showMessage(f"Switched field names to {FIELD_CASE_LABELS[case_style]}", 1500)
             self.update_actions()
 
     def expand_all(self) -> None:

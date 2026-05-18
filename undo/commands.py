@@ -383,3 +383,29 @@ class _SortKeysCmd(QUndoCommand):
         idx = self._tab._index_from_path(self._path)
         if idx.isValid():
             self._tab._diff_apply(self._tab.model.get_item(idx), self._old_subtree, idx)
+
+
+class _SwitchFieldCaseCmd(QUndoCommand):
+    """Rename multiple object-field names as one undo step."""
+
+    def __init__(self, tab: "JsonTab", text: str, renames: list[dict[str, Any]]):
+        super().__init__(text)
+        self._tab = tab
+        self._renames = list(renames)
+
+    def redo(self):
+        self._apply("new_name")
+
+    def undo(self):
+        self._apply("old_name")
+
+    def _apply(self, key: str) -> None:
+        for rec in self._renames:
+            idx = self._tab._index_from_path(rec["path"])
+            if not idx.isValid():
+                continue
+            item = self._tab.model.get_item(idx)
+            item.name = rec[key]
+            if item.parent_item is not None:
+                item.parent_item.mark_children_dirty()
+            self._tab._emit_row_changed(idx)

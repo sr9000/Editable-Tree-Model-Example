@@ -1,3 +1,6 @@
+from tree_actions.field_case import FIELD_CASE_ORDER
+
+
 def setup_connections(window):
     window.appExitAction.triggered.connect(window.close)
 
@@ -24,6 +27,10 @@ def setup_connections(window):
 
     window._setup_theme_menu()
 
+    for case_style in FIELD_CASE_ORDER:
+        action = window._switch_case_actions[case_style]
+        action.triggered.connect(lambda _checked=False, s=case_style: window.switch_document_case(s))
+
     window.update_actions()
 
     window.tabWidget.tabCloseRequested.connect(window.close_tab)
@@ -46,3 +53,4 @@ def update_actions(window):
     window.viewZoomInAction.setEnabled(has_tab)
     window.viewZoomOutAction.setEnabled(has_tab)
     window.viewResetZoomAction.setEnabled(has_tab)
+    window.switchCaseMenu.setEnabled(has_tab and can_edit)
