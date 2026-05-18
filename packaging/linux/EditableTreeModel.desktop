@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=EditableTreeModel
+GenericName=Editable Tree Model
+Comment=Hierarchical JSON/YAML editor built on PySide6
+Exec=EditableTreeModel %F
+Icon=editabletreemodel
+Terminal=false
+Categories=Development;Utility;
+StartupWMClass=EditableTreeModel

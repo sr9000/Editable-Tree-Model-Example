@@ -1,0 +1,7 @@
+#!/bin/bash
+# AppRun entry point used by the AppImage runtime.
+HERE="$(dirname "$(readlink -f "${0}")")"
+export LD_LIBRARY_PATH="${HERE}/usr/bin:${LD_LIBRARY_PATH}"
+# Make Qt happy inside the AppImage sandbox.
+export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/bin/PySide6/Qt/plugins/platforms"
+exec "${HERE}/usr/bin/EditableTreeModel" "$@"

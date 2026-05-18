@@ -63,3 +63,11 @@ Thumbs.db
 /tmp/
 /logs/
 *.log
+
+### --- PyInstaller / Packaging outputs ---
+/dist/
+/build/
+*.AppDir/
+*.AppImage
+*.dmg
+appimagetool
