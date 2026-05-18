@@ -76,14 +76,14 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean EditableTreeModel.spec
 
-      # ----- Windows: zip the one-folder build -----
+      # ----- Windows: zip the single-file .exe -----
       - name: Package Windows zip
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $tag = "${{ inputs.tag }}"
           $asset = "${{ env.APP_NAME }}-$tag-${{ matrix.artifact_name }}.zip"
-          Compress-Archive -Path "dist/${{ env.APP_NAME }}/*" -DestinationPath "dist/$asset"
+          Compress-Archive -Path "dist/${{ env.APP_NAME }}.exe" -DestinationPath "dist/$asset"
           "ASSET_PATH=dist/$asset" | Out-File -FilePath $env:GITHUB_ENV -Append
           "ASSET_NAME=$asset" | Out-File -FilePath $env:GITHUB_ENV -Append
 
