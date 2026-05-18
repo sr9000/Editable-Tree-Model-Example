@@ -116,7 +116,8 @@ jobs:
           APPDIR="dist/${APP_NAME}.AppDir"
           rm -rf "${APPDIR}"
           mkdir -p "${APPDIR}/usr/bin"
-          cp -R "dist/${APP_NAME}/." "${APPDIR}/usr/bin/"
+          cp "dist/${APP_NAME}" "${APPDIR}/usr/bin/${APP_NAME}"
+          chmod +x "${APPDIR}/usr/bin/${APP_NAME}"
 
           install -m 0755 packaging/linux/AppRun "${APPDIR}/AppRun"
           install -m 0644 packaging/linux/EditableTreeModel.desktop \
