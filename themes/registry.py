@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -26,6 +28,50 @@ class ThemeHandle:
     name: str
     mode: Literal["light", "dark"]
     path: Path
+
+
+def _find_builtins_dir() -> Path | None:
+    """Locate the on-disk ``themes/builtin`` directory.
+
+    Tries, in order:
+
+    1. ``<sys._MEIPASS>/themes/builtin`` — PyInstaller frozen onefile/onefolder.
+       ``collect_data_files("themes.builtin")`` in the spec places the full
+       subtree (YAMLs + every icon sub-directory) here, so this branch is
+       authoritative when frozen.
+    2. ``Path(__file__).parent / "builtin"`` — running from source / a wheel
+       installed in *editable* mode.
+    3. ``importlib.resources.files("themes.builtin")`` cast to ``Path`` —
+       last-ditch fallback for unusual install layouts.  We *intentionally*
+       do not use ``importlib.resources`` as the primary strategy: when the
+       package is bundled by PyInstaller, ``resources.as_file`` of individual
+       YAML files can extract each file in isolation, separating it from
+       its sibling icon sub-directories and breaking the relative
+       ``./mingcute-light`` icon search paths declared inside each YAML.
+    """
+    meipass = getattr(sys, "_MEIPASS", None)
+    if isinstance(meipass, str) and meipass:
+        cand = Path(meipass) / "themes" / "builtin"
+        if cand.is_dir():
+            return cand
+
+    cand = Path(__file__).resolve().parent / "builtin"
+    if cand.is_dir():
+        return cand
+
+    try:
+        traversable = resources.files("themes.builtin")
+        fspath = getattr(traversable, "__fspath__", None)
+        if callable(fspath):
+            raw = fspath()
+            if isinstance(raw, (str, bytes)):
+                cand = Path(os.fsdecode(raw))
+                if cand.is_dir():
+                    return cand
+    except (ModuleNotFoundError, TypeError, OSError):
+        pass
+
+    return None
 
 
 class ThemeRegistry:
@@ -78,19 +124,37 @@ class ThemeRegistry:
             self._builtin_names.add(theme.name)
 
     def _load_builtin_themes(self) -> None:
-        builtins_dir = resources.files("themes.builtin")
-        for entry in sorted(builtins_dir.iterdir(), key=lambda p: p.name):
-            if entry.name.startswith("_") or not entry.name.lower().endswith(".yaml"):
-                continue
+        builtins_dir = _find_builtins_dir()
+        if builtins_dir is None:
+            LOGGER.error(
+                "Built-in themes directory could not be located. "
+                "Looked under sys._MEIPASS, source tree, and importlib.resources. "
+                "Falling back to compiled-in defaults only.",
+            )
+            return
 
+        yaml_files = sorted(builtins_dir.glob("*.yaml"))
+        if not yaml_files:
+            LOGGER.error(
+                "No built-in theme YAMLs found in %s. "
+                "Falling back to compiled-in defaults only.",
+                builtins_dir,
+            )
+            return
+
+        loaded = 0
+        for entry in yaml_files:
+            if entry.name.startswith("_"):
+                continue
             try:
-                with resources.as_file(entry) as file_path:
-                    theme = load_theme_yaml(file_path, mode_default=LIGHT_DEFAULT)
+                theme = load_theme_yaml(entry, mode_default=LIGHT_DEFAULT)
             except (ThemeLoadError, OSError) as exc:
                 LOGGER.warning("Failed to load built-in theme '%s': %s", entry.name, exc)
                 continue
+            self._register(theme, entry, is_builtin=True)
+            loaded += 1
 
-            self._register(theme, Path(str(entry)), is_builtin=True)
+        LOGGER.info("Loaded %d built-in theme(s) from %s", loaded, builtins_dir)
 
     def _load_user_themes(self) -> None:
         if not self._user_dir.exists():

@@ -9,7 +9,6 @@ Build with:
 import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import (
-    collect_data_files,
     collect_submodules,
     copy_metadata,
 )
@@ -18,8 +17,27 @@ ENTRY_SCRIPT = "main.py"
 # ---------------------------------------------------------------------------
 # Data files bundled into the executable.
 # ---------------------------------------------------------------------------
-# Theme specs / icons loaded via importlib.resources("themes.builtin").
-datas = collect_data_files("themes.builtin", include_py_files=False)
+# Ship the entire `themes/builtin/` subtree under `<_MEIPASS>/themes/builtin/`.
+#
+# We *deliberately* avoid `collect_data_files("themes.builtin")`: it spawns
+# an isolated subprocess to import the package, and that subprocess does
+# NOT have the project's source directory on `sys.path`, so it silently
+# emits zero entries with a `WARNING: ... is not a package` log line.
+# A direct, source-tree-relative enumeration is bulletproof.
+_SRC_ROOT = Path(SPECPATH)
+_BUILTINS_SRC = _SRC_ROOT / "themes" / "builtin"
+datas = []
+for _path in _BUILTINS_SRC.rglob("*"):
+    if not _path.is_file():
+        continue
+    if _path.suffix == ".pyc":
+        continue
+    if "__pycache__" in _path.parts:
+        continue
+    # `dst` is the destination *directory* (relative to <_MEIPASS>) where the
+    # file will be placed, mirroring the source tree.
+    _rel_dir = _path.parent.relative_to(_SRC_ROOT)
+    datas.append((str(_path), str(_rel_dir)))
 # Several runtime deps call importlib.metadata.version(<pkg>) at import time
 # (gmpy2 is the one that crashed; the others are bundled defensively so we
 # don't play whack-a-mole as users upgrade libraries).
@@ -52,11 +70,6 @@ hiddenimports += collect_submodules("jsonschema")
 hiddenimports += collect_submodules("jsonschema_specifications")
 hiddenimports += collect_submodules("referencing")
 hiddenimports += [
-    # Resources accessed via importlib.resources must be importable as
-    # packages, but they have no static `import` statements anywhere in
-    # the codebase, so PyInstaller's graph misses them.
-    "themes",
-    "themes.builtin",
     "gmpy2",
     "dateutil",
     "dateutil.tz",
@@ -82,15 +95,6 @@ a = Analysis(
         "tests",
         "tkinter",
     ],
-    # ``importlib.resources.files("themes.builtin")`` needs the package's
-    # ``__init__.py`` to live on disk next to the data files, otherwise
-    # the Traversable returned by the frozen importer can't ``iterdir``.
-    # ``pyz+py`` ships the module both inside PYZ (for fast import) and
-    # as a plain file on disk (for resource discovery).
-    module_collection_mode={
-        "themes": "pyz+py",
-        "themes.builtin": "pyz+py",
-    },
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

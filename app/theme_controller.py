@@ -141,6 +141,10 @@ class ThemeController:
         open_folder_action.triggered.connect(self.open_themes_folder)
         menu.addAction(open_folder_action)
 
+        export_action = QAction("Export built-in themes\u2026", self._parent)
+        export_action.triggered.connect(self.export_builtin_themes)
+        menu.addAction(export_action)
+
         view_menu.addMenu(menu)
         self.rebuild_theme_menu_entries()
         self.refresh_theme_menu_checks()
@@ -242,6 +246,44 @@ class ThemeController:
         user_dir = self._theme_registry.user_dir
         user_dir.mkdir(parents=True, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(user_dir)))
+
+    def export_builtin_themes(self) -> None:
+        """Copy bundled built-in themes (YAMLs + icon sets) into the user folder."""
+        from PySide6.QtWidgets import QMessageBox
+
+        from themes.export import export_builtins
+
+        user_dir = self._theme_registry.user_dir
+        try:
+            copied, skipped = export_builtins(user_dir)
+        except (OSError, FileNotFoundError) as exc:
+            QMessageBox.warning(
+                self._parent,
+                "Export failed",
+                f"Could not export built-in themes to:\n{user_dir}\n\n{exc}",
+            )
+            return
+
+        if copied:
+            text = f"Exported {copied} file(s) to:\n{user_dir}"
+        else:
+            text = (
+                f"All built-in themes are already present in:\n{user_dir}\n"
+                "Nothing was overwritten."
+            )
+        if skipped:
+            text += f"\n\n{skipped} existing file(s) were left untouched."
+
+        box = QMessageBox(self._parent)
+        box.setWindowTitle("Export built-in themes")
+        box.setText(text)
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        open_btn = box.addButton("Open folder", QMessageBox.ButtonRole.ActionRole)
+        box.exec()
+        if box.clickedButton() is open_btn:
+            self.open_themes_folder()
+        # Picks up the new YAMLs that just landed in the user folder.
+        self.reload_themes()
 
     def clear_theme_watcher_paths(self) -> None:
         current = self._theme_fs_watcher.directories() + self._theme_fs_watcher.files()
