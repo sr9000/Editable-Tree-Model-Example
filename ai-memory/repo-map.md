@@ -1,24 +1,24 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-17**. PySide6 desktop **structured-data
+_Last scanned: **2026-05-17** (post-merge of PR #9 `improve-ux`,
+`HEAD = ca2b174` on `master`). PySide6 desktop **structured-data
 editor** (originated from Qt's "Editable Tree Model" example).
-**Drag-and-drop plan is fully shipped**: Steps 1–10 (multiselect
-foundation → MIME helpers → atomic multi-row undo move → keyboard
-Alt±arrow multimove with boundary bubble-out → expansion preservation
-across moves → native QTreeView drag-and-drop → drop policies & cycle
-guards → shortcuts/menu/docs → move-mechanics + multi-action redesign
-on anchors → multi-action context-menu paste/zip fixes) are all in
-mainline. The tree gained a `JsonTreeView` subclass that owns
-`startDrag` so the model can fully own internal moves without Qt's
-default post-drag row removal. **Validation Step 7 (YAML schemas,
-multi-doc, schema picker, persistence, sanitization) has shipped, and
-the `schema-registry` branch (`HEAD = a2b1acb`) has shipped registry
-Steps 1–7:** shared `validation/schema_registry.py` ownership,
-`SchemaSource(kind="file"|"url")` source identity, local-file hot reload,
-URL schema support, schema-tab pooling, and a cap-12 recent-schemas
-list, plus the docs/memory close-out. Tests: **906 collected** on this
-scan; known offscreen-only color-scheme failures remain tracked in
-`todo-n-fixme.md`._
+All previous plans are merged: drag-and-drop Steps 1–10, jsonschema
+Step 7, and schema-registry Steps 1–7. PR #9 `improve-ux` added
+**window geometry persistence (normal / maximized / fullscreen)**,
+**main-window file-drop** (drop one or many JSON/YAML files to open
+them all), **base64-cell "Attach from file…" / "Save as…" context
+actions**, **a configurable edit-warning-limits submenu** under
+`File ▸` (string / multiline / binary / attach thresholds, persisted
+via `QSettings`), **size-aware confirmation dialogs** before editing
+large strings, multiline text, or binary blobs, **short "K/M/B"
+human counts** via `units.counts()`, and **simplified validation
+issues** (the `severity` field was removed from `ValidationIssue`;
+the issue index now only distinguishes presence/absence).
+The tree's `JsonTreeView` subclass still owns `startDrag` so the
+model fully owns internal moves without Qt's default post-drag row
+removal. Tests: **922 collected** on this scan; known offscreen-only
+color-scheme failures remain tracked in `todo-n-fixme.md`._
 
 ---
 
@@ -50,6 +50,11 @@ scan; known offscreen-only color-scheme failures remain tracked in
 | Custom widgets                                        | `qhexedit/`, `qmultiline_editor.py`, `datetime_editor/`, `qbigint_spinbox/`, `qmpq_spinbox/` |
 | **Validation / schema**                               | `validation/`, `app/validation_dock.py`, `state/validation_settings.py` |
 | Schema registry / source identity                     | `validation/schema_registry.py`, `state/recent_schemas.py`, `dialogs/attach_schema_dlg.py` |
+| Window geometry / file drop                           | `app/main_window.py::_restore_window_geometry`, `show_with_restored_mode`, `dragEnterEvent`/`dropEvent` |
+| Configurable edit warning limits                      | `state/edit_limits.py`, `settings.py` (`*_WARNING_LIMIT_*`), `app/main_window.py::_setup_edit_limits_menu` |
+| Base64 attach / save context actions                  | `tree_actions/context_menu.py::attach_base64_from_file` / `save_base64_as_file` |
+| Validation badge (in-tree marker)                     | `delegates/validation_badge.py`, `tree/model_roles.py::VALIDATION_SEVERITY_ROLE` |
+| Color cell editor (`COLOR_RGB` / `COLOR_RGBA`)        | `delegates/color_codec.py`, `delegates/value.py::createEditor` (QColorDialog branch) |
 
 ---
 
@@ -214,7 +219,7 @@ mpq2py/                       # mpq_serialization, mpq_json_default, MpqSafeLoad
 jsontream/                    # streaming JSON encoder (iterables)
 units/                        # bits, format_bytes
 coalesce/, binary/, qt2py/    # small utility packages
-tests/                        # 906 collected
+tests/                        # 922 collected
 ai-memory/                    # this folder
 ```
 
@@ -282,9 +287,16 @@ display in `delegates/value_formatting.py`; coercion in
 | `BYTES`        | `"bytes"`       | `QHexDialog` (modal)         | `"<24 byte>"` via `units.format_bytes`   | base64 wire format; encode-on-switch from string/int             |
 | `ZLIB`         | `"zlib"`        | `QHexDialog` (modal)         | `"<…>"`                                  | base64+zlib; cross-format re-encode lossless when `old_type` known |
 | `GZIP`         | `"gzip"`        | `QHexDialog` (modal)         | `"<…>"`                                  | base64+gzip                                                      |
+| `COLOR_RGB`    | `"rgb"`         | `QColorDialog` (modal)       | `"#rrggbb"` + swatch icon                | inferred from `#rgb` / `#rrggbb`; serialised lowercase           |
+| `COLOR_RGBA`   | `"rgba"`        | `QColorDialog` w/ alpha      | `"#rrggbbaa"` + checkerboard swatch      | inferred from `#rgba` / `#rrggbbaa`                              |
 | `OBJECT`       | `"object"`      | n/a (children edited inline) | `"{N keys}  k: v, k2: v2, …"` (collapsed) | array→object preserves children, drops keys                      |
 | `ARRAY`        | `"array"`       | n/a                          | `"[N items]  v1, v2, v3"` (collapsed)    | object→array preserves children, drops keys                      |
 | `NULL`         | `"null"`        | n/a (col 2 not editable)     | `"null"`                                 | always editable type; never serialised as a string               |
+
+`COLOR_FAMILY = {COLOR_RGB, COLOR_RGBA}`. Helpers
+`looks_like_color_rgb` / `looks_like_color_rgba` drive inference;
+`delegates/color_codec.py::parse_color` / `color_to_html` round-trip
+the cell value via `QColor`.
 
 Inference (`parse_json_type`):
 - floats / mpq in `[0, 1]` → `PERCENT`; else → `FLOAT`.
@@ -351,11 +363,18 @@ tree itself).
 ### Menu bar (from `mainwindow.ui` + runtime additions)
 
 - **File**: New, Open, *Recent* (submenu, ≤ 8, runtime), Save, Save As,
-  Exit.
+  *Edit Warning Limits* (submenu — string chars / multiline chars /
+  bytes / attach-file bytes; current value shown in each label,
+  `QInputDialog` prompts for the new int), Exit.
 - **Actions**: Insert Row (before), Insert Row after, Remove Row.
   `aboutToShow` triggers `update_actions`.
+- **Schemas** (runtime via `app/main_window.py::_setup_schemas_menu`):
+  Attach schema…, *Recent ▸* (up to 8 entries from
+  `state.recent_schemas`), Open current schema, Copy full path.
 - **View**: Expand All, Collapse All, Zoom In/Out/Reset, **Theme**
-  submenu (runtime via `ThemeController.setup_theme_menu`).
+  submenu (runtime via `ThemeController.setup_theme_menu`),
+  Validation Panel (toggle), Monospace Names && Values,
+  Select Regular Font…, Select Monospace Font….
 - **History** (runtime via `app/history.py`): Undo, Redo, Show
   History….
 
@@ -375,6 +394,10 @@ Column-aware. Top-level layout (when col 0 / col 2 has a selection):
 - **Copy** — column-aware: name col → `copy_selection_with_name`,
   value col → `copy_selection_value_only`, otherwise full `copy_selection`.
 - **Cut**
+- **Attach from…** / **Save as…** — enabled only when the
+  single-row selection is a `BYTES` / `ZLIB` / `GZIP` cell. Routes
+  through `tree_actions/context_menu.py::attach_base64_from_file` /
+  `save_base64_as_file` (uses the configured attach warning limit).
 - **Paste ▸** (whole submenu disabled when clipboard has no tree-paste-able
   content; per-item enable also gated by selection / container constraints)
   - **Paste (auto)** — smart placement (container ⇒ child append,
@@ -440,12 +463,16 @@ on the pinned version; load uses `parse_float=mpq` only, save uses
 `documents/tab_status.py`:
 - `_on_current_changed` writes a permanent message of the form
   `$.foo.bar[2].baz  (string, 24 chars)` via
-  `permanent_message_callback`.
+  `permanent_message_callback`. Long counts are abbreviated by
+  `units.counts()` (`K`, `M`, `B` suffixes).
 - `size_hint_for_item` per JsonType:
-  - text family → `… chars`
-  - OBJECT → `… keys`
-  - ARRAY → `… items`
+  - text family → `… chars` (via `counts()`)
+  - OBJECT → `… keys` (via `counts()`)
+  - ARRAY → `… items` (via `counts()`)
   - bytes family → `format_bytes(len(decoded))`
+- `format_validation_status(issue_index)` returns
+  `"Validation: N issue(s)"` or `""` when empty (consumed by the
+  permanent right-aligned status-bar label).
 - Transient action messages (Open/Save/copy/cut/paste/etc.) go through
   `status_message_callback(text, timeout_ms)`.
 
@@ -835,9 +862,93 @@ valid current index.
 
 ---
 
+## 15.5) Window geometry, file drop, and edit-warning limits
+(post-merge `improve-ux`, PR #9)
+
+### Window geometry persistence (`app/main_window.py`)
+
+- `__init__` calls `_restore_window_geometry()` which reads
+  `window/geometry` (`QByteArray`), `window/maximized`, and
+  `window/fullscreen` from `QSettings(APPLICATION_ID, "app")`. When
+  no saved geometry exists it falls back to
+  `settings.WINDOW_DEFAULT_SIZE`. The chosen startup mode (`"normal"`
+  / `"maximized"` / `"fullscreen"`) is stashed on `self._startup_window_mode`.
+- `show_with_restored_mode()` is the new entry point used by
+  `main.py`; it calls `show()` and then `QTimer.singleShot(100, …)` to
+  enter maximized / fullscreen mode after the initial layout pass.
+- `closeEvent` persists current geometry plus `isMaximized()` and
+  `isFullScreen()` so the next session restores the same window mode.
+
+### File-drop into the main window (`app/main_window.py`)
+
+- The window calls `setAcceptDrops(True)` in `__init__`.
+- `dragEnterEvent` / `dropEvent` use `_local_paths_from_mime(mime)` to
+  pull deduplicated `Path.resolve()` strings from `mime.urls()`;
+  non-local URLs are filtered.
+- Every accepted path is fed through `_open_path(path)`. Each opens
+  its own tab and is pushed onto the recent-files list. Drops with
+  zero local files are ignored.
+
+### Edit-warning limits (`state/edit_limits.py` + File menu)
+
+- `settings.py` defines four default warning thresholds:
+  `STRING_EDIT_WARNING_LIMIT_CHARS = 10_000`,
+  `MULTILINE_EDIT_WARNING_LIMIT_CHARS = 100_000`,
+  `BINARY_EDIT_WARNING_LIMIT_BYTES = 100 * 1024`,
+  `BINARY_ATTACH_WARNING_LIMIT_BYTES = 100 * 1024`.
+- `state/edit_limits.py` exposes `get_*` / `set_*` accessors
+  persisting under `QSettings(APPLICATION_ID, "app")` keys
+  `edit_limits/{string_chars,multiline_chars,binary_bytes,attach_bytes}`.
+  All values are coerced to positive ints, falling back to the
+  `settings.py` default on garbage.
+- `MainWindow._setup_edit_limits_menu` injects an "Edit Warning
+  Limits" submenu into the File menu (before Exit). Each action shows
+  the current threshold in a short `counts(...)` / `format_bytes(...)`
+  form, opens a `QInputDialog.getInt` capped at `2_147_483_647`, and
+  pushes the new value through the matching `set_*` helper.
+- `delegates/value.py::ValueDelegate._confirm_large_text_edit` /
+  `_confirm_large_binary_edit` consult these limits before opening
+  the string `LineEdit`, multiline dialog, or hex dialog. Declining
+  cancels the edit and surfaces a status message; bypassing the
+  warning continues with the normal modal flow.
+
+### Base64 cell helpers (`tree_actions/context_menu.py`)
+
+When the single selected leaf is a `BYTES` / `ZLIB` / `GZIP` cell, the
+context menu adds two extra actions next to Copy / Cut:
+
+- **Attach from…** (`attach_base64_from_file`) — `QFileDialog.getOpenFileName`,
+  honours `get_attach_file_warning_limit_bytes()` via `_warn_large_open_file`,
+  encodes via `encode_bytes(raw, item.json_type)`, then commits through the
+  tab so the change is undoable.
+- **Save as…** (`save_base64_as_file`) — `QFileDialog.getSaveFileName` and
+  `decode_bytes(...)` write the raw bytes to disk.
+
+Errors emit a status message and a `QMessageBox.warning`.
+
+### Color cell editor
+
+`JsonType.COLOR_RGB` / `JsonType.COLOR_RGBA` open a non-modal
+`QColorDialog` (alpha enabled for RGBA). `delegates/color_codec.py`
+parses `#rgb` / `#rrggbb` / `#rgba` / `#rrggbbaa` strings and emits
+the canonical lowercase form. `ValueDelegate.initStyleOption` paints
+a swatch icon next to the colour value; a checkerboard pattern is
+drawn under semi-transparent RGBA values.
+
+### Validation badge
+
+`tree/model_roles.py::VALIDATION_SEVERITY_ROLE` (`UserRole + 2`)
+returns `"error"` for cells the `IssueIndex` flags (or `None`).
+`delegates/validation_badge.py::draw_severity_badge` draws an inline
+red wave under the cell when the role is set;
+`ValueDelegate.paint` short-circuits to it before the default paint
+path.
+
+---
+
 ## 16) Tests
 
-`tests/` collects **906 tests** as of 2026-05-17. The known
+`tests/` collects **922 tests** as of 2026-05-17 (post-`improve-ux`).
 offscreen-only failing ones are —
 `test_app_color_scheme.py::test_light_theme_sets_light_color_scheme`,
 `test_app_color_scheme.py::test_dark_theme_sets_dark_color_scheme`,
@@ -921,13 +1032,14 @@ Sample fixtures: `data.yaml`, `data.json`, `data.jsonl`,
 
 `requirements.txt`:
 ```
-PySide6==6.11.0
-PyYAML==6.0.3
 python-dateutil==2.9.0.post0
-gmpy2==2.3.0
+PySide6==6.11.1
+PyYAML==6.0.3
 pytest==9.0.3
+gmpy2==2.3.0
 tzdata==2026.2
 simplejson==4.1.1
+jsonschema[format]==4.26.0
 ```
 `pytest-qt` is **not pinned** even though `qtbot` is used by theme
 tests.
@@ -988,12 +1100,12 @@ mainwindow.py`. No `make test` / `themes-check` target.
 
 | Module | Responsibility |
 |---|---|
-| `_engine.py` | Thin adapter over `jsonschema-rs`: `compile_schema(schema)` → `CompiledValidator` |
+| `_engine.py` | Thin adapter over `jsonschema`: `compile_schema(schema)` picks the correct draft via `validator_for(...)`, calls `check_schema(...)`, and enables `jsonschema.FormatChecker()` |
 | `validator.py` | `validate_document(data, schema)` + `is_schema_valid(schema)` |
 | `yaml_validate.py` | `validate_yaml_documents(docs, schema)` — validates each doc in a multi-doc YAML stream separately; prefixes issues with `'[doc N]'` in `instance_path` |
 | `_sanitize.py` | `to_jsonschema_input(value)` — recursively coerces `mpq`→`float`, `Decimal`→`float`, `datetime`/`date`/`time`→ISO string, `bytes`→Base64; precision loss is validation-only, never stored |
-| `issue.py` | `ValidationIssue(severity, message, instance_path, schema_path, kind)` frozen dataclass |
-| `index.py` | `IssueIndex` — maps issues to model paths via `instance_path_to_model_path`; `severity_at`, `ancestor_severity`, `issues_for`, `all_issues` |
+| `issue.py` | `ValidationIssue(message, instance_path, schema_path, kind)` frozen dataclass (no severity — every issue is treated as an error) |
+| `index.py` | `IssueIndex` — maps issues to model paths via `instance_path_to_model_path`; `severity_at` / `ancestor_severity` return `"error"` or `None`; `issues_for`, `all_issues`, `len(index)` |
 | `json_pointer.py` | `instance_path_to_model_path` / `model_path_to_instance_path` — handles plain `int` list tokens and the synthetic `'[doc N]'` string tokens emitted by `yaml_validate` |
 | `schema_source.py` | `SchemaRef(path, inline, origin, url=None)` · `discover_schema(doc_path, data)` — auto-detects local inline `$schema`, sibling `.schema.json`; `load_schema(ref)` supports JSON/YAML files and URL fetches |
 | `schema_registry.py` | Process-wide `schema_registry`; `SchemaSource(kind, key, display)` identity; `SchemaEntry(source, inline, mtime_ns, ref_count, bound_tabs)`; `SchemaRegistry.acquire/release/reload/lookup`; local-file `QFileSystemWatcher`; URL opener |

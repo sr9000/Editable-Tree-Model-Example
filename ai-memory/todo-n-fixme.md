@@ -1,6 +1,7 @@
 # TODO & FIXME
 
-_Last updated: **2026-05-17**._
+_Last updated: **2026-05-17** (post-merge of PR #9 `improve-ux`,
+`HEAD = ca2b174` on `master`)._
 
 Tracks **missing/incomplete features** (TODO) and **bugs/issues**
 (FIXME) discovered while auditing the editor codebase.
@@ -8,12 +9,32 @@ Cross-reference with `pros-n-cons.md` and `repo-map.md` for context.
 
 Format: `- [ ] [scope] description — file:symbol`
 
-> **Schema-registry plan (branch `schema-registry`)** — Steps 1–7 of
-> `plans/00-overview.md` are implemented in `HEAD = a2b1acb`: one
-> shared `SchemaEntry` per `SchemaSource`, `QFileSystemWatcher`-driven
-> hot reload for local schemas, URL source identity, extracted attach
-> dialog, schema-tab pooling, persisted recent schemas, and the
-> docs/memory close-out.
+> **PR #9 `improve-ux` — closed items (now on `master`):**
+> - [x] [ux] Window geometry / maximized / fullscreen mode persisted
+>       across sessions (`app/main_window.py::_restore_window_geometry`,
+>       `show_with_restored_mode`, `closeEvent`).
+> - [x] [ux] Drop one or more local files onto the main window to
+>       open each as a tab (`dragEnterEvent` / `dropEvent` +
+>       `_local_paths_from_mime`).
+> - [x] [ux] Base64 cells gain **Attach from…** and **Save as…**
+>       context-menu actions
+>       (`tree_actions/context_menu.py::attach_base64_from_file`,
+>       `save_base64_as_file`).
+> - [x] [ux] Configurable Edit Warning Limits (File ▸ submenu;
+>       `state/edit_limits.py`); editors confirm before opening large
+>       strings, multiline blobs, or binary payloads.
+> - [x] [validation] Remove `ValidationIssue.severity` and the
+>       severity map from `IssueIndex`; downstream UI now reports a
+>       single "Validation: N issue(s)" count.
+> - [x] [ui] Compact K/M/B counts via `units.counts()` in
+>       breadcrumb, validation summary, hex dialog, and limit labels.
+
+> **Schema-registry plan (branch `schema-registry`, now merged)** —
+> Steps 1–7 of `plans/00-overview.md` are on `master`:
+> shared `SchemaEntry` per `SchemaSource`,
+> `QFileSystemWatcher`-driven hot reload for local schemas, URL
+> source identity, extracted attach dialog, schema-tab pooling,
+> persisted recent schemas, and the docs/memory close-out.
 
 ## Schema-registry plan — closed items
 
@@ -62,7 +83,7 @@ Format: `- [ ] [scope] description — file:symbol`
 > persistence lookup, `JsonTab.revalidate` routing via sanitize +
 > yaml multi. The schema-registry branch adds registry/tab/watch/recents/UI
 > suites on top of those validation tests.
-> The current tree collects **906 tests**; the known offscreen failures are
+> The current tree collects **922 tests**; the known offscreen failures are
 > platform-only — Qt's
 > offscreen QPA ignores `QStyleHints.setColorScheme`). Production code
 > still contains **zero `TODO` / `FIXME` / `XXX` / `HACK` markers**.
@@ -166,7 +187,7 @@ Format: `- [ ] [scope] description — file:symbol`
       — `validation/schema_registry.py`, `validation/schema_source.py`
 - [ ] [feature] Remote `$ref` resolution against `http(s)://` — currently remote
       `$schema` URLs are silently ignored; implement via a configurable HTTP resolver
-      passed to jsonschema-rs or a pre-fetch cache.
+      passed to `jsonschema` or a pre-fetch cache.
       — `validation/schema_source.py`, `validation/_engine.py`
 - [ ] [ux] Schema-authoring UX — "JSON Schema Draft picker" (Draft 7 ↔ Draft
       2020-12) combo in the dock; per-tab draft override for validation.
@@ -310,7 +331,7 @@ listed once here so future audits don't reopen them.
 
 ### Step 7 — YAML support, multi-doc, schema picker, persistence (shipped 2026-05-16)
 - **`validation/_sanitize.py`** — `to_jsonschema_input` coerces `mpq`/`Decimal`/
-  `datetime`/`date`/`time`/`bytes` to jsonschema-rs primitives; precision loss is
+  `datetime`/`date`/`time`/`bytes` to jsonschema-compatible primitives; precision loss is
   validation-only, never stored.
 - **`validation/yaml_validate.py`** — `validate_yaml_documents(docs, schema)`
   validates each doc separately and prefixes issue `instance_path` with `'[doc N]'`.

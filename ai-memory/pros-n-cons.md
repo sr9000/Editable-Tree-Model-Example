@@ -1,25 +1,20 @@
 # JSON Editor — Pros & Cons
 
-_Last analysis: **2026-05-17**. All previous plans (drag-and-drop
-Steps 1–10 + jsonschema Steps 1–7) are merged on `master`
-(`cb7cca8`). The active `schema-registry` branch is at `a2b1acb` and
-has shipped Steps 1–7 of `plans/00-overview.md`: shared
-`SchemaRegistry`, identity-tracked `SchemaSource(kind="file"|"url")`,
-`QFileSystemWatcher`-driven hot reload, URL-backed schema sources, and
-a persisted recent-schemas picker plus this docs/memory close-out._
+_Last analysis: **2026-05-17** (after merge of PR #9 `improve-ux`,
+`HEAD = ca2b174` on `master`). All previous plans are merged:
+drag-and-drop Steps 1–10, jsonschema Step 7, and the full
+`schema-registry` plan (Steps 1–7). PR #9 added window-geometry
+persistence (normal / maximized / fullscreen), main-window file drop,
+a base64-cell "Attach from file…" / "Save as…" context menu, a
+configurable **Edit Warning Limits** submenu, size-aware confirmation
+dialogs before editing large strings / multiline / binary blobs,
+short K/M/B counts via `units.counts()`, and removal of the
+validation `severity` field (all flagged cells are now plain
+"error"s)._
 
-_The six original `plans/` phases plus
-the full drag-and-drop / multi-action plan (Steps 1–10 — multiselect
-foundation, MIME helpers, atomic multi-row undo, keyboard multimove,
-expansion preservation, native QTreeView drag-and-drop, drop policies,
-shortcuts/menu, anchor-based move primitive, multi-action paste
-semantics) have all shipped.  **Step 7 — YAML schema support,
-multi-doc validation, schema picker UI, persistence, and sanitization
-— has also shipped.**  Earlier Phases 0–6 plus the package
-refactor remain green. Test surface: **906 collected** as of this
-memory pass. The known offscreen failures are platform-specific
-(Qt offscreen ignores `QStyleHints.setColorScheme`); they pass on real
-platforms._
+_Test surface: **922 collected**. The 3 known offscreen failures are
+platform-specific (Qt offscreen ignores `QStyleHints.setColorScheme`);
+they pass on real platforms._
 
 This document evaluates the **current** state of the editor across
 the canonical package layout: `app/`, `documents/`, `tree/`,
@@ -171,12 +166,12 @@ See `repo-map.md` for the full module breakdown.
   close.
 
 ### Validation
-- **Schema validation** (Step 7) — JSON Schema validation via optional
-  `jsonschema-rs`; schema auto-detection (inline `$schema`, sibling
+- **Schema validation** (Step 7) — JSON Schema validation via pinned
+  `jsonschema[format]`; schema auto-detection (inline `$schema`, sibling
   `.schema.json`); YAML schemas load via the same `load_file_with_format`
   path; per-file schema binding persisted via `QSettings` sha1-keyed path
   and restored on reopen; `mpq`/`Decimal`/`datetime`/`bytes` sanitized
-  to jsonschema-rs primitives in `validation._sanitize` (validation-only,
+  to jsonschema-compatible primitives in `validation._sanitize` (validation-only,
   never stored); YAML multi-doc validates each document independently with
   `[doc N]` prefix in `instance_path`; **manual schema picker UI** in
   the ValidationDock toolbar (Attach / Reload / Open / Clear); "Clear
@@ -191,6 +186,35 @@ See `repo-map.md` for the full module breakdown.
   reuses an already-open schema tab for the same local path or URL;
   URL schemas open as read-only materialised tabs for rule navigation
   and as browser URLs from the dock's open action.
+- **Simplified validation surface (PR #9)** — `ValidationIssue` no
+  longer carries a `severity`; the IssueIndex hardcodes `"error"`,
+  the dock summary is a single "Validation: N issue(s)" string, and
+  in-tree markers (`VALIDATION_SEVERITY_ROLE` + `draw_severity_badge`)
+  draw a uniform red wave on offending cells.
+
+### Workflow polish (PR #9 `improve-ux`)
+- **Window-mode persistence** — `MainWindow._restore_window_geometry`
+  / `show_with_restored_mode` / `closeEvent` round-trip normal,
+  maximized, and fullscreen modes plus `saveGeometry()` under
+  `QSettings(APPLICATION_ID, "app")::window/*`.
+- **Drop files onto the main window** — `dragEnterEvent` /
+  `dropEvent` accept any number of local `.json` / `.jsonl` /
+  `.yaml` paths from a system file manager and open each as its own
+  tab.
+- **Configurable Edit Warning Limits** — File ▸ Edit Warning Limits
+  exposes the four `state.edit_limits` thresholds (string chars,
+  multiline chars, binary bytes, attach-file bytes). Each editor /
+  attach path consults the matching limit and a
+  `QMessageBox.warning` lets the user bail before opening modal
+  editors with potentially expensive content.
+- **Base64 cell ergonomics** — context menu adds **Attach from…**
+  (encode raw bytes from a chosen file) and **Save as…** (decode the
+  cell to disk) for `BYTES` / `ZLIB` / `GZIP` leaves, with the same
+  attach-size warning guard.
+- **Short K/M/B counts** — `units.counts()` produces compact
+  thousand-separated counts (`12.3K chars`, `4.5M items`); the
+  breadcrumb, validation summary, hex-dialog headers, and the
+  Edit Warning Limits labels all share it.
 
 - **CapsLock-safe inline editing** — `_TextEditorDelegateBase` and
   `_CapsLockSafeLineEdit` swallow lock-key key events and
@@ -208,7 +232,7 @@ See `repo-map.md` for the full module breakdown.
 - **Synthetic root row** — `JsonTreeModel.show_root` lets the user
   edit the root container without breaking legacy fixtures
   (`show_root=False`).
-- **Substantial test coverage** — 906 tests collected; the new Phase 1–5
+- **Substantial test coverage** — 922 tests collected; the new Phase 1–5
   surfaces are covered by `test_kind_switch_coercion.py`,
   `test_container_preview.py`, `test_app_color_scheme.py`, the
   existing 50-test theming surface, and the Phase-5 broader UX
