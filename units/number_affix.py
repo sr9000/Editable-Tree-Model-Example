@@ -9,12 +9,8 @@ from gmpy2 import mpq
 _AFFIX_FORBIDDEN_TOUCH_CHARS = set("+-.")
 _NUMBER_RE = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
 
-_CURRENCY_RE = re.compile(
-    rf"^(?P<affix>[^\d\s+\-.][^\s]*?)(?P<sp> ?)(?P<num>{_NUMBER_RE})$"
-)
-_UNITS_RE = re.compile(
-    rf"^(?P<num>{_NUMBER_RE})(?P<sp> ?)(?P<affix>[^\d\s+\-.eE][^\s]*?)$"
-)
+_CURRENCY_RE = re.compile(rf"^(?P<affix>[^\d\s+\-.][^\s]*?)(?P<sp> ?)(?P<num>{_NUMBER_RE})$")
+_UNITS_RE = re.compile(rf"^(?P<num>{_NUMBER_RE})(?P<sp> ?)(?P<affix>[^\d\s+\-.eE][^\s]*?)$")
 
 
 class AffixKind(StrEnum):

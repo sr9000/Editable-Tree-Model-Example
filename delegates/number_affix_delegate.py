@@ -55,7 +55,9 @@ class AffixCompositeEditor(QWidget):
         self.affix_combo.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.affix_combo.setMinimumContentsLength(1)
         if affix_icon is not None and not affix_icon.isNull() and self.affix_combo.lineEdit() is not None:
-            self.affix_combo.lineEdit().addAction(affix_icon, self.affix_combo.lineEdit().ActionPosition.LeadingPosition)
+            self.affix_combo.lineEdit().addAction(
+                affix_icon, self.affix_combo.lineEdit().ActionPosition.LeadingPosition
+            )
 
         self.space_button = QToolButton(self)
         self.space_button.setCheckable(True)
