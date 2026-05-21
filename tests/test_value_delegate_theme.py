@@ -12,6 +12,7 @@ from documents.tab import JsonTab
 from themes import DARK_DEFAULT, LIGHT_DEFAULT, parse_theme_mapping
 from tree.model import JsonTreeModel
 from tree.types import JsonType
+from units.number_affix import AffixKind, NumberAffix
 
 
 def _color_hex(color) -> str:
@@ -36,6 +37,10 @@ def _index_for_type(json_type: JsonType):
         JsonType.INTEGER: 1,
         JsonType.FLOAT: mpq("3/2"),
         JsonType.PERCENT: mpq("1/2"),
+        JsonType.INTEGER_CURRENCY: NumberAffix(AffixKind.CURRENCY, "$", False, 12),
+        JsonType.INTEGER_UNITS: NumberAffix(AffixKind.UNITS, "kg", True, 12),
+        JsonType.FLOAT_CURRENCY: NumberAffix(AffixKind.CURRENCY, "$", True, mpq("3/2")),
+        JsonType.FLOAT_UNITS: NumberAffix(AffixKind.UNITS, "rad", False, mpq("3/2")),
         JsonType.BOOLEAN: True,
         JsonType.STRING: "ascii",
         JsonType.UNICODE: "caf\u00e9",

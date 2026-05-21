@@ -1,4 +1,5 @@
 import pytest
+from gmpy2 import mpq
 from PySide6.QtCore import QEvent, QModelIndex, Qt
 from PySide6.QtGui import QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
@@ -464,6 +465,30 @@ def test_integer_to_integer_currency_creates_affix_wrapper():
     assert model.setData(type_idx, JsonType.INTEGER_CURRENCY)
     item = model.get_item(model.index(0, 0, QModelIndex()))
     assert item.value == NumberAffix(AffixKind.CURRENCY, "", False, 1234)
+
+
+@pytest.mark.parametrize(
+    ("target_type", "expected_kind", "expected_number_type"),
+    [
+        (JsonType.INTEGER_CURRENCY, AffixKind.CURRENCY, int),
+        (JsonType.INTEGER_UNITS, AffixKind.UNITS, int),
+        (JsonType.FLOAT_CURRENCY, AffixKind.CURRENCY, mpq),
+        (JsonType.FLOAT_UNITS, AffixKind.UNITS, mpq),
+    ],
+)
+def test_null_to_affix_type_creates_transitional_affix_wrapper(target_type, expected_kind, expected_number_type):
+    model = JsonTreeModel({"v": None})
+    type_idx = model.index(0, 1, QModelIndex())
+
+    assert model.setData(type_idx, target_type)
+
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.json_type is target_type
+    assert isinstance(item.value, NumberAffix)
+    assert item.value.kind is expected_kind
+    assert item.value.affix == ""
+    assert item.value.space is False
+    assert isinstance(item.value.number, expected_number_type)
 
 
 def test_float_currency_to_integer_currency_requires_exact_integer():
