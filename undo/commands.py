@@ -146,6 +146,7 @@ class _ChangeTypeCmd(QUndoCommand):
         path: tuple,
         old_subtree: Any,
         old_explicit: bool,
+        old_type: JsonType,
         new_type: JsonType,
     ):
         super().__init__(text)
@@ -153,6 +154,7 @@ class _ChangeTypeCmd(QUndoCommand):
         self._path = path
         self._old_subtree = old_subtree
         self._old_explicit = old_explicit
+        self._old_type = old_type
         self._new_type = new_type
 
     def redo(self):
@@ -193,8 +195,11 @@ class _ChangeTypeCmd(QUndoCommand):
         idx = self._tab._index_from_path(self._path)
         if not idx.isValid():
             return
+        type_idx = self._tab.model.index(idx.row(), 1, idx.parent())
+        value_idx = self._tab.model.index(idx.row(), 2, idx.parent())
+        self._tab.model.setData(type_idx, self._old_type, Qt.ItemDataRole.EditRole)
+        self._tab.model.setData(value_idx, self._old_subtree, Qt.ItemDataRole.EditRole)
         item = self._tab.model.get_item(idx)
-        self._tab._diff_apply(item, self._old_subtree, idx)
         item.explicit_type = self._old_explicit
 
 

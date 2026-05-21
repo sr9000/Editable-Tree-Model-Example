@@ -10,6 +10,7 @@ from gmpy2 import mpq
 
 from datetime_editor.enums import DateTimeCategory
 from datetime_editor.regex import parse_datetime_text
+from settings import NUMBER_AFFIX_MAX_LEN
 from tree.stubs import (
     stub_bytes_raw,
     stub_color_rgb,
@@ -21,7 +22,7 @@ from tree.stubs import (
     stub_string,
 )
 from tree.types import JsonType
-from units.number_affix import AffixKind, NumberAffix, format_number_affix
+from units.number_affix import AffixKind, NumberAffix, format_number_affix, parse_number_affix
 
 # ---------------------------------------------------------------------------
 # Bytes / text helpers
@@ -408,6 +409,13 @@ def coerce_value_for_type(
 
         case JsonType.INTEGER_CURRENCY | JsonType.INTEGER_UNITS:
             kind = _affix_kind_for(json_type)
+            if isinstance(value, str):
+                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
+                if parsed is not None:
+                    truncated = _int_from_truncated(parsed.number)
+                    if truncated is None:
+                        return False, None
+                    return True, NumberAffix(kind=kind, affix=parsed.affix, space=parsed.space, number=truncated)
             if isinstance(value, NumberAffix):
                 truncated = _int_from_truncated(value.number)
                 if truncated is None:
@@ -424,6 +432,13 @@ def coerce_value_for_type(
 
         case JsonType.FLOAT_CURRENCY | JsonType.FLOAT_UNITS:
             kind = _affix_kind_for(json_type)
+            if isinstance(value, str):
+                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
+                if parsed is not None:
+                    q = _to_mpq_or_none(parsed.number)
+                    if q is None:
+                        return False, None
+                    return True, NumberAffix(kind=kind, affix=parsed.affix, space=parsed.space, number=q)
             if isinstance(value, NumberAffix):
                 q = _to_mpq_or_none(value.number)
                 if q is None:

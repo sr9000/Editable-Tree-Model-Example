@@ -629,6 +629,42 @@ def test_number_to_affix_type_uses_mru_default_affix(qtbot):
     assert item.value.affix == "$"
 
 
+def test_affix_to_string_to_affix_undo_redo_round_trip(qtbot):
+    from documents.tab import JsonTab
+
+    original = NumberAffix(AffixKind.CURRENCY, "$", False, 10)
+    tab = JsonTab(lambda *_: None, data={"v": original})
+    qtbot.addWidget(tab)
+
+    type_idx = tab.model.index(0, 1, QModelIndex())
+
+    assert tab.push_change_type(type_idx, JsonType.STRING)
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.STRING
+    assert item.value == "$10"
+
+    assert tab.push_change_type(type_idx, JsonType.INTEGER_UNITS)
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.INTEGER_UNITS
+    assert item.value == NumberAffix(AffixKind.UNITS, "$", False, 10)
+
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.STRING
+    assert item.value == "$10"
+
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.INTEGER_CURRENCY
+    assert item.value == original
+
+    tab.undo_stack.redo()
+    tab.undo_stack.redo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.INTEGER_UNITS
+    assert item.value == NumberAffix(AffixKind.UNITS, "$", False, 10)
+
+
 def test_bytes_to_integer_returns_decoded_length():
     """Switching from a bytes-family kind to INTEGER returns the underlying
     byte length, which is meaningful (file/blob size)."""

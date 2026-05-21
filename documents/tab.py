@@ -1168,6 +1168,7 @@ class JsonTab(QWidget):
         warn_fraction_loss = self._would_drop_fraction_on_type_change(item, target_type)
         old_subtree = item.to_json()
         old_explicit = item.explicit_type
+        old_type = item.json_type
         target_qname = self._qualified_name(name_idx)
         cmd = _ChangeTypeCmd(
             self,
@@ -1175,6 +1176,7 @@ class JsonTab(QWidget):
             self._index_path(name_idx),
             old_subtree,
             old_explicit,
+            old_type,
             target_type,
         )
         self.undo_stack.push(cmd)
