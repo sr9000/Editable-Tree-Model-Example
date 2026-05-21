@@ -6,6 +6,7 @@ palette:
   selection_fg: '#fdf6e3'
   selection_bg: '#268bd2'
   accent: '#b58900'
+  affix_text: '#7f8c8d'
   validation:
     error_fg: '#d13438'
     warning_fg: '#bf6900'

@@ -9,6 +9,7 @@ from mpq2py import mpq_serialization
 from themes.spec import TypeStyle
 from tree.types import JsonType
 from units import format_bytes
+from units.number_affix import NumberAffix, format_number_affix
 
 _PREVIEW_LIMIT = 80
 _PREVIEW_CHILDREN = 5
@@ -91,6 +92,16 @@ def format_with_type(value, json_type: JsonType | None, *, item=None, show_previ
             return f"{float(q * 100):g}%"
         except (TypeError, ValueError):
             return format_default(value)
+
+    if json_type in (
+        JsonType.INTEGER_CURRENCY,
+        JsonType.INTEGER_UNITS,
+        JsonType.FLOAT_CURRENCY,
+        JsonType.FLOAT_UNITS,
+    ):
+        if isinstance(value, NumberAffix):
+            return format_number_affix(value)
+        return format_default(value)
 
     if json_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
         try:

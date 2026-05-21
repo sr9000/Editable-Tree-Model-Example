@@ -123,6 +123,11 @@ def _merge_palette(palette_data: dict[str, Any], base: Palette) -> Palette:
             if "accent" in palette_data
             else QColor(base.accent)
         ),
+        affix_text=(
+            _parse_color(palette_data["affix_text"], key="palette.affix_text")
+            if "affix_text" in palette_data
+            else _copy_color(base.affix_text)
+        ),
         validation=_merge_validation_style(val_data, base.validation),
     )
 
