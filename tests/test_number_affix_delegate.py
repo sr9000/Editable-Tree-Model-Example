@@ -1,5 +1,5 @@
 from gmpy2 import mpq
-from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QStyleOptionViewItem
 
 from delegates.number_affix_delegate import AffixCompositeEditor
@@ -64,3 +64,16 @@ def test_invalid_affix_refuses_commit(qtbot):
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert editor.property("invalid") is True
     assert item.value == original
+
+
+def test_empty_affix_type_switch_paints_without_raising(qtbot):
+    tab = JsonTab(lambda *_: None, data={"v": 1234})
+    qtbot.addWidget(tab)
+
+    type_index = tab.model.index(0, 1, QModelIndex())
+    assert tab.model.setData(type_index, JsonType.INTEGER_CURRENCY)
+
+    option = QStyleOptionViewItem()
+    tab.value_delegate.initStyleOption(option, tab._source_to_view(_value_index(tab)))
+
+    assert option.text == "1234"

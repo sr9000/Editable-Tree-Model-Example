@@ -20,7 +20,7 @@ def _single_line_preview_text(value: str) -> str:
     return value.replace("\r\n", "\n").replace("\r", "\n").replace("\n", _MULTILINE_SEPARATOR)
 
 
-def format_default(value, *, max_text_len: int | None = 80) -> str:
+def format_default(value: object, *, max_text_len: int | None = 80) -> str:
     if value is None:
         return "null"
     if isinstance(value, bool):
@@ -32,6 +32,18 @@ def format_default(value, *, max_text_len: int | None = 80) -> str:
     if isinstance(value, str) and max_text_len is not None and len(value) > max_text_len:
         return value[:max_text_len] + "…"
     return str(value)
+
+
+def _format_number_affix_for_display(value: NumberAffix) -> str:
+    try:
+        return format_number_affix(value)
+    except ValueError:
+        # Type switching intentionally creates a temporary empty-affix wrapper
+        # when no per-document MRU exists yet.  The value editor will require a
+        # valid affix before committing, but painting must remain non-throwing.
+        if not value.affix:
+            return format_default(value.number, max_text_len=None)
+        return format_default(value, max_text_len=None)
 
 
 def _elide(text: str, limit: int = _PREVIEW_LIMIT) -> str:
@@ -100,7 +112,7 @@ def format_with_type(value, json_type: JsonType | None, *, item=None, show_previ
         JsonType.FLOAT_UNITS,
     ):
         if isinstance(value, NumberAffix):
-            return format_number_affix(value)
+            return _format_number_affix_for_display(value)
         return format_default(value)
 
     if json_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
