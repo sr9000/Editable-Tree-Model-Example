@@ -275,7 +275,7 @@ class ValueDelegate(_TextEditorDelegateBase):
                 if provider is not None and hasattr(provider, "for_key"):
                     key = "affix_prefix" if kind.value == "prefix" else "affix_suffix"
                     icon = provider.for_key(key)
-                editor = AffixCompositeEditor(parent, json_type=item.json_type, affix_icon=icon, mru_items=mru_items)
+                editor = AffixCompositeEditor(parent, json_type=item.json_type, mru_items=mru_items)
             case JsonType.INTEGER:
                 editor = QBigIntSpinBox(parent)
             case JsonType.FLOAT:

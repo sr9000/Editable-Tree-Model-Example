@@ -4,7 +4,7 @@ from typing import Iterable
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QSizePolicy, QToolButton, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QSizePolicy, QWidget
 
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
@@ -33,14 +33,7 @@ def is_integer_json_type(json_type: JsonType) -> bool:
 
 
 class AffixCompositeEditor(QWidget):
-    def __init__(
-        self,
-        parent: QWidget,
-        *,
-        json_type: JsonType,
-        affix_icon: QIcon | None,
-        mru_items: Iterable[str],
-    ) -> None:
+    def __init__(self, parent: QWidget, *, json_type: JsonType, mru_items: Iterable[str]) -> None:
         super().__init__(parent)
         self._json_type = json_type
         self.kind = kind_for_json_type(json_type)
@@ -52,37 +45,26 @@ class AffixCompositeEditor(QWidget):
         self.affix_combo = QComboBox(self)
         self.affix_combo.setEditable(True)
         self.affix_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.affix_combo.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        self.affix_combo.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         self.affix_combo.setMinimumContentsLength(1)
-        if affix_icon is not None and not affix_icon.isNull() and self.affix_combo.lineEdit() is not None:
-            self.affix_combo.lineEdit().addAction(
-                affix_icon, self.affix_combo.lineEdit().ActionPosition.LeadingPosition
-            )
 
-        self.space_button = QToolButton(self)
-        self.space_button.setCheckable(True)
-        self.space_button.setAutoRaise(True)
+        self.space_button = QCheckBox("Space", parent=self)
+        self.space_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         self.space_button.setToolTip("Space between affix and number")
-        self.space_button.setFixedSize(16, 16)
 
         if is_integer_json_type(json_type):
             self.number_editor = QBigIntSpinBox(self)
         else:
             self.number_editor = QMpqSpinBox(self)
-        self.number_editor.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.number_editor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         for affix in mru_items:
             if affix:
                 self.affix_combo.addItem(affix)
 
-        if self.kind is AffixKind.CURRENCY:
-            layout.addWidget(self.affix_combo)
-            layout.addWidget(self.space_button)
-            layout.addWidget(self.number_editor)
-        else:
-            layout.addWidget(self.number_editor)
-            layout.addWidget(self.space_button)
-            layout.addWidget(self.affix_combo)
+        layout.addWidget(self.affix_combo)
+        layout.addWidget(self.space_button)
+        layout.addWidget(self.number_editor)
 
     def set_invalid(self, invalid: bool) -> None:
         self.setProperty("invalid", bool(invalid))

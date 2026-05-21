@@ -186,10 +186,10 @@ class JsonType(StrEnum):
 
     # Extra Number
     PERCENT = "percent"
-    INTEGER_CURRENCY = "int currency"
     INTEGER_UNITS = "int units"
-    FLOAT_CURRENCY = "float currency"
     FLOAT_UNITS = "float units"
+    INTEGER_CURRENCY = "int currency"
+    FLOAT_CURRENCY = "float currency"
 
     # Multiline Text Format
     MULTILINE = "multiline"
