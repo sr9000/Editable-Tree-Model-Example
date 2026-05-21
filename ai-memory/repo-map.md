@@ -1,6 +1,6 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-17** (post-merge of PR #9 `improve-ux`,
+_Last scanned: **2026-05-21** (post number-affix rollout,
 `HEAD = ca2b174` on `master`). PySide6 desktop **structured-data
 editor** (originated from Qt's "Editable Tree Model" example).
 All previous plans are merged: drag-and-drop Steps 1–10, jsonschema
@@ -140,6 +140,7 @@ delegates/                    (≈620 LOC)
                               # initStyleOption reads raw value + type directly from the
                               # JsonTreeItem when possible so bigints > 2**63-1 don't
                               # overflow Shiboken's QVariant boxing.
+  number_affix_delegate.py    # AffixCompositeEditor (prefix/suffix + number + space-toggle)
   value_formatting.py         # format_default / format_with_type / container preview / _apply_type_style
   bytes_codec.py              # decode_bytes / encode_bytes (BYTES/ZLIB/GZIP)
   type_delegate.py            # JsonTypeDelegate (combobox with icons)
@@ -192,7 +193,8 @@ io_formats/                   (≈110 LOC)
   dump.py                     # dump_text + mpq-safe serialization
   atomic.py                   # atomic_write / save_file (os.replace)
 
-state/                        (≈245 LOC)
+state/                        (≈290 LOC)
+  affix_mru.py                # per-tab NumberAffix MRU (prefix/suffix)
   view_state.py               # state_key / save / restore / discard
   theme_settings.py           # theme/* QSettings + resolve_active_theme
   qsettings_coercion.py       # cross-platform QSettings shape helpers
@@ -218,6 +220,7 @@ qmpq_spinbox/                 # exact-rational spin (gmpy2.mpq)
 mpq2py/                       # mpq_serialization, mpq_json_default, MpqSafeLoader/Dumper
 jsontream/                    # streaming JSON encoder (iterables)
 units/                        # bits, format_bytes
+  number_affix.py             # NumberAffix dataclass + parser/formatter
 coalesce/, binary/, qt2py/    # small utility packages
 tests/                        # 922 collected
 ai-memory/                    # this folder
@@ -275,6 +278,10 @@ display in `delegates/value_formatting.py`; coercion in
 | `INTEGER`      | `"integer"`     | `QBigIntSpinBox`             | `str(int)`                               | int↔float/percent rounding; int sec/ms ↔ datetime parse          |
 | `FLOAT`        | `"float"`       | `QMpqSpinBox`                | `mpq_serialization` decimal              | stored as `gmpy2.mpq`                                            |
 | `PERCENT`      | `"percent"`     | `QMpqSpinBox` (`0..100 %`)   | `"50%"`, `"33.33%"`                      | UI is 0–100, storage is 0–1 mpq; auto-inferred when value ∈ [0,1] |
+| `INTEGER_CURRENCY` | `"int currency"` | affix composite editor | `"$1234"` / `"$ 1234"` | `NumberAffix(CURRENCY, affix, space, int)` |
+| `INTEGER_UNITS` | `"int units"` | affix composite editor | `"1234kg"` / `"1234 kg"` | `NumberAffix(UNITS, affix, space, int)` |
+| `FLOAT_CURRENCY` | `"float currency"` | affix composite editor | `"$3.5"` / `"$ 3.5"` | `NumberAffix(CURRENCY, affix, space, mpq)` |
+| `FLOAT_UNITS` | `"float units"` | affix composite editor | `"3.14rad"` / `"3.14 rad"` | `NumberAffix(UNITS, affix, space, mpq)` |
 | `BOOLEAN`      | `"boolean"`     | `QComboBox` (true/false)     | `"true"` / `"false"`                     | bool → str produces lowercase `"true"`/`"false"`                 |
 | `STRING`       | `"string"`      | `_CapsLockSafeLineEdit`      | elide at 80 chars                        | ASCII single-line                                                |
 | `UNICODE`      | `"utf-8 line"`  | `_CapsLockSafeLineEdit`      | elide at 80 chars                        | non-ASCII single-line                                            |

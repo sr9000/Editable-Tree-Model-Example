@@ -120,7 +120,10 @@ and can be refreshed with **Reload schema**.
 ### Data model & type system
 - **Three-column tree**: `Name | Type | Value`.
 - **Cell types** (`tree/types.py::JsonType`):
-  `integer`, `float`, `percent`, `boolean`,
+  `integer`, `float`, `percent`,
+  `int currency` (e.g. `$1234`), `int units` (e.g. `1234 kg`),
+  `float currency` (e.g. `$ 3.5`), `float units` (e.g. `3.14 rad`),
+  `boolean`,
   `string`, `utf-8 line`, `multiline`, `utf-8 text`,
   `date`, `time`, `datetime`, `dt+timezone`,
   `bytes`, `zlib`, `gzip`,
@@ -142,6 +145,9 @@ and can be refreshed with **Reload schema**.
 - `QBigIntSpinBox` for integers (no 64-bit cap).
 - `QMpqSpinBox` for floats and percents (`0–100 %` UI, `0–1 mpq`
   storage).
+- Affix-number composite editor for affix numeric kinds: exactly three
+  widgets in a tight row — affix combo, inline space toggle, numeric
+  spin box (prefix/suffix order depends on type).
 - `BetterDateTimeEditor` (segmented) for date / time / datetime / tz.
 - CapsLock-safe `QLineEdit` for ASCII / UTF-8 single-line text.
 - Modal `QMultilineDialog` for multiline ASCII / UTF-8 text.
@@ -153,6 +159,8 @@ and can be refreshed with **Reload schema**.
 - **Confirm-before-open** dialogs for very large strings, multiline
   blocks, and binary payloads — limits configurable in
   **File ▸ Edit Warning Limits**.
+- Percent remains a separate numeric kind; it is not absorbed into the
+  affix-number types.
 
 ### Multi-selection, clipboard, drag-and-drop
 - Multi-row contiguous and disjoint selection.
