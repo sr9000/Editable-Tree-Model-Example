@@ -20,6 +20,13 @@ from datetime_editor.enums import DateTimeCategory
 from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.color_codec import color_to_html, parse_color
+from delegates.number_affix_delegate import (
+    AffixCompositeEditor,
+    is_affix_json_type,
+    kind_for_json_type,
+    normalize_affix_value,
+    validate_affix_value,
+)
 from delegates.validation_badge import draw_severity_badge
 from delegates.value_formatting import _apply_type_style, format_default, format_with_type
 from dialogs.qhexedit_dlg import QHexDialog
@@ -258,6 +265,17 @@ class ValueDelegate(_TextEditorDelegateBase):
 
         editor = None
         match item.json_type:
+            case _ if is_affix_json_type(item.json_type):
+                tab = self._find_tab(parent)
+                mru = getattr(tab, "affix_mru", None)
+                kind = kind_for_json_type(item.json_type)
+                mru_items = mru.items(kind) if mru is not None and hasattr(mru, "items") else []
+                icon = QIcon()
+                provider = getattr(tab, "_icon_provider", None)
+                if provider is not None and hasattr(provider, "for_key"):
+                    key = "affix_prefix" if kind.value == "prefix" else "affix_suffix"
+                    icon = provider.for_key(key)
+                editor = AffixCompositeEditor(parent, json_type=item.json_type, affix_icon=icon, mru_items=mru_items)
             case JsonType.INTEGER:
                 editor = QBigIntSpinBox(parent)
             case JsonType.FLOAT:
@@ -374,6 +392,12 @@ class ValueDelegate(_TextEditorDelegateBase):
                 editor.setValue(0)
             return
 
+        if isinstance(editor, AffixCompositeEditor):
+            normalized = normalize_affix_value(value, item.json_type)
+            if normalized is not None:
+                editor.set_value(normalized)
+            return
+
         if isinstance(editor, QMpqSpinBox):
             try:
                 v = mpq(str(value)) if not isinstance(value, mpq) else value
@@ -425,6 +449,20 @@ class ValueDelegate(_TextEditorDelegateBase):
 
         if isinstance(editor, QLineEdit):
             self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
+            return
+
+        if isinstance(editor, AffixCompositeEditor):
+            candidate = editor.build_value()
+            validated = validate_affix_value(candidate)
+            if validated is None:
+                editor.set_invalid(True)
+                return
+            editor.set_invalid(False)
+            if self._commit(index, validated, Qt.ItemDataRole.EditRole, host=editor):
+                tab = self._find_tab(editor)
+                mru = getattr(tab, "affix_mru", None)
+                if mru is not None and hasattr(mru, "push"):
+                    mru.push(validated.kind, validated.affix)
             return
 
         super().setModelData(editor, model, index)
