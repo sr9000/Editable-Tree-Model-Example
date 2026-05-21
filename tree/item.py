@@ -299,8 +299,8 @@ class JsonTreeItem:
                 aware = converted if converted.tzinfo is not None else converted.replace(tzinfo=datetime.timezone.utc)
                 return aware.isoformat()
             if dst is JsonType.DATETIMEUTC:
-                aware = (converted if converted.tzinfo is not None else converted.replace(tzinfo=datetime.timezone.utc)).astimezone(
-                    datetime.timezone.utc
-                )
+                aware = (
+                    converted if converted.tzinfo is not None else converted.replace(tzinfo=datetime.timezone.utc)
+                ).astimezone(datetime.timezone.utc)
                 return aware.isoformat().replace("+00:00", "Z")
         return None

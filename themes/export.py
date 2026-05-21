@@ -49,8 +49,7 @@ def export_builtins(dest: Path, *, overwrite: bool = False) -> tuple[int, int]:
     src = _find_builtins_dir()
     if src is None:
         raise FileNotFoundError(
-            "Built-in themes directory could not be located; "
-            "the application is missing its bundled theme assets."
+            "Built-in themes directory could not be located; " "the application is missing its bundled theme assets."
         )
 
     dest.mkdir(parents=True, exist_ok=True)

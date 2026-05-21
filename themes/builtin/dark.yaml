@@ -37,6 +37,8 @@ types:
     fg: '#e0af68'
   datetime:
     fg: '#e0af68'
+  datetimeutc:
+    fg: '#e0af68'
   datetimezone:
     fg: '#e0af68'
   bytes:
@@ -76,6 +78,7 @@ icons:
     date: calendar_2_line
     time: hours_line
     datetime: calendar_time_add_line
+    datetimeutc: globe_fill
     datetimezone: calendar_add_line
     bytes: attachment_line
     zlib: file_zip_line

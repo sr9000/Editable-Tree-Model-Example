@@ -267,10 +267,7 @@ class ThemeController:
         if copied:
             text = f"Exported {copied} file(s) to:\n{user_dir}"
         else:
-            text = (
-                f"All built-in themes are already present in:\n{user_dir}\n"
-                "Nothing was overwritten."
-            )
+            text = f"All built-in themes are already present in:\n{user_dir}\n" "Nothing was overwritten."
         if skipped:
             text += f"\n\n{skipped} existing file(s) were left untouched."
 

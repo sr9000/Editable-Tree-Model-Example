@@ -44,6 +44,7 @@ def _index_for_type(json_type: JsonType):
         JsonType.DATE: "2024-06-01",
         JsonType.TIME: "12:34:56",
         JsonType.DATETIME: "2024-06-01 12:34:56",
+        JsonType.DATETIMEUTC: "2024-06-01T12:34:56Z",
         JsonType.DATETIMEZONE: "2024-06-01T12:34:56+00:00",
         JsonType.BYTES: "dGVzdA==",
         JsonType.ZLIB: encode_bytes(b"test", JsonType.ZLIB),

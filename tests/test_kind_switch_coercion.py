@@ -287,7 +287,9 @@ def _temporal_text_and_object(temporal_type: JsonType):
                 2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone(datetime.timedelta(hours=1))
             )
         case JsonType.DATETIMEUTC:
-            return "2024-01-02T03:04:05.5Z", datetime.datetime(2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone.utc)
+            return "2024-01-02T03:04:05.5Z", datetime.datetime(
+                2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone.utc
+            )
     raise AssertionError(f"unsupported temporal type: {temporal_type}")
 
 

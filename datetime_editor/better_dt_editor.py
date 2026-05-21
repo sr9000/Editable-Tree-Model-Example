@@ -200,7 +200,10 @@ class BetterDateTimeBuffer:
         if isinstance(value, datetime):
             if value.tzinfo:
                 if value.tzinfo == timezone.utc:
-                    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"), DateTimeCategory.DateTimeUTC
+                    return (
+                        value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+                        DateTimeCategory.DateTimeUTC,
+                    )
                 return value.isoformat(), DateTimeCategory.DateTimeWithTZ
             return value.isoformat(sep=" "), DateTimeCategory.DateTime
         if isinstance(value, date):

@@ -26,6 +26,7 @@ _TYPE_KEYS: dict[str, JsonType] = {
     "date": JsonType.DATE,
     "time": JsonType.TIME,
     "datetime": JsonType.DATETIME,
+    "datetimeutc": JsonType.DATETIMEUTC,
     "datetimezone": JsonType.DATETIMEZONE,
     "bytes": JsonType.BYTES,
     "zlib": JsonType.ZLIB,

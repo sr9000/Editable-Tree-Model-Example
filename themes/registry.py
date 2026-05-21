@@ -136,8 +136,7 @@ class ThemeRegistry:
         yaml_files = sorted(builtins_dir.glob("*.yaml"))
         if not yaml_files:
             LOGGER.error(
-                "No built-in theme YAMLs found in %s. "
-                "Falling back to compiled-in defaults only.",
+                "No built-in theme YAMLs found in %s. " "Falling back to compiled-in defaults only.",
                 builtins_dir,
             )
             return

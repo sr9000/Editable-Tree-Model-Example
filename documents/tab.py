@@ -103,6 +103,7 @@ def _demo_data() -> dict[str, Any]:
         "date": "2024-06-01",
         "time": "12:34",
         "datetime": "2024-06-01 12:34:56",
+        "datetime-utc": "2024-06-01T12:34:56Z",
         "dt+timezone": "2024-06-01T12:34:56.9999+00:00",
         "boolean": True,
         "object": {"key": "value"},

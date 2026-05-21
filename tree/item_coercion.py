@@ -63,8 +63,11 @@ def _now_for_type(json_type: JsonType) -> str:
         case JsonType.DATETIMEZONE:
             return now.replace(microsecond=0).isoformat(timespec="seconds")
         case JsonType.DATETIMEUTC:
-            return now.astimezone(datetime.timezone.utc).replace(microsecond=0).isoformat(timespec="seconds").replace(
-                "+00:00", "Z"
+            return (
+                now.astimezone(datetime.timezone.utc)
+                .replace(microsecond=0)
+                .isoformat(timespec="seconds")
+                .replace("+00:00", "Z")
             )
     raise ValueError(f"Unsupported temporal JsonType: {json_type}")
 

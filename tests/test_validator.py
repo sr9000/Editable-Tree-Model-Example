@@ -7,6 +7,8 @@ from datetime_editor.validator import DateTimeValidator
 ALL_CATEGORIES = {None} | set(DateTimeCategory)
 PURE_CATEGORIES = {DateTimeCategory.Date, DateTimeCategory.Time}
 INCOMPLETE_CATEGORIES = set(DateTimeCategory) - {DateTimeCategory.DateTimeWithTZ, DateTimeCategory.DateTimeUTC}
+UTC_INVALID_CATEGORIES = INCOMPLETE_CATEGORIES | {DateTimeCategory.DateTimeWithTZ}
+OFFSET_INVALID_CATEGORIES = INCOMPLETE_CATEGORIES | {DateTimeCategory.DateTimeUTC}
 
 
 @pytest.mark.parametrize(
@@ -20,8 +22,8 @@ INCOMPLETE_CATEGORIES = set(DateTimeCategory) - {DateTimeCategory.DateTimeWithTZ
         ("2025-11-02 12:34:56", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
         ("2025-11-02T12:34:56", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
         ("2025-11-02T12:34:56.123456", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
-        ("2025-11-02T12:34:56Z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeUTC}),
-        ("2025-11-02T12:34:56+01:00", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
+        ("2025-11-02T12:34:56Z", UTC_INVALID_CATEGORIES, {DateTimeCategory.DateTimeUTC}),
+        ("2025-11-02T12:34:56+01:00", OFFSET_INVALID_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
         # Intermediate
         ("20", {}, {}),
         ("-12", {DateTimeCategory.Time}, {}),
@@ -59,12 +61,12 @@ INCOMPLETE_CATEGORIES = set(DateTimeCategory) - {DateTimeCategory.DateTimeWithTZ
         ("2025-11-02T12:34:56.1234", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
         ("2025-11-02T12:34:56.12345", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
         ("2025-11-02T12:34:56.123456", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
-        ("2025-11-02T12:34:56Z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeUTC}),
-        ("2025-11-02t12:34:56z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeUTC}),
-        ("2025-11-02T12:34:56+01", INCOMPLETE_CATEGORIES, {}),
-        ("2025-11-02T12:34:56+01:", INCOMPLETE_CATEGORIES, {}),
-        ("2025-11-02T12:34:56+01:0", INCOMPLETE_CATEGORIES, {}),
-        ("2025-11-02T12:34:56+01:00", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
+        ("2025-11-02T12:34:56Z", UTC_INVALID_CATEGORIES, {DateTimeCategory.DateTimeUTC}),
+        ("2025-11-02t12:34:56z", UTC_INVALID_CATEGORIES, {DateTimeCategory.DateTimeUTC}),
+        ("2025-11-02T12:34:56+01", OFFSET_INVALID_CATEGORIES, {}),
+        ("2025-11-02T12:34:56+01:", OFFSET_INVALID_CATEGORIES, {}),
+        ("2025-11-02T12:34:56+01:0", OFFSET_INVALID_CATEGORIES, {}),
+        ("2025-11-02T12:34:56+01:00", OFFSET_INVALID_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
         ("2025T12:34:56", PURE_CATEGORIES, {}),
         ("2025-T12:34:56", PURE_CATEGORIES, {}),
         ("2025-0T12:34:56", PURE_CATEGORIES, {}),
