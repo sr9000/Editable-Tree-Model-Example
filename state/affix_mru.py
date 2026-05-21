@@ -36,6 +36,10 @@ class AffixMRU:
             if isinstance(node, NumberAffix):
                 self.push(node.kind, node.affix)
                 return
+            # JsonTreeItem leaves keep typed data on .value; inspect it before recursing.
+            if hasattr(node, "value") and isinstance(getattr(node, "value", None), NumberAffix):
+                value = getattr(node, "value")
+                self.push(value.kind, value.affix)
             if hasattr(node, "child_items"):
                 for child in getattr(node, "child_items", []):
                     walk(child)

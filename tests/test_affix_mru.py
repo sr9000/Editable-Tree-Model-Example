@@ -1,4 +1,5 @@
 from state.affix_mru import AffixMRU
+from tree.model import JsonTreeModel
 from units.number_affix import AffixKind, NumberAffix
 
 
@@ -34,3 +35,17 @@ def test_prefix_suffix_lists_are_independent() -> None:
 
     assert mru.items(AffixKind.CURRENCY) == ["$"]
     assert mru.items(AffixKind.UNITS) == ["%", "kg"]
+
+
+def test_bootstrap_reads_number_affix_from_json_tree_items() -> None:
+    model = JsonTreeModel(
+        {
+            "price": NumberAffix(AffixKind.CURRENCY, "$", False, 10),
+            "weight": NumberAffix(AffixKind.UNITS, "kg", True, 2),
+        }
+    )
+    mru = AffixMRU(max_size=10)
+    mru.bootstrap_from_tree(model.root_item)
+
+    assert mru.items(AffixKind.CURRENCY) == ["$"]
+    assert mru.items(AffixKind.UNITS) == ["kg"]

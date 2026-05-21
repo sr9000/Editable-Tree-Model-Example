@@ -21,7 +21,7 @@ from tree.stubs import (
     stub_string,
 )
 from tree.types import JsonType
-from units.number_affix import AffixKind, NumberAffix
+from units.number_affix import AffixKind, NumberAffix, format_number_affix
 
 # ---------------------------------------------------------------------------
 # Bytes / text helpers
@@ -445,6 +445,12 @@ def coerce_value_for_type(
                 if strict:
                     return True, ""
                 return True, stub_multiline() if json_type in (JsonType.MULTILINE, JsonType.TEXT) else stub_string()
+            if isinstance(value, NumberAffix):
+                try:
+                    return True, format_number_affix(value)
+                except ValueError:
+                    # Transitional/incomplete affix values fall back to plain numeric text.
+                    return True, str(value.number)
             if isinstance(value, bool):
                 return True, "true" if value else "false"
             # Bytes-family → decode and surface the underlying text when printable.

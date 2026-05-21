@@ -25,7 +25,7 @@ from delegates.bytes_codec import decode_bytes, encode_bytes
 from tree.item_coercion import coerce_value_for_type
 from tree.model import JsonTreeModel
 from tree.types import JsonType
-from units.number_affix import AffixKind, NumberAffix
+from units.number_affix import AffixKind, NumberAffix, format_number_affix
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -600,6 +600,33 @@ def test_float_affix_to_integer_affix_truncates_fractional_part():
     value = NumberAffix(AffixKind.UNITS, "kg", True, mpq("7/2"))
     result = _coerce(JsonType.INTEGER_UNITS, value)
     assert result == NumberAffix(AffixKind.UNITS, "kg", True, 3)
+
+
+def test_affix_to_string_uses_formatted_text():
+    value = NumberAffix(AffixKind.CURRENCY, "$", True, mpq("7/2"))
+    ok, result = coerce_value_for_type(JsonType.STRING, value, strict=False, old_type=JsonType.FLOAT_CURRENCY)
+    assert ok
+    assert result == format_number_affix(value)
+
+
+def test_number_to_affix_type_uses_mru_default_affix(qtbot):
+    from documents.tab import JsonTab
+
+    tab = JsonTab(
+        lambda *_: None,
+        data={
+            "known": NumberAffix(AffixKind.CURRENCY, "$", False, 10),
+            "plain": 5,
+        },
+    )
+    qtbot.addWidget(tab)
+
+    type_idx = tab.model.index(1, 1, QModelIndex())
+    assert tab.push_change_type(type_idx, JsonType.INTEGER_CURRENCY)
+
+    item = tab.model.get_item(tab.model.index(1, 0, QModelIndex()))
+    assert isinstance(item.value, NumberAffix)
+    assert item.value.affix == "$"
 
 
 def test_bytes_to_integer_returns_decoded_length():

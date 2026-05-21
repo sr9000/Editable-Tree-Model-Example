@@ -6,6 +6,7 @@ from PySide6.QtGui import QUndoCommand
 
 from tree.item_names import unique_child_name
 from tree.types import JsonType
+from units.number_affix import AffixKind, NumberAffix
 
 _CMD_ID_RENAME = 0x0E71_0001
 _CMD_ID_EDIT_VALUE = 0x0E71_0002
@@ -159,7 +160,34 @@ class _ChangeTypeCmd(QUndoCommand):
         if not idx.isValid():
             return
         type_idx = self._tab.model.index(idx.row(), 1, idx.parent())
-        self._tab.model.setData(type_idx, self._new_type, Qt.ItemDataRole.EditRole)
+        if not self._tab.model.setData(type_idx, self._new_type, Qt.ItemDataRole.EditRole):
+            return
+
+        item = self._tab.model.get_item(idx)
+        if not isinstance(item.value, NumberAffix) or item.value.affix:
+            return
+        if item.json_type in (JsonType.INTEGER_CURRENCY, JsonType.FLOAT_CURRENCY):
+            kind = AffixKind.CURRENCY
+        elif item.json_type in (JsonType.INTEGER_UNITS, JsonType.FLOAT_UNITS):
+            kind = AffixKind.UNITS
+        else:
+            return
+
+        mru = getattr(self._tab, "affix_mru", None)
+        if mru is None or not hasattr(mru, "items"):
+            return
+        mru_items = mru.items(kind)
+        if not mru_items:
+            return
+
+        replacement = NumberAffix(
+            kind=kind,
+            affix=mru_items[0],
+            space=item.value.space,
+            number=item.value.number,
+        )
+        value_idx = self._tab.model.index(idx.row(), 2, idx.parent())
+        self._tab.model.setData(value_idx, replacement, Qt.ItemDataRole.EditRole)
 
     def undo(self):
         idx = self._tab._index_from_path(self._path)
