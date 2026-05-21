@@ -10,6 +10,7 @@ from typing import Any
 import gmpy2
 
 from datetime_editor import parse_datetime_text
+from units.number_affix import AffixKind, NumberAffix, parse_number_affix
 
 LOGGER = logging.getLogger(__name__)
 _B64_RE = re.compile(r"^[A-Za-z0-9+/]{20,}={0,2}$")
@@ -88,6 +89,12 @@ def text_pseudotype_for(current_type: "JsonType", s: str) -> "JsonType":
 
 def parse_json_type(value: Any) -> "JsonType":
     match value:
+        case NumberAffix(kind=kind, number=number):
+            is_int = isinstance(number, int)
+            if kind is AffixKind.CURRENCY:
+                return JsonType.INTEGER_CURRENCY if is_int else JsonType.FLOAT_CURRENCY
+            return JsonType.INTEGER_UNITS if is_int else JsonType.FLOAT_UNITS
+
         case None:
             return JsonType.NULL
 
@@ -132,6 +139,10 @@ def parse_json_type(value: Any) -> "JsonType":
             except Exception:
                 pass
 
+            parsed_affix = parse_number_affix(s)
+            if parsed_affix is not None:
+                return parse_json_type(parsed_affix)
+
             if _looks_like_base64(s):
                 raw = base64.b64decode(s, validate=True)
 
@@ -174,6 +185,10 @@ class JsonType(StrEnum):
 
     # Extra Number
     PERCENT = "percent"
+    INTEGER_CURRENCY = "int currency"
+    INTEGER_UNITS = "int units"
+    FLOAT_CURRENCY = "float currency"
+    FLOAT_UNITS = "float units"
 
     # Multiline Text Format
     MULTILINE = "multiline"
@@ -200,4 +215,15 @@ TEXT_FAMILY: frozenset[JsonType] = frozenset({JsonType.STRING, JsonType.UNICODE,
 COLOR_FAMILY: frozenset[JsonType] = frozenset({JsonType.COLOR_RGB, JsonType.COLOR_RGBA})
 DATETIME_FAMILY: frozenset[JsonType] = frozenset(
     {JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE, JsonType.DATETIMEUTC}
+)
+NUMBER_FAMILY: frozenset[JsonType] = frozenset(
+    {
+        JsonType.INTEGER,
+        JsonType.FLOAT,
+        JsonType.PERCENT,
+        JsonType.INTEGER_CURRENCY,
+        JsonType.INTEGER_UNITS,
+        JsonType.FLOAT_CURRENCY,
+        JsonType.FLOAT_UNITS,
+    }
 )
