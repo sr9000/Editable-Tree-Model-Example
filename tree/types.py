@@ -10,6 +10,7 @@ from typing import Any
 import gmpy2
 
 from datetime_editor import parse_datetime_text
+from settings import NUMBER_AFFIX_MAX_LEN
 from units.number_affix import AffixKind, NumberAffix, parse_number_affix
 
 LOGGER = logging.getLogger(__name__)
@@ -139,7 +140,7 @@ def parse_json_type(value: Any) -> "JsonType":
             except Exception:
                 pass
 
-            parsed_affix = parse_number_affix(s)
+            parsed_affix = parse_number_affix(s, max_affix_len=NUMBER_AFFIX_MAX_LEN)
             if parsed_affix is not None:
                 return parse_json_type(parsed_affix)
 

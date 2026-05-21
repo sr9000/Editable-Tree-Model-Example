@@ -12,12 +12,13 @@ from io_formats.detect import (
     detect_format,
 )
 from mpq2py import MpqSafeLoader
+from settings import NUMBER_AFFIX_MAX_LEN
 from units.number_affix import parse_number_affix
 
 
 def _decode_number_affixes(value: Any) -> Any:
     if isinstance(value, str):
-        parsed = parse_number_affix(value)
+        parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
         return parsed if parsed is not None else value
     if isinstance(value, list):
         return [_decode_number_affixes(v) for v in value]
