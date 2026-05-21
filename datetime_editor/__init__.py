@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import QLineEdit
@@ -45,6 +45,8 @@ class DateTimeEditor(QLineEdit):
     def get_category(value):
         if isinstance(value, datetime):
             if value.tzinfo:
+                if value.tzinfo == timezone.utc:
+                    return DateTimeCategory.DateTimeUTC
                 return DateTimeCategory.DateTimeWithTZ
             return DateTimeCategory.DateTime
         elif isinstance(value, date):

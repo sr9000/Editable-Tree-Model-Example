@@ -90,12 +90,12 @@ from datetime_editor.regex import parse_datetime_text
         # utc
         (
             "2025-11-02T12:34:56Z",
-            DateTimeCategory.DateTimeWithTZ,
+            DateTimeCategory.DateTimeUTC,
             datetime(2025, 11, 2, 12, 34, 56, tzinfo=timezone.utc),
         ),
         (
             "2025-11-02t12:34:56z",
-            DateTimeCategory.DateTimeWithTZ,
+            DateTimeCategory.DateTimeUTC,
             datetime(2025, 11, 2, 12, 34, 56, tzinfo=timezone.utc),
         ),
         # invalid
@@ -104,3 +104,11 @@ from datetime_editor.regex import parse_datetime_text
 )
 def test_parse_text(text, category, expected):
     assert parse_datetime_text(text, category) == expected
+
+
+def test_utc_category_rejects_offset_form():
+    assert parse_datetime_text("2026-05-21T14:33:09+05:00", DateTimeCategory.DateTimeUTC) is None
+
+
+def test_tz_category_rejects_z_form():
+    assert parse_datetime_text("2026-05-21T14:33:09Z", DateTimeCategory.DateTimeWithTZ) is None

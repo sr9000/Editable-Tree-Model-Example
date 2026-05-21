@@ -6,3 +6,4 @@ class DateTimeCategory(Enum):
     Time = auto()
     DateTime = auto()
     DateTimeWithTZ = auto()
+    DateTimeUTC = auto()

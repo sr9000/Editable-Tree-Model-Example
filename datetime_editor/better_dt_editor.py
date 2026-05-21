@@ -141,6 +141,8 @@ class BetterDateTimeBuffer:
         elif segment.name == "microsecond":
             dt_value = self._apply_microsecond_delta(dt_value, segment, delta)
         elif segment.name in {"tz_sign", "tz_hour", "tz_minute", "utc"}:
+            if self._category is DateTimeCategory.DateTimeUTC:
+                return None
             dt_value = self._ensure_timezone(dt_value)
             total_minutes = self._timezone_minutes(dt_value)
             total_minutes = self._adjust_timezone_minutes(segment.name, total_minutes, delta)
@@ -197,6 +199,8 @@ class BetterDateTimeBuffer:
             return "", None
         if isinstance(value, datetime):
             if value.tzinfo:
+                if value.tzinfo == timezone.utc:
+                    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"), DateTimeCategory.DateTimeUTC
                 return value.isoformat(), DateTimeCategory.DateTimeWithTZ
             return value.isoformat(sep=" "), DateTimeCategory.DateTime
         if isinstance(value, date):
@@ -226,6 +230,8 @@ class BetterDateTimeBuffer:
                 return value.replace(tzinfo=None)
             case DateTimeCategory.DateTimeWithTZ:
                 return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            case DateTimeCategory.DateTimeUTC:
+                return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)
             case _:
                 return value
 

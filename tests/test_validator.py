@@ -6,7 +6,7 @@ from datetime_editor.validator import DateTimeValidator
 
 ALL_CATEGORIES = {None} | set(DateTimeCategory)
 PURE_CATEGORIES = {DateTimeCategory.Date, DateTimeCategory.Time}
-INCOMPLETE_CATEGORIES = set(DateTimeCategory) - {DateTimeCategory.DateTimeWithTZ}
+INCOMPLETE_CATEGORIES = set(DateTimeCategory) - {DateTimeCategory.DateTimeWithTZ, DateTimeCategory.DateTimeUTC}
 
 
 @pytest.mark.parametrize(
@@ -20,7 +20,7 @@ INCOMPLETE_CATEGORIES = set(DateTimeCategory) - {DateTimeCategory.DateTimeWithTZ
         ("2025-11-02 12:34:56", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
         ("2025-11-02T12:34:56", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
         ("2025-11-02T12:34:56.123456", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
-        ("2025-11-02T12:34:56Z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
+        ("2025-11-02T12:34:56Z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeUTC}),
         ("2025-11-02T12:34:56+01:00", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
         # Intermediate
         ("20", {}, {}),
@@ -59,8 +59,8 @@ INCOMPLETE_CATEGORIES = set(DateTimeCategory) - {DateTimeCategory.DateTimeWithTZ
         ("2025-11-02T12:34:56.1234", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
         ("2025-11-02T12:34:56.12345", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
         ("2025-11-02T12:34:56.123456", PURE_CATEGORIES, {DateTimeCategory.DateTime}),
-        ("2025-11-02T12:34:56Z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
-        ("2025-11-02t12:34:56z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeWithTZ}),
+        ("2025-11-02T12:34:56Z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeUTC}),
+        ("2025-11-02t12:34:56z", INCOMPLETE_CATEGORIES, {DateTimeCategory.DateTimeUTC}),
         ("2025-11-02T12:34:56+01", INCOMPLETE_CATEGORIES, {}),
         ("2025-11-02T12:34:56+01:", INCOMPLETE_CATEGORIES, {}),
         ("2025-11-02T12:34:56+01:0", INCOMPLETE_CATEGORIES, {}),

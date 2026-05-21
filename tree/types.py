@@ -3,7 +3,7 @@ import gzip
 import logging
 import re
 import zlib
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -122,6 +122,8 @@ def parse_json_type(value: Any) -> "JsonType":
                     case datetime(tzinfo=None):
                         return JsonType.DATETIME
                     case datetime():
+                        if s.strip().upper().endswith("Z") and val.utcoffset() == timezone.utc.utcoffset(None):
+                            return JsonType.DATETIMEUTC
                         return JsonType.DATETIMEZONE
                     case time():
                         return JsonType.TIME
@@ -181,6 +183,7 @@ class JsonType(StrEnum):
     DATE = "date"
     TIME = "time"
     DATETIME = "datetime"
+    DATETIMEUTC = "datetime utc"
     DATETIMEZONE = "dt+timezone"
 
     # Advanced Text Encoding
@@ -195,3 +198,6 @@ class JsonType(StrEnum):
 
 TEXT_FAMILY: frozenset[JsonType] = frozenset({JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT})
 COLOR_FAMILY: frozenset[JsonType] = frozenset({JsonType.COLOR_RGB, JsonType.COLOR_RGBA})
+DATETIME_FAMILY: frozenset[JsonType] = frozenset(
+    {JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE, JsonType.DATETIMEUTC}
+)

@@ -62,6 +62,10 @@ def _now_for_type(json_type: JsonType) -> str:
             return now.replace(microsecond=0, tzinfo=None).isoformat(timespec="minutes")
         case JsonType.DATETIMEZONE:
             return now.replace(microsecond=0).isoformat(timespec="seconds")
+        case JsonType.DATETIMEUTC:
+            return now.astimezone(datetime.timezone.utc).replace(microsecond=0).isoformat(timespec="seconds").replace(
+                "+00:00", "Z"
+            )
     raise ValueError(f"Unsupported temporal JsonType: {json_type}")
 
 
@@ -83,11 +87,13 @@ def _category_for_temporal_type(json_type: JsonType) -> DateTimeCategory | None:
             return DateTimeCategory.DateTime
         case JsonType.DATETIMEZONE:
             return DateTimeCategory.DateTimeWithTZ
+        case JsonType.DATETIMEUTC:
+            return DateTimeCategory.DateTimeUTC
     return None
 
 
 def _is_temporal_type(json_type: JsonType | None) -> bool:
-    return json_type in (JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE)
+    return json_type in (JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE, JsonType.DATETIMEUTC)
 
 
 def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None) -> mpq | None:
@@ -119,6 +125,7 @@ def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None
             categories.append(hinted)
         categories.extend(
             [
+                DateTimeCategory.DateTimeUTC,
                 DateTimeCategory.DateTimeWithTZ,
                 DateTimeCategory.DateTime,
                 DateTimeCategory.Date,
@@ -165,6 +172,11 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
                 if value.tzinfo is None:
                     value = value.replace(tzinfo=datetime.timezone.utc)
                 return value.isoformat(timespec=_timespec_for_clock(value.second, value.microsecond))
+            case JsonType.DATETIMEUTC:
+                utc = (value if value.tzinfo is not None else value.replace(tzinfo=datetime.timezone.utc)).astimezone(
+                    datetime.timezone.utc
+                )
+                return utc.isoformat(timespec=_timespec_for_clock(utc.second, utc.microsecond)).replace("+00:00", "Z")
         return None
 
     if isinstance(value, datetime.date):
@@ -176,6 +188,12 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
             case JsonType.DATETIMEZONE:
                 return datetime.datetime(value.year, value.month, value.day, tzinfo=datetime.timezone.utc).isoformat(
                     timespec="seconds"
+                )
+            case JsonType.DATETIMEUTC:
+                return (
+                    datetime.datetime(value.year, value.month, value.day, tzinfo=datetime.timezone.utc)
+                    .isoformat(timespec="seconds")
+                    .replace("+00:00", "Z")
                 )
         return None
 
@@ -374,7 +392,7 @@ def coerce_value_for_type(
             return True, str(value)
 
         # 3.2: fall back to "now" instead of epoch-zero when value is unparseable
-        case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
+        case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE | JsonType.DATETIMEUTC:
             parsed = _try_parse_temporal(json_type, value)
             if parsed is not None:
                 return True, parsed

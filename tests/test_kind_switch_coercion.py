@@ -241,6 +241,7 @@ def _temporal_category(json_type: JsonType) -> DateTimeCategory:
         JsonType.TIME: DateTimeCategory.Time,
         JsonType.DATETIME: DateTimeCategory.DateTime,
         JsonType.DATETIMEZONE: DateTimeCategory.DateTimeWithTZ,
+        JsonType.DATETIMEUTC: DateTimeCategory.DateTimeUTC,
     }
     return mapping[json_type]
 
@@ -267,6 +268,9 @@ def _temporal_epoch_seconds(temporal_type: JsonType) -> mpq:
         case JsonType.DATETIMEZONE:
             dt = datetime.datetime(2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone(datetime.timedelta(hours=1)))
             return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
+        case JsonType.DATETIMEUTC:
+            dt = datetime.datetime(2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone.utc)
+            return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
     raise AssertionError(f"unsupported temporal type: {temporal_type}")
 
 
@@ -282,6 +286,8 @@ def _temporal_text_and_object(temporal_type: JsonType):
             return "2024-01-02T03:04:05.5+01:00", datetime.datetime(
                 2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone(datetime.timedelta(hours=1))
             )
+        case JsonType.DATETIMEUTC:
+            return "2024-01-02T03:04:05.5Z", datetime.datetime(2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone.utc)
     raise AssertionError(f"unsupported temporal type: {temporal_type}")
 
 
@@ -299,8 +305,8 @@ _FALLBACK_INTS = {42, 1337, 65535, 8086, 420, 9001, 73, 777, 299792458}
 @pytest.mark.parametrize("number_type", [JsonType.INTEGER, JsonType.FLOAT], ids=["integer", "float"])
 @pytest.mark.parametrize(
     "temporal_type",
-    [JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE],
-    ids=["date", "time", "datetime", "dtz"],
+    [JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE, JsonType.DATETIMEUTC],
+    ids=["date", "time", "datetime", "dtz", "dtutc"],
 )
 @pytest.mark.parametrize(
     "case_kind",
@@ -395,6 +401,11 @@ def test_string_number_matrix(number_type: JsonType, case_kind: str):
             JsonType.DATETIMEZONE,
             "2024-01-02T03:04:05+01:00",
             datetime.datetime(2024, 1, 2, 3, 4, 5, tzinfo=datetime.timezone(datetime.timedelta(hours=1))),
+        ),
+        (
+            JsonType.DATETIMEUTC,
+            "2024-01-02T03:04:05Z",
+            datetime.datetime(2024, 1, 2, 3, 4, 5, tzinfo=datetime.timezone.utc),
         ),
     ],
 )

@@ -287,7 +287,7 @@ class ValueDelegate(_TextEditorDelegateBase):
                     self._notify_status(parent, "String edit cancelled", 2000)
                     return None
                 editor = _CapsLockSafeLineEdit(parent)
-            case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
+            case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE | JsonType.DATETIMEUTC:
                 editor = BetterDateTimeEditor(parent)
             case JsonType.MULTILINE | JsonType.TEXT:
                 text_len = len(str(item.value or ""))
@@ -440,5 +440,7 @@ class ValueDelegate(_TextEditorDelegateBase):
                 return DateTimeCategory.DateTime
             case JsonType.DATETIMEZONE:
                 return DateTimeCategory.DateTimeWithTZ
+            case JsonType.DATETIMEUTC:
+                return DateTimeCategory.DateTimeUTC
             case _:
                 return None

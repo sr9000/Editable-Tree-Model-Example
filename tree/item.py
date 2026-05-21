@@ -1,10 +1,14 @@
 # Ported from: https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/editabletreemodel
 
+import datetime
 from typing import Any
 
+from datetime_editor.enums import DateTimeCategory
+from datetime_editor.regex import parse_datetime_text
 from tree.item_coercion import coerce_value_for_type, compute_editable, normalize_value_for_type
 from tree.item_names import unique_child_name, validated_child_name
-from tree.types import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
+from tree.types import DATETIME_FAMILY, TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
+from tree.types_datetime import convert_datetime
 
 
 class JsonTreeItem:
@@ -121,6 +125,14 @@ class JsonTreeItem:
             # Save old_type so coercion can re-encode bytes-family values correctly.
             old_type = self.json_type
             old_value = self.to_json() if self.json_type in (JsonType.ARRAY, JsonType.OBJECT) else self.value
+
+            if old_type in DATETIME_FAMILY and new_type in DATETIME_FAMILY and isinstance(old_value, str):
+                converted = self._convert_datetime_text(old_value, old_type, new_type)
+                if converted is not None:
+                    self.explicit_type = True
+                    self._apply_typed_value(new_type, converted)
+                    return True
+
             ok, coerced = self._coerce_value_for_type(new_type, old_value, strict=False, old_type=old_type)
             if not ok:
                 return False
@@ -251,3 +263,44 @@ class JsonTreeItem:
 
     def _compute_editable(self) -> bool:
         return compute_editable(self.json_type, self.value, self.EDITABLE_BLOB_LIMIT)
+
+    @staticmethod
+    def _datetime_category_for_type(json_type: JsonType) -> DateTimeCategory | None:
+        match json_type:
+            case JsonType.DATE:
+                return DateTimeCategory.Date
+            case JsonType.TIME:
+                return DateTimeCategory.Time
+            case JsonType.DATETIME:
+                return DateTimeCategory.DateTime
+            case JsonType.DATETIMEZONE:
+                return DateTimeCategory.DateTimeWithTZ
+            case JsonType.DATETIMEUTC:
+                return DateTimeCategory.DateTimeUTC
+            case _:
+                return None
+
+    def _convert_datetime_text(self, value: str, src: JsonType, dst: JsonType) -> str | None:
+        src_category = self._datetime_category_for_type(src)
+        if src_category is None:
+            return None
+        parsed = parse_datetime_text(value, src_category)
+        if parsed is None:
+            return None
+        converted = convert_datetime(parsed, src, dst)
+        if isinstance(converted, datetime.date) and not isinstance(converted, datetime.datetime):
+            return converted.isoformat()
+        if isinstance(converted, datetime.time):
+            return converted.isoformat()
+        if isinstance(converted, datetime.datetime):
+            if dst is JsonType.DATETIME:
+                return converted.replace(tzinfo=None).isoformat()
+            if dst is JsonType.DATETIMEZONE:
+                aware = converted if converted.tzinfo is not None else converted.replace(tzinfo=datetime.timezone.utc)
+                return aware.isoformat()
+            if dst is JsonType.DATETIMEUTC:
+                aware = (converted if converted.tzinfo is not None else converted.replace(tzinfo=datetime.timezone.utc)).astimezone(
+                    datetime.timezone.utc
+                )
+                return aware.isoformat().replace("+00:00", "Z")
+        return None

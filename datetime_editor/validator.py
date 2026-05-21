@@ -42,6 +42,18 @@ class DateTimeValidator(QValidator):
                 only_allowed = {"hour", "minute", "second", "microsecond"}
             case DateTimeCategory.DateTime:
                 only_allowed = {"year", "month", "day", "separator", "hour", "minute", "second", "microsecond"}
+            case DateTimeCategory.DateTimeUTC:
+                only_allowed = {
+                    "year",
+                    "month",
+                    "day",
+                    "separator",
+                    "hour",
+                    "minute",
+                    "second",
+                    "microsecond",
+                    "utc",
+                }
             case _:
                 only_allowed = {
                     "year",

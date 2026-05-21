@@ -76,6 +76,8 @@ def test_parse_json_type_is_total_and_has_narrower_heuristics():
     assert parse_json_type("caf\u00e9") is JsonType.UNICODE
     assert parse_json_type("line1\nline2\n\u03a9") is JsonType.TEXT
     assert parse_json_type("line1\nline2\nline3") is JsonType.MULTILINE
+    assert parse_json_type("2026-01-01T00:00:00Z") is JsonType.DATETIMEUTC
+    assert parse_json_type("2026-01-01T00:00:00+00:00") is JsonType.DATETIMEZONE
     assert parse_json_type((1, 2)) is JsonType.STRING
 
     unknown = JsonTreeItem(None, (1, 2), "tuple_value")
