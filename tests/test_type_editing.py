@@ -495,7 +495,7 @@ def test_float_currency_to_integer_currency_requires_exact_integer():
     model = JsonTreeModel({"v": NumberAffix(AffixKind.CURRENCY, "$", False, 3.5)})
     type_idx = model.index(0, 1, QModelIndex())
     assert model.setData(type_idx, JsonType.FLOAT_CURRENCY)
-    assert not model.setData(type_idx, JsonType.INTEGER_CURRENCY)
+    assert model.setData(type_idx, JsonType.INTEGER_CURRENCY)
 
 
 def test_float_currency_to_integer_currency_exact_value_succeeds():

@@ -25,6 +25,7 @@ from delegates.bytes_codec import decode_bytes, encode_bytes
 from tree.item_coercion import coerce_value_for_type
 from tree.model import JsonTreeModel
 from tree.types import JsonType
+from units.number_affix import AffixKind, NumberAffix
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -587,6 +588,18 @@ def test_int_via_float_string_truncates():
     """'3.14' is not a valid int literal but is a sensible float we can truncate."""
     result = _coerce(JsonType.INTEGER, "3.14")
     assert result == 3
+
+
+def test_float_affix_to_integer_truncates_fractional_part():
+    value = NumberAffix(AffixKind.CURRENCY, "$", False, mpq("7/2"))
+    result = _coerce(JsonType.INTEGER, value)
+    assert result == 3
+
+
+def test_float_affix_to_integer_affix_truncates_fractional_part():
+    value = NumberAffix(AffixKind.UNITS, "kg", True, mpq("7/2"))
+    result = _coerce(JsonType.INTEGER_UNITS, value)
+    assert result == NumberAffix(AffixKind.UNITS, "kg", True, 3)
 
 
 def test_bytes_to_integer_returns_decoded_length():

@@ -314,6 +314,17 @@ def coerce_value_for_type(
             return None
         return int(q)
 
+    def _int_from_truncated(raw: Any) -> int | None:
+        if isinstance(raw, int):
+            return raw
+        q = _to_mpq_or_none(raw)
+        if q is not None:
+            return int(q)
+        try:
+            return int(float(raw))
+        except (ValueError, TypeError):
+            return None
+
     def _affix_kind_for(target: JsonType) -> AffixKind:
         if target in (JsonType.INTEGER_CURRENCY, JsonType.FLOAT_CURRENCY):
             return AffixKind.CURRENCY
@@ -338,10 +349,10 @@ def coerce_value_for_type(
 
         case JsonType.INTEGER:
             if isinstance(value, NumberAffix):
-                exact = _int_from_exact(value.number)
-                if exact is None:
+                truncated = _int_from_truncated(value.number)
+                if truncated is None:
                     return False, None
-                return True, exact
+                return True, truncated
             temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
             if temporal_epoch is not None:
                 return True, int(temporal_epoch)
@@ -398,18 +409,18 @@ def coerce_value_for_type(
         case JsonType.INTEGER_CURRENCY | JsonType.INTEGER_UNITS:
             kind = _affix_kind_for(json_type)
             if isinstance(value, NumberAffix):
-                exact = _int_from_exact(value.number)
-                if exact is None:
+                truncated = _int_from_truncated(value.number)
+                if truncated is None:
                     return False, None
-                return True, NumberAffix(kind=kind, affix=value.affix, space=value.space, number=exact)
-            exact = _int_from_exact(value)
-            if exact is None:
+                return True, NumberAffix(kind=kind, affix=value.affix, space=value.space, number=truncated)
+            truncated = _int_from_truncated(value)
+            if truncated is None:
                 return (
                     (False, None)
                     if strict
                     else (True, NumberAffix(kind=kind, affix="", space=False, number=stub_integer()))
                 )
-            return True, NumberAffix(kind=kind, affix="", space=False, number=exact)
+            return True, NumberAffix(kind=kind, affix="", space=False, number=truncated)
 
         case JsonType.FLOAT_CURRENCY | JsonType.FLOAT_UNITS:
             kind = _affix_kind_for(json_type)

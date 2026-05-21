@@ -59,6 +59,7 @@ from undo.commands import (
     _SwitchFieldCaseCmd,
 )
 from undo.diff import DiffApplier
+from units.number_affix import NumberAffix
 from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
@@ -1164,6 +1165,7 @@ class JsonTab(QWidget):
         item = self.model.get_item(name_idx)
         if item.json_type is target_type:
             return False
+        warn_fraction_loss = self._would_drop_fraction_on_type_change(item, target_type)
         old_subtree = item.to_json()
         old_explicit = item.explicit_type
         target_qname = self._qualified_name(name_idx)
@@ -1176,7 +1178,28 @@ class JsonTab(QWidget):
             target_type,
         )
         self.undo_stack.push(cmd)
+        if warn_fraction_loss and self._status_message_callback is not None:
+            self._status_message_callback("Fractional part discarded during float-to-integer conversion", 3000)
         return True
+
+    @staticmethod
+    def _is_integer_number_type(json_type: JsonType) -> bool:
+        return json_type in (JsonType.INTEGER, JsonType.INTEGER_CURRENCY, JsonType.INTEGER_UNITS)
+
+    @staticmethod
+    def _is_float_number_type(json_type: JsonType) -> bool:
+        return json_type in (JsonType.FLOAT, JsonType.PERCENT, JsonType.FLOAT_CURRENCY, JsonType.FLOAT_UNITS)
+
+    @classmethod
+    def _would_drop_fraction_on_type_change(cls, item: JsonTreeItem, target_type: JsonType) -> bool:
+        if not cls._is_integer_number_type(target_type) or not cls._is_float_number_type(item.json_type):
+            return False
+        source_value = item.value.number if isinstance(item.value, NumberAffix) else item.value
+        try:
+            q = gmpy2.mpq(str(source_value))
+        except (TypeError, ValueError):
+            return False
+        return q.denominator != 1
 
     def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
         """``inserts`` is a list of ``{parent_path, row, value, name}``."""
