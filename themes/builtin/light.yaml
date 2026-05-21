@@ -19,6 +19,18 @@ types:
   percent:
     fg: '#1f8f89'
     italic: true
+  int_currency:
+    fg: '#268bd2'
+    italic: true
+  int_units:
+    fg: '#268bd2'
+    italic: true
+  float_currency:
+    fg: '#1f8f89'
+    italic: true
+  float_units:
+    fg: '#1f8f89'
+    italic: true
   boolean:
     fg: '#d33682'
   string:
@@ -70,6 +82,10 @@ icons:
     integer: hashtag_line
     float: asterisk_2_line
     percent: percentage_line
+    int_currency: hashtag_line
+    int_units: hashtag_line
+    float_currency: asterisk_2_line
+    float_units: asterisk_2_line
     boolean: choice_line
     string: font_line
     unicode: text_2_line

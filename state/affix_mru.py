@@ -9,7 +9,7 @@ from units.number_affix import AffixKind, NumberAffix
 
 class AffixMRU:
     def __init__(self, max_size: int | None = None) -> None:
-        configured = getattr(settings, "NUMBER_AFFIX_MRU_SIZE", 32)
+        configured = getattr(settings, "NUMBER_AFFIX_MRU_SIZE", 50)
         self._max_size = int(max_size if max_size is not None else configured)
         self._prefix: OrderedDict[str, None] = OrderedDict()
         self._suffix: OrderedDict[str, None] = OrderedDict()

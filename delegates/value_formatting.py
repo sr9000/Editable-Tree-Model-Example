@@ -96,7 +96,7 @@ def format_with_type(value, json_type: JsonType | None, *, item=None, show_previ
         try:
             raw = decode_bytes(value, json_type) if isinstance(value, str) else bytes(value)
             preview = " ".join(f"{byte:02X}" for byte in raw[:16])
-            if len(raw) > 16:
+            if len(raw) > 20:
                 preview += "..."
             printable_str = "".join(chr(byte) if 32 <= byte <= 126 else "." for byte in raw[:16])
             return f"<{format_bytes(len(raw))}> | {preview} (`{printable_str}`)"
