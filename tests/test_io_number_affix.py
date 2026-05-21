@@ -6,7 +6,7 @@ from tree.types import JsonType, parse_json_type
 from units.number_affix import AffixKind, NumberAffix
 
 
-def _fixture_tree() -> dict[str, str]:
+def _fixture_tree() -> dict[str, str | int | float]:
     return {
         "int_prefix_nospace": "$1234",
         "int_prefix_space": "$ 1234",

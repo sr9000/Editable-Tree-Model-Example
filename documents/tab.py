@@ -24,6 +24,7 @@ from documents.tab_setup import (
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
 from io_formats.detect import SAVE_FORMAT_YAML_MULTI
+from state.affix_mru import AffixMRU
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
@@ -212,6 +213,7 @@ class JsonTab(QWidget):
 
         self.file_path = file_path
         self.save_format: str | None = save_format
+        self.affix_mru = AffixMRU()
         self._dirty = False
         self._schema_ref = SchemaRef(path=None, inline=None, origin="none")
         self._schema_source: SchemaSource | None = None
@@ -219,6 +221,7 @@ class JsonTab(QWidget):
         self._issue_index = IssueIndex([], model_data)
 
         init_model(self, model_data, show_root=show_root)
+        self.affix_mru.bootstrap_from_tree(self.model.root_item)
 
         # ── auto-rescan debouncer ──────────────────────────────────────────
         # Gate flag; toggled by set_auto_rescan().  Connections are kept alive
