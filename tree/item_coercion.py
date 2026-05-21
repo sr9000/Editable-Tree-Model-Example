@@ -21,6 +21,7 @@ from tree.stubs import (
     stub_string,
 )
 from tree.types import JsonType
+from units.number_affix import AffixKind, NumberAffix
 
 # ---------------------------------------------------------------------------
 # Bytes / text helpers
@@ -297,6 +298,27 @@ def coerce_value_for_type(
     strict: bool,
     old_type: JsonType | None = None,
 ) -> tuple[bool, Any]:
+    def _to_mpq_or_none(raw: Any) -> mpq | None:
+        if isinstance(raw, mpq):
+            return raw
+        try:
+            return mpq(str(raw))
+        except (ValueError, TypeError):
+            return None
+
+    def _int_from_exact(raw: Any) -> int | None:
+        if isinstance(raw, int):
+            return raw
+        q = _to_mpq_or_none(raw)
+        if q is None or q.denominator != 1:
+            return None
+        return int(q)
+
+    def _affix_kind_for(target: JsonType) -> AffixKind:
+        if target in (JsonType.INTEGER_CURRENCY, JsonType.FLOAT_CURRENCY):
+            return AffixKind.CURRENCY
+        return AffixKind.UNITS
+
     match json_type:
         case JsonType.NULL:
             return True, None
@@ -315,6 +337,11 @@ def coerce_value_for_type(
             return True, bool(value)
 
         case JsonType.INTEGER:
+            if isinstance(value, NumberAffix):
+                exact = _int_from_exact(value.number)
+                if exact is None:
+                    return False, None
+                return True, exact
             temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
             if temporal_epoch is not None:
                 return True, int(temporal_epoch)
@@ -342,6 +369,11 @@ def coerce_value_for_type(
             return (False, None) if strict else (True, stub_integer())
 
         case JsonType.FLOAT:
+            if isinstance(value, NumberAffix):
+                q = _to_mpq_or_none(value.number)
+                if q is None:
+                    return False, None
+                return True, q
             temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
             if temporal_epoch is not None:
                 return True, temporal_epoch
@@ -362,6 +394,30 @@ def coerce_value_for_type(
             except (ValueError, TypeError):
                 pass
             return (False, None) if strict else (True, stub_percent())
+
+        case JsonType.INTEGER_CURRENCY | JsonType.INTEGER_UNITS:
+            kind = _affix_kind_for(json_type)
+            if isinstance(value, NumberAffix):
+                exact = _int_from_exact(value.number)
+                if exact is None:
+                    return False, None
+                return True, NumberAffix(kind=kind, affix=value.affix, space=value.space, number=exact)
+            exact = _int_from_exact(value)
+            if exact is None:
+                return False, None
+            return True, NumberAffix(kind=kind, affix="", space=False, number=exact)
+
+        case JsonType.FLOAT_CURRENCY | JsonType.FLOAT_UNITS:
+            kind = _affix_kind_for(json_type)
+            if isinstance(value, NumberAffix):
+                q = _to_mpq_or_none(value.number)
+                if q is None:
+                    return False, None
+                return True, NumberAffix(kind=kind, affix=value.affix, space=value.space, number=q)
+            q = _to_mpq_or_none(value)
+            if q is None:
+                return False, None
+            return True, NumberAffix(kind=kind, affix="", space=False, number=q)
 
         # 3.1: bool → lowercase "true"/"false" instead of Python's "True"/"False"
         case JsonType.STRING | JsonType.UNICODE | JsonType.MULTILINE | JsonType.TEXT:

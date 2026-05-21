@@ -8,6 +8,7 @@ from delegates.type_delegate import JsonTypeDelegate
 from documents.tab import JsonTab
 from tree.model import JsonTreeModel
 from tree.types import JsonType
+from units.number_affix import AffixKind, NumberAffix
 
 
 def test_name_editing_object_and_duplicate_rejection():
@@ -455,3 +456,36 @@ def test_array_to_object_undo_redo(qtbot):
     item = tab.model.get_item(arr_idx)
     assert item.json_type is JsonType.OBJECT
     assert [c.name for c in item.child_items] == ["item1", "item2", "item3"]
+
+
+def test_integer_to_integer_currency_creates_affix_wrapper():
+    model = JsonTreeModel({"v": 1234})
+    type_idx = model.index(0, 1, QModelIndex())
+    assert model.setData(type_idx, JsonType.INTEGER_CURRENCY)
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.value == NumberAffix(AffixKind.CURRENCY, "", False, 1234)
+
+
+def test_float_currency_to_integer_currency_requires_exact_integer():
+    model = JsonTreeModel({"v": NumberAffix(AffixKind.CURRENCY, "$", False, 3.5)})
+    type_idx = model.index(0, 1, QModelIndex())
+    assert model.setData(type_idx, JsonType.FLOAT_CURRENCY)
+    assert not model.setData(type_idx, JsonType.INTEGER_CURRENCY)
+
+
+def test_float_currency_to_integer_currency_exact_value_succeeds():
+    model = JsonTreeModel({"v": NumberAffix(AffixKind.CURRENCY, "$", False, 3.0)})
+    type_idx = model.index(0, 1, QModelIndex())
+    assert model.setData(type_idx, JsonType.FLOAT_CURRENCY)
+    assert model.setData(type_idx, JsonType.INTEGER_CURRENCY)
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.value == NumberAffix(AffixKind.CURRENCY, "$", False, 3)
+
+
+def test_integer_currency_to_integer_units_flips_kind_preserving_payload():
+    model = JsonTreeModel({"v": NumberAffix(AffixKind.CURRENCY, "$", True, 42)})
+    type_idx = model.index(0, 1, QModelIndex())
+    assert model.setData(type_idx, JsonType.INTEGER_CURRENCY)
+    assert model.setData(type_idx, JsonType.INTEGER_UNITS)
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.value == NumberAffix(AffixKind.UNITS, "$", True, 42)
