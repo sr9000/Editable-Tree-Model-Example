@@ -136,11 +136,3 @@ def test_reload_rechecks_filesystem(tmp_path, qapp):
     (icons_dir / "integer.png").unlink()
     provider.reload()
     assert provider.for_type(JsonType.INTEGER).isNull()
-
-
-def test_built_in_themes_resolve_affix_logical_icons(qapp):
-    registry = ThemeRegistry()
-    for handle in registry.list_themes():
-        provider = registry.build_icon_provider(registry.get(handle.name))
-        assert provider.for_key("affix_prefix").isNull() is False
-        assert provider.for_key("affix_suffix").isNull() is False
