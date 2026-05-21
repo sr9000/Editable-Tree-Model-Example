@@ -81,10 +81,10 @@ icons:
     integer: hashtag_line
     float: asterisk_2_line
     percent: percentage_line
-    int_currency: hashtag_line
-    int_units: hashtag_line
-    float_currency: asterisk_2_line
-    float_units: asterisk_2_line
+    int_currency: bank_line
+    int_units: ruler_line
+    float_currency: bank_line
+    float_units: ruler_line
     boolean: choice_line
     string: font_line
     unicode: text_2_line
