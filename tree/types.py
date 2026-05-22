@@ -89,6 +89,11 @@ def text_pseudotype_for(current_type: "JsonType", s: str) -> "JsonType":
 
 
 def parse_json_type(value: Any) -> "JsonType":
+    """Infer a JsonType from raw value content only.
+
+    Name-based secret promotion and secret content coercion are handled by
+    model/item hooks, not by this parser.
+    """
     match value:
         case NumberAffix(kind=kind, number=number):
             is_int = isinstance(number, int)
@@ -194,6 +199,8 @@ class JsonType(StrEnum):
     # Multiline Text Format
     MULTILINE = "multiline"
     TEXT = "utf-8 text"
+    SECRET_LINE = "secret_line"
+    SECRET_TEXT = "secret_text"
 
     # Datetime Text Format
     DATE = "date"
@@ -213,6 +220,7 @@ class JsonType(StrEnum):
 
 
 TEXT_FAMILY: frozenset[JsonType] = frozenset({JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT})
+SECRET_FAMILY: frozenset[JsonType] = frozenset({JsonType.SECRET_LINE, JsonType.SECRET_TEXT})
 COLOR_FAMILY: frozenset[JsonType] = frozenset({JsonType.COLOR_RGB, JsonType.COLOR_RGBA})
 DATETIME_FAMILY: frozenset[JsonType] = frozenset(
     {JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE, JsonType.DATETIMEUTC}
