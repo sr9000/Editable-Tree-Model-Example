@@ -95,12 +95,6 @@ def parse_json_type(value: Any) -> "JsonType":
     model/item hooks, not by this parser.
     """
     match value:
-        case NumberAffix(kind=kind, number=number):
-            is_int = isinstance(number, int)
-            if kind is AffixKind.CURRENCY:
-                return JsonType.INTEGER_CURRENCY if is_int else JsonType.FLOAT_CURRENCY
-            return JsonType.INTEGER_UNITS if is_int else JsonType.FLOAT_UNITS
-
         case None:
             return JsonType.NULL
 
@@ -168,6 +162,12 @@ def parse_json_type(value: Any) -> "JsonType":
 
             return JsonType.UNICODE if _contains_non_ascii(s) else JsonType.STRING
 
+        case NumberAffix(kind=kind, number=number):
+            is_int = isinstance(number, int)
+            if kind is AffixKind.CURRENCY:
+                return JsonType.INTEGER_CURRENCY if is_int else JsonType.FLOAT_CURRENCY
+            return JsonType.INTEGER_UNITS if is_int else JsonType.FLOAT_UNITS
+
         case list(_):
             return JsonType.ARRAY
 
@@ -199,8 +199,8 @@ class JsonType(StrEnum):
     # Multiline Text Format
     MULTILINE = "multiline"
     TEXT = "utf-8 text"
-    SECRET_LINE = "secret_line"
-    SECRET_TEXT = "secret_text"
+    SECRET_LINE = "secret line"
+    SECRET_TEXT = "secret text"
 
     # Datetime Text Format
     DATE = "date"

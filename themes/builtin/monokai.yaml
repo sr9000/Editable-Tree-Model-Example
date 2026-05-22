@@ -43,9 +43,9 @@ types:
   text:
     fg: '#A6E22E'
   secret_line:
-    fg: '#E6DB74'
+    fg: '#AE81FF'
   secret_text:
-    fg: '#E6DB74'
+    fg: '#AE81FF'
     italic: true
   date:
     fg: '#E6DB74'

@@ -20,13 +20,35 @@ from io_formats.detect import (
 )
 from mpq2py import MpqSafeLoader
 from settings import NUMBER_AFFIX_MAX_LEN
+from tree.types import JsonType, parse_json_type
 from units.number_affix import parse_number_affix
+
+# Only these inferred types should cause a string to be promoted to a NumberAffix
+# at load time. Other strings that happen to look like "<prefix><digits>" (colors
+# such as "#ff0000", base64 blobs ending in digits, etc.) are classified to a
+# different JsonType by parse_json_type and must be preserved as plain strings
+# so that downstream type detection can pick the correct category.
+_AFFIX_JSON_TYPES = frozenset(
+    {
+        JsonType.INTEGER_CURRENCY,
+        JsonType.FLOAT_CURRENCY,
+        JsonType.INTEGER_UNITS,
+        JsonType.FLOAT_UNITS,
+    }
+)
 
 
 def _decode_number_affixes(value: Any) -> Any:
     if isinstance(value, str):
-        parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
-        return parsed if parsed is not None else value
+        # parse_json_type encodes the canonical priority of string heuristics
+        # (multiline -> color -> datetime -> number-affix -> base64 -> text).
+        # Only convert to NumberAffix when parse_json_type agrees the string is
+        # actually a number-with-affix; otherwise leave it intact.
+        if parse_json_type(value) in _AFFIX_JSON_TYPES:
+            parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
+            if parsed is not None:
+                return parsed
+        return value
     if isinstance(value, list):
         return [_decode_number_affixes(v) for v in value]
     if isinstance(value, dict):
