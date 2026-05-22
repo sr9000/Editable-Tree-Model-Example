@@ -3,6 +3,8 @@ from decimal import Decimal
 import yaml
 from gmpy2 import mpq
 
+from units.number_affix import NumberAffix, format_number_affix
+
 
 def mpq_serialization(q: mpq) -> tuple[float | Decimal, mpq]:
     num, den = q.as_integer_ratio()
@@ -62,6 +64,12 @@ def mpq_json_default(obj):
         # JSON-serializable; fall back to ``float`` so clipboard / file paths that use
         # stdlib json (rather than simplejson, which handles Decimal natively) succeed.
         return float(obj)
+    if isinstance(obj, NumberAffix):
+        # NumberAffix values are serialized as their canonical string form
+        # (e.g. ``"$1234"``, ``"12 kg"``) so they survive any JSON pipeline
+        # (clipboard, drag MIME, file dump). On reload / paste, name-/value-
+        # based classification re-promotes the string back to a NumberAffix.
+        return format_number_affix(obj)
     raise TypeError(f"Type {type(obj)} not serializable")
 
 
