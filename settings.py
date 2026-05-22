@@ -10,6 +10,21 @@ BINARY_EDIT_WARNING_LIMIT_BYTES = 100 * 1024
 STRING_EDIT_WARNING_LIMIT_CHARS = 10_000
 MULTILINE_EDIT_WARNING_LIMIT_CHARS = 100_000
 
+# Secret field detection and masking defaults.
+SECRET_WORD_PREFIXES: tuple[str, ...] = (
+    "passw",
+    "auth",
+    "token",
+    "key",
+    "secret",
+    "private",
+    "cert",
+)
+SECRET_MASK_GLYPHS = 8
+SECRET_MASK_CHAR = "•"
+SECRET_HIDE_ON_FOCUS_OUT = True
+SECRET_REVEAL_INACTIVITY_MS = 0
+
 # Number-affix parsing/editor limits.
 NUMBER_AFFIX_MAX_LEN = 20
 NUMBER_AFFIX_MRU_SIZE = 50
