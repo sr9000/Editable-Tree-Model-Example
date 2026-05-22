@@ -5,7 +5,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from mpq2py import mpq_serialization
-from tree.types import JsonType
+from settings import SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
+from tree.types import SECRET_FAMILY, JsonType
 
 JSON_TYPE_ROLE = Qt.ItemDataRole.UserRole + 1
 VALIDATION_SEVERITY_ROLE: Final = Qt.ItemDataRole.UserRole + 2  # "error" | "warning" | None
@@ -22,6 +23,9 @@ def font_role_for_name(item, is_root_item: bool) -> QFont | None:
 
 
 def tooltip_role_for_value(item) -> str | None:
+    if item.json_type in SECRET_FAMILY:
+        return SECRET_MASK_CHAR * SECRET_MASK_GLYPHS
+
     raw = item.data(2)
     text = "" if raw is None else str(raw)
     if len(text) <= 80:

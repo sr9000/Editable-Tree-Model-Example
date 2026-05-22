@@ -6,14 +6,16 @@ from PySide6.QtWidgets import QStyleOptionViewItem
 
 from delegates.bytes_codec import decode_bytes
 from mpq2py import mpq_serialization
+from settings import SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
 from themes.spec import TypeStyle
-from tree.types import JsonType
+from tree.types import SECRET_FAMILY, JsonType
 from units import format_bytes
 from units.number_affix import NumberAffix, format_number_affix
 
 _PREVIEW_LIMIT = 80
 _PREVIEW_CHILDREN = 5
 _MULTILINE_SEPARATOR = " | "
+_SECRET_MASK = SECRET_MASK_CHAR * SECRET_MASK_GLYPHS
 
 
 def _single_line_preview_text(value: str) -> str:
@@ -94,6 +96,9 @@ def _format_container_preview(item, json_type: JsonType, *, show_preview: bool) 
 def format_with_type(value, json_type: JsonType | None, *, item=None, show_preview: bool = True) -> str:
     if item is not None and json_type in (JsonType.ARRAY, JsonType.OBJECT):
         return _format_container_preview(item, json_type, show_preview=show_preview)
+
+    if json_type in SECRET_FAMILY:
+        return _SECRET_MASK
 
     if json_type in (JsonType.MULTILINE, JsonType.TEXT) and isinstance(value, str):
         return format_default(_single_line_preview_text(value))
