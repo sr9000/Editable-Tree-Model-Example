@@ -11,14 +11,16 @@ from PySide6.QtCore import (
     QSortFilterProxyModel,
     Qt,
 )
-from PySide6.QtGui import QAction, QFont, QFontDatabase, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QFont, QFontDatabase, QFontMetrics, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QColorDialog,
     QComboBox,
+    QHBoxLayout,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
+    QPushButton,
     QStyle,
     QStyleOptionViewItem,
     QToolButton,
@@ -59,19 +61,57 @@ from tree.types import JsonType
 from units import counts, format_bytes
 
 
-class _SecretLineEdit(_CapsLockSafeLineEdit):
+class _SecretLineEdit(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._revealed = False
-        self.setEchoMode(QLineEdit.EchoMode.Password)
-        self._toggle_action = QAction("Show", self)
-        self.addAction(self._toggle_action, QLineEdit.ActionPosition.TrailingPosition)
-        self._toggle_action.triggered.connect(self._toggle_reveal)
+        self.line_edit = _CapsLockSafeLineEdit(self)
+        self.line_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.toggle_button = QPushButton(self)
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.toggle_button.setAutoDefault(False)
+        self.toggle_button.setDefault(False)
+        self.toggle_button.toggled.connect(self._set_revealed)
 
-    def _toggle_reveal(self) -> None:
-        self._revealed = not self._revealed
-        self.setEchoMode(QLineEdit.EchoMode.Normal if self._revealed else QLineEdit.EchoMode.Password)
-        self._toggle_action.setText("Hide" if self._revealed else "Show")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.addWidget(self.toggle_button)
+        layout.addWidget(self.line_edit)
+
+        self.setFocusProxy(self.line_edit)
+        self._sync_toggle_button()
+
+    def text(self) -> str:
+        return self.line_edit.text()
+
+    def setText(self, text: str) -> None:
+        self.line_edit.setText(text)
+
+    def _set_revealed(self, checked: bool) -> None:
+        self._revealed = bool(checked)
+        self.line_edit.setEchoMode(QLineEdit.EchoMode.Normal if self._revealed else QLineEdit.EchoMode.Password)
+        self._sync_toggle_button()
+
+    def _sync_toggle_button(self) -> None:
+        label = "Shown" if self._revealed else "Hidden"
+        self.toggle_button.setText(label)
+        self.toggle_button.setToolTip(label)
+        if self.toggle_button.isChecked() != self._revealed:
+            self.toggle_button.blockSignals(True)
+            self.toggle_button.setChecked(self._revealed)
+            self.toggle_button.blockSignals(False)
+        self._update_button_width()
+
+    def _update_button_width(self) -> None:
+        metrics = QFontMetrics(self.toggle_button.font())
+        width = max(metrics.horizontalAdvance("Hidden"), metrics.horizontalAdvance("Shown")) + 18
+        self.toggle_button.setFixedWidth(width)
+
+    def setFont(self, font: QFont) -> None:
+        super().setFont(font)
+        self._update_button_width()
 
 
 class _SecretTextEditor(QWidget):
@@ -555,6 +595,10 @@ class ValueDelegate(_TextEditorDelegateBase):
             editor.setText(str(value or ""))
             return
 
+        if isinstance(editor, _SecretLineEdit):
+            editor.setText("" if value is None else str(value))
+            return
+
         if isinstance(editor, QLineEdit):
             editor.setText("" if value is None else str(value))
             return
@@ -584,6 +628,10 @@ class ValueDelegate(_TextEditorDelegateBase):
             return
 
         if isinstance(editor, BetterDateTimeEditor):
+            self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
+            return
+
+        if isinstance(editor, _SecretLineEdit):
             self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
             return
 

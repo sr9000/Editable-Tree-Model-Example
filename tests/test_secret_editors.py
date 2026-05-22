@@ -1,6 +1,6 @@
 from PySide6.QtCore import QEvent, QModelIndex, Qt
 from PySide6.QtGui import QFocusEvent
-from PySide6.QtWidgets import QAbstractItemView, QApplication, QLineEdit, QPlainTextEdit, QToolButton
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QLineEdit, QPlainTextEdit, QPushButton, QToolButton
 
 from documents.tab import JsonTab
 from settings import SECRET_MASK_CHAR
@@ -16,14 +16,16 @@ def test_secret_line_editor_is_password_with_toggle(qtbot):
     tab.view.setCurrentIndex(idx)
     tab.view.edit(idx)
 
-    qtbot.waitUntil(lambda: tab.view.findChild(QLineEdit) is not None)
+    qtbot.waitUntil(lambda: tab.view.findChild(QLineEdit) is not None and tab.view.findChild(QPushButton) is not None)
     editor = tab.view.findChild(QLineEdit)
     assert editor is not None
     assert editor.echoMode() == QLineEdit.EchoMode.Password
 
-    toggle = next((a for a in editor.actions() if a.text() == "Show"), None)
+    toggle = tab.view.findChild(QPushButton)
     assert toggle is not None
-    toggle.trigger()
+    assert toggle.text() == "Hidden"
+    qtbot.mouseClick(toggle, Qt.MouseButton.LeftButton)
+    assert toggle.text() == "Shown"
     assert editor.echoMode() == QLineEdit.EchoMode.Normal
 
 

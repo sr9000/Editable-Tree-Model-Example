@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 from qbigint_spinbox import QBigIntSpinBox
@@ -38,7 +39,7 @@ class AffixCompositeEditor(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(4)
 
         affix_label_text = "Currency: " if self.kind is AffixKind.CURRENCY else "Units: "
         self.affix_label = QLabel(affix_label_text, self)
@@ -55,6 +56,7 @@ class AffixCompositeEditor(QWidget):
         self.space_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         self.space_button.setToolTip("Space between affix and number")
         self.space_button.toggled.connect(self._on_space_toggled)
+        self._update_space_button_width()
 
         if is_integer_json_type(json_type):
             self.number_editor = QBigIntSpinBox(self)
@@ -84,6 +86,21 @@ class AffixCompositeEditor(QWidget):
 
     def _on_space_toggled(self, checked: bool) -> None:
         self.space_button.setText(self._space_button_text(bool(checked)))
+
+    def _update_space_button_width(self) -> None:
+        metrics = QFontMetrics(self.space_button.font())
+        width = (
+            max(
+                metrics.horizontalAdvance(self._space_button_text(False)),
+                metrics.horizontalAdvance(self._space_button_text(True)),
+            )
+            + 18
+        )
+        self.space_button.setFixedWidth(width)
+
+    def setFont(self, font: QFont) -> None:
+        super().setFont(font)
+        self._update_space_button_width()
 
     def set_invalid(self, invalid: bool) -> None:
         self.setProperty("invalid", bool(invalid))
