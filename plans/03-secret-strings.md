@@ -1,68 +1,88 @@
 # Plan 03 — Secret strings (passwords / tokens / secrets)
 
+> **Revision note (2026-05-22):** plan re-aligned with user interview. See
+> **Decisions** below. Several commits from the original draft are deferred
+> to a v2 follow-up.
+
 ## Goal
 
-A dedicated `JsonType.SECRET` text variant that is **never** auto-classified
-as anything else (not `STRING`, not `UNICODE`, not `MULTILINE`, not `BYTES`,
-not a color, not a base64 blob). Secrets:
+A dedicated `JsonType.SECRET` text kind that is **never** auto-classified
+as anything else (not `STRING`, `UNICODE`, `MULTILINE`, `BYTES`, color, or
+base64). Secrets:
 
 - are **hidden by default** in the tree view (rendered as `••••••••` with a
-  fixed glyph count, regardless of length, to avoid leaking length info);
-- can be **revealed per-cell** via a context-menu action ("Reveal value")
-  with a configurable auto-hide timeout;
+  **fixed glyph count**, regardless of length, so length does not leak);
 - are **detected by field name** (e.g. `password`, `token`, `secret`,
-  `api_key`, …); the list of matching name patterns is **configurable** via
-  `settings.py`;
-- are stored as plain strings on disk (no encryption — out of scope), but
-  their **kind** (`SECRET`) is persisted and restored on load even when the
-  field name does not match the configured patterns (manual override wins).
+  `api_key`, …) using a **user-editable** pattern list (settings + dialog);
+- are **sticky**: once a cell is `SECRET`, renaming the field to something
+  innocuous does **not** demote it back. (In v1 there is no manual override,
+  so sticky + no-pin is unambiguous.);
+- can be **revealed only while editing** (double-click → masked `QLineEdit`
+  with an eye-icon toggle); committing the edit re-masks in the view;
+- **auto-hide on focus-out / tab-switch**: if the editor is open and the
+  window/tab loses focus, the editor closes and the cell re-masks;
+- are stored as **plain strings** on disk (no encryption — out of scope).
+  On reload, name-heuristic re-classification is the only way `SECRET`-ness
+  is restored. This is an accepted limitation (see Non-goals).
 
-## Non-goals
+## Non-goals (v1)
 
-- Encryption at rest. The threat model is *shoulder-surfing* and *accidental
-  screenshots / screen sharing*, not adversarial disk access.
-- Clipboard scrubbing (could be a follow-up).
-- Multi-line secrets (out of scope; secret is single-line; a multi-line
-  certificate or PEM blob stays `MULTILINE`/`TEXT` unless manually pinned).
+- Encryption at rest. Threat model = shoulder-surfing, screenshots, screen
+  sharing — **not** adversarial disk access.
+- Clipboard scrubbing — tracked as TODO.
+- Persisting `SECRET` kind for fields whose **name does not** match the
+  patterns (would need a schema sidecar). Tracked as TODO.
+- A "Reveal value" context-menu action with a global timer (deferred to v2;
+  in v1 reveal happens only inside the editor).
+- A type-delegate dropdown entry for `SECRET` / manual kind override
+  (deferred to v2).
+- `MULTILINE` + `SECRET` combinations (e.g. PEM blobs). See **Open item**
+  below — flagged because the interview answer was ambiguous.
+
+## Decisions (from interview)
+
+| Topic                 | Decision                                                                                                                  |
+|-----------------------|---------------------------------------------------------------------------------------------------------------------------|
+| v1 scope              | `JsonType.SECRET`, masked rendering, name-based auto-detect, password-echo editor with eye toggle, auto-hide on focus-out |
+| Detection model       | Name heuristic + **sticky** (rename never demotes)                                                                        |
+| Manual pin semantics  | No pin concept (no manual override surface in v1)                                                                         |
+| Masking               | Fixed 8 glyphs, no length leak                                                                                            |
+| Reveal scope          | Only inside the editor; closes on focus-out; optional inactivity timer                                                    |
+| Persistence           | Heuristic-only on load; accept documented limitation                                                                      |
+| Text-family interplay | **Open** — see below                                                                                                      |
+| Editor UX             | `QLineEdit.Password` + eye-icon toggle                                                                                    |
+| Name patterns         | Editable in `settings.py` **and** in a Settings dialog                                                                    |
+
+### Open item — `SECRET` × `MULTILINE`
+
+User indicated SECRET should be able to "wrap any text variant, incl.
+MULTILINE for PEM keys", but also opted **out** of a flag/modifier model.
+Resolved for v1 as: **SECRET is a single, flat kind that accepts arbitrary
+string content (newlines allowed in the stored value).** The editor remains
+single-line `QLineEdit` in v1; multi-line secret editing (PEM-style) is a
+v2 follow-up that would either (a) introduce a multi-line secret editor or
+(b) re-model SECRET as an orthogonal flag. Flagged in TODO.
 
 ## Design notes
 
 - New `JsonType.SECRET = "secret"` in `tree/types.py`.
-- New helper module: `validation/secret_names.py`:
-
-  ```python
-  def name_looks_secret(field_name: str, patterns: Iterable[str]) -> bool: ...
-  ```
-
-  Patterns are case-insensitive substrings **and** regexes (a pattern
-  starting with `re:` is treated as regex, otherwise substring).
-- Detection points (in priority order):
-  1. **Persisted kind** from the file (if loader saw `SECRET`).
-  2. **Manual override** via the type-delegate dropdown (last user wins).
-  3. **Name heuristic**: only on *new* values or values currently classified
-     into `TEXT_FAMILY`; never demotes a `MULTILINE` blob to `SECRET`.
-- `parse_json_type` does **not** know about field names (it sees only
-  values). Name-based promotion happens one layer up in the model when a
-  cell's name *or* its value changes.
-- View masking is implemented in `delegates/value_formatting.py` via a
-  per-row "revealed" flag held in the model (transient; not persisted).
-
-## Persisted form
-
-To survive round-trip without encryption-flavored magic, dump a `SECRET`
-string as a plain JSON/YAML string but tag the kind in the **schema sidecar**
-(if present) or via a per-tab in-memory map. If no sidecar exists, the
-loader falls back to the name heuristic — which is acceptable because the
-name patterns are exactly what would have classified it on first creation.
-
-(If the project later gains schema sidecars at the field level, this slots
-in cleanly. For now we accept the heuristic-based reload.)
+- `TEXT_FAMILY` is **not** extended to include `SECRET` (transitions in/out
+  of SECRET are not free text-axis moves).
+- New helper module `validation/secret_names.py` with
+  `name_looks_secret(name, patterns) -> bool`:
+  - case-insensitive substring match by default;
+  - `"re:<expr>"` prefix → regex match (`re.IGNORECASE`);
+  - empty / non-string `name` → `False`.
+- `parse_json_type` is **not** name-aware. Promotion happens in the model
+  on name-change / cell-create hooks.
+- Sticky rule lives entirely in the model: once `kind == SECRET`, name
+  changes do not alter `kind`.
+- View masking lives in `delegates/value_formatting.py`. No reveal state in
+  the view-layer model for v1 (reveal is editor-local).
 
 ## Commits
 
 ### Commit 1 — `settings.py`
-
-Add:
 
 ```python
 SECRET_NAME_PATTERNS: tuple[str, ...] = (
@@ -71,164 +91,141 @@ SECRET_NAME_PATTERNS: tuple[str, ...] = (
     "access_key", "private_key",
     "re:auth.*token",
 )
-SECRET_REVEAL_TIMEOUT_MS = 8_000   # 0 = no auto-hide
-SECRET_MASK_GLYPHS = 8             # fixed glyph count when masked
+SECRET_MASK_GLYPHS = 8          # fixed glyph count when masked
 SECRET_MASK_CHAR = "•"
+SECRET_HIDE_ON_FOCUS_OUT = True # auto-close editor + re-mask on focus loss
+SECRET_REVEAL_INACTIVITY_MS = 0 # 0 = no inactivity auto-mask in editor
 ```
 
 **DoD**
-
-- Settings module imports cleanly.
-- A tiny unit test (`tests/test_settings_secret.py`) asserts the constants
-  exist and have the documented types.
+- Module imports cleanly.
+- `tests/test_settings_secret.py` asserts constants exist with documented
+  types.
 
 ### Commit 2 — `validation/secret_names.py` (new)
 
-Implement `name_looks_secret(name, patterns)`:
+Implement `name_looks_secret(name, patterns)`.
 
-- Substring match: case-insensitive.
-- Regex match: pattern `"re:<expr>"` → `re.search(expr, name, re.IGNORECASE)`.
-- Empty / non-string `name` → `False`.
-
-**DoD**
-
-- `tests/test_secret_names.py`:
-  - `name_looks_secret("Password", default_patterns) is True`.
-  - `name_looks_secret("user_token_v2", default_patterns) is True`.
-  - `name_looks_secret("description", default_patterns) is False`.
-  - Custom regex `("re:^x_.*key$",)` matches `"x_super_key"` only.
-- Pure stdlib; no imports from app modules.
+**DoD** — `tests/test_secret_names.py`:
+- `"Password"` ✔, `"user_token_v2"` ✔, `"description"` ✘.
+- Custom `("re:^x_.*key$",)` matches `"x_super_key"` only.
+- Stdlib only.
 
 ### Commit 3 — `tree/types.py`
 
 - Add `JsonType.SECRET = "secret"`.
-- Extend `TEXT_FAMILY` to **exclude** `SECRET` (intentional: secrets are
-  not a free text-axis transition target).
 - Add `SECRET_FAMILY = frozenset({JsonType.SECRET})`.
-- `parse_json_type` is *not* changed (no name visibility); add a docstring
-  note explaining promotion happens in the model.
+- `TEXT_FAMILY` unchanged (does **not** include SECRET).
+- Docstring on `parse_json_type` noting name-based promotion is the model's
+  responsibility.
+
+**DoD** — existing tests green; `JsonType.SECRET` exported.
+
+### Commit 4 — Model integration (sticky promotion)
+
+Files: `tree/item.py` and/or `tree/item_coercion.py` (verify ownership of
+name-change / value-change hooks before editing).
+
+- On **new** cell in `TEXT_FAMILY` **or** name change of a `TEXT_FAMILY`
+  cell: if `name_looks_secret(name, SECRET_NAME_PATTERNS)` → promote to
+  `SECRET`.
+- Once `kind == SECRET`: **sticky** — subsequent name changes do not
+  demote.
+- Promotion never modifies the stored value.
+
+**DoD** — `tests/test_secret_promotion.py`:
+- Rename `STRING` "comment" → "password" promotes to `SECRET`.
+- Rename `SECRET` "password" → "comment" stays `SECRET` (sticky).
+- Creating a new field named `api_key` starts as `SECRET`.
+
+### Commit 5 — `delegates/value_formatting.py` (masked rendering)
+
+- `SECRET` cells render `SECRET_MASK_CHAR * SECRET_MASK_GLYPHS`.
+- Tooltip identical (no length leak; no value substring).
+- Other kinds unaffected.
 
 **DoD**
+- `SECRET` cell with value `"hunter2"` displays exactly `••••••••`.
+- Cell with value `""` also displays `••••••••` (no `<empty>` leak).
+- Tooltip equals the mask string.
 
-- Existing tests green.
-- `JsonType.SECRET` is exported and usable.
+### Commit 6 — Editor: masked `QLineEdit` + eye toggle
 
-### Commit 4 — Model integration
+File: whichever delegate creates the single-line text editor (likely
+`delegates/value.py` — verify).
 
-Files: `tree/item.py` and/or `tree/item_coercion.py` (whichever owns
-"on-name-change" / "on-value-change" hooks — verify before editing).
-
-- When a cell's *name* changes or a *new cell* is created in `TEXT_FAMILY`,
-  call `name_looks_secret(name, settings.SECRET_NAME_PATTERNS)` and promote
-  to `SECRET` if matched and the user has not manually pinned a different
-  type.
-- A "manual pin" flag (`Qt.UserRole + N`) suppresses future auto-promotion.
-
-**DoD**
-
-- `tests/test_secret_promotion.py`:
-  - Renaming a `STRING` cell to `"password"` promotes it to `SECRET`.
-  - Renaming back to `"comment"` demotes to `STRING` (only if not manually
-    pinned).
-  - Manually setting type to `STRING` on a `password` field sets the pin
-    and survives a subsequent name re-edit.
-- Promotion does **not** modify the stored value.
-
-### Commit 5 — `delegates/value_formatting.py`
-
-- Render `SECRET` cells as `SECRET_MASK_CHAR * SECRET_MASK_GLYPHS`.
-- Tooltip is also masked (no length leak).
-- A transient per-row "revealed" flag (held in a `WeakKeyDictionary` keyed by
-  model index's internal id, or in the model's user-role) toggles the
-  rendering.
+- For `SECRET` cells: editor is a `QLineEdit` with `EchoMode.Password` by
+  default; embedded eye-icon `QAction` toggles to `EchoMode.Normal` for the
+  duration of the edit.
+- **Focus-out / tab-switch behavior** (when `SECRET_HIDE_ON_FOCUS_OUT`):
+  intercept `focusOut` / app `applicationStateChanged` to inactive →
+  `commitData` + `closeEditor`, which causes the view to re-mask.
+- Optional inactivity timer (`SECRET_REVEAL_INACTIVITY_MS > 0`): while in
+  Normal echo, restart on key/mouse activity; on timeout flip back to
+  Password echo (editor stays open).
 
 **DoD**
+- Double-click on `SECRET` cell → editor with bullets, eye icon visible.
+- Click eye → plaintext; click again → bullets.
+- Switching apps / focusing another tab closes the editor and the view
+  shows `••••••••`.
+- After commit, the view re-masks (covered by Commit 5).
 
-- A `SECRET` cell with value `"hunter2"` displays `••••••••` (exactly
-  `SECRET_MASK_GLYPHS` chars).
-- Setting the reveal flag shows the real value; clearing it re-masks.
-- Other cells unaffected.
+### Commit 7 — Settings dialog: editable name patterns
 
-### Commit 6 — `delegates/type_delegate.py`
+Files: the existing app settings UI (locate under `app/` — likely a
+preferences dialog; if none exists, add a minimal modal under `dialogs/`).
 
-- Allow `SECRET` in the dropdown for `TEXT_FAMILY` cells (and from `SECRET`
-  back to `STRING`/`UNICODE`).
-- Selecting `SECRET` sets the manual-pin flag.
-
-**DoD**
-
-- Dropdown shows `secret` for a string cell.
-- Picking `secret` then re-renaming the field to `description` keeps it
-  `SECRET` (manual pin honored).
-- Switching back to `STRING` clears the pin.
-
-### Commit 7 — Context menu: Reveal / Hide
-
-File: most likely `tree/view.py` (verify owns context menu) or a new
-`tree_actions/secret_actions.py`.
-
-- Add `"Reveal value"` and `"Hide value"` actions, enabled only on
-  `SECRET` cells.
-- On reveal: set the transient flag, start a `QTimer` for
-  `SECRET_REVEAL_TIMEOUT_MS` (when > 0) that auto-hides.
-- Multiple reveals across cells are tracked independently.
+- Add a list editor for `SECRET_NAME_PATTERNS` (add / remove / edit row;
+  `re:` prefix supported and indicated in placeholder text).
+- Changes persist via the existing settings mechanism (verify whether
+  `settings.py` is a frozen module or backed by `QSettings`; if frozen,
+  introduce a thin runtime override layer rather than mutating the module).
+- Live-apply: changing patterns re-evaluates promotion **only on next
+  name/value edit** (we do not retroactively scan existing cells — keeps
+  sticky semantics clean).
 
 **DoD**
+- Patterns added in the dialog cause new fields matching them to be
+  detected as `SECRET`.
+- Removing the default `"password"` pattern means a *new* field named
+  `password` does **not** auto-promote (existing `SECRET` cells stay
+  sticky).
+- Patterns survive app restart.
 
-- Right-click on a `SECRET` cell shows "Reveal value".
-- After clicking, value is shown; after `SECRET_REVEAL_TIMEOUT_MS` it
-  auto-masks again.
-- Setting `SECRET_REVEAL_TIMEOUT_MS = 0` disables auto-hide; only manual
-  "Hide value" re-masks.
-- Tab/window switch does *not* leak: optional behavior to auto-hide on
-  focus-out is implemented and covered in commit body (toggleable via a
-  setting `SECRET_HIDE_ON_FOCUS_OUT = True`).
+### Commit 8 — `io_formats/dump.py` + `io_formats/load.py`
 
-### Commit 8 — Editor behavior
+- Dump: write `SECRET` as a plain string. No magic marker.
+- Load: rely on Commit 4's name heuristic to re-promote on import.
+  Document this in a module docstring.
 
-File: whichever editor handles single-line text (likely
-`delegates/value.py` or a sibling).
+**DoD** — `tests/test_io_secret.py`:
+- Tree with `password = "hunter2"` saved and reloaded → `SECRET`.
+- Tree with `notes = "hunter2"` whose kind is `SECRET` (sticky from a
+  prior `password` rename) is saved and reloaded → falls back to `STRING`.
+  Test asserts this limitation and references the TODO.
 
-- When editing a `SECRET` cell, the editor uses `QLineEdit.Password` echo
-  mode by default with a "show" toggle (eye icon) inside the field.
-- Copy/paste works normally (clipboard scrubbing is out of scope but a
-  TODO is added to `ai-memory/todo-n-fixme.md`).
+### Commit 9 — Docs + TODOs
 
-**DoD**
+Update `README.md`, `ai-memory/repo-map.md`:
+- Document the `SECRET` kind, sticky semantics, name-pattern config (file
+  + dialog), and the persistence limitation.
 
-- Double-click on a `SECRET` cell opens an editor that masks input by
-  default.
-- Toggle button reveals plaintext for the duration of the edit session.
-- Committing the edit re-masks in the view.
+Append to `ai-memory/todo-n-fixme.md`:
+- Persist `SECRET` kind for non-matching names (needs schema sidecar /
+  metadata file).
+- Clipboard scrubbing for revealed `SECRET` values.
+- Manual override surface (type-delegate dropdown / context menu) — v2.
+- Reveal-in-view (context menu + global timer) — v2.
+- Multi-line `SECRET` (PEM blobs) — decide flag-vs-kind modeling — v2.
 
-### Commit 9 — `io_formats/dump.py` + `io_formats/load.py`
+**DoD** — docs updated; no code changes.
 
-- Dump writes the secret as a plain string.
-- Load relies on the model's name-heuristic promotion (Commit 4) to
-  re-classify on import. Document this in a module docstring.
+## Deferred to v2 (explicitly out of v1)
 
-**DoD**
-
-- `tests/test_io_secret.py`: a tree with a field named `password = "hunter2"`
-  saved and reloaded comes back as `SECRET`.
-- A field named `notes = "hunter2"` saved as `SECRET` (manual pin), then
-  reloaded with the *same* name, **falls back to `STRING`** (documented
-  limitation: no per-field schema sidecar yet). Test asserts this and
-  references the future-work TODO.
-
-### Commit 10 — Docs
-
-Update `README.md`, `ai-memory/repo-map.md`, and append a TODO entry in
-`ai-memory/todo-n-fixme.md`:
-
-- Document `SECRET` kind and the name-pattern config.
-- Document the persistence limitation (manual pins not preserved without a
-  schema sidecar).
-- Add TODO: "Persist `SECRET` manual pin per field — needs schema sidecar
-  or out-of-band metadata file."
-- Add TODO: "Clipboard scrubbing for revealed `SECRET` values."
-
-**DoD**
-
-- All three docs updated.
-- No code changes in this commit.
+1. Context-menu "Reveal value" / "Hide value" with global per-cell timer.
+2. Type-delegate dropdown entry for `SECRET` (manual override).
+3. Session-wide "reveal all secrets" toggle.
+4. Schema sidecar for per-field kind persistence.
+5. Multi-line secret editor (PEM keys, certificates).
+6. Clipboard scrubbing.
