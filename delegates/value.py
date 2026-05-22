@@ -2,16 +2,20 @@ import binascii
 import zlib
 
 from gmpy2 import mpq
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
-from PySide6.QtGui import QFont, QFontDatabase, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QAbstractItemModel, QEvent, QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Qt
+from PySide6.QtGui import QAction, QFont, QFontDatabase, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QColorDialog,
     QComboBox,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QStyle,
     QStyleOptionViewItem,
+    QToolButton,
     QTreeView,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -44,6 +48,98 @@ from tree.item import JsonTreeItem
 from tree.model_roles import JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType
 from units import counts, format_bytes
+from settings import SECRET_HIDE_ON_FOCUS_OUT, SECRET_MASK_CHAR
+
+
+class _SecretLineEdit(_CapsLockSafeLineEdit):
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._revealed = False
+        self.setEchoMode(QLineEdit.EchoMode.Password)
+        self._toggle_action = QAction("Show", self)
+        self.addAction(self._toggle_action, QLineEdit.ActionPosition.TrailingPosition)
+        self._toggle_action.triggered.connect(self._toggle_reveal)
+
+    def _toggle_reveal(self) -> None:
+        self._revealed = not self._revealed
+        self.setEchoMode(QLineEdit.EchoMode.Normal if self._revealed else QLineEdit.EchoMode.Password)
+        self._toggle_action.setText("Hide" if self._revealed else "Show")
+
+
+class _SecretTextEditor(QWidget):
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._text = ""
+        self._revealed = False
+        self.text_edit = QPlainTextEdit(self)
+        self.toggle_button = QToolButton(self)
+        self.toggle_button.setText("Show")
+        self.toggle_button.clicked.connect(self._toggle_reveal)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.toggle_button)
+        layout.addWidget(self.text_edit)
+        self.text_edit.textChanged.connect(self._on_text_changed)
+        self._apply_masked_view()
+
+    def set_secret_text(self, text: str) -> None:
+        self._text = text
+        if self._revealed:
+            self.text_edit.setPlainText(text)
+        else:
+            self._apply_masked_view()
+
+    def secret_text(self) -> str:
+        return self._text
+
+    def _masked_text(self) -> str:
+        return "".join("\n" if ch == "\n" else SECRET_MASK_CHAR for ch in self._text)
+
+    def _apply_masked_view(self) -> None:
+        self.text_edit.blockSignals(True)
+        self.text_edit.setReadOnly(True)
+        self.text_edit.setPlainText(self._masked_text())
+        self.text_edit.blockSignals(False)
+
+    def _toggle_reveal(self) -> None:
+        self._revealed = not self._revealed
+        self.toggle_button.setText("Hide" if self._revealed else "Show")
+        self.text_edit.blockSignals(True)
+        self.text_edit.setReadOnly(not self._revealed)
+        self.text_edit.setPlainText(self._text if self._revealed else self._masked_text())
+        self.text_edit.blockSignals(False)
+
+    def _on_text_changed(self) -> None:
+        if self._revealed:
+            self._text = self.text_edit.toPlainText()
+
+
+class _SecretEditorWatcher(QObject):
+    def __init__(self, delegate: "ValueDelegate", editor: QWidget, index: QPersistentModelIndex):
+        super().__init__(editor)
+        self._delegate = delegate
+        self._editor = editor
+        self._index = index
+        app = QApplication.instance()
+        if app is not None:
+            app.applicationStateChanged.connect(self._on_app_state_changed)
+
+    def cleanup(self) -> None:
+        app = QApplication.instance()
+        if app is not None:
+            try:
+                app.applicationStateChanged.disconnect(self._on_app_state_changed)
+            except (RuntimeError, TypeError):
+                pass
+
+    def eventFilter(self, watched, event):  # type: ignore[override]
+        if event.type() == QEvent.Type.FocusOut and SECRET_HIDE_ON_FOCUS_OUT:
+            self._delegate._finalize_secret_editor(self._editor, self._index)
+        return super().eventFilter(watched, event)
+
+    def _on_app_state_changed(self, state) -> None:
+        if SECRET_HIDE_ON_FOCUS_OUT and state != Qt.ApplicationState.ApplicationActive:
+            self._delegate._finalize_secret_editor(self._editor, self._index)
 
 
 class ValueDelegate(_TextEditorDelegateBase):
@@ -52,6 +148,7 @@ class ValueDelegate(_TextEditorDelegateBase):
         self._theme = theme or LIGHT_DEFAULT
         self._monospace_fields_enabled = False
         self._mono_family = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
+        self._secret_watchers: dict[QWidget, _SecretEditorWatcher] = {}
 
     def set_theme(self, theme: ThemeSpec) -> None:
         self._theme = theme
@@ -311,6 +408,8 @@ class ValueDelegate(_TextEditorDelegateBase):
                     self._notify_status(parent, "String edit cancelled", 2000)
                     return None
                 editor = _CapsLockSafeLineEdit(parent)
+            case JsonType.SECRET_LINE:
+                editor = _SecretLineEdit(parent)
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE | JsonType.DATETIMEUTC:
                 editor = BetterDateTimeEditor(parent)
             case JsonType.MULTILINE | JsonType.TEXT:
@@ -333,7 +432,8 @@ class ValueDelegate(_TextEditorDelegateBase):
 
                 QMultilineDialog(parent=parent, text=str(item.value or ""), callback=_save_multiline).open()
                 return None
-
+            case JsonType.SECRET_TEXT:
+                editor = _SecretTextEditor(parent)
             case JsonType.COLOR_RGB | JsonType.COLOR_RGBA:
                 pidx = QPersistentModelIndex(index)
                 initial = parse_color(item.value if isinstance(item.value, str) else "") or parse_color("#000000")
@@ -385,7 +485,28 @@ class ValueDelegate(_TextEditorDelegateBase):
         if editor is not None:
             editor.setFont(self._apply_monospace_font(editor.font()))
             self._mark_editor_open(index)
+            if item.json_type in (JsonType.SECRET_LINE, JsonType.SECRET_TEXT):
+                self._install_secret_watcher(editor, index)
         return editor
+
+    def _install_secret_watcher(self, editor: QWidget, index: QModelIndex) -> None:
+        watcher = _SecretEditorWatcher(self, editor, QPersistentModelIndex(index))
+        editor.installEventFilter(watcher)
+        for child in editor.findChildren(QWidget):
+            child.installEventFilter(watcher)
+        self._secret_watchers[editor] = watcher
+
+    def _finalize_secret_editor(self, editor: QWidget, index: QPersistentModelIndex) -> None:
+        if editor is None or not index.isValid():
+            return
+        self.commitData.emit(editor)
+        self.closeEditor.emit(editor, self.EndEditHint.NoHint)
+
+    def destroyEditor(self, editor, index) -> None:  # type: ignore[override]
+        watcher = self._secret_watchers.pop(editor, None)
+        if watcher is not None:
+            watcher.cleanup()
+        super().destroyEditor(editor, index)
 
     def setEditorData(self, editor: QWidget, index: QModelIndex):
         source_index = self._source_index(index)
@@ -430,6 +551,10 @@ class ValueDelegate(_TextEditorDelegateBase):
             editor.setText("" if value is None else str(value))
             return
 
+        if isinstance(editor, _SecretTextEditor):
+            editor.set_secret_text("" if value is None else str(value))
+            return
+
         super().setEditorData(editor, index)
 
     def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
@@ -456,6 +581,10 @@ class ValueDelegate(_TextEditorDelegateBase):
 
         if isinstance(editor, QLineEdit):
             self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
+            return
+
+        if isinstance(editor, _SecretTextEditor):
+            self._commit(index, editor.secret_text(), Qt.ItemDataRole.EditRole, host=editor)
             return
 
         if isinstance(editor, AffixCompositeEditor):
