@@ -125,6 +125,7 @@ and can be refreshed with **Reload schema**.
   `float currency` (e.g. `$ 3.5`), `float units` (e.g. `3.14 rad`),
   `boolean`,
   `string`, `utf-8 line`, `multiline`, `utf-8 text`,
+  `secret_line`, `secret_text`,
   `date`, `time`, `datetime`, `dt+timezone`,
   `bytes`, `zlib`, `gzip`,
   `rgb`, `rgba`,
@@ -151,6 +152,9 @@ and can be refreshed with **Reload schema**.
 - `BetterDateTimeEditor` (segmented) for date / time / datetime / tz.
 - CapsLock-safe `QLineEdit` for ASCII / UTF-8 single-line text.
 - Modal `QMultilineDialog` for multiline ASCII / UTF-8 text.
+- Secret editors: masked single-line (`secret_line`) and masked multiline
+  (`secret_text`) with an inline Show/Hide toggle; editors auto-close on
+  focus/app deactivation so the view returns to masked cells.
 - Modal `QHexDialog` for binary blobs (`bytes` / `zlib` / `gzip`),
   base64 wire format on disk.
 - Non-modal `QColorDialog` for `rgb` / `rgba`; cell shows a swatch
@@ -205,6 +209,17 @@ and can be refreshed with **Reload schema**.
   round-trip.
 - Atomic writes via `os.replace`; Save preserves the originally
   detected format (notably YAML multi-doc).
+- Secret kinds are saved as plain strings. On reload, secret kind
+  restoration is heuristic (field-name prefix match + newline check), so
+  sticky secret fields renamed to neutral names reload as normal text.
+
+### Secret field detection
+- Name detection uses word-prefix matching (split on `_`, `-`, `.`, space,
+  and camelCase boundaries).
+- Defaults come from `settings.SECRET_WORD_PREFIXES`; runtime overrides are
+  editable in **File ▸ Secret word prefixes...** and persisted with `QSettings`.
+- Promotion is sticky in-session (`secret_line`/`secret_text` do not demote
+  on rename), and `secret_line` auto-upgrades to `secret_text` on newline edits.
 
 ### Themes & fonts
 - Built-in light & dark YAML themes (`themes/builtin/`) plus 18

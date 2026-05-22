@@ -199,6 +199,20 @@ Format: `- [ ] [scope] description — file:symbol`
       (`themes/_contrast.py` is available; `VALIDATION_SEVERITY_ROLE` paints
       cells, but no accessibility regression suite exists yet).
 
+### Secret strings follow-ups (v2)
+- [ ] [secret] Persist secret kind for non-matching field names (schema-sidecar
+      or equivalent metadata), so sticky secrets survive reload after rename.
+      — `tree/item.py`, `io_formats/{dump,load}.py`, `state/`
+- [ ] [secret, security] Clipboard scrubbing policy for revealed secret values
+      (clear/expire clipboard after copy operations).
+      — `tree_actions/clipboard.py`, secret editor paths in `delegates/value.py`
+- [ ] [secret, ux] Manual override surface for secret kinds (type delegate
+      entry or context-menu action) rather than name-heuristic only.
+      — `delegates/type_delegate.py`, `tree_actions/context_menu.py`
+- [ ] [secret, ux] Reveal-in-view action with global timer (cell-level reveal,
+      not editor-only reveal).
+      — `delegates/value.py`, `tree_actions/context_menu.py`
+
 - [ ] [tests] `tests/test_value_delegate.py`: full editor matrix.
       - editor widget class per `JsonType`
       - `setEditorData` / `setModelData` round-trip for INTEGER, mpq

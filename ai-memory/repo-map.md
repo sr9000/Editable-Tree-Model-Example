@@ -287,6 +287,8 @@ display in `delegates/value_formatting.py`; coercion in
 | `UNICODE`      | `"utf-8 line"`  | `_CapsLockSafeLineEdit`      | elide at 80 chars                        | non-ASCII single-line                                            |
 | `MULTILINE`    | `"multiline"`   | `QMultilineDialog` (modal)   | `"line1 \| line2 \| ..."` joined preview | ASCII, has `\n` and (>1 newline OR >80 chars)                    |
 | `TEXT`         | `"utf-8 text"`  | `QMultilineDialog` (modal)   | joined preview                           | non-ASCII multiline                                              |
+| `SECRET_LINE`  | `"secret_line"` | masked `QLineEdit` + Show/Hide | always `••••••••`                      | name-prefix promotion; sticky; newline upgrades to `SECRET_TEXT` |
+| `SECRET_TEXT`  | `"secret_text"` | masked multiline editor + Show/Hide | always `••••••••`                 | name-prefix promotion; sticky; remains secret even single-line   |
 | `DATE`         | `"date"`        | `BetterDateTimeEditor`       | ISO date string                          | "now" placeholder if unparseable                                 |
 | `TIME`         | `"time"`        | `BetterDateTimeEditor`       | ISO time string                          | "now" placeholder                                                |
 | `DATETIME`     | `"datetime"`    | `BetterDateTimeEditor`       | ISO no-tz                                | int sec/ms parsing supported; "now" fallback                     |
@@ -310,6 +312,12 @@ Inference (`parse_json_type`):
 - strings: multiline→`MULTILINE`/`TEXT`; else datetime parse first
   (`DATETIME`/`DATETIMEZONE`/`TIME`/`DATE`); else strict base64 →
   `ZLIB`/`GZIP`/`BYTES`; else `STRING`/`UNICODE`.
+- secret detection is model-side (not parser-side): field-name word-prefix
+  match (default from `settings.SECRET_WORD_PREFIXES`, runtime override in
+  `state/secret_settings.py` via **File ▸ Secret word prefixes...**) promotes
+  text fields to `SECRET_LINE` / `SECRET_TEXT`.
+- persistence caveat: secret kinds are dumped as plain strings; reload
+  restores secret kinds only when name-prefix heuristics match.
 - `parse_json_type` is **total**: returns `STRING` + logger warning
   for unknown types.
 - `JsonTreeItem.explicit_type` pins user choices so re-inference cannot
