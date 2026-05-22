@@ -1,6 +1,6 @@
-from PySide6.QtCore import QModelIndex, QEvent, Qt
+from PySide6.QtCore import QEvent, QModelIndex, Qt
 from PySide6.QtGui import QFocusEvent
-from PySide6.QtWidgets import QApplication, QAbstractItemView, QLineEdit, QPlainTextEdit, QToolButton
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QLineEdit, QPlainTextEdit, QToolButton
 
 from documents.tab import JsonTab
 from settings import SECRET_MASK_CHAR

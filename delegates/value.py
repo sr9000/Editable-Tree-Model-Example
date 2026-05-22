@@ -2,7 +2,15 @@ import binascii
 import zlib
 
 from gmpy2 import mpq
-from PySide6.QtCore import QAbstractItemModel, QEvent, QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Qt
+from PySide6.QtCore import (
+    QAbstractItemModel,
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    QSortFilterProxyModel,
+    Qt,
+)
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -37,6 +45,7 @@ from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
+from settings import SECRET_HIDE_ON_FOCUS_OUT, SECRET_MASK_CHAR
 from state.edit_limits import (
     get_binary_edit_warning_limit_bytes,
     get_multiline_edit_warning_limit_chars,
@@ -48,7 +57,6 @@ from tree.item import JsonTreeItem
 from tree.model_roles import JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType
 from units import counts, format_bytes
-from settings import SECRET_HIDE_ON_FOCUS_OUT, SECRET_MASK_CHAR
 
 
 class _SecretLineEdit(_CapsLockSafeLineEdit):
