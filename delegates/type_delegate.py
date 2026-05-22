@@ -3,6 +3,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
 from delegates.value_formatting import _apply_type_style
+from delegates.base import paint_editor_underlay
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec
@@ -102,6 +103,15 @@ class JsonTypeDelegate(QStyledItemDelegate):
             selected=bool(option.state & QStyle.StateFlag.State_Selected),
             allow_background=False,
         )
+
+    def paint(self, painter, option, index) -> None:  # type: ignore[override]
+        source_index = self._source_index(index)
+        if source_index.isValid() and self._is_active_type_edit_index(source_index):
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, index)
+            paint_editor_underlay(painter, opt, option.widget)
+            return
+        super().paint(painter, option, index)
 
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         editor = QComboBox(parent)

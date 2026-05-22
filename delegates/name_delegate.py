@@ -2,7 +2,7 @@ from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QLineEdit, QStyleOptionViewItem, QWidget
 
-from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase
+from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase, paint_editor_underlay
 from delegates.validation_badge import draw_severity_badge
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
@@ -60,6 +60,11 @@ class NameDelegate(_TextEditorDelegateBase):
         option.font = self._apply_monospace_font(option.font)
 
     def paint(self, painter, option, index) -> None:  # type: ignore[override]
+        if self._is_editor_open(index):
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, index)
+            paint_editor_underlay(painter, opt, option.widget)
+            return
         severity = index.data(VALIDATION_SEVERITY_ROLE)
         if severity is not None:
             opt = QStyleOptionViewItem(option)
@@ -71,6 +76,7 @@ class NameDelegate(_TextEditorDelegateBase):
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         editor = _CapsLockSafeLineEdit(parent)
         editor.setFont(self._apply_monospace_font(editor.font()))
+        self._mark_editor_open(index)
         return editor
 
     def setEditorData(self, editor: QLineEdit, index: QModelIndex):

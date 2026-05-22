@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
-from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase
+from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase, paint_editor_underlay
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.color_codec import color_to_html, parse_color
 from delegates.number_affix_delegate import (
@@ -152,6 +152,12 @@ class ValueDelegate(_TextEditorDelegateBase):
         option.font = self._apply_monospace_font(option.font)
 
     def paint(self, painter, option, index) -> None:  # type: ignore[override]
+        if self._is_editor_open(index):
+            idx = self._to_index(index)
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, idx)
+            paint_editor_underlay(painter, opt, option.widget)
+            return
         severity = index.data(VALIDATION_SEVERITY_ROLE)
         if severity is not None:
             idx = self._to_index(index)
@@ -378,6 +384,7 @@ class ValueDelegate(_TextEditorDelegateBase):
 
         if editor is not None:
             editor.setFont(self._apply_monospace_font(editor.font()))
+            self._mark_editor_open(index)
         return editor
 
     def setEditorData(self, editor: QWidget, index: QModelIndex):
