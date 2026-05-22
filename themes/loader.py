@@ -27,6 +27,8 @@ _TYPE_KEYS: dict[str, JsonType] = {
     "unicode": JsonType.UNICODE,
     "multiline": JsonType.MULTILINE,
     "text": JsonType.TEXT,
+    "secret_line": JsonType.SECRET_LINE,
+    "secret_text": JsonType.SECRET_TEXT,
     "date": JsonType.DATE,
     "time": JsonType.TIME,
     "datetime": JsonType.DATETIME,

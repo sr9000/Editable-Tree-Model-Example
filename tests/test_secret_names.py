@@ -1,6 +1,5 @@
 from validation.secret_names import name_looks_secret
 
-
 DEFAULT_PREFIXES = ("passw", "auth", "token", "key", "secret", "private", "cert")
 
 

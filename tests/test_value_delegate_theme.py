@@ -46,6 +46,8 @@ def _index_for_type(json_type: JsonType):
         JsonType.UNICODE: "caf\u00e9",
         JsonType.MULTILINE: "line 1\nline 2",
         JsonType.TEXT: "line 1\n\u03a9",
+        JsonType.SECRET_LINE: "plainsecret",
+        JsonType.SECRET_TEXT: "line 1\nline 2",
         JsonType.DATE: "2024-06-01",
         JsonType.TIME: "12:34:56",
         JsonType.DATETIME: "2024-06-01 12:34:56",

@@ -4,7 +4,6 @@ from tree.item import JsonTreeItem
 from tree.model_roles import tooltip_role_for_value
 from tree.types import JsonType
 
-
 MASK = SECRET_MASK_CHAR * SECRET_MASK_GLYPHS
 
 

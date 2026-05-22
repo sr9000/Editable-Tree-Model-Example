@@ -1,4 +1,4 @@
-from tree.types import JsonType, SECRET_FAMILY, TEXT_FAMILY
+from tree.types import SECRET_FAMILY, TEXT_FAMILY, JsonType
 
 
 def test_secret_types_are_exported() -> None:

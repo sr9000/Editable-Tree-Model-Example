@@ -38,6 +38,7 @@ class JsonTreeItem:
         self.json_type = parse_json_type(value)
         self.value = None
         self._apply_typed_value(self.json_type, value)
+        self._promote_secret_from_name()
 
         self.editable = self._compute_editable()
 
@@ -196,9 +197,7 @@ class JsonTreeItem:
                 )
                 if child_name is not None:
                     reserved_names.add(child_name)
-                child = JsonTreeItem(parent_item=self, value=None, name=child_name)
-                child._promote_secret_from_name(allow_from_null=True)
-                new_items.append(child)
+                new_items.append(JsonTreeItem(parent_item=self, value=None, name=child_name))
 
             self.child_items[position:position] = new_items
             self._children_dirty = True
@@ -267,12 +266,14 @@ class JsonTreeItem:
             return
         if not name_looks_secret(self.name, SECRET_WORD_PREFIXES):
             return
-        if self.json_type in TEXT_FAMILY:
+        if isinstance(self.value, str):
             self._apply_typed_value(self._secret_type_for_value(), self.value)
             return
         if allow_from_null and self.json_type is JsonType.NULL:
             secret_value = self.value if isinstance(self.value, str) else ""
-            self._apply_typed_value(JsonType.SECRET_TEXT if "\n" in secret_value else JsonType.SECRET_LINE, secret_value)
+            self._apply_typed_value(
+                JsonType.SECRET_TEXT if "\n" in secret_value else JsonType.SECRET_LINE, secret_value
+            )
             return
 
     def _morph_container(self, new_type: JsonType) -> bool:

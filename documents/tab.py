@@ -103,6 +103,8 @@ def _demo_data() -> dict[str, Any]:
         "utf8-line": "caf\u00e9",
         "multi-line": "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6",
         "utf8-text": "Line 1\nLine 2\n\u03a9",
+        "password": "plainsecret",
+        "private_key": "-----BEGIN KEY-----\nabc\n-----END KEY-----",
         "bytes": base64.b64encode(b"hello " * 10).decode(),
         "zlib": base64.b64encode(zlib.compress(b"hello " * 10)).decode(),
         "gzip": base64.b64encode(gzip.compress(b"hello " * 10)).decode(),
