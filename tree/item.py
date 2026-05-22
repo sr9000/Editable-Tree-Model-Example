@@ -5,10 +5,12 @@ from typing import Any
 
 from datetime_editor.enums import DateTimeCategory
 from datetime_editor.regex import parse_datetime_text
+from settings import SECRET_WORD_PREFIXES
 from tree.item_coercion import coerce_value_for_type, compute_editable, normalize_value_for_type
 from tree.item_names import unique_child_name, validated_child_name
-from tree.types import DATETIME_FAMILY, TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
+from tree.types import DATETIME_FAMILY, SECRET_FAMILY, TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
 from tree.types_datetime import convert_datetime
+from validation.secret_names import name_looks_secret
 
 
 class JsonTreeItem:
@@ -155,16 +157,31 @@ class JsonTreeItem:
                     # Pseudo text types auto-track ASCII vs non-ASCII even when
                     # type was explicitly chosen.
                     self._apply_typed_value(text_pseudotype_for(self.json_type, coerced), coerced)
+                elif self.json_type is JsonType.SECRET_LINE and self._value_has_newline(coerced):
+                    self._apply_typed_value(JsonType.SECRET_TEXT, coerced)
+                else:
+                    self._apply_typed_value(self.json_type, coerced)
+                return True
+
+            if self.json_type in SECRET_FAMILY:
+                ok, coerced = self._coerce_value_for_type(self.json_type, value, strict=True)
+                if not ok:
+                    return False
+                if self.json_type is JsonType.SECRET_LINE and self._value_has_newline(coerced):
+                    self._apply_typed_value(JsonType.SECRET_TEXT, coerced)
                 else:
                     self._apply_typed_value(self.json_type, coerced)
                 return True
 
             if isinstance(value, str) and self.json_type in TEXT_FAMILY:
-                self._apply_typed_value(text_pseudotype_for(self.json_type, value), value)
+                inferred_text_type = text_pseudotype_for(self.json_type, value)
+                self._apply_typed_value(inferred_text_type, value)
+                self._promote_secret_from_name()
                 return True
 
             inferred_type = parse_json_type(value)
             self._apply_typed_value(inferred_type, value)
+            self._promote_secret_from_name()
             return True
 
         return False
@@ -179,7 +196,9 @@ class JsonTreeItem:
                 )
                 if child_name is not None:
                     reserved_names.add(child_name)
-                new_items.append(JsonTreeItem(parent_item=self, value=None, name=child_name))
+                child = JsonTreeItem(parent_item=self, value=None, name=child_name)
+                child._promote_secret_from_name(allow_from_null=True)
+                new_items.append(child)
 
             self.child_items[position:position] = new_items
             self._children_dirty = True
@@ -233,7 +252,28 @@ class JsonTreeItem:
             return False
 
         self.name = candidate
+        self._promote_secret_from_name(allow_from_null=True)
         return True
+
+    @staticmethod
+    def _value_has_newline(value: Any) -> bool:
+        return isinstance(value, str) and "\n" in value
+
+    def _secret_type_for_value(self) -> JsonType:
+        return JsonType.SECRET_TEXT if self._value_has_newline(self.value) else JsonType.SECRET_LINE
+
+    def _promote_secret_from_name(self, allow_from_null: bool = False) -> None:
+        if self.json_type in SECRET_FAMILY:
+            return
+        if not name_looks_secret(self.name, SECRET_WORD_PREFIXES):
+            return
+        if self.json_type in TEXT_FAMILY:
+            self._apply_typed_value(self._secret_type_for_value(), self.value)
+            return
+        if allow_from_null and self.json_type is JsonType.NULL:
+            secret_value = self.value if isinstance(self.value, str) else ""
+            self._apply_typed_value(JsonType.SECRET_TEXT if "\n" in secret_value else JsonType.SECRET_LINE, secret_value)
+            return
 
     def _morph_container(self, new_type: JsonType) -> bool:
         """Mutate ARRAY→OBJECT or OBJECT→ARRAY in-place, preserving children.

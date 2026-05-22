@@ -288,7 +288,14 @@ def _looks_valid_for(json_type: JsonType, value: str) -> bool:
 
 
 def normalize_value_for_type(json_type: JsonType, value: Any) -> Any:
-    if json_type in (JsonType.STRING, JsonType.UNICODE) and not isinstance(value, str):
+    if json_type in (
+        JsonType.STRING,
+        JsonType.UNICODE,
+        JsonType.MULTILINE,
+        JsonType.TEXT,
+        JsonType.SECRET_LINE,
+        JsonType.SECRET_TEXT,
+    ) and not isinstance(value, str):
         return repr(value)
     return value
 
@@ -454,7 +461,14 @@ def coerce_value_for_type(
             return True, NumberAffix(kind=kind, affix="", space=False, number=q)
 
         # 3.1: bool → lowercase "true"/"false" instead of Python's "True"/"False"
-        case JsonType.STRING | JsonType.UNICODE | JsonType.MULTILINE | JsonType.TEXT:
+        case (
+            JsonType.STRING
+            | JsonType.UNICODE
+            | JsonType.MULTILINE
+            | JsonType.TEXT
+            | JsonType.SECRET_LINE
+            | JsonType.SECRET_TEXT
+        ):
             if value is None:
                 # Saint coercion: empty box of nothing → friendly placeholder.
                 if strict:
@@ -550,7 +564,14 @@ def compute_editable(json_type: JsonType, value: Any, editable_blob_limit: int) 
 
     try:
         match json_type:
-            case JsonType.STRING | JsonType.UNICODE | JsonType.MULTILINE | JsonType.TEXT:
+            case (
+                JsonType.STRING
+                | JsonType.UNICODE
+                | JsonType.MULTILINE
+                | JsonType.TEXT
+                | JsonType.SECRET_LINE
+                | JsonType.SECRET_TEXT
+            ):
                 return True
             case JsonType.BYTES:
                 base64.b64decode(value, validate=True)
