@@ -5,7 +5,7 @@ from typing import Any
 
 from datetime_editor.enums import DateTimeCategory
 from datetime_editor.regex import parse_datetime_text
-from settings import SECRET_WORD_PREFIXES
+from state.secret_settings import get_secret_word_prefixes
 from tree.item_coercion import coerce_value_for_type, compute_editable, normalize_value_for_type
 from tree.item_names import unique_child_name, validated_child_name
 from tree.types import DATETIME_FAMILY, SECRET_FAMILY, TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
@@ -264,7 +264,7 @@ class JsonTreeItem:
     def _promote_secret_from_name(self, allow_from_null: bool = False) -> None:
         if self.json_type in SECRET_FAMILY:
             return
-        if not name_looks_secret(self.name, SECRET_WORD_PREFIXES):
+        if not name_looks_secret(self.name, get_secret_word_prefixes()):
             return
         if isinstance(self.value, str):
             self._apply_typed_value(self._secret_type_for_value(), self.value)
