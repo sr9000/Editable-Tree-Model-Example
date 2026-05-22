@@ -1,3 +1,10 @@
+"""Load text files into Python data for JsonTreeModel.
+
+Secret kinds are not serialized as tagged values on disk. Reload relies on
+name-based promotion in the tree model (and newline coercion) to classify
+secret_line / secret_text again.
+"""
+
 from typing import Any
 
 import simplejson

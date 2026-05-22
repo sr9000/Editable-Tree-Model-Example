@@ -1,3 +1,9 @@
+"""Serialize Python data to JSON/YAML text.
+
+Secret kinds are emitted as plain strings (no encryption or sidecar marker).
+On load, classification is restored only when name heuristics match.
+"""
+
 from typing import Any
 
 import simplejson
