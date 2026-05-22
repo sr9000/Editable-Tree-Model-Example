@@ -2,8 +2,8 @@ from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelInde
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
-from delegates.value_formatting import _apply_type_style
 from delegates.base import paint_editor_underlay
+from delegates.value_formatting import _apply_type_style
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec

@@ -21,6 +21,7 @@ def paint_editor_underlay(
     style = widget.style() if widget is not None else QApplication.style()
     style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, widget)
 
+
 # Some users bind CapsLock to a keyboard-layout switch via xkb / IM.
 # That can deliver a Key_CapsLock event, plus an ``ActiveWindowFocusReason``
 # / ``OtherFocusReason`` ``FocusOut`` to the embedded line-editor, which the
