@@ -19,13 +19,10 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QMessageBox,
-    QPlainTextEdit,
     QPushButton,
     QStyle,
     QStyleOptionViewItem,
-    QToolButton,
     QTreeView,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -47,7 +44,7 @@ from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
-from settings import SECRET_HIDE_ON_FOCUS_OUT, SECRET_MASK_CHAR
+from settings import SECRET_HIDE_ON_FOCUS_OUT
 from state.edit_limits import (
     get_binary_edit_warning_limit_bytes,
     get_multiline_edit_warning_limit_chars,
@@ -112,54 +109,6 @@ class _SecretLineEdit(QWidget):
     def setFont(self, font: QFont) -> None:
         super().setFont(font)
         self._update_button_width()
-
-
-class _SecretTextEditor(QWidget):
-    def __init__(self, parent: QWidget | None = None):
-        super().__init__(parent)
-        self._text = ""
-        self._revealed = False
-        self.text_edit = QPlainTextEdit(self)
-        self.toggle_button = QToolButton(self)
-        self.toggle_button.setText("Show")
-        self.toggle_button.clicked.connect(self._toggle_reveal)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.toggle_button)
-        layout.addWidget(self.text_edit)
-        self.text_edit.textChanged.connect(self._on_text_changed)
-        self._apply_masked_view()
-
-    def set_secret_text(self, text: str) -> None:
-        self._text = text
-        if self._revealed:
-            self.text_edit.setPlainText(text)
-        else:
-            self._apply_masked_view()
-
-    def secret_text(self) -> str:
-        return self._text
-
-    def _masked_text(self) -> str:
-        return "".join("\n" if ch == "\n" else SECRET_MASK_CHAR for ch in self._text)
-
-    def _apply_masked_view(self) -> None:
-        self.text_edit.blockSignals(True)
-        self.text_edit.setReadOnly(True)
-        self.text_edit.setPlainText(self._masked_text())
-        self.text_edit.blockSignals(False)
-
-    def _toggle_reveal(self) -> None:
-        self._revealed = not self._revealed
-        self.toggle_button.setText("Hide" if self._revealed else "Show")
-        self.text_edit.blockSignals(True)
-        self.text_edit.setReadOnly(not self._revealed)
-        self.text_edit.setPlainText(self._text if self._revealed else self._masked_text())
-        self.text_edit.blockSignals(False)
-
-    def _on_text_changed(self) -> None:
-        if self._revealed:
-            self._text = self.text_edit.toPlainText()
 
 
 class _SecretEditorWatcher(QObject):
@@ -481,7 +430,30 @@ class ValueDelegate(_TextEditorDelegateBase):
                 QMultilineDialog(parent=parent, text=str(item.value or ""), callback=_save_multiline).open()
                 return None
             case JsonType.SECRET_TEXT:
-                editor = _SecretTextEditor(parent)
+                text_len = len(str(item.value or ""))
+                limit = get_multiline_edit_warning_limit_chars()
+                if not self._confirm_large_text_edit(
+                    parent,
+                    text_len=text_len,
+                    limit=limit,
+                    title="Large secret text",
+                    kind="Secret value",
+                ):
+                    self._notify_status(parent, "Secret text edit cancelled", 2000)
+                    return None
+
+                pidx = QPersistentModelIndex(index)
+
+                def _save_secret_text(text: str) -> None:
+                    if pidx.isValid():
+                        self._commit(pidx, text, Qt.ItemDataRole.EditRole, host=parent)
+
+                dlg = QMultilineDialog(
+                    parent=parent, text=str(item.value or ""), sensitive=True, callback=_save_secret_text
+                )
+                dlg.setWindowTitle("Edit Secret Text")
+                dlg.open()
+                return None
             case JsonType.COLOR_RGB | JsonType.COLOR_RGBA:
                 pidx = QPersistentModelIndex(index)
                 initial = parse_color(item.value if isinstance(item.value, str) else "") or parse_color("#000000")
@@ -603,10 +575,6 @@ class ValueDelegate(_TextEditorDelegateBase):
             editor.setText("" if value is None else str(value))
             return
 
-        if isinstance(editor, _SecretTextEditor):
-            editor.set_secret_text("" if value is None else str(value))
-            return
-
         super().setEditorData(editor, index)
 
     def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
@@ -637,10 +605,6 @@ class ValueDelegate(_TextEditorDelegateBase):
 
         if isinstance(editor, QLineEdit):
             self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
-            return
-
-        if isinstance(editor, _SecretTextEditor):
-            self._commit(index, editor.secret_text(), Qt.ItemDataRole.EditRole, host=editor)
             return
 
         if isinstance(editor, AffixCompositeEditor):

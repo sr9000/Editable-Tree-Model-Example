@@ -1,9 +1,9 @@
 from PySide6.QtCore import QEvent, QModelIndex, Qt
 from PySide6.QtGui import QFocusEvent
-from PySide6.QtWidgets import QAbstractItemView, QApplication, QLineEdit, QPlainTextEdit, QPushButton, QToolButton
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QDialogButtonBox, QLineEdit, QPushButton
 
+from dialogs.qmultiline_dlg import QMultilineDialog
 from documents.tab import JsonTab
-from settings import SECRET_MASK_CHAR
 
 
 def test_secret_line_editor_is_password_with_toggle(qtbot):
@@ -40,16 +40,19 @@ def test_secret_text_editor_masks_and_reveals(qtbot):
     tab.view.setCurrentIndex(idx)
     tab.view.edit(idx)
 
-    qtbot.waitUntil(lambda: tab.view.findChild(QPlainTextEdit) is not None)
-    text_edit = tab.view.findChild(QPlainTextEdit)
-    button = tab.view.findChild(QToolButton)
-    assert text_edit is not None
-    assert button is not None
-    assert value not in text_edit.toPlainText()
-    assert SECRET_MASK_CHAR in text_edit.toPlainText()
+    qtbot.waitUntil(lambda: tab.findChild(QMultilineDialog) is not None)
+    dlg = tab.findChild(QMultilineDialog)
+    assert dlg is not None
+    assert dlg.windowTitle() == "Edit Secret Text"
+    assert dlg.editor.toPlainText() == value
 
-    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
-    assert text_edit.toPlainText() == value
+    dlg.editor.setPlainText("line1\nline2\nline3")
+    ok = dlg.buttonBox.button(QDialogButtonBox.StandardButton.Ok)
+    assert ok is not None
+    qtbot.mouseClick(ok, Qt.MouseButton.LeftButton)
+
+    src_after = tab.model.index(0, 2, QModelIndex())
+    assert str(src_after.data(Qt.ItemDataRole.EditRole) or "") == "line1\nline2\nline3"
 
 
 def test_secret_editor_closes_on_focus_out(qtbot):
