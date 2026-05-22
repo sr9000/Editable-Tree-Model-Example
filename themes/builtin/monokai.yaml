@@ -42,6 +42,11 @@ types:
     italic: true
   text:
     fg: '#A6E22E'
+  secret_line:
+    fg: '#E6DB74'
+  secret_text:
+    fg: '#E6DB74'
+    italic: true
   date:
     fg: '#E6DB74'
   time:
@@ -90,6 +95,8 @@ icons:
     unicode: text_2_line
     multiline: font_size_line
     text: translate_2_line
+    secret_line: lock_line
+    secret_text: certificate_2_line
     date: calendar_2_line
     time: hours_line
     datetime: calendar_time_add_line
