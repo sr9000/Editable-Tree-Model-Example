@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QSizePolicy, QWidget
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
@@ -42,15 +40,21 @@ class AffixCompositeEditor(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        affix_label_text = "Currency: " if self.kind is AffixKind.CURRENCY else "Units: "
+        self.affix_label = QLabel(affix_label_text, self)
+        self.affix_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+
         self.affix_combo = QComboBox(self)
         self.affix_combo.setEditable(True)
         self.affix_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.affix_combo.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         self.affix_combo.setMinimumContentsLength(1)
 
-        self.space_button = QCheckBox("Space", parent=self)
+        self.space_button = QPushButton(self._space_button_text(False), parent=self)
+        self.space_button.setCheckable(True)
         self.space_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         self.space_button.setToolTip("Space between affix and number")
+        self.space_button.toggled.connect(self._on_space_toggled)
 
         if is_integer_json_type(json_type):
             self.number_editor = QBigIntSpinBox(self)
@@ -58,13 +62,28 @@ class AffixCompositeEditor(QWidget):
             self.number_editor = QMpqSpinBox(self)
         self.number_editor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
+        self.value_label = QLabel("Value: ", self)
+
+        value_font = self.number_editor.font()
+        self.affix_label.setFont(value_font)
+        self.value_label.setFont(value_font)
+
         for affix in mru_items:
             if affix:
                 self.affix_combo.addItem(affix)
 
-        layout.addWidget(self.affix_combo)
         layout.addWidget(self.space_button)
+        layout.addWidget(self.affix_label)
+        layout.addWidget(self.affix_combo)
+        layout.addWidget(self.value_label)
         layout.addWidget(self.number_editor)
+
+    @staticmethod
+    def _space_button_text(spaced: bool) -> str:
+        return "Spaced out" if spaced else "Joined-up"
+
+    def _on_space_toggled(self, checked: bool) -> None:
+        self.space_button.setText(self._space_button_text(bool(checked)))
 
     def set_invalid(self, invalid: bool) -> None:
         self.setProperty("invalid", bool(invalid))
