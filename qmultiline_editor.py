@@ -193,6 +193,7 @@ class QMultilineEditor(QPlainTextEdit):
         if self._cover.isVisible():
             self._cover.raise_()
         self._reveal_button.raise_()
+        self._update_button_width()
 
     def _update_button_width(self) -> None:
         if self._reveal_button is None:
@@ -226,9 +227,12 @@ class QMultilineEditor(QPlainTextEdit):
         return space
 
     def _update_line_number_area_width(self, new_block_count: int = 0) -> None:
+        self._update_button_width()
         self.setViewportMargins(self.line_number_area_width(new_block_count), 0, 0, 0)
 
     def _update_line_number_area(self, rect: QRect, dy: int) -> None:
+        self._update_button_width()
+
         if dy:
             self._lineNumbersWidget.scroll(0, dy)
         else:
@@ -239,6 +243,7 @@ class QMultilineEditor(QPlainTextEdit):
 
     def resizeEvent(self, event):  # type: ignore[override]
         super().resizeEvent(event)
+        self._update_button_width()
         cr = self.contentsRect()
         self._lineNumbersWidget.setGeometry(QRect(cr.left(), cr.top(), self.line_number_area_width(), cr.height()))
         self._update_sensitive_geometry()
