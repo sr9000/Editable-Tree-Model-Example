@@ -23,6 +23,26 @@ The resulting one-folder distribution is written to `dist/EditableTreeModel/`.
   (`AppRun`, `.desktop`, `.svg` icon) and
   [`appimagetool`](https://github.com/AppImage/AppImageKit).
 
+## Icon assets
+
+The platform-neutral icon source is `packaging/linux/editabletreemodel.svg`,
+rasterised to a 256 px PNG at `packaging/linux/editabletreemodel.png`. The
+PNG is loaded by `QApplication.setWindowIcon` at runtime (Linux/macOS/Windows)
+and bundled by the PyInstaller spec.
+
+The Windows executable additionally embeds a multi-resolution
+`packaging/windows/editabletreemodel.ico` as its Win32 resource (taskbar,
+Explorer, Alt-Tab). Regenerate it from the PNG with ImageMagick:
+
+```bash
+convert packaging/linux/editabletreemodel.png \
+    -define icon:auto-resize=256,128,64,48,32,24,16 \
+    packaging/windows/editabletreemodel.ico
+```
+
+If the `.ico` file is absent, the spec falls back to PyInstaller's default
+icon — the build still succeeds on every platform.
+
 ## Release pipeline
 
 `.github/workflows/release.yml` is a **manual** workflow

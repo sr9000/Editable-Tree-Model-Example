@@ -1,5 +1,6 @@
 import base64
 import gzip
+import os
 import zlib
 from collections.abc import Mapping
 from datetime import datetime
@@ -121,11 +122,11 @@ def _demo_data() -> dict[str, Any]:
         "color rgba": "#3498db80",
         # Pseudo text types — content-derived labels that appear automatically
         # when a string value is empty or whitespace-only.
-        "empty string": "",           # → EMPTY_STRING
-        "ws ascii": "   ",            # → WS_STRING (ASCII spaces only)
-        "ws unicode": " \u00a0 ",     # → WS_UNICODE (includes NBSP)
-        "ws multiline": "  \n  ",     # → WS_MULTILINE (whitespace + newline)
-        "ws text": " \u00a0\n ",      # → WS_TEXT  (non-ASCII WS + newline)
+        "empty string": "",  # → EMPTY_STRING
+        "ws ascii": "   ",  # → WS_STRING (ASCII spaces only)
+        "ws unicode": " \u00a0 ",  # → WS_UNICODE (includes NBSP)
+        "ws multiline": "  \n  ",  # → WS_MULTILINE (whitespace + newline)
+        "ws text": " \u00a0\n ",  # → WS_TEXT  (non-ASCII WS + newline)
     }
 
 
@@ -760,7 +761,13 @@ class JsonTab(QWidget):
         self._set_dirty(not clean)
 
     def display_name(self) -> str:
-        name = self.file_path.rsplit("/", 1)[-1] if self.file_path else "Untitled"
+        if self.file_path:
+            # ``os.path.basename`` is platform-aware on POSIX (only "/") so we
+            # also strip "\\" explicitly to handle Windows-style paths produced
+            # by ``QFileDialog`` and similar APIs regardless of host OS.
+            name = os.path.basename(self.file_path.replace("\\", "/")) or "Untitled"
+        else:
+            name = "Untitled"
         return f"{name} *" if self._dirty else name
 
     def save(self) -> bool:

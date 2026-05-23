@@ -13,8 +13,7 @@ from PyInstaller.utils.hooks import (
     copy_metadata,
 )
 APP_NAME = "EditableTreeModel"
-ENTRY_SCRIPT = "main.py"
-# ---------------------------------------------------------------------------
+ENTRY_SCRIPT = "main.py"# ---------------------------------------------------------------------------
 # Data files bundled into the executable.
 # ---------------------------------------------------------------------------
 # Ship the entire `themes/builtin/` subtree under `<_MEIPASS>/themes/builtin/`.
@@ -26,7 +25,13 @@ ENTRY_SCRIPT = "main.py"
 # A direct, source-tree-relative enumeration is bulletproof.
 _SRC_ROOT = Path(SPECPATH)
 _BUILTINS_SRC = _SRC_ROOT / "themes" / "builtin"
+_WIN_ICON = _SRC_ROOT / "packaging" / "windows" / "editabletreemodel.ico"
+_RUNTIME_ICON_PNG = _SRC_ROOT / "packaging" / "linux" / "editabletreemodel.png"
 datas = []
+# Bundle the PNG icon used at runtime by ``QApplication.setWindowIcon``.
+# Shipped on every platform so Linux/macOS get the in-app icon too.
+if _RUNTIME_ICON_PNG.is_file():
+    datas.append((str(_RUNTIME_ICON_PNG), "packaging/linux"))
 for _path in _BUILTINS_SRC.rglob("*"):
     if not _path.is_file():
         continue
@@ -125,6 +130,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(_WIN_ICON) if _WIN_ICON.is_file() and sys.platform == "win32" else None,
 )
 if sys.platform == "darwin":
     app = BUNDLE(
