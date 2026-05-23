@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from documents.tab import JsonTab
 from tree.types import JsonType
+
 # EMPTY_MULTILINE cannot be produced from a raw JSON value (an empty string
 # always infers to EMPTY_STRING; flipping the shape requires an explicit type
 # column edit). All other JsonType members, including the five remaining pseudo
