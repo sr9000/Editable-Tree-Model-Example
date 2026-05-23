@@ -220,7 +220,7 @@ class JsonType(StrEnum):
     INTEGER = "integer"
     FLOAT = "float"
     STRING = "string"
-    UNICODE = "utf-8 line"
+    MULTILINE = "multiline"
     BOOLEAN = "boolean"
     OBJECT = "object"
     ARRAY = "array"
@@ -234,7 +234,7 @@ class JsonType(StrEnum):
     FLOAT_CURRENCY = "float currency"
 
     # Multiline Text Format
-    MULTILINE = "multiline"
+    UNICODE = "utf-8 line"
     TEXT = "utf-8 text"
     SECRET_LINE = "secret line"
     SECRET_TEXT = "secret text"
