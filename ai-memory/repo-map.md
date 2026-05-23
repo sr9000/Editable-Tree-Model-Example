@@ -1,40 +1,26 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-23** (branch `new-kinds`, ~52 commits ahead of
-`master`). PySide6 desktop **structured-data editor** (originated from
-Qt's "Editable Tree Model" example).
-All previous plans are merged: drag-and-drop Steps 1–10, jsonschema
-Step 7, schema-registry Steps 1–7, and the PR #9 `improve-ux` UX pack
-(window-geometry persistence, main-window file-drop, base64
-attach/save, configurable edit-warning limits, K/M/B counts,
-single-severity validation)._
+_Last scanned: **2026-05-23**. This is a PySide6 desktop
+**structured-data editor** for JSON, JSON Lines, YAML, and
+multi-document YAML. It originated from Qt's "Editable Tree Model"
+example, but the current repository is a full app with typed cell
+editors, undo/redo, search, themes, JSON-Schema validation, schema
+hot-reload, drag-and-drop, exact numerics, binary helpers, secret
+masking, and persisted UI state._
 
-_**`new-kinds` branch (this scan) ships three feature plans
-(`plans/01-utc-datetime.md`, `plans/02-number-affix.md`,
-`plans/03-secret-strings.md`)**, all complete:_
-- **UTC datetime** — new `JsonType.DATETIMEUTC` (`"datetime utc"`)
-  with `Z` suffix, full DATETIME-family conversion lattice in
-  `tree/types_datetime.py::convert_datetime`, regex/editor support.
-- **Number affixes** — four new kinds (`INTEGER_CURRENCY`,
-  `INTEGER_UNITS`, `FLOAT_CURRENCY`, `FLOAT_UNITS`); structured
-  storage via `units/number_affix.py::NumberAffix`; composite editor
-  `delegates/number_affix_delegate.py::AffixCompositeEditor`;
-  per-tab MRU `state/affix_mru.py`; round-trip in `io_formats/`.
-- **Secret strings** — `SECRET_LINE` / `SECRET_TEXT` kinds, masked
-  rendering with fixed glyph count, name-prefix promotion
-  (`validation/secret_names.py`), sticky semantics, sensitive
-  `qmultiline_editor.py` reveal mode, runtime-configurable prefix
-  list via `state/secret_settings.py` + **File ▸ Secret word
-  prefixes…** dialog (`dialogs/secret_prefixes_dlg.py`).
-- **Pseudo text family** (derived, not user-selectable):
-  `EMPTY_STRING`, `EMPTY_MULTILINE`, `WS_STRING`, `WS_UNICODE`,
-  `WS_MULTILINE`, `WS_TEXT` — surface empty / whitespace-only values
-  with previewable type chips. Map back to canonical parent via
-  `PSEUDO_TEXT_PARENT` / `canonical_text_type` in `tree/types.py`.
+**Purpose of this file:** a dense repo index for LLM agents and
+contributors. Use it to answer: "where is this behaviour implemented?",
+"which module owns this rule?", and "what invariants should I preserve?"
+It is intentionally organised by subsystem, not by historical branch.
+For end-user startup instructions see `README.md`; for active open
+work see `ai-memory/todo-n-fixme.md`; for resolved phase history see
+`ai-memory/history.md`.
 
-_Tests: **1023 collected**. Known offscreen-only color-scheme
-failures remain tracked in `todo-n-fixme.md`. Long-lived historical
-phase/step changelog now lives in `ai-memory/history.md`._
+**Current surface snapshot:** 1023 tests collected. Known
+offscreen-only color-scheme failures are tracked in
+`todo-n-fixme.md`. Recent feature-plan docs remain in `plans/`, but
+their shipped behaviours are documented below as normal capabilities
+(UTC datetimes, number affixes, secret strings, and pseudo-text chips).
 
 ---
 
@@ -105,6 +91,34 @@ A PySide6 desktop **structured-data editor** with:
   placeholders for unrecoverable cases).
 - Reusable widget stack: hex editor, multiline editor, segmented
   datetime editor, big-int and exact-rational spin boxes.
+
+### Repo rules & invariants for future edits
+
+- **Do not hand-edit generated UI Python**: `mainwindow.py` is
+  generated from `mainwindow.ui`. Runtime app logic belongs in
+  `app/`, `documents/`, delegates, or tree-action modules.
+- **Mutations should be undoable** in the live UI. Prefer
+  `JsonTab.push_*` / `commit_set_data(...)` paths over direct model
+  mutation; `model_actions.py` exists mainly for headless fallbacks.
+- **Model indexes are fragile across mutations**. Long-lived edit
+  callbacks use paths or `QPersistentModelIndex`; undo commands use
+  path-based addressing.
+- **Type semantics live in one place each**: inference in
+  `tree/types.py`, cross-type conversion in `tree/item_coercion.py`
+  (plus `tree/types_datetime.py` for date/time lattice), display in
+  `delegates/value_formatting.py`, editors in `delegates/value.py`.
+- **Raw JSON/YAML persistence is intentionally conservative**:
+  `io_formats/` writes normal JSON/YAML-compatible structures;
+  richer in-memory values (`mpq`, `NumberAffix`, bytes-family strings,
+  secret kinds) are encoded/decoded at the I/O boundary.
+- **The view owns UX state, the model owns data**. Column widths,
+  expansion, selection, zoom, themes, validation-dock layout, recent
+  files/schemas, and settings all persist through `state/` helpers and
+  `QSettings`.
+- **Tests prefer offscreen Qt** (`QT_QPA_PLATFORM=offscreen pytest`),
+  but app color-scheme assertions can be platform-sensitive under the
+  offscreen plugin; see `todo-n-fixme.md` before treating those as
+  production regressions.
 
 ---
 
@@ -1101,7 +1115,7 @@ green on real platforms.
   single hit row.
 
 Notable suites:
-- **`new-kinds` branch (this scan):**
+- **Advanced type/editor suites:**
   - UTC datetime: `test_convert_datetime`, datetime suite extensions
     (`test_datetime_editor`, `test_better_datetime_buffer`,
     `test_validator`).
