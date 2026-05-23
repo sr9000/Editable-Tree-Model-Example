@@ -1,5 +1,5 @@
 import re
-from datetime import date, time
+from datetime import date, time, timezone
 
 from dateutil.parser import isoparse
 
@@ -55,11 +55,21 @@ def parse_datetime_text(text: str, category=None):
 
             case DateTimeCategory.DateTimeWithTZ:
                 assert SEPARATOR_RE.search(text)
+                assert not text.upper().endswith("Z")
 
                 dt = isoparse(text)
                 assert dt.tzinfo is not None
 
                 return dt
+
+            case DateTimeCategory.DateTimeUTC:
+                assert SEPARATOR_RE.search(text)
+                assert text.upper().endswith("Z")
+
+                dt = isoparse(text)
+                assert dt.tzinfo is not None
+
+                return dt.astimezone(timezone.utc)
 
             case _ if category is not None:
                 return None

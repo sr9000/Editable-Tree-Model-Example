@@ -71,7 +71,6 @@ def test_step_with_set_value(buffer: BetterDateTimeBuffer, val_str: str, inc: in
         (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00-0*0:45", 1, "2025-01-01T00:00:00+00:45", 45),
         (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00+02:5*9", 1, "2025-01-01T00:00:00+02:00", 120),
         (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00-*01:00", 1, "2025-01-01T00:00:00+01:00", 60),
-        (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00Z*", 1, "2025-01-01T00:00:00+01:00", 60),
         (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00+0*0:30", -1, "2025-01-01T00:00:00-00:30", -30),
         (DateTimeCategory.DateTimeWithTZ, "2025-01-01T00:00:00-02:1*5", 1, "2025-01-01T00:00:00-02:16", -136),
     ],
@@ -92,6 +91,12 @@ def test_step_with_accept_text(
     assert new_text == exp_str
     if exp_offset_minutes is not None:
         assert buffer.value.tzinfo.utcoffset(buffer.value) == timedelta(minutes=exp_offset_minutes)
+
+
+def test_utc_category_rejects_timezone_step(buffer: BetterDateTimeBuffer) -> None:
+    buffer.set_category(DateTimeCategory.DateTimeUTC, "")
+    buffer.accept_text("2025-01-01T00:00:00Z")
+    assert buffer.step(1, cursor_pos=len("2025-01-01T00:00:00Z")) is None
 
 
 def test_step_returns_none_without_value(buffer: BetterDateTimeBuffer) -> None:

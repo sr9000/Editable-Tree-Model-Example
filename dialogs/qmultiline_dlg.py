@@ -13,7 +13,11 @@ QMULTILINEDIALOG_ID = "QMultilineDialog-19beb602-e9c1-479b-a037-d9dbfbddec65"
 
 class QMultilineDialog(QDialog):
     def __init__(
-        self, parent: QWidget | None = None, text: str = "", callback: Callable[[str], None] = lambda _: None
+        self,
+        parent: QWidget | None = None,
+        text: str = "",
+        sensitive: bool = False,
+        callback: Callable[[str], None] = lambda _: None,
     ) -> None:
         super().__init__(parent)
         self._callback = callback
@@ -23,6 +27,8 @@ class QMultilineDialog(QDialog):
         self.resize(*MODAL_WINDOW_SIZE)
 
         self.editor = QMultilineEditor(self)
+        if sensitive:
+            self.editor.setSensitive(True)
         self.editor.setPlainText(text or "")
         self._applyGlobalEditorFontSettings()
 

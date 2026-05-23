@@ -2,12 +2,13 @@ from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelInde
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
+from delegates.base import paint_editor_underlay
 from delegates.value_formatting import _apply_type_style
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
-from tree.types import JsonType
+from tree.types import USER_SELECTABLE_TYPES, canonical_text_type
 
 
 class JsonTypeDelegate(QStyledItemDelegate):
@@ -103,6 +104,15 @@ class JsonTypeDelegate(QStyledItemDelegate):
             allow_background=False,
         )
 
+    def paint(self, painter, option, index) -> None:  # type: ignore[override]
+        source_index = self._source_index(index)
+        if source_index.isValid() and self._is_active_type_edit_index(source_index):
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, index)
+            paint_editor_underlay(painter, opt, option.widget)
+            return
+        super().paint(painter, option, index)
+
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         editor = QComboBox(parent)
         icon_size = QSize(max(12, option.fontMetrics.height()), max(12, option.fontMetrics.height()))
@@ -113,7 +123,7 @@ class JsonTypeDelegate(QStyledItemDelegate):
                 icon_size = host_size
         editor.setIconSize(icon_size)
         editor.view().setIconSize(icon_size)
-        for tp in JsonType:
+        for tp in USER_SELECTABLE_TYPES:
             editor.addItem(self._icon_provider.for_type(tp), tp.value, tp)
         self._set_active_type_edit_index(self._source_index(index))
         return editor
@@ -129,7 +139,10 @@ class JsonTypeDelegate(QStyledItemDelegate):
     def setEditorData(self, editor: QComboBox, index: QModelIndex):
         source_index = self._source_index(index)
         item: JsonTreeItem = source_index.internalPointer()
-        idx = editor.findData(item.json_type)
+        # Pseudo text types (EMPTY_*, WS_*) collapse to their canonical parent
+        # in the combobox so the user sees the type they could pick manually.
+        current_type = canonical_text_type(item.json_type)
+        idx = editor.findData(current_type)
         editor.setCurrentIndex(idx if idx >= 0 else 0)
 
     def setModelData(self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex):

@@ -2,6 +2,7 @@ from PySide6.QtCore import QModelIndex
 
 from app.main_window import MainWindow
 from documents.tab import JsonTab
+from tree.types import JsonType
 
 
 def test_view_menu_expand_collapse_toggles_expansion(qtbot):
@@ -92,3 +93,18 @@ def test_zoom_updates_tree_icon_size(qtbot):
 
     assert after_in >= before
     assert after_out <= after_in
+
+
+def test_float_to_integer_type_change_shows_fraction_loss_warning(qtbot):
+    messages: list[tuple[str, int]] = []
+
+    def _status(text: str, timeout_ms: int) -> None:
+        messages.append((text, timeout_ms))
+
+    tab = JsonTab(lambda *_: None, data={"v": 3.5}, show_root=True, status_message_callback=_status)
+    qtbot.addWidget(tab)
+
+    root_idx = tab.model.index(0, 0, QModelIndex())
+    type_idx = tab.model.index(0, 1, root_idx)
+    assert tab.push_change_type(type_idx, JsonType.INTEGER)
+    assert any("Fractional part discarded" in text for text, _ in messages)

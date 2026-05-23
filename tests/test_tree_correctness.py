@@ -7,6 +7,7 @@ from model_actions import action_insert_child
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
 from tree.types import JsonType, parse_json_type
+from units.number_affix import AffixKind, NumberAffix
 
 
 def test_insert_row_under_object_creates_unique_named_null_children():
@@ -67,6 +68,11 @@ def test_parse_json_type_is_total_and_has_narrower_heuristics():
     assert parse_json_type(gmpy2.mpq("50/100")) is JsonType.PERCENT
     assert parse_json_type(gmpy2.mpq("1/2")) is JsonType.PERCENT
     assert parse_json_type(gmpy2.mpq("3/2")) is JsonType.FLOAT
+    assert parse_json_type(NumberAffix(AffixKind.CURRENCY, "$", False, 1234)) is JsonType.INTEGER_CURRENCY
+    assert parse_json_type("$1234") is JsonType.INTEGER_CURRENCY
+    assert parse_json_type("3.14 rad") is JsonType.FLOAT_UNITS
+    assert parse_json_type("1234") is JsonType.STRING
+    assert parse_json_type("hello world") is JsonType.STRING
 
     # A pure base64 string (regex + padding + clean decode) is BYTES.
     assert parse_json_type("bXkgbG92ZWx5IGJ5dGVzIQ==") is JsonType.BYTES
@@ -76,6 +82,8 @@ def test_parse_json_type_is_total_and_has_narrower_heuristics():
     assert parse_json_type("caf\u00e9") is JsonType.UNICODE
     assert parse_json_type("line1\nline2\n\u03a9") is JsonType.TEXT
     assert parse_json_type("line1\nline2\nline3") is JsonType.MULTILINE
+    assert parse_json_type("2026-01-01T00:00:00Z") is JsonType.DATETIMEUTC
+    assert parse_json_type("2026-01-01T00:00:00+00:00") is JsonType.DATETIMEZONE
     assert parse_json_type((1, 2)) is JsonType.STRING
 
     unknown = JsonTreeItem(None, (1, 2), "tuple_value")

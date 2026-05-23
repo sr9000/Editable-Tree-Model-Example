@@ -19,6 +19,18 @@ types:
   percent:
     fg: '#f6d32d'
     italic: true
+  int_currency:
+    fg: '#FD971F'
+    italic: true
+  int_units:
+    fg: '#FD971F'
+    italic: true
+  float_currency:
+    fg: '#f6d32d'
+    italic: true
+  float_units:
+    fg: '#f6d32d'
+    italic: true
   boolean:
     fg: '#F92672'
   string:
@@ -30,11 +42,18 @@ types:
     italic: true
   text:
     fg: '#A6E22E'
+  secret_line:
+    fg: '#AE81FF'
+  secret_text:
+    fg: '#AE81FF'
+    italic: true
   date:
     fg: '#E6DB74'
   time:
     fg: '#E6DB74'
   datetime:
+    fg: '#E6DB74'
+  datetimeutc:
     fg: '#E6DB74'
   datetimezone:
     fg: '#E6DB74'
@@ -67,14 +86,21 @@ icons:
     integer: hashtag_line
     float: asterisk_2_line
     percent: percentage_line
+    int_currency: bank_line
+    int_units: ruler_line
+    float_currency: bank_line
+    float_units: ruler_line
     boolean: choice_line
     string: font_line
     unicode: text_2_line
     multiline: font_size_line
     text: translate_2_line
+    secret_line: lock_line
+    secret_text: certificate_2_line
     date: calendar_2_line
     time: hours_line
     datetime: calendar_time_add_line
+    datetimeutc: globe_fill
     datetimezone: calendar_add_line
     bytes: attachment_line
     zlib: file_zip_line

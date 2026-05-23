@@ -10,6 +10,7 @@ from gmpy2 import mpq
 
 from datetime_editor.enums import DateTimeCategory
 from datetime_editor.regex import parse_datetime_text
+from settings import NUMBER_AFFIX_MAX_LEN
 from tree.stubs import (
     stub_bytes_raw,
     stub_color_rgb,
@@ -20,7 +21,8 @@ from tree.stubs import (
     stub_percent,
     stub_string,
 )
-from tree.types import JsonType
+from tree.types import TEXT_FAMILY, TEXT_MULTI_FAMILY, JsonType
+from units.number_affix import AffixKind, NumberAffix, format_number_affix, parse_number_affix
 
 # ---------------------------------------------------------------------------
 # Bytes / text helpers
@@ -62,6 +64,13 @@ def _now_for_type(json_type: JsonType) -> str:
             return now.replace(microsecond=0, tzinfo=None).isoformat(timespec="minutes")
         case JsonType.DATETIMEZONE:
             return now.replace(microsecond=0).isoformat(timespec="seconds")
+        case JsonType.DATETIMEUTC:
+            return (
+                now.astimezone(datetime.timezone.utc)
+                .replace(microsecond=0)
+                .isoformat(timespec="seconds")
+                .replace("+00:00", "Z")
+            )
     raise ValueError(f"Unsupported temporal JsonType: {json_type}")
 
 
@@ -83,11 +92,13 @@ def _category_for_temporal_type(json_type: JsonType) -> DateTimeCategory | None:
             return DateTimeCategory.DateTime
         case JsonType.DATETIMEZONE:
             return DateTimeCategory.DateTimeWithTZ
+        case JsonType.DATETIMEUTC:
+            return DateTimeCategory.DateTimeUTC
     return None
 
 
 def _is_temporal_type(json_type: JsonType | None) -> bool:
-    return json_type in (JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE)
+    return json_type in (JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE, JsonType.DATETIMEUTC)
 
 
 def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None) -> mpq | None:
@@ -119,6 +130,7 @@ def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None
             categories.append(hinted)
         categories.extend(
             [
+                DateTimeCategory.DateTimeUTC,
                 DateTimeCategory.DateTimeWithTZ,
                 DateTimeCategory.DateTime,
                 DateTimeCategory.Date,
@@ -165,6 +177,11 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
                 if value.tzinfo is None:
                     value = value.replace(tzinfo=datetime.timezone.utc)
                 return value.isoformat(timespec=_timespec_for_clock(value.second, value.microsecond))
+            case JsonType.DATETIMEUTC:
+                utc = (value if value.tzinfo is not None else value.replace(tzinfo=datetime.timezone.utc)).astimezone(
+                    datetime.timezone.utc
+                )
+                return utc.isoformat(timespec=_timespec_for_clock(utc.second, utc.microsecond)).replace("+00:00", "Z")
         return None
 
     if isinstance(value, datetime.date):
@@ -176,6 +193,12 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
             case JsonType.DATETIMEZONE:
                 return datetime.datetime(value.year, value.month, value.day, tzinfo=datetime.timezone.utc).isoformat(
                     timespec="seconds"
+                )
+            case JsonType.DATETIMEUTC:
+                return (
+                    datetime.datetime(value.year, value.month, value.day, tzinfo=datetime.timezone.utc)
+                    .isoformat(timespec="seconds")
+                    .replace("+00:00", "Z")
                 )
         return None
 
@@ -265,7 +288,9 @@ def _looks_valid_for(json_type: JsonType, value: str) -> bool:
 
 
 def normalize_value_for_type(json_type: JsonType, value: Any) -> Any:
-    if json_type in (JsonType.STRING, JsonType.UNICODE) and not isinstance(value, str):
+    if (json_type in TEXT_FAMILY or json_type in (JsonType.SECRET_LINE, JsonType.SECRET_TEXT)) and not isinstance(
+        value, str
+    ):
         return repr(value)
     return value
 
@@ -276,6 +301,38 @@ def coerce_value_for_type(
     strict: bool,
     old_type: JsonType | None = None,
 ) -> tuple[bool, Any]:
+    def _to_mpq_or_none(raw: Any) -> mpq | None:
+        if isinstance(raw, mpq):
+            return raw
+        try:
+            return mpq(str(raw))
+        except (ValueError, TypeError):
+            return None
+
+    def _int_from_exact(raw: Any) -> int | None:
+        if isinstance(raw, int):
+            return raw
+        q = _to_mpq_or_none(raw)
+        if q is None or q.denominator != 1:
+            return None
+        return int(q)
+
+    def _int_from_truncated(raw: Any) -> int | None:
+        if isinstance(raw, int):
+            return raw
+        q = _to_mpq_or_none(raw)
+        if q is not None:
+            return int(q)
+        try:
+            return int(float(raw))
+        except (ValueError, TypeError):
+            return None
+
+    def _affix_kind_for(target: JsonType) -> AffixKind:
+        if target in (JsonType.INTEGER_CURRENCY, JsonType.FLOAT_CURRENCY):
+            return AffixKind.CURRENCY
+        return AffixKind.UNITS
+
     match json_type:
         case JsonType.NULL:
             return True, None
@@ -294,6 +351,11 @@ def coerce_value_for_type(
             return True, bool(value)
 
         case JsonType.INTEGER:
+            if isinstance(value, NumberAffix):
+                truncated = _int_from_truncated(value.number)
+                if truncated is None:
+                    return False, None
+                return True, truncated
             temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
             if temporal_epoch is not None:
                 return True, int(temporal_epoch)
@@ -321,6 +383,11 @@ def coerce_value_for_type(
             return (False, None) if strict else (True, stub_integer())
 
         case JsonType.FLOAT:
+            if isinstance(value, NumberAffix):
+                q = _to_mpq_or_none(value.number)
+                if q is None:
+                    return False, None
+                return True, q
             temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
             if temporal_epoch is not None:
                 return True, temporal_epoch
@@ -342,13 +409,65 @@ def coerce_value_for_type(
                 pass
             return (False, None) if strict else (True, stub_percent())
 
+        case JsonType.INTEGER_CURRENCY | JsonType.INTEGER_UNITS:
+            kind = _affix_kind_for(json_type)
+            if isinstance(value, str):
+                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
+                if parsed is not None:
+                    truncated = _int_from_truncated(parsed.number)
+                    if truncated is None:
+                        return False, None
+                    return True, NumberAffix(kind=kind, affix=parsed.affix, space=parsed.space, number=truncated)
+            if isinstance(value, NumberAffix):
+                truncated = _int_from_truncated(value.number)
+                if truncated is None:
+                    return False, None
+                return True, NumberAffix(kind=kind, affix=value.affix, space=value.space, number=truncated)
+            truncated = _int_from_truncated(value)
+            if truncated is None:
+                return (
+                    (False, None)
+                    if strict
+                    else (True, NumberAffix(kind=kind, affix="", space=False, number=stub_integer()))
+                )
+            return True, NumberAffix(kind=kind, affix="", space=False, number=truncated)
+
+        case JsonType.FLOAT_CURRENCY | JsonType.FLOAT_UNITS:
+            kind = _affix_kind_for(json_type)
+            if isinstance(value, str):
+                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
+                if parsed is not None:
+                    q = _to_mpq_or_none(parsed.number)
+                    if q is None:
+                        return False, None
+                    return True, NumberAffix(kind=kind, affix=parsed.affix, space=parsed.space, number=q)
+            if isinstance(value, NumberAffix):
+                q = _to_mpq_or_none(value.number)
+                if q is None:
+                    return False, None
+                return True, NumberAffix(kind=kind, affix=value.affix, space=value.space, number=q)
+            q = _to_mpq_or_none(value)
+            if q is None:
+                return (
+                    (False, None)
+                    if strict
+                    else (True, NumberAffix(kind=kind, affix="", space=False, number=stub_float()))
+                )
+            return True, NumberAffix(kind=kind, affix="", space=False, number=q)
+
         # 3.1: bool → lowercase "true"/"false" instead of Python's "True"/"False"
-        case JsonType.STRING | JsonType.UNICODE | JsonType.MULTILINE | JsonType.TEXT:
+        case _ if json_type in TEXT_FAMILY or json_type in (JsonType.SECRET_LINE, JsonType.SECRET_TEXT):
             if value is None:
                 # Saint coercion: empty box of nothing → friendly placeholder.
                 if strict:
                     return True, ""
-                return True, stub_multiline() if json_type in (JsonType.MULTILINE, JsonType.TEXT) else stub_string()
+                return True, stub_multiline() if json_type in TEXT_MULTI_FAMILY else stub_string()
+            if isinstance(value, NumberAffix):
+                try:
+                    return True, format_number_affix(value)
+                except ValueError:
+                    # Transitional/incomplete affix values fall back to plain numeric text.
+                    return True, str(value.number)
             if isinstance(value, bool):
                 return True, "true" if value else "false"
             # Bytes-family → decode and surface the underlying text when printable.
@@ -374,7 +493,7 @@ def coerce_value_for_type(
             return True, str(value)
 
         # 3.2: fall back to "now" instead of epoch-zero when value is unparseable
-        case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
+        case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE | JsonType.DATETIMEUTC:
             parsed = _try_parse_temporal(json_type, value)
             if parsed is not None:
                 return True, parsed
@@ -433,7 +552,7 @@ def compute_editable(json_type: JsonType, value: Any, editable_blob_limit: int) 
 
     try:
         match json_type:
-            case JsonType.STRING | JsonType.UNICODE | JsonType.MULTILINE | JsonType.TEXT:
+            case _ if json_type in TEXT_FAMILY or json_type in (JsonType.SECRET_LINE, JsonType.SECRET_TEXT):
                 return True
             case JsonType.BYTES:
                 base64.b64decode(value, validate=True)

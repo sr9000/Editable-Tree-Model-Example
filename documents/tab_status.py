@@ -2,7 +2,7 @@ from PySide6.QtCore import QModelIndex
 
 from delegates.bytes_codec import decode_bytes
 from tree.item import JsonTreeItem
-from tree.types import JsonType
+from tree.types import TEXT_FAMILY, JsonType
 from units import counts, format_bytes
 
 
@@ -20,7 +20,7 @@ def format_validation_status(issue_index) -> str:
 
 
 def size_hint_for_item(item: JsonTreeItem) -> str | None:
-    if item.json_type in (JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT):
+    if item.json_type in TEXT_FAMILY:
         return f"{counts(len(str(item.value or '')))} chars"
     if item.json_type is JsonType.ARRAY:
         return f"{counts(item.child_count())} items"

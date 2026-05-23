@@ -54,6 +54,7 @@ class Palette:
     selection_fg: QColor
     selection_bg: QColor
     accent: QColor
+    affix_text: QColor | None = None
     validation: ValidationStyle = field(default_factory=ValidationStyle)
 
     def __hash__(self) -> int:
@@ -64,6 +65,7 @@ class Palette:
                 _color_key(self.selection_fg),
                 _color_key(self.selection_bg),
                 _color_key(self.accent),
+                _color_key(self.affix_text),
                 self.validation,
             )
         )

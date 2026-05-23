@@ -24,6 +24,7 @@ from documents.tab_setup import (
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
 from io_formats.detect import SAVE_FORMAT_YAML_MULTI
+from state.affix_mru import AffixMRU
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
@@ -58,6 +59,7 @@ from undo.commands import (
     _SwitchFieldCaseCmd,
 )
 from undo.diff import DiffApplier
+from units.number_affix import NumberAffix
 from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
@@ -91,18 +93,25 @@ def _demo_data() -> dict[str, Any]:
         "question": "The Ultimate Question of Life, the Universe, and Everything.",
         "answer": 42,
         "integer": 9223372036854775808,
+        "int units": "10 m/s",
+        "float units": "3.45s",
+        "int currency": "$10",
+        "float currency": "lvl 2.5",
         "float": gmpy2.mpq("3.14"),
         "percent": gmpy2.mpq("50/100"),
         "single-line": "Hello, world!" * 100,
         "utf8-line": "caf\u00e9",
         "multi-line": "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6",
         "utf8-text": "Line 1\nLine 2\n\u03a9",
+        "password": "plainsecret",
+        "private_key": "-----BEGIN KEY-----\nabc\n-----END KEY-----",
         "bytes": base64.b64encode(b"hello " * 10).decode(),
         "zlib": base64.b64encode(zlib.compress(b"hello " * 10)).decode(),
         "gzip": base64.b64encode(gzip.compress(b"hello " * 10)).decode(),
         "date": "2024-06-01",
         "time": "12:34",
         "datetime": "2024-06-01 12:34:56",
+        "datetime-utc": "2024-06-01T12:34:56Z",
         "dt+timezone": "2024-06-01T12:34:56.9999+00:00",
         "boolean": True,
         "object": {"key": "value"},
@@ -110,6 +119,13 @@ def _demo_data() -> dict[str, Any]:
         "null": None,
         "color rgb": "#3498db",
         "color rgba": "#3498db80",
+        # Pseudo text types — content-derived labels that appear automatically
+        # when a string value is empty or whitespace-only.
+        "empty string": "",           # → EMPTY_STRING
+        "ws ascii": "   ",            # → WS_STRING (ASCII spaces only)
+        "ws unicode": " \u00a0 ",     # → WS_UNICODE (includes NBSP)
+        "ws multiline": "  \n  ",     # → WS_MULTILINE (whitespace + newline)
+        "ws text": " \u00a0\n ",      # → WS_TEXT  (non-ASCII WS + newline)
     }
 
 
@@ -211,6 +227,7 @@ class JsonTab(QWidget):
 
         self.file_path = file_path
         self.save_format: str | None = save_format
+        self.affix_mru = AffixMRU()
         self._dirty = False
         self._schema_ref = SchemaRef(path=None, inline=None, origin="none")
         self._schema_source: SchemaSource | None = None
@@ -218,6 +235,7 @@ class JsonTab(QWidget):
         self._issue_index = IssueIndex([], model_data)
 
         init_model(self, model_data, show_root=show_root)
+        self.affix_mru.bootstrap_from_tree(self.model.root_item)
 
         # ── auto-rescan debouncer ──────────────────────────────────────────
         # Gate flag; toggled by set_auto_rescan().  Connections are kept alive
@@ -1156,8 +1174,10 @@ class JsonTab(QWidget):
         item = self.model.get_item(name_idx)
         if item.json_type is target_type:
             return False
+        warn_fraction_loss = self._would_drop_fraction_on_type_change(item, target_type)
         old_subtree = item.to_json()
         old_explicit = item.explicit_type
+        old_type = item.json_type
         target_qname = self._qualified_name(name_idx)
         cmd = _ChangeTypeCmd(
             self,
@@ -1165,10 +1185,32 @@ class JsonTab(QWidget):
             self._index_path(name_idx),
             old_subtree,
             old_explicit,
+            old_type,
             target_type,
         )
         self.undo_stack.push(cmd)
+        if warn_fraction_loss and self._status_message_callback is not None:
+            self._status_message_callback("Fractional part discarded during float-to-integer conversion", 3000)
         return True
+
+    @staticmethod
+    def _is_integer_number_type(json_type: JsonType) -> bool:
+        return json_type in (JsonType.INTEGER, JsonType.INTEGER_CURRENCY, JsonType.INTEGER_UNITS)
+
+    @staticmethod
+    def _is_float_number_type(json_type: JsonType) -> bool:
+        return json_type in (JsonType.FLOAT, JsonType.PERCENT, JsonType.FLOAT_CURRENCY, JsonType.FLOAT_UNITS)
+
+    @classmethod
+    def _would_drop_fraction_on_type_change(cls, item: JsonTreeItem, target_type: JsonType) -> bool:
+        if not cls._is_integer_number_type(target_type) or not cls._is_float_number_type(item.json_type):
+            return False
+        source_value = item.value.number if isinstance(item.value, NumberAffix) else item.value
+        try:
+            q = gmpy2.mpq(str(source_value))
+        except (TypeError, ValueError):
+            return False
+        return q.denominator != 1
 
     def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
         """``inserts`` is a list of ``{parent_path, row, value, name}``."""

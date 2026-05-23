@@ -1,10 +1,16 @@
 # Ported from: https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/editabletreemodel
 
+import datetime
 from typing import Any
 
+from datetime_editor.enums import DateTimeCategory
+from datetime_editor.regex import parse_datetime_text
+from state.secret_settings import get_secret_word_prefixes
 from tree.item_coercion import coerce_value_for_type, compute_editable, normalize_value_for_type
 from tree.item_names import unique_child_name, validated_child_name
-from tree.types import TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
+from tree.types import DATETIME_FAMILY, SECRET_FAMILY, TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
+from tree.types_datetime import convert_datetime
+from validation.secret_names import name_looks_secret
 
 
 class JsonTreeItem:
@@ -32,6 +38,7 @@ class JsonTreeItem:
         self.json_type = parse_json_type(value)
         self.value = None
         self._apply_typed_value(self.json_type, value)
+        self._promote_secret_from_name()
 
         self.editable = self._compute_editable()
 
@@ -121,6 +128,14 @@ class JsonTreeItem:
             # Save old_type so coercion can re-encode bytes-family values correctly.
             old_type = self.json_type
             old_value = self.to_json() if self.json_type in (JsonType.ARRAY, JsonType.OBJECT) else self.value
+
+            if old_type in DATETIME_FAMILY and new_type in DATETIME_FAMILY and isinstance(old_value, str):
+                converted = self._convert_datetime_text(old_value, old_type, new_type)
+                if converted is not None:
+                    self.explicit_type = True
+                    self._apply_typed_value(new_type, converted)
+                    return True
+
             ok, coerced = self._coerce_value_for_type(new_type, old_value, strict=False, old_type=old_type)
             if not ok:
                 return False
@@ -143,16 +158,31 @@ class JsonTreeItem:
                     # Pseudo text types auto-track ASCII vs non-ASCII even when
                     # type was explicitly chosen.
                     self._apply_typed_value(text_pseudotype_for(self.json_type, coerced), coerced)
+                elif self.json_type is JsonType.SECRET_LINE and self._value_has_newline(coerced):
+                    self._apply_typed_value(JsonType.SECRET_TEXT, coerced)
+                else:
+                    self._apply_typed_value(self.json_type, coerced)
+                return True
+
+            if self.json_type in SECRET_FAMILY:
+                ok, coerced = self._coerce_value_for_type(self.json_type, value, strict=True)
+                if not ok:
+                    return False
+                if self.json_type is JsonType.SECRET_LINE and self._value_has_newline(coerced):
+                    self._apply_typed_value(JsonType.SECRET_TEXT, coerced)
                 else:
                     self._apply_typed_value(self.json_type, coerced)
                 return True
 
             if isinstance(value, str) and self.json_type in TEXT_FAMILY:
-                self._apply_typed_value(text_pseudotype_for(self.json_type, value), value)
+                inferred_text_type = text_pseudotype_for(self.json_type, value)
+                self._apply_typed_value(inferred_text_type, value)
+                self._promote_secret_from_name()
                 return True
 
             inferred_type = parse_json_type(value)
             self._apply_typed_value(inferred_type, value)
+            self._promote_secret_from_name()
             return True
 
         return False
@@ -221,7 +251,30 @@ class JsonTreeItem:
             return False
 
         self.name = candidate
+        self._promote_secret_from_name(allow_from_null=True)
         return True
+
+    @staticmethod
+    def _value_has_newline(value: Any) -> bool:
+        return isinstance(value, str) and "\n" in value
+
+    def _secret_type_for_value(self) -> JsonType:
+        return JsonType.SECRET_TEXT if self._value_has_newline(self.value) else JsonType.SECRET_LINE
+
+    def _promote_secret_from_name(self, allow_from_null: bool = False) -> None:
+        if self.json_type in SECRET_FAMILY:
+            return
+        if not name_looks_secret(self.name, get_secret_word_prefixes()):
+            return
+        if isinstance(self.value, str):
+            self._apply_typed_value(self._secret_type_for_value(), self.value)
+            return
+        if allow_from_null and self.json_type is JsonType.NULL:
+            secret_value = self.value if isinstance(self.value, str) else ""
+            self._apply_typed_value(
+                JsonType.SECRET_TEXT if "\n" in secret_value else JsonType.SECRET_LINE, secret_value
+            )
+            return
 
     def _morph_container(self, new_type: JsonType) -> bool:
         """Mutate ARRAY→OBJECT or OBJECT→ARRAY in-place, preserving children.
@@ -251,3 +304,44 @@ class JsonTreeItem:
 
     def _compute_editable(self) -> bool:
         return compute_editable(self.json_type, self.value, self.EDITABLE_BLOB_LIMIT)
+
+    @staticmethod
+    def _datetime_category_for_type(json_type: JsonType) -> DateTimeCategory | None:
+        match json_type:
+            case JsonType.DATE:
+                return DateTimeCategory.Date
+            case JsonType.TIME:
+                return DateTimeCategory.Time
+            case JsonType.DATETIME:
+                return DateTimeCategory.DateTime
+            case JsonType.DATETIMEZONE:
+                return DateTimeCategory.DateTimeWithTZ
+            case JsonType.DATETIMEUTC:
+                return DateTimeCategory.DateTimeUTC
+            case _:
+                return None
+
+    def _convert_datetime_text(self, value: str, src: JsonType, dst: JsonType) -> str | None:
+        src_category = self._datetime_category_for_type(src)
+        if src_category is None:
+            return None
+        parsed = parse_datetime_text(value, src_category)
+        if parsed is None:
+            return None
+        converted = convert_datetime(parsed, src, dst)
+        if isinstance(converted, datetime.date) and not isinstance(converted, datetime.datetime):
+            return converted.isoformat()
+        if isinstance(converted, datetime.time):
+            return converted.isoformat()
+        if isinstance(converted, datetime.datetime):
+            if dst is JsonType.DATETIME:
+                return converted.replace(tzinfo=None).isoformat()
+            if dst is JsonType.DATETIMEZONE:
+                aware = converted if converted.tzinfo is not None else converted.replace(tzinfo=datetime.timezone.utc)
+                return aware.isoformat()
+            if dst is JsonType.DATETIMEUTC:
+                aware = (
+                    converted if converted.tzinfo is not None else converted.replace(tzinfo=datetime.timezone.utc)
+                ).astimezone(datetime.timezone.utc)
+                return aware.isoformat().replace("+00:00", "Z")
+        return None

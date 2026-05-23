@@ -2,13 +2,24 @@ import binascii
 import zlib
 
 from gmpy2 import mpq
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
-from PySide6.QtGui import QFont, QFontDatabase, QIcon, QPainter, QPixmap
+from PySide6.QtCore import (
+    QAbstractItemModel,
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    QSortFilterProxyModel,
+    Qt,
+)
+from PySide6.QtGui import QFont, QFontDatabase, QFontMetrics, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QColorDialog,
     QComboBox,
+    QHBoxLayout,
     QLineEdit,
     QMessageBox,
+    QPushButton,
     QStyle,
     QStyleOptionViewItem,
     QTreeView,
@@ -17,15 +28,23 @@ from PySide6.QtWidgets import (
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
-from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase
+from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase, paint_editor_underlay
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.color_codec import color_to_html, parse_color
+from delegates.number_affix_delegate import (
+    AffixCompositeEditor,
+    is_affix_json_type,
+    kind_for_json_type,
+    normalize_affix_value,
+    validate_affix_value,
+)
 from delegates.validation_badge import draw_severity_badge
 from delegates.value_formatting import _apply_type_style, format_default, format_with_type
 from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
+from settings import SECRET_HIDE_ON_FOCUS_OUT
 from state.edit_limits import (
     get_binary_edit_warning_limit_bytes,
     get_multiline_edit_warning_limit_chars,
@@ -35,8 +54,89 @@ from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model_roles import JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE
-from tree.types import JsonType
+from tree.types import TEXT_LINE_FAMILY, TEXT_MULTI_FAMILY, JsonType
 from units import counts, format_bytes
+
+
+class _SecretLineEdit(QWidget):
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._revealed = False
+        self.line_edit = _CapsLockSafeLineEdit(self)
+        self.line_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.toggle_button = QPushButton(self)
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.toggle_button.setAutoDefault(False)
+        self.toggle_button.setDefault(False)
+        self.toggle_button.toggled.connect(self._set_revealed)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.addWidget(self.toggle_button)
+        layout.addWidget(self.line_edit)
+
+        self.setFocusProxy(self.line_edit)
+        self._sync_toggle_button()
+
+    def text(self) -> str:
+        return self.line_edit.text()
+
+    def setText(self, text: str) -> None:
+        self.line_edit.setText(text)
+
+    def _set_revealed(self, checked: bool) -> None:
+        self._revealed = bool(checked)
+        self.line_edit.setEchoMode(QLineEdit.EchoMode.Normal if self._revealed else QLineEdit.EchoMode.Password)
+        self._sync_toggle_button()
+
+    def _sync_toggle_button(self) -> None:
+        label = "Shown" if self._revealed else "Hidden"
+        self.toggle_button.setText(label)
+        self.toggle_button.setToolTip(label)
+        if self.toggle_button.isChecked() != self._revealed:
+            self.toggle_button.blockSignals(True)
+            self.toggle_button.setChecked(self._revealed)
+            self.toggle_button.blockSignals(False)
+        self._update_button_width()
+
+    def _update_button_width(self) -> None:
+        metrics = QFontMetrics(self.toggle_button.font())
+        width = max(metrics.horizontalAdvance("Hidden"), metrics.horizontalAdvance("Shown")) + 18
+        self.toggle_button.setFixedWidth(width)
+
+    def setFont(self, font: QFont) -> None:
+        super().setFont(font)
+        self._update_button_width()
+
+
+class _SecretEditorWatcher(QObject):
+    def __init__(self, delegate: "ValueDelegate", editor: QWidget, index: QPersistentModelIndex):
+        super().__init__(editor)
+        self._delegate = delegate
+        self._editor = editor
+        self._index = index
+        app = QApplication.instance()
+        if app is not None:
+            app.applicationStateChanged.connect(self._on_app_state_changed)
+
+    def cleanup(self) -> None:
+        app = QApplication.instance()
+        if app is not None:
+            try:
+                app.applicationStateChanged.disconnect(self._on_app_state_changed)
+            except (RuntimeError, TypeError):
+                pass
+
+    def eventFilter(self, watched, event):  # type: ignore[override]
+        if event.type() == QEvent.Type.FocusOut and SECRET_HIDE_ON_FOCUS_OUT:
+            self._delegate._finalize_secret_editor(self._editor, self._index)
+        return super().eventFilter(watched, event)
+
+    def _on_app_state_changed(self, state) -> None:
+        if SECRET_HIDE_ON_FOCUS_OUT and state != Qt.ApplicationState.ApplicationActive:
+            self._delegate._finalize_secret_editor(self._editor, self._index)
 
 
 class ValueDelegate(_TextEditorDelegateBase):
@@ -45,6 +145,7 @@ class ValueDelegate(_TextEditorDelegateBase):
         self._theme = theme or LIGHT_DEFAULT
         self._monospace_fields_enabled = False
         self._mono_family = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
+        self._secret_watchers: dict[QWidget, _SecretEditorWatcher] = {}
 
     def set_theme(self, theme: ThemeSpec) -> None:
         self._theme = theme
@@ -145,6 +246,12 @@ class ValueDelegate(_TextEditorDelegateBase):
         option.font = self._apply_monospace_font(option.font)
 
     def paint(self, painter, option, index) -> None:  # type: ignore[override]
+        if self._is_editor_open(index):
+            idx = self._to_index(index)
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, idx)
+            paint_editor_underlay(painter, opt, option.widget)
+            return
         severity = index.data(VALIDATION_SEVERITY_ROLE)
         if severity is not None:
             idx = self._to_index(index)
@@ -258,6 +365,17 @@ class ValueDelegate(_TextEditorDelegateBase):
 
         editor = None
         match item.json_type:
+            case _ if is_affix_json_type(item.json_type):
+                tab = self._find_tab(parent)
+                mru = getattr(tab, "affix_mru", None)
+                kind = kind_for_json_type(item.json_type)
+                mru_items = mru.items(kind) if mru is not None and hasattr(mru, "items") else []
+                icon = QIcon()
+                provider = getattr(tab, "_icon_provider", None)
+                if provider is not None and hasattr(provider, "for_key"):
+                    key = "affix_prefix" if kind.value == "prefix" else "affix_suffix"
+                    icon = provider.for_key(key)
+                editor = AffixCompositeEditor(parent, json_type=item.json_type, mru_items=mru_items)
             case JsonType.INTEGER:
                 editor = QBigIntSpinBox(parent)
             case JsonType.FLOAT:
@@ -274,7 +392,7 @@ class ValueDelegate(_TextEditorDelegateBase):
                 editor = QComboBox(parent)
                 editor.addItem("true", True)
                 editor.addItem("false", False)
-            case JsonType.STRING | JsonType.UNICODE:
+            case _ if item.json_type in TEXT_LINE_FAMILY:
                 text_len = len(str(item.value or ""))
                 limit = get_string_edit_warning_limit_chars()
                 if not self._confirm_large_text_edit(
@@ -287,9 +405,11 @@ class ValueDelegate(_TextEditorDelegateBase):
                     self._notify_status(parent, "String edit cancelled", 2000)
                     return None
                 editor = _CapsLockSafeLineEdit(parent)
-            case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE:
+            case JsonType.SECRET_LINE:
+                editor = _SecretLineEdit(parent)
+            case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE | JsonType.DATETIMEUTC:
                 editor = BetterDateTimeEditor(parent)
-            case JsonType.MULTILINE | JsonType.TEXT:
+            case _ if item.json_type in TEXT_MULTI_FAMILY:
                 text_len = len(str(item.value or ""))
                 limit = get_multiline_edit_warning_limit_chars()
                 if not self._confirm_large_text_edit(
@@ -309,7 +429,31 @@ class ValueDelegate(_TextEditorDelegateBase):
 
                 QMultilineDialog(parent=parent, text=str(item.value or ""), callback=_save_multiline).open()
                 return None
+            case JsonType.SECRET_TEXT:
+                text_len = len(str(item.value or ""))
+                limit = get_multiline_edit_warning_limit_chars()
+                if not self._confirm_large_text_edit(
+                    parent,
+                    text_len=text_len,
+                    limit=limit,
+                    title="Large secret text",
+                    kind="Secret value",
+                ):
+                    self._notify_status(parent, "Secret text edit cancelled", 2000)
+                    return None
 
+                pidx = QPersistentModelIndex(index)
+
+                def _save_secret_text(text: str) -> None:
+                    if pidx.isValid():
+                        self._commit(pidx, text, Qt.ItemDataRole.EditRole, host=parent)
+
+                dlg = QMultilineDialog(
+                    parent=parent, text=str(item.value or ""), sensitive=True, callback=_save_secret_text
+                )
+                dlg.setWindowTitle("Edit Secret Text")
+                dlg.open()
+                return None
             case JsonType.COLOR_RGB | JsonType.COLOR_RGBA:
                 pidx = QPersistentModelIndex(index)
                 initial = parse_color(item.value if isinstance(item.value, str) else "") or parse_color("#000000")
@@ -360,7 +504,29 @@ class ValueDelegate(_TextEditorDelegateBase):
 
         if editor is not None:
             editor.setFont(self._apply_monospace_font(editor.font()))
+            self._mark_editor_open(index)
+            if item.json_type in (JsonType.SECRET_LINE, JsonType.SECRET_TEXT):
+                self._install_secret_watcher(editor, index)
         return editor
+
+    def _install_secret_watcher(self, editor: QWidget, index: QModelIndex) -> None:
+        watcher = _SecretEditorWatcher(self, editor, QPersistentModelIndex(index))
+        editor.installEventFilter(watcher)
+        for child in editor.findChildren(QWidget):
+            child.installEventFilter(watcher)
+        self._secret_watchers[editor] = watcher
+
+    def _finalize_secret_editor(self, editor: QWidget, index: QPersistentModelIndex) -> None:
+        if editor is None or not index.isValid():
+            return
+        self.commitData.emit(editor)
+        self.closeEditor.emit(editor, self.EndEditHint.NoHint)
+
+    def destroyEditor(self, editor, index) -> None:  # type: ignore[override]
+        watcher = self._secret_watchers.pop(editor, None)
+        if watcher is not None:
+            watcher.cleanup()
+        super().destroyEditor(editor, index)
 
     def setEditorData(self, editor: QWidget, index: QModelIndex):
         source_index = self._source_index(index)
@@ -372,6 +538,12 @@ class ValueDelegate(_TextEditorDelegateBase):
                 editor.setValue(int(value))
             except (TypeError, ValueError):
                 editor.setValue(0)
+            return
+
+        if isinstance(editor, AffixCompositeEditor):
+            normalized = normalize_affix_value(value, item.json_type)
+            if normalized is not None:
+                editor.set_value(normalized)
             return
 
         if isinstance(editor, QMpqSpinBox):
@@ -393,6 +565,10 @@ class ValueDelegate(_TextEditorDelegateBase):
             if category is not None:
                 editor.setCategory(category)
             editor.setText(str(value or ""))
+            return
+
+        if isinstance(editor, _SecretLineEdit):
+            editor.setText("" if value is None else str(value))
             return
 
         if isinstance(editor, QLineEdit):
@@ -423,8 +599,26 @@ class ValueDelegate(_TextEditorDelegateBase):
             self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
             return
 
+        if isinstance(editor, _SecretLineEdit):
+            self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
+            return
+
         if isinstance(editor, QLineEdit):
             self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
+            return
+
+        if isinstance(editor, AffixCompositeEditor):
+            candidate = editor.build_value()
+            validated = validate_affix_value(candidate)
+            if validated is None:
+                editor.set_invalid(True)
+                return
+            editor.set_invalid(False)
+            if self._commit(index, validated, Qt.ItemDataRole.EditRole, host=editor):
+                tab = self._find_tab(editor)
+                mru = getattr(tab, "affix_mru", None)
+                if mru is not None and hasattr(mru, "push"):
+                    mru.push(validated.kind, validated.affix)
             return
 
         super().setModelData(editor, model, index)
@@ -440,5 +634,7 @@ class ValueDelegate(_TextEditorDelegateBase):
                 return DateTimeCategory.DateTime
             case JsonType.DATETIMEZONE:
                 return DateTimeCategory.DateTimeWithTZ
+            case JsonType.DATETIMEUTC:
+                return DateTimeCategory.DateTimeUTC
             case _:
                 return None

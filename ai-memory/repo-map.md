@@ -1,24 +1,26 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-17** (post-merge of PR #9 `improve-ux`,
-`HEAD = ca2b174` on `master`). PySide6 desktop **structured-data
-editor** (originated from Qt's "Editable Tree Model" example).
-All previous plans are merged: drag-and-drop Steps 1–10, jsonschema
-Step 7, and schema-registry Steps 1–7. PR #9 `improve-ux` added
-**window geometry persistence (normal / maximized / fullscreen)**,
-**main-window file-drop** (drop one or many JSON/YAML files to open
-them all), **base64-cell "Attach from file…" / "Save as…" context
-actions**, **a configurable edit-warning-limits submenu** under
-`File ▸` (string / multiline / binary / attach thresholds, persisted
-via `QSettings`), **size-aware confirmation dialogs** before editing
-large strings, multiline text, or binary blobs, **short "K/M/B"
-human counts** via `units.counts()`, and **simplified validation
-issues** (the `severity` field was removed from `ValidationIssue`;
-the issue index now only distinguishes presence/absence).
-The tree's `JsonTreeView` subclass still owns `startDrag` so the
-model fully owns internal moves without Qt's default post-drag row
-removal. Tests: **922 collected** on this scan; known offscreen-only
-color-scheme failures remain tracked in `todo-n-fixme.md`._
+_Last scanned: **2026-05-23**. This is a PySide6 desktop
+**structured-data editor** for JSON, JSON Lines, YAML, and
+multi-document YAML. It originated from Qt's "Editable Tree Model"
+example, but the current repository is a full app with typed cell
+editors, undo/redo, search, themes, JSON-Schema validation, schema
+hot-reload, drag-and-drop, exact numerics, binary helpers, secret
+masking, and persisted UI state._
+
+**Purpose of this file:** a dense repo index for LLM agents and
+contributors. Use it to answer: "where is this behaviour implemented?",
+"which module owns this rule?", and "what invariants should I preserve?"
+It is intentionally organised by subsystem, not by historical branch.
+For end-user startup instructions see `README.md`; for active open
+work see `ai-memory/todo-n-fixme.md`; for resolved phase history see
+`ai-memory/history.md`.
+
+**Current surface snapshot:** 1023 tests collected. Known
+offscreen-only color-scheme failures are tracked in
+`todo-n-fixme.md`. Recent feature-plan docs remain in `plans/`, but
+their shipped behaviours are documented below as normal capabilities
+(UTC datetimes, number affixes, secret strings, and pseudo-text chips).
 
 ---
 
@@ -55,6 +57,11 @@ color-scheme failures remain tracked in `todo-n-fixme.md`._
 | Base64 attach / save context actions                  | `tree_actions/context_menu.py::attach_base64_from_file` / `save_base64_as_file` |
 | Validation badge (in-tree marker)                     | `delegates/validation_badge.py`, `tree/model_roles.py::VALIDATION_SEVERITY_ROLE` |
 | Color cell editor (`COLOR_RGB` / `COLOR_RGBA`)        | `delegates/color_codec.py`, `delegates/value.py::createEditor` (QColorDialog branch) |
+| Number-affix kinds (currency / units, int/float)      | `units/number_affix.py`, `delegates/number_affix_delegate.py`, `state/affix_mru.py`, `tree/item_coercion.py` |
+| Secret kinds (`SECRET_LINE` / `SECRET_TEXT`)          | `validation/secret_names.py`, `state/secret_settings.py`, `tree/item.py::_promote_secret_from_name`, `qmultiline_editor.py` (sensitive mode), `delegates/value.py` (masked editors), `dialogs/secret_prefixes_dlg.py` |
+| UTC datetime (`DATETIMEUTC`)                          | `tree/types_datetime.py::convert_datetime`, `datetime_editor/` (regex/validator/enums), `tests/test_convert_datetime.py` |
+| Pseudo-text (empty / whitespace previews)             | `tree/types.py` (`EMPTY_*`, `WS_*`, `PSEUDO_TEXT_*`, `text_pseudotype_for`, `canonical_text_type`) |
+| Feature plans (per-feature DoD specs)                 | `plans/README.md` + `plans/01-utc-datetime.md` / `02-number-affix.md` / `03-secret-strings.md` |
 
 ---
 
@@ -84,6 +91,34 @@ A PySide6 desktop **structured-data editor** with:
   placeholders for unrecoverable cases).
 - Reusable widget stack: hex editor, multiline editor, segmented
   datetime editor, big-int and exact-rational spin boxes.
+
+### Repo rules & invariants for future edits
+
+- **Do not hand-edit generated UI Python**: `mainwindow.py` is
+  generated from `mainwindow.ui`. Runtime app logic belongs in
+  `app/`, `documents/`, delegates, or tree-action modules.
+- **Mutations should be undoable** in the live UI. Prefer
+  `JsonTab.push_*` / `commit_set_data(...)` paths over direct model
+  mutation; `model_actions.py` exists mainly for headless fallbacks.
+- **Model indexes are fragile across mutations**. Long-lived edit
+  callbacks use paths or `QPersistentModelIndex`; undo commands use
+  path-based addressing.
+- **Type semantics live in one place each**: inference in
+  `tree/types.py`, cross-type conversion in `tree/item_coercion.py`
+  (plus `tree/types_datetime.py` for date/time lattice), display in
+  `delegates/value_formatting.py`, editors in `delegates/value.py`.
+- **Raw JSON/YAML persistence is intentionally conservative**:
+  `io_formats/` writes normal JSON/YAML-compatible structures;
+  richer in-memory values (`mpq`, `NumberAffix`, bytes-family strings,
+  secret kinds) are encoded/decoded at the I/O boundary.
+- **The view owns UX state, the model owns data**. Column widths,
+  expansion, selection, zoom, themes, validation-dock layout, recent
+  files/schemas, and settings all persist through `state/` helpers and
+  `QSettings`.
+- **Tests prefer offscreen Qt** (`QT_QPA_PLATFORM=offscreen pytest`),
+  but app color-scheme assertions can be platform-sensitive under the
+  offscreen plugin; see `todo-n-fixme.md` before treating those as
+  production regressions.
 
 ---
 
@@ -118,10 +153,23 @@ documents/                    (≈1330 LOC)
   tab_status.py               # breadcrumb + size hint per JsonType
   tab_io.py                   # save / save-as / snapshot
 
-tree/                         (≈1520 LOC)
-  types.py                    # JsonType + parse_json_type / infer_text_json_type
-  item.py                     # JsonTreeItem
-  item_coercion.py            # coerce_value_for_type (Phase-3 overhaul)
+tree/                         (≈1730 LOC)
+  types.py                    # JsonType (incl. DATETIMEUTC, INTEGER/FLOAT_CURRENCY|UNITS,
+                              # SECRET_LINE|TEXT, pseudo-text EMPTY_* / WS_*); families
+                              # (TEXT_FAMILY/_LINE/_MULTI, EMPTY_FAMILY, WS_FAMILY,
+                              # PSEUDO_TEXT_FAMILY, SECRET_FAMILY, COLOR_FAMILY,
+                              # DATETIME_FAMILY, NUMBER_FAMILY); PSEUDO_TEXT_PARENT +
+                              # canonical_text_type; USER_SELECTABLE_TYPES (excludes
+                              # pseudo-text); parse_json_type / infer_text_json_type /
+                              # text_pseudotype_for
+  types_datetime.py           # convert_datetime(value, src, dst) — full DATE/TIME/
+                              # DATETIME/DATETIMEZONE/DATETIMEUTC lattice; real tz-shift
+                              # on DATETIMEZONE → DATETIMEUTC
+  item.py                     # JsonTreeItem; _promote_secret_from_name uses
+                              # validation.secret_names.name_looks_secret + runtime
+                              # SECRET_WORD_PREFIXES; sticky once promoted
+  item_coercion.py            # coerce_value_for_type (Phase-3 overhaul + number-affix
+                              # and DATETIMEUTC arms; routes via convert_datetime)
   item_names.py               # validate_object_child_name / unique_child_name
   stubs.py                    # friendly placeholder values for unrecoverable coercions
   model.py                    # JsonTreeModel (drag-drop hooks: mimeTypes/mimeData/
@@ -140,6 +188,7 @@ delegates/                    (≈620 LOC)
                               # initStyleOption reads raw value + type directly from the
                               # JsonTreeItem when possible so bigints > 2**63-1 don't
                               # overflow Shiboken's QVariant boxing.
+  number_affix_delegate.py    # AffixCompositeEditor (prefix/suffix + number + space-toggle)
   value_formatting.py         # format_default / format_with_type / container preview / _apply_type_style
   bytes_codec.py              # decode_bytes / encode_bytes (BYTES/ZLIB/GZIP)
   type_delegate.py            # JsonTypeDelegate (combobox with icons)
@@ -192,7 +241,8 @@ io_formats/                   (≈110 LOC)
   dump.py                     # dump_text + mpq-safe serialization
   atomic.py                   # atomic_write / save_file (os.replace)
 
-state/                        (≈245 LOC)
+state/                        (≈290 LOC)
+  affix_mru.py                # per-tab NumberAffix MRU (prefix/suffix)
   view_state.py               # state_key / save / restore / discard
   theme_settings.py           # theme/* QSettings + resolve_active_theme
   qsettings_coercion.py       # cross-platform QSettings shape helpers
@@ -210,17 +260,31 @@ themes/                       (≈660 LOC)
     dark.yaml                 # built-in dark theme
     icons/                    # 18 SVGs, one per JsonType key
 
-dialogs/                      # QHexDialog, QMultilineDialog (modal, persisted)
-datetime_editor/              # BetterDateTimeEditor (segments, partial regex, TZ)
+dialogs/                      # QHexDialog, QMultilineDialog (modal, persisted);
+                              # AttachSchemaDialog; SecretPrefixesDialog
+                              # (File ▸ Secret word prefixes…)
+datetime_editor/              # BetterDateTimeEditor (segments, partial regex, TZ);
+                              # DateTimeCategory.DateTimeUTC; validator/regex
+                              # accept trailing `Z`
 qhexedit/                     # QHexEdit + ColorManager + chunks/commands
 qbigint_spinbox/              # arbitrary-precision integer spin
 qmpq_spinbox/                 # exact-rational spin (gmpy2.mpq)
 mpq2py/                       # mpq_serialization, mpq_json_default, MpqSafeLoader/Dumper
 jsontream/                    # streaming JSON encoder (iterables)
-units/                        # bits, format_bytes
+units/                        # bits, format_bytes, counts
+  number_affix.py             # NumberAffix dataclass + AffixKind enum +
+                              # parse_number_affix / format_number_affix
+validation/                   # see § 20; new: validation/secret_names.py
+                              # (name_looks_secret word-prefix matcher)
+state/                        # see § 13; new: state/affix_mru.py,
+                              # state/secret_settings.py (QSettings-backed prefixes)
+plans/                        # per-feature plans + DoD (read order independent).
+                              # README.md lists 01-utc-datetime / 02-number-affix /
+                              # 03-secret-strings (all complete on this branch)
 coalesce/, binary/, qt2py/    # small utility packages
-tests/                        # 922 collected
-ai-memory/                    # this folder
+tests/                        # 1023 collected
+ai-memory/                    # this folder (repo-map / pros-n-cons / todo-n-fixme /
+                              # history — the historical changelog archive)
 ```
 
 Canonical imports:
@@ -260,6 +324,22 @@ from io_formats.atomic import atomic_write, save_file
 from state.view_state import save, restore, discard, state_key
 from state.theme_settings import resolve_active_theme
 from themes import ThemeRegistry, ThemeSpec, LIGHT_DEFAULT, DARK_DEFAULT
+from units.number_affix import (
+    AffixKind, NumberAffix, parse_number_affix, format_number_affix,
+)
+from state.affix_mru import AffixMRU
+from state.secret_settings import (
+    get_secret_word_prefixes, set_secret_word_prefixes,
+)
+from validation.secret_names import name_looks_secret
+from tree.types_datetime import convert_datetime
+from tree.types import (
+    USER_SELECTABLE_TYPES, SECRET_FAMILY, NUMBER_FAMILY, DATETIME_FAMILY,
+    PSEUDO_TEXT_FAMILY, EMPTY_FAMILY, WS_FAMILY, PSEUDO_TEXT_PARENT,
+    canonical_text_type, text_pseudotype_for,
+)
+from delegates.number_affix_delegate import AffixCompositeEditor
+from dialogs.secret_prefixes_dlg import SecretPrefixesDialog
 ```
 
 ---
@@ -275,15 +355,22 @@ display in `delegates/value_formatting.py`; coercion in
 | `INTEGER`      | `"integer"`     | `QBigIntSpinBox`             | `str(int)`                               | int↔float/percent rounding; int sec/ms ↔ datetime parse          |
 | `FLOAT`        | `"float"`       | `QMpqSpinBox`                | `mpq_serialization` decimal              | stored as `gmpy2.mpq`                                            |
 | `PERCENT`      | `"percent"`     | `QMpqSpinBox` (`0..100 %`)   | `"50%"`, `"33.33%"`                      | UI is 0–100, storage is 0–1 mpq; auto-inferred when value ∈ [0,1] |
+| `INTEGER_CURRENCY` | `"int currency"` | affix composite editor | `"$1234"` / `"$ 1234"` | `NumberAffix(CURRENCY, affix, space, int)` |
+| `INTEGER_UNITS` | `"int units"` | affix composite editor | `"1234kg"` / `"1234 kg"` | `NumberAffix(UNITS, affix, space, int)` |
+| `FLOAT_CURRENCY` | `"float currency"` | affix composite editor | `"$3.5"` / `"$ 3.5"` | `NumberAffix(CURRENCY, affix, space, mpq)` |
+| `FLOAT_UNITS` | `"float units"` | affix composite editor | `"3.14rad"` / `"3.14 rad"` | `NumberAffix(UNITS, affix, space, mpq)` |
 | `BOOLEAN`      | `"boolean"`     | `QComboBox` (true/false)     | `"true"` / `"false"`                     | bool → str produces lowercase `"true"`/`"false"`                 |
 | `STRING`       | `"string"`      | `_CapsLockSafeLineEdit`      | elide at 80 chars                        | ASCII single-line                                                |
 | `UNICODE`      | `"utf-8 line"`  | `_CapsLockSafeLineEdit`      | elide at 80 chars                        | non-ASCII single-line                                            |
 | `MULTILINE`    | `"multiline"`   | `QMultilineDialog` (modal)   | `"line1 \| line2 \| ..."` joined preview | ASCII, has `\n` and (>1 newline OR >80 chars)                    |
 | `TEXT`         | `"utf-8 text"`  | `QMultilineDialog` (modal)   | joined preview                           | non-ASCII multiline                                              |
+| `SECRET_LINE`  | `"secret_line"` | masked `QLineEdit` + Show/Hide | always `••••••••`                      | name-prefix promotion; sticky; newline upgrades to `SECRET_TEXT` |
+| `SECRET_TEXT`  | `"secret_text"` | masked multiline editor + Show/Hide | always `••••••••`                 | name-prefix promotion; sticky; remains secret even single-line   |
 | `DATE`         | `"date"`        | `BetterDateTimeEditor`       | ISO date string                          | "now" placeholder if unparseable                                 |
 | `TIME`         | `"time"`        | `BetterDateTimeEditor`       | ISO time string                          | "now" placeholder                                                |
 | `DATETIME`     | `"datetime"`    | `BetterDateTimeEditor`       | ISO no-tz                                | int sec/ms parsing supported; "now" fallback                     |
 | `DATETIMEZONE` | `"dt+timezone"` | `BetterDateTimeEditor`       | ISO with offset                          | "now" fallback in local tz                                       |
+| `DATETIMEUTC`  | `"datetime utc"`| `BetterDateTimeEditor` (UTC) | ISO with trailing `Z`                    | `convert_datetime` performs real tz-shift from `DATETIMEZONE`; `+00:00` stays as `DATETIMEZONE` |
 | `BYTES`        | `"bytes"`       | `QHexDialog` (modal)         | `"<24 byte>"` via `units.format_bytes`   | base64 wire format; encode-on-switch from string/int             |
 | `ZLIB`         | `"zlib"`        | `QHexDialog` (modal)         | `"<…>"`                                  | base64+zlib; cross-format re-encode lossless when `old_type` known |
 | `GZIP`         | `"gzip"`        | `QHexDialog` (modal)         | `"<…>"`                                  | base64+gzip                                                      |
@@ -298,11 +385,39 @@ display in `delegates/value_formatting.py`; coercion in
 `delegates/color_codec.py::parse_color` / `color_to_html` round-trip
 the cell value via `QColor`.
 
+**Pseudo text family** (`PSEUDO_TEXT_FAMILY = EMPTY_FAMILY | WS_FAMILY`,
+purely derived — excluded from `USER_SELECTABLE_TYPES`):
+empty strings surface as `EMPTY_STRING` / `EMPTY_MULTILINE`;
+whitespace-only strings (ASCII + Unicode separators) map to
+`WS_STRING` / `WS_UNICODE` / `WS_MULTILINE` / `WS_TEXT` along the
+ascii × multiline axes. They render with a visible chip but edit
+exactly like the canonical parent (`PSEUDO_TEXT_PARENT[t]`).
+`text_pseudotype_for(current_type, s)` keeps the shape when an
+existing text field's value turns empty/whitespace.
+
+**Number-affix family** (`AffixKind.CURRENCY` = prefix,
+`AffixKind.UNITS` = suffix; strict XOR — never both). Stored as
+`units.number_affix.NumberAffix(kind, affix, space, number)`;
+`parse_number_affix` / `format_number_affix` are the only canonical
+codecs. Per-tab `state.affix_mru.AffixMRU` feeds the editor combo's
+suggestions (capped by `settings.NUMBER_AFFIX_MRU_SIZE`); affix length
+capped by `settings.NUMBER_AFFIX_MAX_LEN`.
+
 Inference (`parse_json_type`):
 - floats / mpq in `[0, 1]` → `PERCENT`; else → `FLOAT`.
-- strings: multiline→`MULTILINE`/`TEXT`; else datetime parse first
-  (`DATETIME`/`DATETIMEZONE`/`TIME`/`DATE`); else strict base64 →
+- strings: empty / whitespace → pseudo-text (`EMPTY_*` / `WS_*`);
+  else multiline→`MULTILINE`/`TEXT`; else color hex; else datetime
+  parse (`DATETIME` / `DATETIMEUTC` (trailing `Z`) /
+  `DATETIMEZONE` / `TIME` / `DATE`); else number-affix
+  (`{INTEGER,FLOAT}_{CURRENCY,UNITS}`) via
+  `units.number_affix.parse_number_affix`; else strict base64 →
   `ZLIB`/`GZIP`/`BYTES`; else `STRING`/`UNICODE`.
+- secret detection is model-side (not parser-side): field-name word-prefix
+  match (default from `settings.SECRET_WORD_PREFIXES`, runtime override in
+  `state/secret_settings.py` via **File ▸ Secret word prefixes...**) promotes
+  text fields to `SECRET_LINE` / `SECRET_TEXT`.
+- persistence caveat: secret kinds are dumped as plain strings; reload
+  restores secret kinds only when name-prefix heuristics match.
 - `parse_json_type` is **total**: returns `STRING` + logger warning
   for unknown types.
 - `JsonTreeItem.explicit_type` pins user choices so re-inference cannot
@@ -365,7 +480,9 @@ tree itself).
 - **File**: New, Open, *Recent* (submenu, ≤ 8, runtime), Save, Save As,
   *Edit Warning Limits* (submenu — string chars / multiline chars /
   bytes / attach-file bytes; current value shown in each label,
-  `QInputDialog` prompts for the new int), Exit.
+  `QInputDialog` prompts for the new int),
+  **Secret word prefixes…** (opens `SecretPrefixesDialog`; persists
+  via `state.secret_settings`), Exit.
 - **Actions**: Insert Row (before), Insert Row after, Remove Row.
   `aboutToShow` triggers `update_actions`.
 - **Schemas** (runtime via `app/main_window.py::_setup_schemas_menu`):
@@ -948,8 +1065,8 @@ path.
 
 ## 16) Tests
 
-`tests/` collects **922 tests** as of 2026-05-17 (post-`improve-ux`).
-offscreen-only failing ones are —
+`tests/` collects **1023 tests** as of 2026-05-23 (post `new-kinds`
+branch). offscreen-only failing ones are —
 `test_app_color_scheme.py::test_light_theme_sets_light_color_scheme`,
 `test_app_color_scheme.py::test_dark_theme_sets_dark_color_scheme`,
 `test_theme_switching.py::test_color_scheme_follows_selected_theme` —
@@ -998,6 +1115,18 @@ green on real platforms.
   single hit row.
 
 Notable suites:
+- **Advanced type/editor suites:**
+  - UTC datetime: `test_convert_datetime`, datetime suite extensions
+    (`test_datetime_editor`, `test_better_datetime_buffer`,
+    `test_validator`).
+  - Number affixes: `test_number_affix`, `test_number_affix_delegate`,
+    `test_number_affix_formatting`, `test_io_number_affix`,
+    `test_affix_mru`; kind-switch arms in
+    `test_kind_switch_coercion` / `test_type_editing`.
+  - Secret strings: `test_secret_types`, `test_secret_names`,
+    `test_secret_promotion`, `test_secret_editors`,
+    `test_secret_mask_formatting`, `test_secret_prefix_settings`,
+    `test_settings_secret`, `test_io_secret`.
 - Phase-3 coercion: `test_kind_switch_coercion.py` (bool→str
   lowercase, "now" temporal fallback, int sec/ms ↔ datetime,
   bytes encode-on-switch, array↔object morph).
@@ -1058,7 +1187,8 @@ mainwindow.py`. No `make test` / `themes-check` target.
 2. `documents/tab.py` (push API, dirty state, zoom) +
    `documents/tab_setup.py` (delegate + shortcut wiring)
 3. `tree/types.py` → `tree/model.py` + `tree/model_roles.py` →
-   `tree/item.py` → `tree/item_coercion.py` + `tree/stubs.py`
+   `tree/item.py` → `tree/item_coercion.py` + `tree/stubs.py` +
+   `tree/types_datetime.py`
 4. `delegates/value.py` + `delegates/value_formatting.py` →
    `delegates/type_delegate.py` + `delegates/name_delegate.py`
 5. `undo/commands.py` + `undo/diff.py`

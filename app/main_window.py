@@ -29,6 +29,7 @@ from app.schema_tab_pool import SchemaTabPool
 from app.theme_controller import ThemeController
 from app.validation_dock import ValidationDock
 from dialogs.attach_schema_dlg import AttachSchemaDialog
+from dialogs.secret_prefixes_dlg import SecretPrefixesDialog
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
@@ -44,6 +45,7 @@ from state.edit_limits import (
     set_string_edit_warning_limit_chars,
 )
 from state.recent_schemas import recent_schemas
+from state.secret_settings import get_secret_word_prefixes, set_secret_word_prefixes
 from tree_actions.clipboard import copy_selection
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
 from tree_actions.structure import collapse_all, delete_selection, expand_all
@@ -107,6 +109,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
+        self._setup_secret_prefixes_action()
         self._setup_edit_limits_menu()
         refresh_recent_menu(self)
         self._setup_schemas_menu()
@@ -435,6 +438,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.fileMenu.insertMenu(self.appExitAction, self._limits_menu)
         self.fileMenu.insertSeparator(self.appExitAction)
+
+    def _setup_secret_prefixes_action(self) -> None:
+        self._secret_prefixes_action = QAction(self.tr("Secret word prefixes..."), self)
+        self._secret_prefixes_action.triggered.connect(self._edit_secret_prefixes)
+        self.fileMenu.insertAction(self.appExitAction, self._secret_prefixes_action)
+
+    def _edit_secret_prefixes(self) -> None:
+        dlg = SecretPrefixesDialog(get_secret_word_prefixes(), self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        prefixes = set_secret_word_prefixes(dlg.prefixes())
+        self.statusBar.showMessage(self.tr("Updated {n} secret prefixes").format(n=len(prefixes)), 2000)
 
     def _refresh_edit_limits_menu_entries(self) -> None:
         string_limit = get_string_edit_warning_limit_chars()

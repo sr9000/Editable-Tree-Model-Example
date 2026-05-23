@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor
 
 from themes._defaults import DARK_DEFAULT, LIGHT_DEFAULT
 from themes.spec import Palette, ThemeSpec, TypeStyle, ValidationStyle
-from tree.types import JsonType
+from tree.types import PSEUDO_TEXT_PARENT, JsonType
 
 LOGGER = logging.getLogger(__name__)
 
@@ -18,14 +18,27 @@ _TYPE_KEYS: dict[str, JsonType] = {
     "integer": JsonType.INTEGER,
     "float": JsonType.FLOAT,
     "percent": JsonType.PERCENT,
+    "int_currency": JsonType.INTEGER_CURRENCY,
+    "int_units": JsonType.INTEGER_UNITS,
+    "float_currency": JsonType.FLOAT_CURRENCY,
+    "float_units": JsonType.FLOAT_UNITS,
     "boolean": JsonType.BOOLEAN,
     "string": JsonType.STRING,
     "unicode": JsonType.UNICODE,
     "multiline": JsonType.MULTILINE,
     "text": JsonType.TEXT,
+    "secret_line": JsonType.SECRET_LINE,
+    "secret_text": JsonType.SECRET_TEXT,
+    "empty_string": JsonType.EMPTY_STRING,
+    "empty_multiline": JsonType.EMPTY_MULTILINE,
+    "ws_string": JsonType.WS_STRING,
+    "ws_unicode": JsonType.WS_UNICODE,
+    "ws_multiline": JsonType.WS_MULTILINE,
+    "ws_text": JsonType.WS_TEXT,
     "date": JsonType.DATE,
     "time": JsonType.TIME,
     "datetime": JsonType.DATETIME,
+    "datetimeutc": JsonType.DATETIMEUTC,
     "datetimezone": JsonType.DATETIMEZONE,
     "bytes": JsonType.BYTES,
     "zlib": JsonType.ZLIB,
@@ -118,6 +131,11 @@ def _merge_palette(palette_data: dict[str, Any], base: Palette) -> Palette:
             if "accent" in palette_data
             else QColor(base.accent)
         ),
+        affix_text=(
+            _parse_color(palette_data["affix_text"], key="palette.affix_text")
+            if "affix_text" in palette_data
+            else _copy_color(base.affix_text)
+        ),
         validation=_merge_validation_style(val_data, base.validation),
     )
 
@@ -142,6 +160,27 @@ def _merge_style(style_data: dict[str, Any], base: TypeStyle, *, key_prefix: str
         icon = base.icon
 
     return TypeStyle(fg=fg, bg=bg, bold=bold, italic=italic, icon=icon)
+
+
+def _propagate_pseudo_styles(merged: dict[JsonType, TypeStyle]) -> None:
+    """Re-sync every pseudo text type with its fully-merged parent style.
+
+    This must run *after* the icon-map application so that icon keys set via
+    ``icons.map.string`` propagate to ``EMPTY_STRING``, ``WS_STRING``, etc.
+    It also fixes the case where a YAML theme overrides a parent's fg/bg/bold/
+    italic — those changes would otherwise remain invisible on the pseudos,
+    because ``_merge_types`` seeds pseudos from the base-default snapshot, not
+    from the just-merged parent.
+    """
+    for pseudo, parent in PSEUDO_TEXT_PARENT.items():
+        p = merged[parent]
+        merged[pseudo] = TypeStyle(
+            fg=_copy_color(p.fg),
+            bg=_copy_color(p.bg),
+            bold=p.bold,
+            italic=p.italic,
+            icon=p.icon,
+        )
 
 
 def _merge_types(types_data: dict[str, Any], base: ThemeSpec) -> dict[JsonType, TypeStyle]:
@@ -242,6 +281,10 @@ def parse_theme_mapping(data: dict, *, mode_default: ThemeSpec, base_dir: Path |
                 italic=style.italic,
                 icon=icon_key,
             )
+
+    # Re-sync pseudo text types (EMPTY_*, WS_*) from their now-fully-resolved
+    # parent styles, covering both icon keys and any YAML color overrides.
+    _propagate_pseudo_styles(merged_types)
 
     return ThemeSpec(
         name=name,

@@ -25,6 +25,7 @@ from delegates.bytes_codec import decode_bytes, encode_bytes
 from tree.item_coercion import coerce_value_for_type
 from tree.model import JsonTreeModel
 from tree.types import JsonType
+from units.number_affix import AffixKind, NumberAffix, format_number_affix
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -241,6 +242,7 @@ def _temporal_category(json_type: JsonType) -> DateTimeCategory:
         JsonType.TIME: DateTimeCategory.Time,
         JsonType.DATETIME: DateTimeCategory.DateTime,
         JsonType.DATETIMEZONE: DateTimeCategory.DateTimeWithTZ,
+        JsonType.DATETIMEUTC: DateTimeCategory.DateTimeUTC,
     }
     return mapping[json_type]
 
@@ -267,6 +269,9 @@ def _temporal_epoch_seconds(temporal_type: JsonType) -> mpq:
         case JsonType.DATETIMEZONE:
             dt = datetime.datetime(2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone(datetime.timedelta(hours=1)))
             return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
+        case JsonType.DATETIMEUTC:
+            dt = datetime.datetime(2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone.utc)
+            return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
     raise AssertionError(f"unsupported temporal type: {temporal_type}")
 
 
@@ -281,6 +286,10 @@ def _temporal_text_and_object(temporal_type: JsonType):
         case JsonType.DATETIMEZONE:
             return "2024-01-02T03:04:05.5+01:00", datetime.datetime(
                 2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone(datetime.timedelta(hours=1))
+            )
+        case JsonType.DATETIMEUTC:
+            return "2024-01-02T03:04:05.5Z", datetime.datetime(
+                2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone.utc
             )
     raise AssertionError(f"unsupported temporal type: {temporal_type}")
 
@@ -299,8 +308,8 @@ _FALLBACK_INTS = {42, 1337, 65535, 8086, 420, 9001, 73, 777, 299792458}
 @pytest.mark.parametrize("number_type", [JsonType.INTEGER, JsonType.FLOAT], ids=["integer", "float"])
 @pytest.mark.parametrize(
     "temporal_type",
-    [JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE],
-    ids=["date", "time", "datetime", "dtz"],
+    [JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE, JsonType.DATETIMEUTC],
+    ids=["date", "time", "datetime", "dtz", "dtutc"],
 )
 @pytest.mark.parametrize(
     "case_kind",
@@ -395,6 +404,11 @@ def test_string_number_matrix(number_type: JsonType, case_kind: str):
             JsonType.DATETIMEZONE,
             "2024-01-02T03:04:05+01:00",
             datetime.datetime(2024, 1, 2, 3, 4, 5, tzinfo=datetime.timezone(datetime.timedelta(hours=1))),
+        ),
+        (
+            JsonType.DATETIMEUTC,
+            "2024-01-02T03:04:05Z",
+            datetime.datetime(2024, 1, 2, 3, 4, 5, tzinfo=datetime.timezone.utc),
         ),
     ],
 )
@@ -574,6 +588,81 @@ def test_int_via_float_string_truncates():
     """'3.14' is not a valid int literal but is a sensible float we can truncate."""
     result = _coerce(JsonType.INTEGER, "3.14")
     assert result == 3
+
+
+def test_float_affix_to_integer_truncates_fractional_part():
+    value = NumberAffix(AffixKind.CURRENCY, "$", False, mpq("7/2"))
+    result = _coerce(JsonType.INTEGER, value)
+    assert result == 3
+
+
+def test_float_affix_to_integer_affix_truncates_fractional_part():
+    value = NumberAffix(AffixKind.UNITS, "kg", True, mpq("7/2"))
+    result = _coerce(JsonType.INTEGER_UNITS, value)
+    assert result == NumberAffix(AffixKind.UNITS, "kg", True, 3)
+
+
+def test_affix_to_string_uses_formatted_text():
+    value = NumberAffix(AffixKind.CURRENCY, "$", True, mpq("7/2"))
+    ok, result = coerce_value_for_type(JsonType.STRING, value, strict=False, old_type=JsonType.FLOAT_CURRENCY)
+    assert ok
+    assert result == format_number_affix(value)
+
+
+def test_number_to_affix_type_uses_mru_default_affix(qtbot):
+    from documents.tab import JsonTab
+
+    tab = JsonTab(
+        lambda *_: None,
+        data={
+            "known": NumberAffix(AffixKind.CURRENCY, "$", False, 10),
+            "plain": 5,
+        },
+    )
+    qtbot.addWidget(tab)
+
+    type_idx = tab.model.index(1, 1, QModelIndex())
+    assert tab.push_change_type(type_idx, JsonType.INTEGER_CURRENCY)
+
+    item = tab.model.get_item(tab.model.index(1, 0, QModelIndex()))
+    assert isinstance(item.value, NumberAffix)
+    assert item.value.affix == "$"
+
+
+def test_affix_to_string_to_affix_undo_redo_round_trip(qtbot):
+    from documents.tab import JsonTab
+
+    original = NumberAffix(AffixKind.CURRENCY, "$", False, 10)
+    tab = JsonTab(lambda *_: None, data={"v": original})
+    qtbot.addWidget(tab)
+
+    type_idx = tab.model.index(0, 1, QModelIndex())
+
+    assert tab.push_change_type(type_idx, JsonType.STRING)
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.STRING
+    assert item.value == "$10"
+
+    assert tab.push_change_type(type_idx, JsonType.INTEGER_UNITS)
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.INTEGER_UNITS
+    assert item.value == NumberAffix(AffixKind.UNITS, "$", False, 10)
+
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.STRING
+    assert item.value == "$10"
+
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.INTEGER_CURRENCY
+    assert item.value == original
+
+    tab.undo_stack.redo()
+    tab.undo_stack.redo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.json_type is JsonType.INTEGER_UNITS
+    assert item.value == NumberAffix(AffixKind.UNITS, "$", False, 10)
 
 
 def test_bytes_to_integer_returns_decoded_length():

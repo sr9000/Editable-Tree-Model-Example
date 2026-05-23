@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 from themes import LIGHT_DEFAULT, parse_theme_mapping
 from themes.icon_provider import FileIconProvider, StubIconProvider
+from themes.registry import ThemeRegistry
 from tree.types import JsonType
 
 

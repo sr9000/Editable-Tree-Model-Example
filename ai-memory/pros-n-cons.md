@@ -1,18 +1,27 @@
 # JSON Editor — Pros & Cons
 
-_Last analysis: **2026-05-17** (after merge of PR #9 `improve-ux`,
-`HEAD = ca2b174` on `master`). All previous plans are merged:
-drag-and-drop Steps 1–10, jsonschema Step 7, and the full
-`schema-registry` plan (Steps 1–7). PR #9 added window-geometry
-persistence (normal / maximized / fullscreen), main-window file drop,
-a base64-cell "Attach from file…" / "Save as…" context menu, a
-configurable **Edit Warning Limits** submenu, size-aware confirmation
-dialogs before editing large strings / multiline / binary blobs,
-short K/M/B counts via `units.counts()`, and removal of the
-validation `severity` field (all flagged cells are now plain
-"error"s)._
+_Last analysis: **2026-05-23** (branch `new-kinds`, ~52 commits ahead
+of `master`). On top of everything that landed on `master` (drag-and-
+drop Steps 1–10, jsonschema Step 7, schema-registry, PR #9
+`improve-ux`), this branch ships three feature plans
+(`plans/01-utc-datetime.md`, `plans/02-number-affix.md`,
+`plans/03-secret-strings.md`):_
 
-_Test surface: **922 collected**. The 3 known offscreen failures are
+- **UTC datetime** — `JsonType.DATETIMEUTC` with `Z` suffix, full
+  conversion lattice (`tree/types_datetime.py::convert_datetime`,
+  real tz-shift on `DATETIMEZONE → DATETIMEUTC`).
+- **Number affixes** — four new structured-number kinds
+  (`INTEGER_CURRENCY`, `INTEGER_UNITS`, `FLOAT_CURRENCY`,
+  `FLOAT_UNITS`), composite editor, per-tab MRU, round-trip in I/O.
+- **Secret strings** — `SECRET_LINE` / `SECRET_TEXT`, name-prefix
+  promotion (configurable via **File ▸ Secret word prefixes…**),
+  sticky semantics, masked rendering with fixed glyph count,
+  reveal-toggle editors with focus-out auto-hide.
+- **Pseudo text family** — `EMPTY_*` / `WS_*` derived chips for empty
+  and whitespace-only strings; excluded from `USER_SELECTABLE_TYPES`;
+  map back to canonical parents via `PSEUDO_TEXT_PARENT`.
+
+_Test surface: **1023 collected**. The 3 known offscreen failures are
 platform-specific (Qt offscreen ignores `QStyleHints.setColorScheme`);
 they pass on real platforms._
 
@@ -43,8 +52,14 @@ See `repo-map.md` for the full module breakdown.
   the inferred type is a first-class, editable concept.
 - **Rich `JsonType` enum** — INTEGER, FLOAT, PERCENT, BOOLEAN,
   STRING, UNICODE, MULTILINE, TEXT, DATE, TIME, DATETIME,
-  DATETIMEZONE, BYTES, ZLIB, GZIP, OBJECT, ARRAY, NULL. The editor
-  is a *structured-data* editor, not just JSON.
+  DATETIMEZONE, **DATETIMEUTC**, BYTES, ZLIB, GZIP, OBJECT, ARRAY,
+  NULL — plus the four **number-affix** kinds
+  (`INTEGER_CURRENCY` / `INTEGER_UNITS` / `FLOAT_CURRENCY` /
+  `FLOAT_UNITS`), the two **secret** kinds (`SECRET_LINE` /
+  `SECRET_TEXT`), the two **color** kinds (`COLOR_RGB` /
+  `COLOR_RGBA`), and the derived **pseudo-text** family
+  (`EMPTY_*` / `WS_*`). The editor is a *structured-data* editor,
+  not just JSON.
 - **Total, conservative type detection** — `parse_json_type` returns
   STRING with a logger warning for unknown types; short ambiguous
   strings stay STRING; datetime is checked before bytes; PERCENT is
@@ -66,6 +81,47 @@ See `repo-map.md` for the full module breakdown.
 - **History dialog** — `QUndoView` bound to the active tab's stack.
 
 ### UX / functional features
+- **UTC datetime** (`new-kinds` plan 01) — first-class
+  `JsonType.DATETIMEUTC` (`"datetime utc"`) serialised with trailing
+  `Z`; full date/time conversion lattice in
+  `tree/types_datetime.py::convert_datetime`, including a **real
+  tz-shift** when switching `DATETIMEZONE → DATETIMEUTC`
+  (local-with-offset normalised to the UTC instant). `+00:00` stays
+  as `DATETIMEZONE` so the user's chosen rendering is preserved.
+  Editor support in `datetime_editor/{enums,regex,validator,
+  better_dt_editor}.py`.
+- **Number affixes** (`new-kinds` plan 02) — four structured-number
+  kinds with strict prefix-XOR-suffix semantics. Cell value is a
+  frozen `units.number_affix.NumberAffix(kind, affix, space, number)`
+  with `number: int | mpq`. Composite editor in
+  `delegates/number_affix_delegate.py` packs a combo (with optional
+  space-toggle button on the inner edge) and a spin box; per-tab
+  `state.affix_mru.AffixMRU` feeds the combo's recent affixes.
+  Round-trip through JSON / YAML / JSONL / YAML-multi via
+  `io_formats/{dump,load}.py` — only strings whose
+  `parse_json_type` agrees are promoted back to `NumberAffix`.
+- **Secret strings** (`new-kinds` plan 03) — `SECRET_LINE` /
+  `SECRET_TEXT` kinds, **never** auto-classified as any non-secret
+  kind. Promotion is name-driven via
+  `validation.secret_names.name_looks_secret` (word-prefix matching
+  on `_`, `-`, `.`, space, and camelCase boundaries; default
+  prefixes `passw, auth, token, key, secret, private, cert`),
+  configurable at runtime through `state.secret_settings` +
+  `dialogs/secret_prefixes_dlg.py` (**File ▸ Secret word
+  prefixes…**). Sticky once promoted — renaming the field does not
+  demote. Rendering uses a fixed glyph count (`settings.SECRET_MASK_GLYPHS`),
+  so length never leaks. Editors mask by default with an eye-icon
+  reveal toggle and auto-hide on focus-out / tab-switch
+  (`qmultiline_editor.py` sensitive mode). Persisted as plain
+  strings; reload re-promotes via the name heuristic.
+- **Pseudo text family** — derived `EMPTY_STRING`,
+  `EMPTY_MULTILINE`, `WS_STRING`, `WS_UNICODE`, `WS_MULTILINE`,
+  `WS_TEXT` types surface empty / whitespace-only string values as
+  visible type chips without changing their editable behaviour.
+  Excluded from `USER_SELECTABLE_TYPES`; mapped back to the
+  canonical parent via `PSEUDO_TEXT_PARENT` / `canonical_text_type`.
+
+### Existing UX / functional features
 - **Multi-format file I/O** — JSON, JSONL/NDJSON, YAML, YAML
   multi-document; atomic writes via `os.replace`; `mpq2py` round-trip
   preserves exact rationals across all formats.
@@ -232,7 +288,7 @@ See `repo-map.md` for the full module breakdown.
 - **Synthetic root row** — `JsonTreeModel.show_root` lets the user
   edit the root container without breaking legacy fixtures
   (`show_root=False`).
-- **Substantial test coverage** — 922 tests collected; the new Phase 1–5
+- **Substantial test coverage** — 1023 tests collected; the new Phase 1–5
   surfaces are covered by `test_kind_switch_coercion.py`,
   `test_container_preview.py`, `test_app_color_scheme.py`, the
   existing 50-test theming surface, and the Phase-5 broader UX
@@ -274,6 +330,18 @@ See `repo-map.md` for the full module breakdown.
   `QStyleHints.setColorScheme` and reports `Qt.ColorScheme.Unknown`.
   These tests should either skip on the offscreen platform or
   monkey-patch `setColorScheme`. Code is correct on real platforms.
+
+### Secret strings follow-ups (v2 — open)
+- **No schema-sidecar metadata** for fields whose name does not
+  match the secret-prefix heuristic, so a secret survives reload
+  only if the name still matches.
+- **No clipboard scrubbing** for revealed secret values — copy
+  operations leave the cleartext on the system clipboard
+  indefinitely.
+- **No manual override surface** for secret kinds (type delegate
+  entry or context-menu action); promotion is heuristic-driven.
+- **No cell-level reveal** with global timer — reveal currently
+  lives inside the editor only.
 
 ### Schema validation follow-ups
 - **URL schema staleness** — URL-backed schema `reload()` always

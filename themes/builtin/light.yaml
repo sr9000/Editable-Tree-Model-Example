@@ -6,6 +6,7 @@ palette:
   selection_fg: '#fdf6e3'
   selection_bg: '#268bd2'
   accent: '#b58900'
+  affix_text: '#7f8c8d'
   validation:
     error_fg: '#d13438'
     warning_fg: '#bf6900'
@@ -17,6 +18,18 @@ types:
   float:
     fg: '#1f8f89'
   percent:
+    fg: '#1f8f89'
+    italic: true
+  int_currency:
+    fg: '#268bd2'
+    italic: true
+  int_units:
+    fg: '#268bd2'
+    italic: true
+  float_currency:
+    fg: '#1f8f89'
+    italic: true
+  float_units:
     fg: '#1f8f89'
     italic: true
   boolean:
@@ -31,11 +44,18 @@ types:
   text:
     fg: '#6f8100'
     italic: true
+  secret_line:
+    fg: '#cb4b16'
+  secret_text:
+    fg: '#cb4b16'
+    italic: true
   date:
     fg: '#946f00'
   time:
     fg: '#946f00'
   datetime:
+    fg: '#946f00'
+  datetimeutc:
     fg: '#946f00'
   datetimezone:
     fg: '#946f00'
@@ -68,14 +88,21 @@ icons:
     integer: hashtag_line
     float: asterisk_2_line
     percent: percentage_line
+    int_currency: bank_line
+    int_units: ruler_line
+    float_currency: bank_line
+    float_units: ruler_line
     boolean: choice_line
     string: font_line
     unicode: text_2_line
     multiline: font_size_line
     text: translate_2_line
+    secret_line: lock_line
+    secret_text: certificate_2_line
     date: calendar_2_line
     time: hours_line
     datetime: calendar_time_add_line
+    datetimeutc: globe_fill
     datetimezone: calendar_add_line
     bytes: attachment_line
     zlib: file_zip_line

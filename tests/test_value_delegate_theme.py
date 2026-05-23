@@ -12,6 +12,7 @@ from documents.tab import JsonTab
 from themes import DARK_DEFAULT, LIGHT_DEFAULT, parse_theme_mapping
 from tree.model import JsonTreeModel
 from tree.types import JsonType
+from units.number_affix import AffixKind, NumberAffix
 
 
 def _color_hex(color) -> str:
@@ -29,21 +30,49 @@ def qapp():
 def _index_for_type(json_type: JsonType):
     model = JsonTreeModel({"v": None})
     type_index = model.index(0, 1, QModelIndex())
-    assert model.setData(type_index, json_type, Qt.ItemDataRole.EditRole)
     value_index = model.index(0, 2, QModelIndex())
+
+    # Pseudo text types (EMPTY_*, WS_*) are purely content-derived and not
+    # user-selectable via the type combobox. To put an item into one of those
+    # states we seed the value with content that text_pseudotype_for collapses
+    # to the desired pseudo while the item is already in its parent shape.
+    pseudo_seeds: dict[JsonType, tuple[JsonType, str]] = {
+        JsonType.EMPTY_STRING: (JsonType.STRING, ""),
+        JsonType.EMPTY_MULTILINE: (JsonType.MULTILINE, ""),
+        JsonType.WS_STRING: (JsonType.STRING, "   "),
+        JsonType.WS_UNICODE: (JsonType.STRING, " \u00a0 "),
+        JsonType.WS_MULTILINE: (JsonType.MULTILINE, "  \n  "),
+        JsonType.WS_TEXT: (JsonType.MULTILINE, " \u00a0\n\u3000 "),
+    }
+    if json_type in pseudo_seeds:
+        parent, seed = pseudo_seeds[json_type]
+        assert model.setData(type_index, parent, Qt.ItemDataRole.EditRole)
+        assert model.setData(value_index, seed, Qt.ItemDataRole.EditRole)
+        item = model.get_item(model.index(0, 0, QModelIndex()))
+        assert item.json_type is json_type, f"Expected {json_type}, got {item.json_type}"
+        return model, value_index
+
+    assert model.setData(type_index, json_type, Qt.ItemDataRole.EditRole)
 
     sample_values = {
         JsonType.INTEGER: 1,
         JsonType.FLOAT: mpq("3/2"),
         JsonType.PERCENT: mpq("1/2"),
+        JsonType.INTEGER_CURRENCY: NumberAffix(AffixKind.CURRENCY, "$", False, 12),
+        JsonType.INTEGER_UNITS: NumberAffix(AffixKind.UNITS, "kg", True, 12),
+        JsonType.FLOAT_CURRENCY: NumberAffix(AffixKind.CURRENCY, "$", True, mpq("3/2")),
+        JsonType.FLOAT_UNITS: NumberAffix(AffixKind.UNITS, "rad", False, mpq("3/2")),
         JsonType.BOOLEAN: True,
         JsonType.STRING: "ascii",
         JsonType.UNICODE: "caf\u00e9",
         JsonType.MULTILINE: "line 1\nline 2",
         JsonType.TEXT: "line 1\n\u03a9",
+        JsonType.SECRET_LINE: "plainsecret",
+        JsonType.SECRET_TEXT: "line 1\nline 2",
         JsonType.DATE: "2024-06-01",
         JsonType.TIME: "12:34:56",
         JsonType.DATETIME: "2024-06-01 12:34:56",
+        JsonType.DATETIMEUTC: "2024-06-01T12:34:56Z",
         JsonType.DATETIMEZONE: "2024-06-01T12:34:56+00:00",
         JsonType.BYTES: "dGVzdA==",
         JsonType.ZLIB: encode_bytes(b"test", JsonType.ZLIB),
