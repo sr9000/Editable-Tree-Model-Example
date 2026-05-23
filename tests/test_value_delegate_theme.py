@@ -30,8 +30,29 @@ def qapp():
 def _index_for_type(json_type: JsonType):
     model = JsonTreeModel({"v": None})
     type_index = model.index(0, 1, QModelIndex())
-    assert model.setData(type_index, json_type, Qt.ItemDataRole.EditRole)
     value_index = model.index(0, 2, QModelIndex())
+
+    # Pseudo text types (EMPTY_*, WS_*) are purely content-derived and not
+    # user-selectable via the type combobox. To put an item into one of those
+    # states we seed the value with content that text_pseudotype_for collapses
+    # to the desired pseudo while the item is already in its parent shape.
+    pseudo_seeds: dict[JsonType, tuple[JsonType, str]] = {
+        JsonType.EMPTY_STRING: (JsonType.STRING, ""),
+        JsonType.EMPTY_MULTILINE: (JsonType.MULTILINE, ""),
+        JsonType.WS_STRING: (JsonType.STRING, "   "),
+        JsonType.WS_UNICODE: (JsonType.STRING, " \u00a0 "),
+        JsonType.WS_MULTILINE: (JsonType.MULTILINE, "  \n  "),
+        JsonType.WS_TEXT: (JsonType.MULTILINE, " \u00a0\n\u3000 "),
+    }
+    if json_type in pseudo_seeds:
+        parent, seed = pseudo_seeds[json_type]
+        assert model.setData(type_index, parent, Qt.ItemDataRole.EditRole)
+        assert model.setData(value_index, seed, Qt.ItemDataRole.EditRole)
+        item = model.get_item(model.index(0, 0, QModelIndex()))
+        assert item.json_type is json_type, f"Expected {json_type}, got {item.json_type}"
+        return model, value_index
+
+    assert model.setData(type_index, json_type, Qt.ItemDataRole.EditRole)
 
     sample_values = {
         JsonType.INTEGER: 1,

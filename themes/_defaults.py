@@ -6,7 +6,7 @@ from typing import Literal
 from PySide6.QtGui import QColor
 
 from themes.spec import Palette, ThemeSpec, TypeStyle, ValidationStyle
-from tree.types import JsonType
+from tree.types import PSEUDO_TEXT_PARENT, JsonType
 
 
 def _c(value: str) -> QColor:
@@ -14,6 +14,27 @@ def _c(value: str) -> QColor:
     if not color.isValid():
         raise ValueError(f"Invalid default color: {value}")
     return color
+
+
+def _inherit_pseudo_text_styles(styles: dict[JsonType, TypeStyle]) -> dict[JsonType, TypeStyle]:
+    """Backfill each pseudo text type with a *copy* of its canonical parent's style.
+
+    Each pseudo (EMPTY_*, WS_*) reuses its parent's fg/bg/bold/italic/icon so
+    themes do not need to declare anything extra. A copy is used (not the
+    same object) to leave the door open for theme overrides per pseudo later.
+    """
+    for pseudo, parent in PSEUDO_TEXT_PARENT.items():
+        if pseudo in styles:
+            continue
+        base = styles[parent]
+        styles[pseudo] = TypeStyle(
+            fg=QColor(base.fg) if base.fg is not None else None,
+            bg=QColor(base.bg) if base.bg is not None else None,
+            bold=base.bold,
+            italic=base.italic,
+            icon=base.icon,
+        )
+    return styles
 
 
 def _theme(
@@ -90,6 +111,10 @@ _DARK_TYPES: dict[JsonType, TypeStyle] = {
     JsonType.OBJECT: TypeStyle(fg=_c("#7dcfff"), bold=True),
     JsonType.ARRAY: TypeStyle(fg=_c("#7dcfff"), bold=True),
 }
+
+
+_inherit_pseudo_text_styles(_LIGHT_TYPES)
+_inherit_pseudo_text_styles(_DARK_TYPES)
 
 
 LIGHT_DEFAULT = _theme(

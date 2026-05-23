@@ -8,7 +8,7 @@ from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
-from tree.types import JsonType
+from tree.types import USER_SELECTABLE_TYPES, canonical_text_type
 
 
 class JsonTypeDelegate(QStyledItemDelegate):
@@ -123,7 +123,7 @@ class JsonTypeDelegate(QStyledItemDelegate):
                 icon_size = host_size
         editor.setIconSize(icon_size)
         editor.view().setIconSize(icon_size)
-        for tp in JsonType:
+        for tp in USER_SELECTABLE_TYPES:
             editor.addItem(self._icon_provider.for_type(tp), tp.value, tp)
         self._set_active_type_edit_index(self._source_index(index))
         return editor
@@ -139,7 +139,10 @@ class JsonTypeDelegate(QStyledItemDelegate):
     def setEditorData(self, editor: QComboBox, index: QModelIndex):
         source_index = self._source_index(index)
         item: JsonTreeItem = source_index.internalPointer()
-        idx = editor.findData(item.json_type)
+        # Pseudo text types (EMPTY_*, WS_*) collapse to their canonical parent
+        # in the combobox so the user sees the type they could pick manually.
+        current_type = canonical_text_type(item.json_type)
+        idx = editor.findData(current_type)
         editor.setCurrentIndex(idx if idx >= 0 else 0)
 
     def setModelData(self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex):

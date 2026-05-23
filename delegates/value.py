@@ -54,7 +54,7 @@ from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model_roles import JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE
-from tree.types import JsonType
+from tree.types import TEXT_LINE_FAMILY, TEXT_MULTI_FAMILY, JsonType
 from units import counts, format_bytes
 
 
@@ -392,7 +392,7 @@ class ValueDelegate(_TextEditorDelegateBase):
                 editor = QComboBox(parent)
                 editor.addItem("true", True)
                 editor.addItem("false", False)
-            case JsonType.STRING | JsonType.UNICODE:
+            case _ if item.json_type in TEXT_LINE_FAMILY:
                 text_len = len(str(item.value or ""))
                 limit = get_string_edit_warning_limit_chars()
                 if not self._confirm_large_text_edit(
@@ -409,7 +409,7 @@ class ValueDelegate(_TextEditorDelegateBase):
                 editor = _SecretLineEdit(parent)
             case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE | JsonType.DATETIMEUTC:
                 editor = BetterDateTimeEditor(parent)
-            case JsonType.MULTILINE | JsonType.TEXT:
+            case _ if item.json_type in TEXT_MULTI_FAMILY:
                 text_len = len(str(item.value or ""))
                 limit = get_multiline_edit_warning_limit_chars()
                 if not self._confirm_large_text_edit(

@@ -8,7 +8,7 @@ from delegates.bytes_codec import decode_bytes
 from mpq2py import mpq_serialization
 from settings import SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
 from themes.spec import TypeStyle
-from tree.types import SECRET_FAMILY, JsonType
+from tree.types import EMPTY_FAMILY, SECRET_FAMILY, WS_FAMILY, JsonType
 from units import format_bytes
 from units.number_affix import NumberAffix, format_number_affix
 
@@ -16,6 +16,41 @@ _PREVIEW_LIMIT = 80
 _PREVIEW_CHILDREN = 5
 _MULTILINE_SEPARATOR = " | "
 _SECRET_MASK = SECRET_MASK_CHAR * SECRET_MASK_GLYPHS
+
+# Whitespace preview map: every char that can appear in a WS_* value is rendered
+# as a named escape so the user can see the actual shape of the data. Anything
+# str.isspace()-true that isn't named below falls back to ``<??>``.
+_WS_PREVIEW_MAP: dict[str, str] = {
+    " ": "<SP>",
+    "\t": "<TAB>",
+    "\n": "<LF>",
+    "\r": "<CR>",
+    "\x0b": "<VT>",
+    "\x0c": "<FF>",
+    "\x85": "<NEL>",
+    "\xa0": "<NBSP>",
+    "\u1680": "<OGSP>",
+    "\u2000": "<ENQ>",
+    "\u2001": "<EMQ>",
+    "\u2002": "<ENSP>",
+    "\u2003": "<EMSP>",
+    "\u2004": "<3MSP>",
+    "\u2005": "<4MSP>",
+    "\u2006": "<6MSP>",
+    "\u2007": "<FIGSP>",
+    "\u2008": "<PUNSP>",
+    "\u2009": "<THINSP>",
+    "\u200a": "<HAIRSP>",
+    "\u2028": "<LS>",
+    "\u2029": "<PS>",
+    "\u202f": "<NNBSP>",
+    "\u205f": "<MMSP>",
+    "\u3000": "<IDSP>",
+}
+
+
+def _format_ws_preview(value: str) -> str:
+    return "".join(_WS_PREVIEW_MAP.get(ch, "<??>") for ch in value)
 
 
 def _single_line_preview_text(value: str) -> str:
@@ -99,6 +134,12 @@ def format_with_type(value, json_type: JsonType | None, *, item=None, show_previ
 
     if json_type in SECRET_FAMILY:
         return _SECRET_MASK
+
+    if json_type in EMPTY_FAMILY:
+        return "<empty>"
+
+    if json_type in WS_FAMILY and isinstance(value, str):
+        return _elide(_format_ws_preview(value))
 
     if json_type in (JsonType.MULTILINE, JsonType.TEXT) and isinstance(value, str):
         return format_default(_single_line_preview_text(value))

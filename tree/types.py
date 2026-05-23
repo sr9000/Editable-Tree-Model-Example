@@ -54,6 +54,28 @@ def _looks_like_multiline_text(s: str) -> bool:
     return "\n" in s and (s.count("\n") > 1 or len(s) > 80)
 
 
+def _is_ws_only(s: str) -> bool:
+    """Return True iff *s* is non-empty and consists entirely of whitespace.
+
+    Uses ``str.isspace`` so it covers ASCII whitespace (SP/TAB/LF/CR/VT/FF)
+    as well as Unicode whitespace (NBSP, IDSP, line/paragraph separators…).
+    """
+    return s != "" and s.isspace()
+
+
+def _ws_has_newline(s: str) -> bool:
+    return "\n" in s or "\r" in s or "\u2028" in s or "\u2029" in s
+
+
+def _ws_type_for(s: str, *, force_multi: bool = False) -> "JsonType":
+    """Pick the appropriate WS_* pseudo for a whitespace-only string *s*."""
+    multi = force_multi or _ws_has_newline(s)
+    non_ascii = _contains_non_ascii(s)
+    if multi:
+        return JsonType.WS_TEXT if non_ascii else JsonType.WS_MULTILINE
+    return JsonType.WS_UNICODE if non_ascii else JsonType.WS_STRING
+
+
 def infer_text_json_type(s: str) -> "JsonType":
     """Classify *s* within the text-only pseudo-type family.
 
@@ -61,7 +83,14 @@ def infer_text_json_type(s: str) -> "JsonType":
     container conversion). Picks both axes:
     - multiline-ness: ``MULTILINE`` / ``TEXT`` vs ``STRING`` / ``UNICODE``
     - ascii axis: ``UNICODE`` / ``TEXT`` vs ``STRING`` / ``MULTILINE``
+
+    Empty strings are surfaced as ``EMPTY_STRING``; whitespace-only strings
+    map to the ``WS_*`` pseudo family.
     """
+    if s == "":
+        return JsonType.EMPTY_STRING
+    if _is_ws_only(s):
+        return _ws_type_for(s)
     if _looks_like_multiline_text(s):
         return JsonType.TEXT if _contains_non_ascii(s) else JsonType.MULTILINE
     return JsonType.UNICODE if _contains_non_ascii(s) else JsonType.STRING
@@ -70,19 +99,22 @@ def infer_text_json_type(s: str) -> "JsonType":
 def text_pseudotype_for(current_type: "JsonType", s: str) -> "JsonType":
     """Pick a text-family type when the *current* field type is text-family.
 
-    This switches **only along the ascii axis**, preserving multiline-ness.
-    Allowed transitions:
+    Preserves the single-line vs multiline shape implied by *current_type*
+    (so ``STRING`` <-> ``UNICODE``, ``MULTILINE`` <-> ``TEXT``), and
+    collapses to the empty/whitespace pseudo-types when content warrants it.
 
-    - ``STRING`` <-> ``UNICODE``
-    - ``MULTILINE`` <-> ``TEXT``
-
-    Any cross-family switch (e.g. ``STRING`` -> ``MULTILINE`` or
-    ``UNICODE`` -> ``TEXT``) is intentionally **not** performed here:
-    once the user has chosen a single-line vs multiline shape, edits
-    keep that shape until the type is changed explicitly.
+    Empty content yields ``EMPTY_STRING`` or ``EMPTY_MULTILINE`` based on
+    the current shape. Whitespace-only content yields ``WS_*`` flavored
+    along both axes (shape preserved, but upgraded to multiline if the
+    string actually contains a newline).
     """
+    is_multi_current = current_type in TEXT_MULTI_FAMILY
+    if s == "":
+        return JsonType.EMPTY_MULTILINE if is_multi_current else JsonType.EMPTY_STRING
+    if _is_ws_only(s):
+        return _ws_type_for(s, force_multi=is_multi_current)
     non_ascii = _contains_non_ascii(s)
-    if current_type in (JsonType.MULTILINE, JsonType.TEXT):
+    if is_multi_current:
         return JsonType.TEXT if non_ascii else JsonType.MULTILINE
     # STRING / UNICODE (and any other caller-text-family) stay single-line.
     return JsonType.UNICODE if non_ascii else JsonType.STRING
@@ -115,6 +147,11 @@ def parse_json_type(value: Any) -> "JsonType":
             return JsonType.FLOAT
 
         case str(s):
+            if s == "":
+                return JsonType.EMPTY_STRING
+            if _is_ws_only(s):
+                return _ws_type_for(s)
+
             if _looks_like_multiline_text(s):
                 return JsonType.TEXT if _contains_non_ascii(s) else JsonType.MULTILINE
 
@@ -202,6 +239,16 @@ class JsonType(StrEnum):
     SECRET_LINE = "secret line"
     SECRET_TEXT = "secret text"
 
+    # Pseudo Text (purely-derived; not user-selectable). Empty / whitespace-only
+    # content gets these previewable types so the value column makes the shape
+    # visible. Editing behaves identically to the parent text type.
+    EMPTY_STRING = "empty string"
+    EMPTY_MULTILINE = "empty multiline"
+    WS_STRING = "ws string"
+    WS_UNICODE = "ws utf-8 line"
+    WS_MULTILINE = "ws multiline"
+    WS_TEXT = "ws utf-8 text"
+
     # Datetime Text Format
     DATE = "date"
     TIME = "time"
@@ -219,7 +266,64 @@ class JsonType(StrEnum):
     COLOR_RGBA = "rgba"  # #rgba / #rrggbbaa
 
 
-TEXT_FAMILY: frozenset[JsonType] = frozenset({JsonType.STRING, JsonType.UNICODE, JsonType.MULTILINE, JsonType.TEXT})
+TEXT_FAMILY: frozenset[JsonType] = frozenset(
+    {
+        JsonType.STRING,
+        JsonType.UNICODE,
+        JsonType.MULTILINE,
+        JsonType.TEXT,
+        JsonType.EMPTY_STRING,
+        JsonType.EMPTY_MULTILINE,
+        JsonType.WS_STRING,
+        JsonType.WS_UNICODE,
+        JsonType.WS_MULTILINE,
+        JsonType.WS_TEXT,
+    }
+)
+TEXT_LINE_FAMILY: frozenset[JsonType] = frozenset(
+    {
+        JsonType.STRING,
+        JsonType.UNICODE,
+        JsonType.EMPTY_STRING,
+        JsonType.WS_STRING,
+        JsonType.WS_UNICODE,
+    }
+)
+TEXT_MULTI_FAMILY: frozenset[JsonType] = frozenset(
+    {
+        JsonType.MULTILINE,
+        JsonType.TEXT,
+        JsonType.EMPTY_MULTILINE,
+        JsonType.WS_MULTILINE,
+        JsonType.WS_TEXT,
+    }
+)
+EMPTY_FAMILY: frozenset[JsonType] = frozenset({JsonType.EMPTY_STRING, JsonType.EMPTY_MULTILINE})
+WS_FAMILY: frozenset[JsonType] = frozenset(
+    {JsonType.WS_STRING, JsonType.WS_UNICODE, JsonType.WS_MULTILINE, JsonType.WS_TEXT}
+)
+PSEUDO_TEXT_FAMILY: frozenset[JsonType] = EMPTY_FAMILY | WS_FAMILY
+
+
+# Parent (canonical, user-selectable) type for each pseudo text type.
+PSEUDO_TEXT_PARENT: dict[JsonType, JsonType] = {
+    JsonType.EMPTY_STRING: JsonType.STRING,
+    JsonType.EMPTY_MULTILINE: JsonType.MULTILINE,
+    JsonType.WS_STRING: JsonType.STRING,
+    JsonType.WS_UNICODE: JsonType.UNICODE,
+    JsonType.WS_MULTILINE: JsonType.MULTILINE,
+    JsonType.WS_TEXT: JsonType.TEXT,
+}
+
+
+def canonical_text_type(json_type: JsonType) -> JsonType:
+    """Return the user-selectable parent for a pseudo text type, else *json_type*."""
+    return PSEUDO_TEXT_PARENT.get(json_type, json_type)
+
+
+# Types the user can pick from the type combobox. Pseudo text types are
+# excluded because they are derived purely from content.
+USER_SELECTABLE_TYPES: tuple[JsonType, ...] = tuple(t for t in JsonType if t not in PSEUDO_TEXT_FAMILY)
 SECRET_FAMILY: frozenset[JsonType] = frozenset({JsonType.SECRET_LINE, JsonType.SECRET_TEXT})
 COLOR_FAMILY: frozenset[JsonType] = frozenset({JsonType.COLOR_RGB, JsonType.COLOR_RGBA})
 DATETIME_FAMILY: frozenset[JsonType] = frozenset(
