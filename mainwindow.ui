@@ -58,6 +58,8 @@
     <addaction name="fileSaveAction"/>
     <addaction name="fileSaveAsAction"/>
     <addaction name="separator"/>
+    <addaction name="fileCopyPathAction"/>
+    <addaction name="separator"/>
     <addaction name="appExitAction"/>
    </widget>
    <widget class="QMenu" name="actionsMenu">
@@ -181,6 +183,17 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+0</string>
+   </property>
+  </action>
+  <action name="fileCopyPathAction">
+   <property name="text">
+    <string>Copy Full File &amp;Path</string>
+   </property>
+   <property name="toolTip">
+    <string>Copy absolute path of the current document</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Alt+C</string>
    </property>
   </action>
  </widget>

@@ -932,6 +932,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             self.statusBar.showMessage("Nothing to copy", 1500)
 
+    def copy_current_file_path(self) -> None:
+        """Put the absolute path of the current tab on the system clipboard."""
+        tab = self._current_tab()
+        if tab is None or not tab.file_path:
+            self.statusBar.showMessage(self.tr("No file path to copy"), 2000)
+            return
+        QApplication.clipboard().setText(tab.file_path)
+        self.statusBar.showMessage(self.tr("Copied: {path}").format(path=tab.file_path), 2000)
+
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._theme_controller.shutdown()
         for i in range(self.tabWidget.count() - 1, -1, -1):
