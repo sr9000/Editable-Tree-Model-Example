@@ -1,4 +1,6 @@
-# Issue 01 — Inline editor overlaps underlying cell text on Windows
+# ~~Issue 01 — Inline editor overlaps underlying cell text on Windows~~
+
+> ALREADY DONE VIA DISABLING PAINTING OF VALUE TEXT IN EDIT MODE
 
 **Status:** open
 **Severity:** High (data-entry blocker)
