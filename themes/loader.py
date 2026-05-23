@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor
 
 from themes._defaults import DARK_DEFAULT, LIGHT_DEFAULT
 from themes.spec import Palette, ThemeSpec, TypeStyle, ValidationStyle
-from tree.types import JsonType
+from tree.types import PSEUDO_TEXT_PARENT, JsonType
 
 LOGGER = logging.getLogger(__name__)
 
@@ -162,6 +162,27 @@ def _merge_style(style_data: dict[str, Any], base: TypeStyle, *, key_prefix: str
     return TypeStyle(fg=fg, bg=bg, bold=bold, italic=italic, icon=icon)
 
 
+def _propagate_pseudo_styles(merged: dict[JsonType, TypeStyle]) -> None:
+    """Re-sync every pseudo text type with its fully-merged parent style.
+
+    This must run *after* the icon-map application so that icon keys set via
+    ``icons.map.string`` propagate to ``EMPTY_STRING``, ``WS_STRING``, etc.
+    It also fixes the case where a YAML theme overrides a parent's fg/bg/bold/
+    italic — those changes would otherwise remain invisible on the pseudos,
+    because ``_merge_types`` seeds pseudos from the base-default snapshot, not
+    from the just-merged parent.
+    """
+    for pseudo, parent in PSEUDO_TEXT_PARENT.items():
+        p = merged[parent]
+        merged[pseudo] = TypeStyle(
+            fg=_copy_color(p.fg),
+            bg=_copy_color(p.bg),
+            bold=p.bold,
+            italic=p.italic,
+            icon=p.icon,
+        )
+
+
 def _merge_types(types_data: dict[str, Any], base: ThemeSpec) -> dict[JsonType, TypeStyle]:
     merged: dict[JsonType, TypeStyle] = {}
     for json_type in JsonType:
@@ -260,6 +281,10 @@ def parse_theme_mapping(data: dict, *, mode_default: ThemeSpec, base_dir: Path |
                 italic=style.italic,
                 icon=icon_key,
             )
+
+    # Re-sync pseudo text types (EMPTY_*, WS_*) from their now-fully-resolved
+    # parent styles, covering both icon keys and any YAML color overrides.
+    _propagate_pseudo_styles(merged_types)
 
     return ThemeSpec(
         name=name,

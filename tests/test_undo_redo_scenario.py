@@ -9,6 +9,11 @@ from PySide6.QtWidgets import QApplication
 
 from documents.tab import JsonTab
 from tree.types import JsonType
+# EMPTY_MULTILINE cannot be produced from a raw JSON value (an empty string
+# always infers to EMPTY_STRING; flipping the shape requires an explicit type
+# column edit). All other JsonType members, including the five remaining pseudo
+# text types, are present in the _demo_data() seed.
+_TYPES_IN_SEED = set(JsonType) - {JsonType.EMPTY_MULTILINE}
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_from_clipboard
 from tree_actions.structure import (
@@ -91,7 +96,7 @@ def test_undo_redo_comprehensive_scenario(qtbot):
     view = tab.view
 
     # --- All JsonType values are represented in the seed ---------------------
-    assert _gather_types(tab) == set(JsonType)
+    assert _gather_types(tab) == _TYPES_IN_SEED
 
     # --- Snapshots of every committed state, indexed by stack depth ---------
     states: list = [_state(tab)]
