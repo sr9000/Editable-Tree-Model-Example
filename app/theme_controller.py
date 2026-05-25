@@ -89,6 +89,8 @@ class ThemeController:
         else:
             self._theme = self._theme_registry.default_for_mode("light")
         self._icon_provider = self._theme_registry.build_icon_provider(self._theme)
+        self._apply_app_palette(self._theme)
+        self._sync_app_color_scheme(self._theme)
 
         if get_watch_user_dir():
             self.refresh_theme_watcher_paths()

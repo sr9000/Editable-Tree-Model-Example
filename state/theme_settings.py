@@ -47,7 +47,9 @@ def get_follow_system() -> bool:
 
 
 def set_follow_system(enabled: bool) -> None:
-    _settings().setValue(_FOLLOW_SYSTEM_KEY, bool(enabled))
+    s = _settings()
+    s.setValue(_FOLLOW_SYSTEM_KEY, bool(enabled))
+    s.sync()
 
 
 def get_watch_user_dir() -> bool:
@@ -55,7 +57,9 @@ def get_watch_user_dir() -> bool:
 
 
 def set_watch_user_dir(enabled: bool) -> None:
-    _settings().setValue(_WATCH_USER_DIR_KEY, bool(enabled))
+    s = _settings()
+    s.setValue(_WATCH_USER_DIR_KEY, bool(enabled))
+    s.sync()
 
 
 def get_preferred_theme_name(mode: Literal["light", "dark"]) -> str:
@@ -65,10 +69,12 @@ def get_preferred_theme_name(mode: Literal["light", "dark"]) -> str:
 
 
 def set_preferred_theme_name(mode: Literal["light", "dark"], name: str) -> None:
+    s = _settings()
     if mode == "dark":
-        _settings().setValue(_DARK_THEME_KEY, name)
+        s.setValue(_DARK_THEME_KEY, name)
     else:
-        _settings().setValue(_LIGHT_THEME_KEY, name)
+        s.setValue(_LIGHT_THEME_KEY, name)
+    s.sync()
 
 
 def get_manual_theme_name() -> str:
@@ -76,7 +82,9 @@ def get_manual_theme_name() -> str:
 
 
 def set_manual_theme_name(name: str) -> None:
-    _settings().setValue(_MANUAL_THEME_KEY, name)
+    s = _settings()
+    s.setValue(_MANUAL_THEME_KEY, name)
+    s.sync()
 
 
 def resolve_active_theme(registry: ThemeRegistry, app: QGuiApplication) -> ThemeSpec:

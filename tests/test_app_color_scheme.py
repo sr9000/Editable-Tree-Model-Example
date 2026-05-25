@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.main_window import MainWindow
 from settings import APPLICATION_ID
-from state.theme_settings import set_follow_system
+from state.theme_settings import set_follow_system, set_manual_theme_name
 
 
 def _theme_settings() -> QSettings:
@@ -81,6 +81,31 @@ def test_dark_theme_sets_dark_color_scheme(qtbot, tmp_path, monkeypatch):
     assert isinstance(app_widget, QApplication)
     pal = app_widget.palette()
     assert pal.color(QPalette.ColorRole.AlternateBase).name().lower() == dark_theme.palette.alternate_bg.name().lower()
+
+
+def test_startup_applies_saved_theme_to_qt_scheme_and_palette(qtbot, tmp_path, monkeypatch):
+    QStandardPaths.setTestModeEnabled(True)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    _theme_settings().clear()
+    set_follow_system(False)
+    set_manual_theme_name("Default Dark")
+
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+
+    app = QGuiApplication.instance()
+    assert isinstance(app, QGuiApplication)
+    style_hints = app.styleHints()
+    setter = getattr(style_hints, "setColorScheme", None)
+    if setter is None:
+        pytest.skip("Qt version does not support setColorScheme")
+
+    assert win._theme.mode == "dark"
+    assert style_hints.colorScheme() == Qt.ColorScheme.Dark
+    app_widget = QApplication.instance()
+    assert isinstance(app_widget, QApplication)
+    pal = app_widget.palette()
+    assert pal.color(QPalette.ColorRole.AlternateBase).name().lower() == win._theme.palette.alternate_bg.name().lower()
 
 
 def test_no_feedback_loop_on_scheme_change(qtbot, tmp_path, monkeypatch):
