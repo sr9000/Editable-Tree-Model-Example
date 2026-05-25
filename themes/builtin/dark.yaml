@@ -3,6 +3,7 @@ mode: dark
 palette:
   base_fg: '#c0caf5'
   base_bg: '#1a1b26'
+  alternate_bg: '#22283a'
   selection_fg: '#1a1b26'
   selection_bg: '#7aa2f7'
   accent: '#e0af68'

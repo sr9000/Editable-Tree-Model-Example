@@ -3,6 +3,7 @@ mode: light
 palette:
   base_fg: '#272822'
   base_bg: '#F8F8F2'
+  alternate_bg: '#f2efe4'
   selection_fg: '#FFFFFF'
   selection_bg: '#FD971F'
   accent: '#A6E22E'
@@ -74,10 +75,10 @@ types:
     fg: '#999988'
     italic: true
   object:
-    fg: '#1a5fb4'
+    fg: '#1f599d'
     bold: true
   array:
-    fg: '#1a5fb4'
+    fg: '#1f599d'
     bold: true
 icons:
   search_paths:

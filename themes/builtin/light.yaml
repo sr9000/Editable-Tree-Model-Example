@@ -1,8 +1,9 @@
 name: Default Light
 mode: light
 palette:
-  base_fg: '#657b83'
+  base_fg: '#22242a'
   base_bg: '#fdf6e3'
+  alternate_bg: '#f4ecd6'
   selection_fg: '#fdf6e3'
   selection_bg: '#268bd2'
   accent: '#b58900'

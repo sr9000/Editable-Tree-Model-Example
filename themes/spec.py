@@ -51,6 +51,7 @@ class ValidationStyle:
 class Palette:
     base_fg: QColor
     base_bg: QColor
+    alternate_bg: QColor
     selection_fg: QColor
     selection_bg: QColor
     accent: QColor
@@ -62,6 +63,7 @@ class Palette:
             (
                 _color_key(self.base_fg),
                 _color_key(self.base_bg),
+                _color_key(self.alternate_bg),
                 _color_key(self.selection_fg),
                 _color_key(self.selection_bg),
                 _color_key(self.accent),

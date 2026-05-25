@@ -10,6 +10,7 @@ from PySide6.QtGui import QColor, QGuiApplication
 from themes import DARK_DEFAULT, LIGHT_DEFAULT, ThemeRegistry, detect_system_mode, load_theme_yaml
 from themes._contrast import contrast_ratio
 from themes.icon_provider import FileIconProvider
+from themes.loader import parse_theme_mapping
 
 
 def _color_hex(color: QColor | None) -> str | None:
@@ -23,6 +24,7 @@ def _assert_theme_equal(actual, expected, *, compare_icons: bool = True) -> None
     assert actual.mode == expected.mode
     assert _color_hex(actual.palette.base_fg) == _color_hex(expected.palette.base_fg)
     assert _color_hex(actual.palette.base_bg) == _color_hex(expected.palette.base_bg)
+    assert _color_hex(actual.palette.alternate_bg) == _color_hex(expected.palette.alternate_bg)
     assert _color_hex(actual.palette.selection_fg) == _color_hex(expected.palette.selection_fg)
     assert _color_hex(actual.palette.selection_bg) == _color_hex(expected.palette.selection_bg)
     assert _color_hex(actual.palette.accent) == _color_hex(expected.palette.accent)
@@ -86,6 +88,45 @@ def test_user_theme_override_wins_by_name(tmp_path):
 
     assert overridden.mode == "light"
     assert _color_hex(overridden.palette.accent) == "#ff0000"
+
+
+def test_user_theme_can_override_alternate_bg(tmp_path):
+    user_dir = tmp_path / "themes"
+    user_dir.mkdir()
+    (user_dir / "override-alt.yaml").write_text(
+        "\n".join(
+            [
+                "name: Default Dark",
+                "mode: dark",
+                "palette:",
+                "  alternate_bg: '#304060'",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    registry = ThemeRegistry(user_dir=user_dir)
+    overridden = registry.get("Default Dark")
+
+    assert overridden.mode == "dark"
+    assert _color_hex(overridden.palette.alternate_bg) == "#304060"
+
+
+@pytest.mark.parametrize("mode", ["light", "dark"])
+def test_theme_without_alternate_bg_derives_fallback(mode):
+    loaded = {
+        "name": f"No Alt {mode}",
+        "mode": mode,
+        "palette": {
+            "base_bg": "#fdf6e3" if mode == "light" else "#1a1b26",
+            "accent": "#b58900" if mode == "light" else "#e0af68",
+            "selection_bg": "#268bd2" if mode == "light" else "#7aa2f7",
+        },
+    }
+    parsed = parse_theme_mapping(loaded, mode_default=LIGHT_DEFAULT)
+    assert _color_hex(parsed.palette.alternate_bg) is not None
+    assert _color_hex(parsed.palette.alternate_bg) != _color_hex(parsed.palette.base_bg)
 
 
 def test_broken_user_file_is_skipped(tmp_path, caplog):

@@ -103,34 +103,60 @@ def _merge_validation_style(val_data: dict[str, Any], base: ValidationStyle) -> 
     )
 
 
-def _merge_palette(palette_data: dict[str, Any], base: Palette) -> Palette:
+def _blend(lhs: QColor, rhs: QColor, weight_rhs: float) -> QColor:
+    t = max(0.0, min(1.0, float(weight_rhs)))
+    return QColor(
+        int(round(lhs.red() * (1.0 - t) + rhs.red() * t)),
+        int(round(lhs.green() * (1.0 - t) + rhs.green() * t)),
+        int(round(lhs.blue() * (1.0 - t) + rhs.blue() * t)),
+        int(round(lhs.alpha() * (1.0 - t) + rhs.alpha() * t)),
+    )
+
+
+def _derive_alternate_bg(base: QColor, *, mode: Literal["light", "dark"], accent: QColor, selection: QColor) -> QColor:
+    if mode == "light":
+        warmed = _blend(base, accent, 0.08)
+        return warmed.darker(106)
+    cool = _blend(base, selection, 0.14)
+    return cool.lighter(112)
+
+
+def _merge_palette(palette_data: dict[str, Any], base: Palette, *, mode: Literal["light", "dark"]) -> Palette:
     val_data = _as_mapping(palette_data.get("validation"), key="palette.validation")
+    base_bg = (
+        _parse_color(palette_data["base_bg"], key="palette.base_bg")
+        if "base_bg" in palette_data
+        else QColor(base.base_bg)
+    )
+    accent = (
+        _parse_color(palette_data["accent"], key="palette.accent")
+        if "accent" in palette_data
+        else QColor(base.accent)
+    )
+    selection_bg = (
+        _parse_color(palette_data["selection_bg"], key="palette.selection_bg")
+        if "selection_bg" in palette_data
+        else QColor(base.selection_bg)
+    )
     return Palette(
         base_fg=(
             _parse_color(palette_data["base_fg"], key="palette.base_fg")
             if "base_fg" in palette_data
             else QColor(base.base_fg)
         ),
-        base_bg=(
-            _parse_color(palette_data["base_bg"], key="palette.base_bg")
-            if "base_bg" in palette_data
-            else QColor(base.base_bg)
+        base_bg=base_bg,
+        alternate_bg=(
+            _parse_color(palette_data["alternate_bg"], key="palette.alternate_bg")
+            if "alternate_bg" in palette_data
+            else _derive_alternate_bg(base_bg, mode=mode, accent=accent, selection=selection_bg)
         ),
         selection_fg=(
             _parse_color(palette_data["selection_fg"], key="palette.selection_fg")
             if "selection_fg" in palette_data
             else QColor(base.selection_fg)
         ),
-        selection_bg=(
-            _parse_color(palette_data["selection_bg"], key="palette.selection_bg")
-            if "selection_bg" in palette_data
-            else QColor(base.selection_bg)
-        ),
-        accent=(
-            _parse_color(palette_data["accent"], key="palette.accent")
-            if "accent" in palette_data
-            else QColor(base.accent)
-        ),
+        selection_bg=selection_bg,
+        accent=accent,
         affix_text=(
             _parse_color(palette_data["affix_text"], key="palette.affix_text")
             if "affix_text" in palette_data
@@ -289,7 +315,7 @@ def parse_theme_mapping(data: dict, *, mode_default: ThemeSpec, base_dir: Path |
     return ThemeSpec(
         name=name,
         mode=mode,
-        palette=_merge_palette(palette_data, base_default.palette),
+        palette=_merge_palette(palette_data, base_default.palette, mode=mode),
         types=MappingProxyType(merged_types),
         icon_search_paths=icon_search_paths,
     )
