@@ -458,7 +458,7 @@ class ValueDelegate(_TextEditorDelegateBase):
                 pidx = QPersistentModelIndex(index)
                 initial = parse_color(item.value if isinstance(item.value, str) else "") or parse_color("#000000")
 
-                dialog = QColorDialog(initial, parent)
+                dialog = QColorDialog(parent, currentColor=initial)
                 if item.json_type is JsonType.COLOR_RGBA:
                     dialog.setOption(QColorDialog.ColorDialogOption.ShowAlphaChannel, True)
                 dialog.setWindowTitle(

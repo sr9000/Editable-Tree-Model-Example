@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import QFileSystemWatcher, QObject, Qt, QTimer, QUrl, Slot
-from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication
-from PySide6.QtWidgets import QMenu, QWidget
+from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication, QPalette
+from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
 try:
     from PySide6.QtCore import Shiboken as _shiboken
@@ -89,6 +89,8 @@ class ThemeController:
         else:
             self._theme = self._theme_registry.default_for_mode("light")
         self._icon_provider = self._theme_registry.build_icon_provider(self._theme)
+        self._apply_app_palette(self._theme)
+        self._sync_app_color_scheme(self._theme)
 
         if get_watch_user_dir():
             self.refresh_theme_watcher_paths()
@@ -152,9 +154,26 @@ class ThemeController:
     def apply_theme(self, theme: ThemeSpec) -> None:
         self._theme = theme
         self._icon_provider = self._theme_registry.build_icon_provider(theme)
+        self._apply_app_palette(theme)
         self._sync_app_color_scheme(theme)
         self._on_theme_changed(theme, self._icon_provider)
         self.refresh_theme_menu_checks()
+
+    def _apply_app_palette(self, theme: ThemeSpec) -> None:
+        app = QApplication.instance()
+        if not isinstance(app, QApplication):
+            return
+        pal = QPalette(app.palette())
+        palette = theme.palette
+        pal.setColor(QPalette.ColorRole.Base, palette.base_bg)
+        pal.setColor(QPalette.ColorRole.AlternateBase, palette.alternate_bg)
+        pal.setColor(QPalette.ColorRole.Text, palette.base_fg)
+        pal.setColor(QPalette.ColorRole.WindowText, palette.base_fg)
+        pal.setColor(QPalette.ColorRole.Highlight, palette.selection_bg)
+        pal.setColor(QPalette.ColorRole.HighlightedText, palette.selection_fg)
+        if hasattr(QPalette.ColorRole, "Accent"):
+            pal.setColor(QPalette.ColorRole.Accent, palette.accent)
+        app.setPalette(pal)
 
     def _sync_app_color_scheme(self, theme: ThemeSpec) -> None:
         app = QGuiApplication.instance()
