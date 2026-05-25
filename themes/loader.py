@@ -123,15 +123,22 @@ def _derive_alternate_bg(base: QColor, *, mode: Literal["light", "dark"], accent
 
 def _merge_palette(palette_data: dict[str, Any], base: Palette, *, mode: Literal["light", "dark"]) -> Palette:
     val_data = _as_mapping(palette_data.get("validation"), key="palette.validation")
+    palette_override_keys = {
+        "base_fg",
+        "base_bg",
+        "selection_fg",
+        "selection_bg",
+        "accent",
+        "affix_text",
+    }
+    has_palette_override = any(key in palette_data for key in palette_override_keys)
     base_bg = (
         _parse_color(palette_data["base_bg"], key="palette.base_bg")
         if "base_bg" in palette_data
         else QColor(base.base_bg)
     )
     accent = (
-        _parse_color(palette_data["accent"], key="palette.accent")
-        if "accent" in palette_data
-        else QColor(base.accent)
+        _parse_color(palette_data["accent"], key="palette.accent") if "accent" in palette_data else QColor(base.accent)
     )
     selection_bg = (
         _parse_color(palette_data["selection_bg"], key="palette.selection_bg")
@@ -148,7 +155,11 @@ def _merge_palette(palette_data: dict[str, Any], base: Palette, *, mode: Literal
         alternate_bg=(
             _parse_color(palette_data["alternate_bg"], key="palette.alternate_bg")
             if "alternate_bg" in palette_data
-            else _derive_alternate_bg(base_bg, mode=mode, accent=accent, selection=selection_bg)
+            else (
+                _derive_alternate_bg(base_bg, mode=mode, accent=accent, selection=selection_bg)
+                if has_palette_override
+                else QColor(base.alternate_bg)
+            )
         ),
         selection_fg=(
             _parse_color(palette_data["selection_fg"], key="palette.selection_fg")
