@@ -1,4 +1,5 @@
 """Tests for Ctrl+W (close tab) and Ctrl+Shift+T (reopen closed tab)."""
+
 from __future__ import annotations
 
 import json

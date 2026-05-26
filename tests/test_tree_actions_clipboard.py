@@ -144,6 +144,7 @@ def test_copy_selection_with_name_and_value_only(qtbot):
     md = QApplication.clipboard().mimeData()
     # copy_with_name now wraps named entries in a JSON object for round-trip fidelity.
     import json
+
     assert json.loads(md.text()) == {"foo": 42}
     assert md.hasFormat(MIME_JSON_TREE)
     assert copy_selection_value_only(view)
@@ -164,6 +165,7 @@ def test_copy_selection_string_value_is_json_quoted(qtbot):
     assert copy_selection_with_name(view)
     md = QApplication.clipboard().mimeData()
     import json
+
     assert json.loads(md.text()) == {"greeting": "hello world"}
 
     assert copy_selection_value_only(view)

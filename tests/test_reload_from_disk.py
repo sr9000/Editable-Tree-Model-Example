@@ -102,6 +102,7 @@ def test_reload_from_disk_cancel_keeps_current_state(qtbot, tmp_path, monkeypatc
         assert tab.is_dirty
 
         _write_json(doc, {"a": 2})
+
         def _choose_cancel(box):
             for btn in box.buttons():
                 if btn.text().replace("&", "") == "Cancel":

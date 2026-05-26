@@ -56,6 +56,7 @@ from validation.schema_registry import SchemaSource, open_in_browser, schema_reg
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     _MAX_CLOSED_TABS = 10
+
     @staticmethod
     def _coerce_bool(value, *, default: bool) -> bool:
         if isinstance(value, bool):
@@ -122,6 +123,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._copyAsYamlAction = QAction(self.tr("Copy as YAML text"), self)
         self._copyAsYamlAction.setCheckable(True)
         from state.clipboard_settings import CLIPBOARD_TEXT_FORMAT_YAML, get_clipboard_text_format
+
         self._copyAsYamlAction.setChecked(get_clipboard_text_format() == CLIPBOARD_TEXT_FORMAT_YAML)
         self._copyAsYamlAction.toggled.connect(self._on_copy_as_yaml_toggled)
         self.fileMenu.insertAction(self.appExitAction, self._copyAsYamlAction)
@@ -612,7 +614,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.viewMenu.addAction(self.viewSelectMonospaceFontAction)
 
     def _on_copy_as_yaml_toggled(self, checked: bool) -> None:
-        from state.clipboard_settings import CLIPBOARD_TEXT_FORMAT_JSON, CLIPBOARD_TEXT_FORMAT_YAML, set_clipboard_text_format
+        from state.clipboard_settings import (
+            CLIPBOARD_TEXT_FORMAT_JSON,
+            CLIPBOARD_TEXT_FORMAT_YAML,
+            set_clipboard_text_format,
+        )
 
         set_clipboard_text_format(CLIPBOARD_TEXT_FORMAT_YAML if checked else CLIPBOARD_TEXT_FORMAT_JSON)
         fmt = "YAML" if checked else "JSON"

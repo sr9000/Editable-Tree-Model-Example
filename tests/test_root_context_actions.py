@@ -1,4 +1,5 @@
 """Tests for context menu actions available on the fake root node."""
+
 from __future__ import annotations
 
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, QPoint

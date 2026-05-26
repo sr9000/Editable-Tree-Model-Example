@@ -404,7 +404,12 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
     )
 
     base64_value_index = _selected_base64_value_index(tree_view)
-    _add(context_menu, "Attach from...", lambda: attach_base64_from_file(tree_view), enabled=base64_value_index is not None)
+    _add(
+        context_menu,
+        "Attach from...",
+        lambda: attach_base64_from_file(tree_view),
+        enabled=base64_value_index is not None,
+    )
     _add(context_menu, "Save as...", lambda: save_base64_as_file(tree_view), enabled=base64_value_index is not None)
 
     # ------------------------------------------------------------------
@@ -462,7 +467,13 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
     # ------------------------------------------------------------------
     if has_non_root or can_insert_child:
         insert_menu = context_menu.addMenu("Insert")
-        _add(insert_menu, "Insert Before", lambda: insert_sibling_before(tree_view), enabled=has_non_root, shortcut="Ctrl+I")
+        _add(
+            insert_menu,
+            "Insert Before",
+            lambda: insert_sibling_before(tree_view),
+            enabled=has_non_root,
+            shortcut="Ctrl+I",
+        )
         _add(
             insert_menu,
             "Insert After",
