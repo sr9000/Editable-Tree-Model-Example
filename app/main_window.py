@@ -108,6 +108,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._theme_follow_action = self._theme_controller.follow_action
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
+        self.fileReloadAction = QAction("Reload from Disk", self)
+        self.fileReloadAction.setShortcut(QKeySequence("Ctrl+R"))
+        self.fileMenu.insertAction(self.fileSaveAction, self.fileReloadAction)
         self.fileMenu.insertSeparator(self.appExitAction)
         self._setup_secret_prefixes_action()
         self._setup_edit_limits_menu()
@@ -756,6 +759,45 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._on_tab_dirty(tab)
         return True
 
+    def _confirm_reload_dirty_tab(self, tab: JsonTab) -> bool:
+        if not tab.is_dirty:
+            return True
+        choice = QMessageBox.question(
+            self,
+            "Reload from disk",
+            f"Save changes to {tab.display_name().replace(' *', '')} before reloading?",
+            QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+        if choice == QMessageBox.StandardButton.Cancel:
+            return False
+        if choice == QMessageBox.StandardButton.Save:
+            return self._save_tab(tab, save_as=False)
+        return True
+
+    def _reload_tab_from_path(self, tab: JsonTab, path: str) -> bool:
+        resolved = str(Path(path).resolve())
+        self.statusBar.showMessage(f"Reloading: {resolved}", 0)
+        try:
+            data, source_format = load_file_with_format(resolved)
+        except Exception as exc:
+            self.statusBar.showMessage(f"Reload failed: {resolved}", 3000)
+            QMessageBox.critical(self, "Reload failed", f"Could not reload {resolved}:\n{exc}")
+            return False
+
+        root_value = tab.model.index(0, 2, QModelIndex()) if tab.model.show_root else QModelIndex()
+        changed = root_value.isValid() and tab.push_edit_value(root_value, data, label="reload from disk")
+        if changed:
+            tab.undo_stack.clear()
+        tab.undo_stack.setClean()
+        tab.save_format = source_format
+        tab.file_path = resolved
+        tab.revalidate()
+        self._refresh_tab_presentation(tab)
+        self.update_actions()
+        self.statusBar.showMessage(f"Reloaded: {resolved}", 2000)
+        return True
+
     def _confirm_close(self, tab: JsonTab) -> bool:
         return confirm_close(self, tab)
 
@@ -781,6 +823,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if tab is None:
             return
         self._save_tab(tab, save_as=True)
+
+    def reload_from_disk(self) -> None:
+        tab = self._current_tab()
+        if tab is None or tab.is_read_only or not tab.file_path:
+            return
+        if not self._confirm_reload_dirty_tab(tab):
+            return
+        self._reload_tab_from_path(tab, tab.file_path)
 
     def create_new_file(self):
         self._add_tab(data={}, file_path=None)

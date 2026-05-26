@@ -8,6 +8,7 @@ def setup_connections(window):
     window.fileOpenAction.triggered.connect(window.open_file_dialog)
     window.fileSaveAction.triggered.connect(window.save_file)
     window.fileSaveAsAction.triggered.connect(window.save_file_as)
+    window.fileReloadAction.triggered.connect(window.reload_from_disk)
     window.fileCopyPathAction.triggered.connect(window.copy_current_file_path)
 
     window.fileMenu.aboutToShow.connect(window.update_actions)
@@ -48,6 +49,7 @@ def update_actions(window):
 
     window.fileSaveAction.setEnabled(has_tab and can_edit and tab.is_dirty)
     window.fileSaveAsAction.setEnabled(has_tab and can_edit)
+    window.fileReloadAction.setEnabled(has_tab and can_edit and bool(tab.file_path))
     window.fileCopyPathAction.setEnabled(bool(tab and tab.file_path))
     window.rowInsertAction.setEnabled(has_valid_index and can_edit)
     window.rowInsertAfterAction.setEnabled(has_valid_index and can_edit)
