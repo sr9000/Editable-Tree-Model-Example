@@ -32,6 +32,8 @@ def test_convert_field_name_variants():
     assert convert_field_name("someHTTPField-id", "KEBAB-CASE-UPPER") == "SOME-HTTP-FIELD-ID"
     assert convert_field_name("some_http_field-id", "camelCase") == "someHttpFieldId"
     assert convert_field_name("some_http_field-id", "PascalCase") == "SomeHttpFieldId"
+    assert convert_field_name("api.v1_field-name", "snake_case") == "api.v1_field_name"
+    assert convert_field_name("api:v1_field-name", "kebab-case") == "api:v1-field-name"
 
 
 def test_switch_selection_case_non_recursive(qtbot):

@@ -34,10 +34,13 @@ _TOKEN_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+|\d+")
 
 
 def _words(name: str) -> list[str]:
-    # Normalize known separators first, then split camel/pascal/acronym runs.
-    parts = [p for p in re.split(r"[-_\s]+", name.strip()) if p]
+    # Only '-' and '_' are treated as structural separators.
+    parts = [p for p in re.split(r"[-_]+", name.strip()) if p]
     words: list[str] = []
     for part in parts:
+        if re.search(r"[^A-Za-z0-9]", part):
+            words.append(part.lower())
+            continue
         for token in _TOKEN_RE.findall(part):
             words.append(token.lower())
     return words
