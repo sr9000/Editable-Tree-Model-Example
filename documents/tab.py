@@ -227,10 +227,14 @@ class JsonTab(QWidget):
         else:
             model_data = data if data is not None else {}
 
-        self.file_path = file_path
-        self.save_format: str | None = save_format
         self.affix_mru = AffixMRU()
-        self._dirty = False
+
+        # Phase-2.3: file path / save format / dirty flag move to a
+        # QObject controller owned by the tab.
+        from documents.tab_io_controller import TabIOController
+
+        self.io = TabIOController(self, file_path=file_path, save_format=save_format)
+        self.io.dirtyChanged.connect(self.dirtyChanged.emit)
 
         init_model(self, model_data, show_root=show_root)
         # Phase-2.2: undo stack and view-state map move to a dedicated
@@ -724,16 +728,37 @@ class JsonTab(QWidget):
 
     @property
     def is_dirty(self) -> bool:
-        return self._dirty
+        return self.io.dirty
+
+    @property
+    def file_path(self) -> str | None:
+        return self.io.file_path
+
+    @file_path.setter
+    def file_path(self, value: str | None) -> None:
+        self.io.file_path = value
+
+    @property
+    def save_format(self) -> str | None:
+        return self.io.save_format
+
+    @save_format.setter
+    def save_format(self, value: str | None) -> None:
+        self.io.save_format = value
+
+    @property
+    def _dirty(self) -> bool:
+        return self.io.dirty
+
+    @_dirty.setter
+    def _dirty(self, value: bool) -> None:
+        self.io.set_dirty(value)
 
     def _set_dirty(self, dirty: bool) -> None:
-        if self._dirty == dirty:
-            return
-        self._dirty = dirty
-        self.dirtyChanged.emit(dirty)
+        self.io.set_dirty(dirty)
 
     def _on_clean_changed(self, clean: bool) -> None:
-        self._set_dirty(not clean)
+        self.io.on_clean_changed(clean)
 
     def display_name(self) -> str:
         if self.file_path:
