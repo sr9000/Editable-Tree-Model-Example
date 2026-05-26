@@ -37,7 +37,27 @@ class DocumentMutationGateway:
         value: Any,
         role: Qt.ItemDataRole | int = Qt.ItemDataRole.EditRole,
     ) -> bool:
-        return self._tab.commit_set_data(index, value, role)
+        """Route a single ``setData`` from a delegate to the right typed undo
+        command (rename / change-type / edit-value).
+
+        Phase-2.4: the routing body lives here instead of on ``JsonTab``; the
+        tab method becomes a one-line delegation.
+        """
+        tab = self._tab
+        if tab._read_only:
+            return False
+        if role != Qt.ItemDataRole.EditRole or not index.isValid():
+            return False
+        idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+        idx = tab._proxy_to_source(idx)
+        col = idx.column()
+        if col == 0:
+            return tab.push_rename(idx, value)
+        if col == 1:
+            return tab.push_change_type(idx, value)
+        if col == 2:
+            return tab.push_edit_value(idx, value)
+        return False
 
     def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
         return self._tab.push_edit_value(value_index, new_value, label=label)

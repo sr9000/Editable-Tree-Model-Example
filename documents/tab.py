@@ -969,19 +969,7 @@ class JsonTab(QWidget):
         return self._diff_applier.diff_array(item, target_list, item_index)
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
-        if self._read_only:
-            return False
-        if role != Qt.ItemDataRole.EditRole or not index.isValid():
-            return False
-        index = self._proxy_to_source(index)
-        col = index.column()
-        if col == 0:
-            return self.push_rename(index, value)
-        if col == 1:
-            return self.push_change_type(index, value)
-        if col == 2:
-            return self.push_edit_value(index, value)
-        return False
+        return self.mutations.commit_set_data(index, value, role)
 
     # ------------------------------------------------------------------
     # Typed-command public API (action/compensation, no full-tree snapshot)
