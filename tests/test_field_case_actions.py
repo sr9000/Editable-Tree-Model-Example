@@ -36,6 +36,23 @@ def test_convert_field_name_variants():
     assert convert_field_name("api:v1_field-name", "kebab-case") == "api:v1-field-name"
 
 
+def test_convert_field_name_preserves_non_standard_separators_per_segment():
+    assert convert_field_name("many_words", "camelCase") == "manyWords"
+    assert convert_field_name("manyWords", "kebab-case") == "many-words"
+
+    assert convert_field_name("non_standard:approach", "PascalCase") == "NonStandard:Approach"
+    assert convert_field_name("NonStandard:Approach", "kebab-case") == "non-standard:approach"
+
+    assert convert_field_name("NonStandard.VeryLong.Approach", "camelCase") == "nonStandard.veryLong.approach"
+    assert convert_field_name("nonStandard.veryLong.approach", "kebab-case") == "non-standard.very-long.approach"
+
+
+def test_convert_field_name_supports_unicode_letters():
+    assert convert_field_name("привет_мир", "camelCase") == "приветМир"
+    assert convert_field_name("ПриветМир:ОченьДлинный.Путь", "snake_case") == "привет_мир:очень_длинный.путь"
+    assert convert_field_name("очень_длинный:путь", "PascalCase") == "ОченьДлинный:Путь"
+
+
 def test_convert_field_name_snake_pascal_snake_roundtrip_keeps_digits():
     original = "http2_server_v1"
     pascal = convert_field_name(original, "PascalCase")
