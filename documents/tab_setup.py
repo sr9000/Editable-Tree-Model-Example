@@ -2,10 +2,11 @@ import functools
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut, QUndoStack
-from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QVBoxLayout
+from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QMessageBox, QVBoxLayout
 
+from delegates.edit_context import DefaultEditContext, EditResult
 from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
@@ -13,6 +14,83 @@ from tree.model import JsonTreeModel
 from tree.view import JsonTreeView
 from tree_actions.context_menu import show_context_menu
 from tree_filter_proxy import TreeFilterProxy
+from units import counts, format_bytes
+
+
+class JsonTabEditContext(DefaultEditContext):
+    """``DelegateEditContext`` implementation backed by a ``JsonTab``.
+
+    Holds a weakref-style direct reference to the host tab (lifetime is
+    coupled to the tab anyway because the delegate is parented to it).
+    Routes commits through ``tab.mutations.commit_set_data`` so the seam
+    published in Phase 0 is honoured, and exposes ``affix_mru`` /
+    ``icon_provider`` / status callback collaborators owned by the tab.
+    """
+
+    def __init__(self, tab) -> None:
+        super().__init__()
+        self._tab = tab
+
+    # ---- commit ----
+    def commit(self, index, value, role=Qt.ItemDataRole.EditRole) -> EditResult:  # type: ignore[override]
+        idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+        if idx.model() is None:
+            return EditResult(accepted=False)
+        accepted = bool(self._tab.mutations.commit_set_data(idx, value, role))
+        return EditResult(accepted=accepted)
+
+    # ---- collaborators ----
+    def notify_status(self, message: str, timeout_ms: int = 0) -> None:  # type: ignore[override]
+        cb = getattr(self._tab, "_status_message_callback", None)
+        if cb is None:
+            return
+        try:
+            cb(message, timeout_ms)
+        except Exception:
+            pass
+
+    def icon_provider(self):  # type: ignore[override]
+        return getattr(self._tab, "_icon_provider", None)
+
+    def affix_mru(self):  # type: ignore[override]
+        return getattr(self._tab, "affix_mru", None)
+
+    # ---- confirmation dialogs (parented to a real widget) ----
+    def confirm_large_text_edit(  # type: ignore[override]
+        self,
+        parent,
+        *,
+        text_len: int,
+        limit: int,
+        title: str,
+        kind: str,
+    ) -> bool:
+        if text_len <= limit:
+            return True
+        answer = QMessageBox.warning(
+            parent if parent is not None else self._tab,
+            title,
+            f"{kind} is {counts(text_len)} chars!\nLimit is {counts(limit)}.\nContinue editing?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def confirm_large_binary_edit(self, parent, payload_size: int) -> bool:  # type: ignore[override]
+        from state.edit_limits import get_binary_edit_warning_limit_bytes
+
+        limit = get_binary_edit_warning_limit_bytes()
+        if payload_size <= limit:
+            return True
+        answer = QMessageBox.warning(
+            parent if parent is not None else self._tab,
+            "Large binary value",
+            f"Binary value is {format_bytes(payload_size)}!\n"
+            f"Limit is {format_bytes(limit)}.\nContinue editing?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
 
 def init_layout(tab) -> None:
@@ -68,9 +146,14 @@ def init_validation_state(tab, model_data: Any) -> None:
 
 
 def init_delegates_and_connections(tab, update_actions_callback) -> None:
-    tab.name_delegate = NameDelegate(tab, theme=tab._theme)
-    tab.type_delegate = JsonTypeDelegate(tab, theme=tab._theme, icon_provider=tab._icon_provider)
-    tab.value_delegate = ValueDelegate(tab, theme=tab._theme)
+    edit_context = JsonTabEditContext(tab)
+    tab._edit_context = edit_context  # kept for tests / debugging
+
+    tab.name_delegate = NameDelegate(tab, theme=tab._theme, edit_context=edit_context)
+    tab.type_delegate = JsonTypeDelegate(
+        tab, theme=tab._theme, icon_provider=tab._icon_provider, edit_context=edit_context
+    )
+    tab.value_delegate = ValueDelegate(tab, theme=tab._theme, edit_context=edit_context)
 
     tab.view.setItemDelegateForColumn(0, tab.name_delegate)
     tab.view.setItemDelegateForColumn(1, tab.type_delegate)

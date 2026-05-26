@@ -22,14 +22,19 @@ class JsonTypeDelegate(QStyledItemDelegate):
         return idx
 
     @staticmethod
-    def _find_tab(host) -> object | None:
-        """Deprecated transitional helper.  Phase 1.2 removes parent crawling."""
-        cursor = host
-        while cursor is not None:
-            if hasattr(cursor, "commit_set_data"):
-                return cursor
-            cursor = cursor.parent() if hasattr(cursor, "parent") else None
-        return None
+    def _emit_icon_changed(index: QModelIndex | QPersistentModelIndex | None) -> None:
+        if index is None:
+            return
+        idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+        if not idx.isValid():
+            return
+        model = idx.model()
+        if model is None:
+            return
+        type_idx = model.index(idx.row(), 1, idx.parent())
+        if not type_idx.isValid():
+            return
+        model.dataChanged.emit(type_idx, type_idx, [Qt.ItemDataRole.DecorationRole])
 
     def __init__(
         self,
@@ -66,37 +71,12 @@ class JsonTypeDelegate(QStyledItemDelegate):
     def _context_for(self, host) -> DelegateEditContext:
         if self._edit_context is not None:
             return self._edit_context
-        # Transitional: until Phase 1.2 wires an explicit context, derive a
-        # legacy adapter so type commits still go through ``JsonTab``.
-        tab = self._find_tab(host)
-        if tab is None:
-            ctx = DefaultEditContext()
-            self._edit_context = ctx
-            return ctx
+        # No injected context — use the standalone fallback.  Parent crawling
+        # was removed in Phase 1.2.
+        ctx = DefaultEditContext()
+        self._edit_context = ctx
+        return ctx
 
-        class _LegacyTabContext(DefaultEditContext):
-            def commit(self, index, value, role=Qt.ItemDataRole.EditRole):  # type: ignore[override]
-                idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
-                if idx.model() is None:
-                    return EditResult(accepted=False)
-                return EditResult(accepted=bool(tab.commit_set_data(idx, value, role)))
-
-        return _LegacyTabContext(status_sink=getattr(tab, "_status_message_callback", None))
-
-    @staticmethod
-    def _emit_icon_changed(index: QModelIndex | QPersistentModelIndex | None) -> None:
-        if index is None:
-            return
-        idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
-        if not idx.isValid():
-            return
-        model = idx.model()
-        if model is None:
-            return
-        type_idx = model.index(idx.row(), 1, idx.parent())
-        if not type_idx.isValid():
-            return
-        model.dataChanged.emit(type_idx, type_idx, [Qt.ItemDataRole.DecorationRole])
 
     def _set_active_type_edit_index(self, source_index: QModelIndex) -> None:
         next_index = QPersistentModelIndex(source_index) if source_index.isValid() else None

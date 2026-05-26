@@ -140,37 +140,15 @@ class _SecretEditorWatcher(QObject):
             self._delegate._finalize_secret_editor(self._editor, self._index)
 
 
-def _find_tab_via_parent(host) -> object | None:
-    cursor = host
-    while cursor is not None:
-        if hasattr(cursor, "commit_set_data"):
-            return cursor
-        cursor = cursor.parent() if hasattr(cursor, "parent") else None
-    return None
-
-
 def _tab_adapter_context(host) -> DelegateEditContext:
-    """Build a transitional context that adapts to a JsonTab found via the
-    parent chain.  Once Phase 1.2 wires an explicit context into delegates,
-    this helper is no longer reached.
+    """No-op fallback retained as a hard-error breadcrumb.
+
+    Phase 1.2 deletes parent-crawling and wires an explicit context from
+    ``documents/tab_setup.py``.  Reaching this fallback means the delegate
+    was instantiated without an ``edit_context`` and outside of a host that
+    provides one, so the safest behaviour is the bare model fallback.
     """
-    tab = _find_tab_via_parent(host)
-    if tab is None:
-        return DefaultEditContext()
-    status_cb = getattr(tab, "_status_message_callback", None)
-    mru = getattr(tab, "affix_mru", None)
-    icons = getattr(tab, "_icon_provider", None)
-
-    class _LegacyTabContext(DefaultEditContext):
-        def commit(self, index, value, role=Qt.ItemDataRole.EditRole):  # type: ignore[override]
-            idx = index
-            if isinstance(idx, QPersistentModelIndex):
-                idx = QModelIndex(idx)
-            if idx.model() is None:
-                return EditResult(accepted=False)
-            return EditResult(accepted=bool(tab.commit_set_data(idx, value, role)))
-
-    return _LegacyTabContext(status_sink=status_cb, affix_mru=mru, icon_provider=icons)
+    return DefaultEditContext()
 
 
 class ValueDelegate(_TextEditorDelegateBase):
@@ -345,16 +323,6 @@ class ValueDelegate(_TextEditorDelegateBase):
             return QModelIndex(index)
         return index
 
-    @staticmethod
-    def _find_tab(host) -> object | None:
-        # Deprecated transitional helper.  Phase 1.2 deletes all parent
-        # crawling; use ``self._edit_context`` collaborators instead.
-        cursor = host
-        while cursor is not None:
-            if hasattr(cursor, "commit_set_data"):
-                return cursor
-            cursor = cursor.parent() if hasattr(cursor, "parent") else None
-        return None
 
     def _commit(
         self,

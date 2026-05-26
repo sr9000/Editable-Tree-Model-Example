@@ -1,39 +1,18 @@
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QLineEdit, QStyleOptionViewItem, QWidget
 
 from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase, paint_editor_underlay
-from delegates.edit_context import DefaultEditContext, DelegateEditContext, EditResult
+from delegates.edit_context import DefaultEditContext, DelegateEditContext
 from delegates.validation_badge import draw_severity_badge
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.model_roles import VALIDATION_SEVERITY_ROLE
 
 
-def _find_tab(host) -> object | None:
-    """Deprecated transitional helper.  Phase 1.2 removes parent crawling."""
-    cursor = host
-    while cursor is not None:
-        if hasattr(cursor, "commit_set_data"):
-            return cursor
-        cursor = cursor.parent() if hasattr(cursor, "parent") else None
-    return None
-
-
 def _tab_adapter_context(host) -> DelegateEditContext:
-    tab = _find_tab(host)
-    if tab is None:
-        return DefaultEditContext()
-    status_cb = getattr(tab, "_status_message_callback", None)
-
-    class _LegacyTabContext(DefaultEditContext):
-        def commit(self, index, value, role=Qt.ItemDataRole.EditRole):  # type: ignore[override]
-            idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
-            if idx.model() is None:
-                return EditResult(accepted=False)
-            return EditResult(accepted=bool(tab.commit_set_data(idx, value, role)))
-
-    return _LegacyTabContext(status_sink=status_cb)
+    """Fallback when no edit context was injected; performs no parent walk."""
+    return DefaultEditContext()
 
 
 class NameDelegate(_TextEditorDelegateBase):
