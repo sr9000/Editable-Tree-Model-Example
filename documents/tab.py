@@ -327,6 +327,14 @@ class JsonTab(QWidget):
 
     @property
     def _mutation_debounce_timer(self) -> QTimer:
+        import warnings
+
+        warnings.warn(
+            "JsonTab._mutation_debounce_timer is deprecated; "
+            "use tab.validation.debounce_timer instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.validation.debounce_timer
 
     @property
