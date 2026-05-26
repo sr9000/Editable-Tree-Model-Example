@@ -584,3 +584,38 @@ def expand_all(tree_view: QTreeView) -> bool:
 def collapse_all(tree_view: QTreeView) -> bool:
     tree_view.collapseAll()
     return True
+
+
+def expand_selection_recursive(tree_view: QTreeView) -> bool:
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    roots = [idx for idx in _top_level_selected_rows(tree_view) if idx.isValid() and not _is_root_index(model, idx)]
+    if not roots:
+        return False
+    changed = False
+    for src in roots:
+        view_idx = _to_view_index(tree_view, _row0(model, src))
+        if not view_idx.isValid():
+            continue
+        tree_view.expandRecursively(view_idx)
+        changed = True
+    return changed
+
+
+def collapse_selection_recursive(tree_view: QTreeView) -> bool:
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    roots = [idx for idx in _top_level_selected_rows(tree_view) if idx.isValid() and not _is_root_index(model, idx)]
+    if not roots:
+        return False
+
+    changed = False
+    for src in roots:
+        for row0 in _iter_subtree_rows(model, src):
+            view_idx = _to_view_index(tree_view, row0)
+            if view_idx.isValid():
+                tree_view.collapse(view_idx)
+                changed = True
+    return changed

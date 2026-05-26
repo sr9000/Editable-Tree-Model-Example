@@ -22,11 +22,11 @@ from tree_actions.paste import (
 )
 from tree_actions.selection import _index_path, _resolve_model, _row0, _to_source_index, selected_source_rows
 from tree_actions.structure import (
-    collapse_all,
+    collapse_selection_recursive,
     cut_selection,
     delete_selection,
     duplicate_selection,
-    expand_all,
+    expand_selection_recursive,
     insert_child_current,
     insert_sibling_after,
     insert_sibling_before,
@@ -42,6 +42,8 @@ _BASE64_TYPES = {JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP}
 
 
 def _add(menu: QMenu, text: str, slot, *, enabled: bool = True, shortcut: str | None = None):
+    if not enabled:
+        return None
     act = menu.addAction(text)
     if shortcut is not None:
         act.setShortcut(QKeySequence(shortcut))
@@ -149,6 +151,8 @@ def _selected_base64_value_index(tree_view: QTreeView):
 
 
 def _add_switch_case_submenu(menu: QMenu, title: str, tree_view: QTreeView, *, recursive: bool, enabled: bool) -> None:
+    if not enabled:
+        return
     sub = menu.addMenu(title)
     sub.setEnabled(enabled)
     for case_style in FIELD_CASE_ORDER:
@@ -269,11 +273,7 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
     if col == 1:
         if _trigger_type_combo_from_context_menu(tree_view, index):
             return
-        _add(context_menu, "Expand All", lambda: expand_all(tree_view))
-        _add(context_menu, "Collapse All", lambda: collapse_all(tree_view))
-        if execute:
-            context_menu.exec(tree_view.mapToGlobal(position))
-        return context_menu
+        return None
 
     # ------------------------------------------------------------------
     # Capability flags driven by current selection
@@ -331,104 +331,76 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
     )
 
     base64_value_index = _selected_base64_value_index(tree_view)
-    _add(
-        context_menu,
-        "Attach from...",
-        lambda: attach_base64_from_file(tree_view),
-        enabled=base64_value_index is not None,
-    )
-    _add(
-        context_menu,
-        "Save as...",
-        lambda: save_base64_as_file(tree_view),
-        enabled=base64_value_index is not None,
-    )
+    _add(context_menu, "Attach from...", lambda: attach_base64_from_file(tree_view), enabled=base64_value_index is not None)
+    _add(context_menu, "Save as...", lambda: save_base64_as_file(tree_view), enabled=base64_value_index is not None)
 
     # ------------------------------------------------------------------
     # Paste submenu (placement-aware) + auto Paste shortcut
     # ------------------------------------------------------------------
-    paste_menu = context_menu.addMenu("Paste")
-    paste_menu.setEnabled(clipboard_has)
-    _add(
-        paste_menu,
-        "Paste (auto)",
-        lambda: paste_auto(tree_view),
-        enabled=clipboard_has,
-        shortcut="Ctrl+V",
-    )
-    _add(
-        paste_menu,
-        "Paste at All Selected",
-        lambda: paste_clones_at_targets(tree_view),
-        enabled=clipboard_has and selection_count > 1,
-    )
-    _add(
-        paste_menu,
-        "Paste Each After Selected",
-        lambda: paste_insert_after_zip(tree_view),
-        enabled=clipboard_has and selection_count > 1,
-        shortcut="Ctrl+Shift+V",
-    )
-    _add(
-        paste_menu,
-        "Replace Each Selected Value",
-        lambda: paste_replace_zip(tree_view),
-        enabled=clipboard_has and selection_count > 1,
-        shortcut="Ctrl+Alt+V",
-    )
-    paste_menu.addSeparator()
-    _add(
-        paste_menu,
-        "Paste Before",
-        lambda: paste_before(tree_view),
-        enabled=clipboard_has and has_non_root,
-    )
-    _add(
-        paste_menu,
-        "Paste After",
-        lambda: paste_after(tree_view),
-        enabled=clipboard_has and has_non_root,
-    )
-    _add(
-        paste_menu,
-        "Paste as Child",
-        lambda: paste_as_child(tree_view),
-        enabled=clipboard_has and is_container,
-    )
-    paste_menu.addSeparator()
-    _add(
-        paste_menu,
-        "Paste — Replace Value",
-        lambda: paste_replace_value(tree_view),
-        enabled=clipboard_has and has_non_root,
-    )
+    if clipboard_has:
+        paste_menu = context_menu.addMenu("Paste")
+        top_actions = 0
+        placement_actions = 0
+        _a = _add(paste_menu, "Paste (auto)", lambda: paste_auto(tree_view), enabled=True, shortcut="Ctrl+V")
+        top_actions += int(_a is not None)
+        _a = _add(
+            paste_menu,
+            "Paste at All Selected",
+            lambda: paste_clones_at_targets(tree_view),
+            enabled=selection_count > 1,
+        )
+        top_actions += int(_a is not None)
+        _a = _add(
+            paste_menu,
+            "Paste Each After Selected",
+            lambda: paste_insert_after_zip(tree_view),
+            enabled=selection_count > 1,
+            shortcut="Ctrl+Shift+V",
+        )
+        top_actions += int(_a is not None)
+        _a = _add(
+            paste_menu,
+            "Replace Each Selected Value",
+            lambda: paste_replace_zip(tree_view),
+            enabled=selection_count > 1,
+            shortcut="Ctrl+Alt+V",
+        )
+        top_actions += int(_a is not None)
+
+        _a = _add(paste_menu, "Paste Before", lambda: paste_before(tree_view), enabled=has_non_root)
+        placement_actions += int(_a is not None)
+        _a = _add(paste_menu, "Paste After", lambda: paste_after(tree_view), enabled=has_non_root)
+        placement_actions += int(_a is not None)
+        _a = _add(paste_menu, "Paste as Child", lambda: paste_as_child(tree_view), enabled=is_container)
+        placement_actions += int(_a is not None)
+        _replace = _add(
+            paste_menu,
+            "Paste — Replace Value",
+            lambda: paste_replace_value(tree_view),
+            enabled=has_non_root,
+        )
+        if top_actions and (placement_actions or _replace is not None):
+            paste_menu.insertSeparator(paste_menu.actions()[top_actions])
+        if placement_actions and _replace is not None:
+            paste_menu.addSeparator()
 
     # ------------------------------------------------------------------
     # Insert submenu (fresh empty node) — three placements
     # ------------------------------------------------------------------
-    insert_menu = context_menu.addMenu("Insert")
-    _add(
-        insert_menu,
-        "Insert Before",
-        lambda: insert_sibling_before(tree_view),
-        enabled=has_non_root,
-        shortcut="Ctrl+I",
-    )
-    _add(
-        insert_menu,
-        "Insert After",
-        lambda: insert_sibling_after(tree_view),
-        enabled=has_non_root,
-        shortcut="Ctrl+Shift+I",
-    )
-    _add(
-        insert_menu,
-        "Insert as Child",
-        lambda: insert_child_current(tree_view),
-        enabled=can_insert_child,
-    )
+    if has_non_root or can_insert_child:
+        insert_menu = context_menu.addMenu("Insert")
+        _add(insert_menu, "Insert Before", lambda: insert_sibling_before(tree_view), enabled=has_non_root, shortcut="Ctrl+I")
+        _add(
+            insert_menu,
+            "Insert After",
+            lambda: insert_sibling_after(tree_view),
+            enabled=has_non_root,
+            shortcut="Ctrl+Shift+I",
+        )
+        _add(insert_menu, "Insert as Child", lambda: insert_child_current(tree_view), enabled=can_insert_child)
 
-    context_menu.addSeparator()
+    if context_menu.actions():
+        context_menu.addSeparator()
 
     _add(
         context_menu,
@@ -445,7 +417,8 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
         shortcut="Del",
     )
 
-    context_menu.addSeparator()
+    if context_menu.actions() and context_menu.actions()[-1].isSeparator() is False:
+        context_menu.addSeparator()
 
     # ------------------------------------------------------------------
     # Arrange group: move / sort
@@ -494,11 +467,12 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
         enabled=has_non_root,
     )
 
-    context_menu.addSeparator()
+    _add(context_menu, "Expand Recursively", lambda: expand_selection_recursive(tree_view), enabled=has_non_root)
+    _add(context_menu, "Collapse Recursively", lambda: collapse_selection_recursive(tree_view), enabled=has_non_root)
 
-    _add(context_menu, "Expand All", lambda: expand_all(tree_view))
-    _add(context_menu, "Collapse All", lambda: collapse_all(tree_view))
+    while context_menu.actions() and context_menu.actions()[-1].isSeparator():
+        context_menu.removeAction(context_menu.actions()[-1])
 
-    if execute:
+    if execute and context_menu.actions():
         context_menu.exec(tree_view.mapToGlobal(position))
     return context_menu

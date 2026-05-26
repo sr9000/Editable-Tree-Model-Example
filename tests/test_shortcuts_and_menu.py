@@ -140,7 +140,7 @@ def test_context_menu_shows_shortcuts_for_registered_actions(qtbot):
     assert seen["Move Down"] == "Alt+Down"
     assert seen["Move Out of Parent (Up)"] == "Ctrl+Alt+Up"
     assert seen["Move Out of Parent (Down)"] == "Ctrl+Alt+Down"
-    assert seen["Sort Keys"] == "Ctrl+Alt+S"
+    assert "Sort Keys" not in seen
 
 
 def test_main_menu_actions_are_disabled_when_inactive(qtbot):
