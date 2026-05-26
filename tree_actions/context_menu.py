@@ -136,6 +136,70 @@ def _status_message(tree_view: QTreeView, text: str, timeout_ms: int = 3000) -> 
         cb(text, timeout_ms)
 
 
+def _search_is_active(tree_view: QTreeView) -> bool:
+    tab = _find_enter_edit_target(tree_view)
+    if tab is None:
+        return False
+    search_edit = getattr(tab, "search_edit", None)
+    if search_edit is None:
+        return False
+    return bool(search_edit.text().strip())
+
+
+def _goto_row_and_clear_search(tree_view: QTreeView, clicked_index) -> bool:
+    source_model, _proxy = _resolve_model(tree_view)
+    if source_model is None or not clicked_index.isValid():
+        return False
+
+    source_index = _to_source_index(clicked_index)
+    if not source_index.isValid():
+        return False
+    source_row = _row0(source_model, source_index)
+    if not source_row.isValid():
+        return False
+    source_path = _index_path(source_row)
+    target_col = max(0, min(2, int(source_index.column())))
+
+    tab = _find_enter_edit_target(tree_view)
+    if tab is None:
+        return False
+
+    search_edit = getattr(tab, "search_edit", None)
+    if search_edit is None:
+        return False
+
+    if search_edit.text():
+        search_edit.clear()
+        apply_filter = getattr(tab, "_apply_filter", None)
+        if callable(apply_filter):
+            apply_filter()
+
+    idx = tab._index_from_path(source_path)
+    if not idx.isValid():
+        return False
+    source_target = idx.siblingAtColumn(target_col)
+    if not source_target.isValid():
+        source_target = idx.siblingAtColumn(0)
+    view_target = tab._source_to_view(source_target)
+    if not view_target.isValid():
+        return False
+
+    parent = view_target.parent()
+    while parent.isValid():
+        tree_view.expand(parent)
+        parent = parent.parent()
+
+    tree_view.scrollTo(view_target)
+    sm = tree_view.selectionModel()
+    if sm is not None:
+        sm.select(
+            view_target,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+        )
+        sm.setCurrentIndex(view_target, QItemSelectionModel.SelectionFlag.NoUpdate)
+    return True
+
+
 def _selected_base64_value_index(tree_view: QTreeView):
     source_model, _proxy = _resolve_model(tree_view)
     if source_model is None:
@@ -322,6 +386,12 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
         copy_slot = lambda: copy_selection(tree_view)
 
     _add(context_menu, "Copy", copy_slot, enabled=has_selection, shortcut="Ctrl+C")
+    _add(
+        context_menu,
+        "Go To",
+        lambda _checked=False, idx=index: _goto_row_and_clear_search(tree_view, idx),
+        enabled=_search_is_active(tree_view) and index.isValid(),
+    )
     _add(
         context_menu,
         "Cut",
