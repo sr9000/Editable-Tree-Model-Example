@@ -11,6 +11,7 @@ import gmpy2
 from PySide6.QtCore import QEvent, QItemSelectionModel, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
+from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
@@ -237,6 +238,9 @@ class JsonTab(QWidget):
 
         init_model(self, model_data, show_root=show_root)
         self.affix_mru.bootstrap_from_tree(self.model.root_item)
+        # Phase-0 façade: publishes a stable mutation seam over the current
+        # in-tab implementation; later commits move the implementation out.
+        self.mutations = DocumentMutationGateway(self)
 
         # ── auto-rescan debouncer ──────────────────────────────────────────
         # Gate flag; toggled by set_auto_rescan().  Connections are kept alive
