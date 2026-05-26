@@ -232,10 +232,6 @@ class JsonTab(QWidget):
         self.save_format: str | None = save_format
         self.affix_mru = AffixMRU()
         self._dirty = False
-        self._schema_ref = SchemaRef(path=None, inline=None, origin="none")
-        self._schema_source: SchemaSource | None = None
-        self._schema: dict[str, Any] | None = None
-        self._issue_index = IssueIndex([], model_data)
 
         init_model(self, model_data, show_root=show_root)
         self.affix_mru.bootstrap_from_tree(self.model.root_item)
@@ -243,22 +239,17 @@ class JsonTab(QWidget):
         # in-tab implementation; later commits move the implementation out.
         self.mutations = DocumentMutationGateway(self)
 
-        # ── auto-rescan debouncer ──────────────────────────────────────────
-        # Gate flag; toggled by set_auto_rescan().  Connections are kept alive
-        # permanently to avoid Qt-disconnect quirks — the gate is cheap.
-        self._auto_rescan: bool = False
-        self._mutation_debounce_timer = QTimer(self)
-        self._mutation_debounce_timer.setSingleShot(True)
-        self._mutation_debounce_timer.setInterval(250)
-        self._mutation_debounce_timer.timeout.connect(self.revalidate)
-        # dataChanged carries roles — we must ignore our own validation-repaint
-        # emissions to avoid an infinite loop.
-        self.model.dataChanged.connect(self._on_data_changed_mutation)
-        self.model.rowsInserted.connect(self._schedule_debounced_revalidation)
-        self.model.rowsRemoved.connect(self._schedule_debounced_revalidation)
-        self.model.rowsMoved.connect(self._schedule_debounced_revalidation)
-        self.model.modelReset.connect(self._schedule_debounced_revalidation)
-        # ──────────────────────────────────────────────────────────────────
+        # Phase-2.1: schema / validation / debounce timer / registry binding
+        # are owned by an explicit QObject controller parented to the tab.
+        from documents.tab_validation import TabValidationController
+
+        self.validation = TabValidationController(
+            self,
+            self.model,
+            on_schema_changed=lambda ref: self.schemaChanged.emit(ref),
+            on_validation_changed=lambda idx: self.validationChanged.emit(idx),
+            initial_data=model_data,
+        )
 
         init_delegates_and_connections(self, update_actions_callback)
         self.set_monospace_fields_enabled(self._monospace_fields_enabled)
@@ -269,7 +260,6 @@ class JsonTab(QWidget):
         self.model.set_issue_index_provider(self._severity_provider)
         self.validationChanged.connect(self._on_validation_changed)
         init_validation_state(self, model_data)
-        schema_registry.schemaReloaded.connect(self._on_registry_schema_reloaded)
         self._diff_applier = DiffApplier(self)
 
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
@@ -284,15 +274,45 @@ class JsonTab(QWidget):
 
     @property
     def schema(self) -> dict[str, Any] | None:
-        return self._schema
+        return self.validation.schema
 
     @property
     def schema_ref(self) -> SchemaRef:
-        return self._schema_ref
+        return self.validation.schema_ref
 
     @property
     def schema_source(self) -> SchemaSource | None:
-        return self._schema_source
+        return self.validation.schema_source
+
+    # ----- deprecated private accessors kept for tests (Issue 16) -------
+    @property
+    def _schema(self):
+        return self.validation.schema
+
+    @property
+    def _schema_ref(self) -> SchemaRef:
+        return self.validation.schema_ref
+
+    @property
+    def _schema_source(self) -> SchemaSource | None:
+        return self.validation.schema_source
+
+    @_schema_source.setter
+    def _schema_source(self, value) -> None:
+        # Tests set this directly; keep the controller in sync.
+        self.validation._schema_source = value
+
+    @property
+    def _issue_index(self) -> IssueIndex:
+        return self.validation.issue_index
+
+    @property
+    def _mutation_debounce_timer(self) -> QTimer:
+        return self.validation.debounce_timer
+
+    @property
+    def _auto_rescan(self) -> bool:
+        return self.validation.auto_rescan
 
     @property
     def is_read_only(self) -> bool:
@@ -316,97 +336,45 @@ class JsonTab(QWidget):
             self.view.setDragDropMode(self._editable_drag_drop_mode)
 
     def set_schema_view_source(self, source: SchemaSource | None) -> None:
-        """Tag this tab as representing *source* for navigation/pool reuse."""
-        self._schema_source = source
-        self._schema_ref = (
-            source.as_ref(origin="manual") if source is not None else SchemaRef(path=None, inline=None, origin="none")
-        )
-        self.schemaChanged.emit(self._schema_ref)
+        self.validation.set_schema_view_source(source)
 
     @property
     def issue_index(self) -> IssueIndex:
-        return self._issue_index
+        return self.validation.issue_index
 
     def _init_validation_state(self, model_data: Any, *, doc_path: Path | None = None) -> None:
-        from state.validation_settings import _is_url, read_schema_ref_str
-
-        if doc_path is None and self.file_path:
-            doc_path = Path(self.file_path).expanduser().resolve()
-        ref = discover_schema(doc_path, model_data)
-
-        # Fall back to any previously persisted manual binding.
-        if ref.origin == "none" and doc_path is not None:
-            persisted = read_schema_ref_str(doc_path)
-            if persisted is not None:
-                if _is_url(persisted):
-                    candidate = SchemaRef(path=None, inline=None, origin="manual", url=persisted)
-                else:
-                    candidate = SchemaRef(path=Path(persisted), inline=None, origin="manual")
-                try:
-                    loaded = load_schema(candidate)
-                except Exception:
-                    loaded = None
-                if loaded is not None:
-                    if _is_url(persisted):
-                        ref = SchemaRef(path=None, inline=dict(loaded), origin="manual", url=persisted)
-                    else:
-                        ref = SchemaRef(path=Path(persisted), inline=dict(loaded), origin="manual")
-
-        self.set_schema(ref)
+        self.validation.init_state(model_data, doc_path=doc_path)
 
     def set_schema(self, ref: SchemaRef) -> None:
-        self._swap_source(SchemaSource.from_ref(ref), ref)
+        self.validation.set_schema(ref)
 
     def set_schema_from_source(self, source: SchemaSource) -> None:
-        self._swap_source(source, source.as_ref())
+        self.validation.set_schema_from_source(source)
 
     def _swap_source(self, source: SchemaSource | None, ref: SchemaRef) -> None:
-        if self._schema_source is not None:
-            schema_registry.release(self._schema_source, self)
-
-        inline_hint = ref.inline if isinstance(ref.inline, Mapping) else None
-        entry = schema_registry.acquire(source, self, inline_hint=inline_hint) if source is not None else None
-
-        self._schema_source = source
-        self._schema_ref = ref
-        if source is None and ref.inline is not None:
-            self._schema = dict(ref.inline)
-        else:
-            self._schema = entry.inline if entry is not None else None
-        self.schemaChanged.emit(self._schema_ref)
-        self.revalidate()
+        # Kept for tests that monkey-patch the path; forward to controller.
+        self.validation._swap_source(source, ref)
 
     def clear_schema(self) -> None:
-        self.set_schema(SchemaRef(path=None, inline=None, origin="none"))
+        self.validation.clear_schema()
 
     def closeEvent(self, event):  # type: ignore[override]
-        if self._schema_source is not None:
-            schema_registry.release(self._schema_source, self)
-            self._schema_source = None
+        self.validation.release()
         super().closeEvent(event)
 
     def _on_registry_schema_reloaded(self, source: SchemaSource) -> None:
-        if source == self._schema_source:
-            self.revalidate()
+        # Kept as a deprecated shim — the controller installs its own slot.
+        self.validation._on_registry_schema_reloaded(source)
 
     def revalidate(self) -> None:
-        root_data = self.model.root_item.to_json()
-        issues: list[ValidationIssue] = []
-        if self._schema is not None:
-            sanitized = to_jsonschema_input(root_data)
-            if self.save_format == SAVE_FORMAT_YAML_MULTI and isinstance(sanitized, list):
-                issues = validate_yaml_documents(sanitized, self._schema)
-            else:
-                issues = validate_document(sanitized, self._schema)
-        self._issue_index = IssueIndex(issues, root_data)
-        self.validationChanged.emit(self._issue_index)
+        self.validation.revalidate()
 
     # ── auto-rescan API ───────────────────────────────────────────────────
 
     @property
     def auto_rescan(self) -> bool:
         """True when model mutations trigger debounced revalidation."""
-        return self._auto_rescan
+        return self.validation.auto_rescan
 
     def set_auto_rescan(self, enabled: bool) -> None:
         """Enable or disable automatic revalidation on model mutations.
@@ -416,28 +384,15 @@ class JsonTab(QWidget):
         250 ms trailing debounce timer that calls ``revalidate()``.
         Disabling cancels any pending debounce.
         """
-        enabled = bool(enabled)
-        if self._auto_rescan == enabled:
-            return
-        self._auto_rescan = enabled
-        if not enabled:
-            self._mutation_debounce_timer.stop()
+        self.validation.set_auto_rescan(enabled)
 
     def _on_data_changed_mutation(self, top_left, bottom_right, roles=None) -> None:  # noqa: ARG002
-        """Slot for ``model.dataChanged`` — ignores our own validation repaints."""
-        if not self._auto_rescan:
-            return
-        # Skip emissions that carry only VALIDATION_SEVERITY_ROLE; those are
-        # emitted by _on_validation_changed() itself and would cause a loop.
-        if roles is not None and len(roles) > 0 and all(r == VALIDATION_SEVERITY_ROLE for r in roles):
-            return
-        self._mutation_debounce_timer.start()
+        # Deprecated façade — the controller owns the slot now.
+        self.validation._on_data_changed_mutation(top_left, bottom_right, roles)
 
     def _schedule_debounced_revalidation(self, *_args) -> None:
-        """Slot for structural model signals (rows inserted/removed/moved/reset)."""
-        if not self._auto_rescan:
-            return
-        self._mutation_debounce_timer.start()
+        # Deprecated façade — the controller owns the slot now.
+        self.validation._schedule_debounced_revalidation(*_args)
 
     # ─────────────────────────────────────────────────────────────────────
 
@@ -491,10 +446,7 @@ class JsonTab(QWidget):
 
     def _severity_provider(self, model_path: tuple[int, ...]) -> str | None:
         """Lazily queried by the model for VALIDATION_SEVERITY_ROLE."""
-        exact = self._issue_index.severity_at(model_path)
-        if exact is not None:
-            return exact
-        return self._issue_index.ancestor_severity(model_path)
+        return self.validation.severity_for(model_path)
 
     def _on_validation_changed(self, _index: IssueIndex) -> None:
         """Emit recursive dataChanged so all visible rows repaint their badges."""
