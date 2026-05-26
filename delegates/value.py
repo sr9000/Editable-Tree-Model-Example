@@ -31,6 +31,7 @@ from datetime_editor.enums import DateTimeCategory
 from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase, paint_editor_underlay
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.color_codec import color_to_html, parse_color
+from delegates.edit_context import DefaultEditContext, DelegateEditContext, EditResult
 from delegates.number_affix_delegate import (
     AffixCompositeEditor,
     is_affix_json_type,
@@ -139,13 +140,65 @@ class _SecretEditorWatcher(QObject):
             self._delegate._finalize_secret_editor(self._editor, self._index)
 
 
+def _find_tab_via_parent(host) -> object | None:
+    cursor = host
+    while cursor is not None:
+        if hasattr(cursor, "commit_set_data"):
+            return cursor
+        cursor = cursor.parent() if hasattr(cursor, "parent") else None
+    return None
+
+
+def _tab_adapter_context(host) -> DelegateEditContext:
+    """Build a transitional context that adapts to a JsonTab found via the
+    parent chain.  Once Phase 1.2 wires an explicit context into delegates,
+    this helper is no longer reached.
+    """
+    tab = _find_tab_via_parent(host)
+    if tab is None:
+        return DefaultEditContext()
+    status_cb = getattr(tab, "_status_message_callback", None)
+    mru = getattr(tab, "affix_mru", None)
+    icons = getattr(tab, "_icon_provider", None)
+
+    class _LegacyTabContext(DefaultEditContext):
+        def commit(self, index, value, role=Qt.ItemDataRole.EditRole):  # type: ignore[override]
+            idx = index
+            if isinstance(idx, QPersistentModelIndex):
+                idx = QModelIndex(idx)
+            if idx.model() is None:
+                return EditResult(accepted=False)
+            return EditResult(accepted=bool(tab.commit_set_data(idx, value, role)))
+
+    return _LegacyTabContext(status_sink=status_cb, affix_mru=mru, icon_provider=icons)
+
+
 class ValueDelegate(_TextEditorDelegateBase):
-    def __init__(self, parent=None, *, theme: ThemeSpec | None = None):
+    def __init__(
+        self,
+        parent=None,
+        *,
+        theme: ThemeSpec | None = None,
+        edit_context: DelegateEditContext | None = None,
+    ):
         super().__init__(parent)
         self._theme = theme or LIGHT_DEFAULT
         self._monospace_fields_enabled = False
         self._mono_family = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
         self._secret_watchers: dict[QWidget, _SecretEditorWatcher] = {}
+        self._edit_context: DelegateEditContext | None = edit_context
+
+    # ----- edit-context plumbing -----
+    def set_edit_context(self, context: DelegateEditContext | None) -> None:
+        self._edit_context = context
+
+    def _context_for(self, host) -> DelegateEditContext:
+        if self._edit_context is not None:
+            return self._edit_context
+        # Transitional: until Phase 1.2 wires an explicit context, derive one
+        # from the host widget hierarchy.  Once tab_setup injects a context,
+        # this fallback is never reached.
+        return _tab_adapter_context(host)
 
     def set_theme(self, theme: ThemeSpec) -> None:
         self._theme = theme
@@ -294,6 +347,8 @@ class ValueDelegate(_TextEditorDelegateBase):
 
     @staticmethod
     def _find_tab(host) -> object | None:
+        # Deprecated transitional helper.  Phase 1.2 deletes all parent
+        # crawling; use ``self._edit_context`` collaborators instead.
         cursor = host
         while cursor is not None:
             if hasattr(cursor, "commit_set_data"):
@@ -301,63 +356,31 @@ class ValueDelegate(_TextEditorDelegateBase):
             cursor = cursor.parent() if hasattr(cursor, "parent") else None
         return None
 
-    @staticmethod
     def _commit(
+        self,
         index: QModelIndex | QPersistentModelIndex,
         value,
         role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole,
         host=None,
     ) -> bool:
         idx = ValueDelegate._to_index(index)
-        model = idx.model()
-        if model is None:
+        if idx.model() is None:
             return False
+        ctx = self._context_for(host)
+        result = ctx.commit(idx, value, role)
+        return bool(result)
 
-        tab = ValueDelegate._find_tab(host)
-        if tab is not None:
-            return bool(tab.commit_set_data(idx, value, role))
-        return bool(model.setData(idx, value, role))
+    def _notify_status(self, host, message: str, timeout: int = 3000) -> None:
+        """Surface a transient status message via the injected edit context."""
+        self._context_for(host).notify_status(message, timeout)
 
-    @staticmethod
-    def _notify_status(host, message: str, timeout: int = 3000) -> None:
-        """Surface a transient status message via the owning tab's status callback, if available."""
-        tab = ValueDelegate._find_tab(host)
-        cb = getattr(tab, "_status_message_callback", None) if tab is not None else None
-        if cb is not None:
-            try:
-                cb(message, timeout)
-            except Exception:
-                pass
+    def _confirm_large_binary_edit(self, host, payload_size: int) -> bool:
+        return self._context_for(host).confirm_large_binary_edit(host, payload_size)
 
-    @staticmethod
-    def _confirm_large_binary_edit(host, payload_size: int) -> bool:
-        limit = get_binary_edit_warning_limit_bytes()
-        if payload_size <= limit:
-            return True
-
-        answer = QMessageBox.warning(
-            host,
-            "Large binary value",
-            f"Binary value is {format_bytes(payload_size)}!\n"
-            f"Limit is {format_bytes(limit)}.\n"
-            f"Continue editing?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
+    def _confirm_large_text_edit(self, host, *, text_len: int, limit: int, title: str, kind: str) -> bool:
+        return self._context_for(host).confirm_large_text_edit(
+            host, text_len=text_len, limit=limit, title=title, kind=kind
         )
-        return answer == QMessageBox.StandardButton.Yes
-
-    @staticmethod
-    def _confirm_large_text_edit(host, *, text_len: int, limit: int, title: str, kind: str) -> bool:
-        if text_len <= limit:
-            return True
-        answer = QMessageBox.warning(
-            host,
-            title,
-            f"{kind} is {counts(text_len)} chars!\n" f"Limit is {counts(limit)}.\n" f"Continue editing?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        return answer == QMessageBox.StandardButton.Yes
 
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget | None:
         source_index = self._source_index(index)
@@ -366,12 +389,12 @@ class ValueDelegate(_TextEditorDelegateBase):
         editor = None
         match item.json_type:
             case _ if is_affix_json_type(item.json_type):
-                tab = self._find_tab(parent)
-                mru = getattr(tab, "affix_mru", None)
+                ctx = self._context_for(parent)
+                mru = ctx.affix_mru()
                 kind = kind_for_json_type(item.json_type)
                 mru_items = mru.items(kind) if mru is not None and hasattr(mru, "items") else []
                 icon = QIcon()
-                provider = getattr(tab, "_icon_provider", None)
+                provider = ctx.icon_provider()
                 if provider is not None and hasattr(provider, "for_key"):
                     key = "affix_prefix" if kind.value == "prefix" else "affix_suffix"
                     icon = provider.for_key(key)
@@ -615,8 +638,7 @@ class ValueDelegate(_TextEditorDelegateBase):
                 return
             editor.set_invalid(False)
             if self._commit(index, validated, Qt.ItemDataRole.EditRole, host=editor):
-                tab = self._find_tab(editor)
-                mru = getattr(tab, "affix_mru", None)
+                mru = self._context_for(editor).affix_mru()
                 if mru is not None and hasattr(mru, "push"):
                     mru.push(validated.kind, validated.affix)
             return

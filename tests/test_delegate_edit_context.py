@@ -74,3 +74,89 @@ def test_default_context_confirm_below_limit_auto_accepts():
     # When text length is at or below the limit, no dialog should appear.
     assert ctx.confirm_large_text_edit(None, text_len=0, limit=1000, title="t", kind="k") is True
     assert ctx.confirm_large_binary_edit(None, 0) is True
+
+
+# ---------------------------------------------------------------------------
+# Contract: the three delegates accept ``edit_context`` and route through it.
+# ---------------------------------------------------------------------------
+
+
+class _RecordingContext(DefaultEditContext):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.commits: list[tuple[int, object, int]] = []
+        self._next_result = EditResult(accepted=True)
+
+    def set_next_result(self, result: EditResult) -> None:
+        self._next_result = result
+
+    def commit(self, index, value, role=Qt.ItemDataRole.EditRole):  # type: ignore[override]
+        self.commits.append((index.row(), value, int(role)))
+        return self._next_result
+
+
+def _make_model() -> QStandardItemModel:
+    m = QStandardItemModel(1, 3)
+    for col in range(3):
+        m.setItem(0, col, QStandardItem(f"c{col}"))
+    return m
+
+
+def test_value_delegate_uses_context_commit(_qapp):
+    from PySide6.QtWidgets import QLineEdit
+
+    from delegates.value import ValueDelegate
+
+    ctx = _RecordingContext()
+    delegate = ValueDelegate(edit_context=ctx)
+
+    model = _make_model()
+    idx = model.index(0, 2)
+
+    editor = QLineEdit()
+    editor.setText("typed")
+    delegate.setModelData(editor, model, idx)
+
+    assert ctx.commits and ctx.commits[0][1] == "typed"
+
+
+def test_name_delegate_uses_context_commit(_qapp):
+    from PySide6.QtWidgets import QLineEdit
+
+    from delegates.name_delegate import NameDelegate
+
+    ctx = _RecordingContext()
+    delegate = NameDelegate(edit_context=ctx)
+
+    model = _make_model()
+    idx = model.index(0, 0)
+
+    editor = QLineEdit()
+    editor.setText("newname")
+    delegate.setModelData(editor, model, idx)
+
+    assert ctx.commits == [(0, "newname", int(Qt.ItemDataRole.EditRole))]
+
+
+def test_type_delegate_reopen_via_edit_result(_qapp):
+    from PySide6.QtWidgets import QComboBox
+
+    from delegates.type_delegate import JsonTypeDelegate
+    from tree.types import JsonType
+
+    ctx = _RecordingContext()
+    ctx.set_next_result(EditResult(accepted=True, reopen_value_editor=True))
+    delegate = JsonTypeDelegate(edit_context=ctx)
+
+    model = _make_model()
+    idx = model.index(0, 1)
+
+    editor = QComboBox()
+    editor.addItem("string", JsonType.STRING)
+    editor.setCurrentIndex(0)
+
+    delegate.setModelData(editor, model, idx)
+
+    assert delegate.last_edit_result is not None
+    assert delegate.last_edit_result.accepted is True
+    assert delegate.last_edit_result.reopen_value_editor is True

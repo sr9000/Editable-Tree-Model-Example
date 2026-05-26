@@ -1,8 +1,9 @@
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QLineEdit, QStyleOptionViewItem, QWidget
 
 from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase, paint_editor_underlay
+from delegates.edit_context import DefaultEditContext, DelegateEditContext, EditResult
 from delegates.validation_badge import draw_severity_badge
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
@@ -10,6 +11,7 @@ from tree.model_roles import VALIDATION_SEVERITY_ROLE
 
 
 def _find_tab(host) -> object | None:
+    """Deprecated transitional helper.  Phase 1.2 removes parent crawling."""
     cursor = host
     while cursor is not None:
         if hasattr(cursor, "commit_set_data"):
@@ -18,23 +20,43 @@ def _find_tab(host) -> object | None:
     return None
 
 
-def _commit(index: QModelIndex, value, role: Qt.ItemDataRole, host=None) -> bool:
-    model = index.model()
-    if model is None:
-        return False
-
+def _tab_adapter_context(host) -> DelegateEditContext:
     tab = _find_tab(host)
-    if tab is not None:
-        return bool(tab.commit_set_data(index, value, role))
-    return bool(model.setData(index, value, role))
+    if tab is None:
+        return DefaultEditContext()
+    status_cb = getattr(tab, "_status_message_callback", None)
+
+    class _LegacyTabContext(DefaultEditContext):
+        def commit(self, index, value, role=Qt.ItemDataRole.EditRole):  # type: ignore[override]
+            idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+            if idx.model() is None:
+                return EditResult(accepted=False)
+            return EditResult(accepted=bool(tab.commit_set_data(idx, value, role)))
+
+    return _LegacyTabContext(status_sink=status_cb)
 
 
 class NameDelegate(_TextEditorDelegateBase):
-    def __init__(self, parent=None, *, theme: ThemeSpec | None = None):
+    def __init__(
+        self,
+        parent=None,
+        *,
+        theme: ThemeSpec | None = None,
+        edit_context: DelegateEditContext | None = None,
+    ):
         super().__init__(parent)
         self._theme = theme or LIGHT_DEFAULT
         self._monospace_fields_enabled = False
         self._mono_family = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
+        self._edit_context: DelegateEditContext | None = edit_context
+
+    def set_edit_context(self, context: DelegateEditContext | None) -> None:
+        self._edit_context = context
+
+    def _context_for(self, host) -> DelegateEditContext:
+        if self._edit_context is not None:
+            return self._edit_context
+        return _tab_adapter_context(host)
 
     def set_theme(self, theme: ThemeSpec) -> None:
         self._theme = theme
@@ -83,4 +105,4 @@ class NameDelegate(_TextEditorDelegateBase):
         editor.setText(str(index.data(Qt.ItemDataRole.EditRole) or ""))
 
     def setModelData(self, editor: QLineEdit, model: QAbstractItemModel, index: QModelIndex):
-        _commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
+        self._context_for(editor).commit(index, editor.text(), Qt.ItemDataRole.EditRole)

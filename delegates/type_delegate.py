@@ -3,6 +3,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
 from delegates.base import paint_editor_underlay
+from delegates.edit_context import DefaultEditContext, DelegateEditContext, EditResult
 from delegates.value_formatting import _apply_type_style
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
@@ -22,6 +23,7 @@ class JsonTypeDelegate(QStyledItemDelegate):
 
     @staticmethod
     def _find_tab(host) -> object | None:
+        """Deprecated transitional helper.  Phase 1.2 removes parent crawling."""
         cursor = host
         while cursor is not None:
             if hasattr(cursor, "commit_set_data"):
@@ -35,10 +37,12 @@ class JsonTypeDelegate(QStyledItemDelegate):
         *,
         theme: ThemeSpec | None = None,
         icon_provider: IconProvider | None = None,
+        edit_context: DelegateEditContext | None = None,
     ):
         super().__init__(parent)
         self._theme = theme or LIGHT_DEFAULT
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
+        self._edit_context: DelegateEditContext | None = edit_context
         # ``_interactive`` is set to ``True`` for the duration of an
         # interactive (user-driven) commit out of the type combo. The
         # ``JsonTab._on_type_changed`` slot reads it to decide whether to
@@ -49,7 +53,35 @@ class JsonTypeDelegate(QStyledItemDelegate):
         # ``tests/test_smoke_mainwindow.py`` from logging
         # ``edit: editing failed``.
         self._interactive: bool = False
+        # ``last_edit_result`` carries the post-commit decision (notably the
+        # ``reopen_value_editor`` flag set by the host context) so callers can
+        # consult an explicit ``EditResult`` instead of the private
+        # ``_interactive`` backchannel.
+        self.last_edit_result: EditResult | None = None
         self._active_type_edit_index: QPersistentModelIndex | None = None
+
+    def set_edit_context(self, context: DelegateEditContext | None) -> None:
+        self._edit_context = context
+
+    def _context_for(self, host) -> DelegateEditContext:
+        if self._edit_context is not None:
+            return self._edit_context
+        # Transitional: until Phase 1.2 wires an explicit context, derive a
+        # legacy adapter so type commits still go through ``JsonTab``.
+        tab = self._find_tab(host)
+        if tab is None:
+            ctx = DefaultEditContext()
+            self._edit_context = ctx
+            return ctx
+
+        class _LegacyTabContext(DefaultEditContext):
+            def commit(self, index, value, role=Qt.ItemDataRole.EditRole):  # type: ignore[override]
+                idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+                if idx.model() is None:
+                    return EditResult(accepted=False)
+                return EditResult(accepted=bool(tab.commit_set_data(idx, value, role)))
+
+        return _LegacyTabContext(status_sink=getattr(tab, "_status_message_callback", None))
 
     @staticmethod
     def _emit_icon_changed(index: QModelIndex | QPersistentModelIndex | None) -> None:
@@ -150,11 +182,8 @@ class JsonTypeDelegate(QStyledItemDelegate):
 
         self._interactive = True
         try:
-            tab = self._find_tab(editor)
-            if tab is not None:
-                tab.commit_set_data(index, selected_type, Qt.ItemDataRole.EditRole)
-                return
-
-            model.setData(index, selected_type, Qt.ItemDataRole.EditRole)
+            ctx = self._context_for(editor)
+            result = ctx.commit(index, selected_type, Qt.ItemDataRole.EditRole)
+            self.last_edit_result = result
         finally:
             self._interactive = False
