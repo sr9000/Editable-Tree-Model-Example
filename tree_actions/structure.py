@@ -537,6 +537,9 @@ def switch_selection_case(tree_view: QTreeView, case_style: FieldCase, *, recurs
     if model is None:
         return False
     rows = _top_level_selected_rows(tree_view) if recursive else _selected_rows(tree_view)
+    # When root is selected, treat it as a whole-document operation.
+    if any(idx.isValid() and _is_root_index(model, idx) for idx in rows):
+        return switch_document_case(tree_view, case_style)
     roots = [idx for idx in rows if idx.isValid() and not _is_root_index(model, idx)]
     if not roots:
         return False
@@ -584,3 +587,46 @@ def expand_all(tree_view: QTreeView) -> bool:
 def collapse_all(tree_view: QTreeView) -> bool:
     tree_view.collapseAll()
     return True
+
+
+def expand_selection_recursive(tree_view: QTreeView) -> bool:
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    all_rows = _top_level_selected_rows(tree_view)
+    # When root is selected, expand the whole document.
+    if any(idx.isValid() and _is_root_index(model, idx) for idx in all_rows):
+        return expand_all(tree_view)
+    roots = [idx for idx in all_rows if idx.isValid() and not _is_root_index(model, idx)]
+    if not roots:
+        return False
+    changed = False
+    for src in roots:
+        view_idx = _to_view_index(tree_view, _row0(model, src))
+        if not view_idx.isValid():
+            continue
+        tree_view.expandRecursively(view_idx)
+        changed = True
+    return changed
+
+
+def collapse_selection_recursive(tree_view: QTreeView) -> bool:
+    model, _proxy = _resolve_model(tree_view)
+    if model is None:
+        return False
+    all_rows = _top_level_selected_rows(tree_view)
+    # When root is selected, collapse the whole document.
+    if any(idx.isValid() and _is_root_index(model, idx) for idx in all_rows):
+        return collapse_all(tree_view)
+    roots = [idx for idx in all_rows if idx.isValid() and not _is_root_index(model, idx)]
+    if not roots:
+        return False
+
+    changed = False
+    for src in roots:
+        for row0 in _iter_subtree_rows(model, src):
+            view_idx = _to_view_index(tree_view, row0)
+            if view_idx.isValid():
+                tree_view.collapse(view_idx)
+                changed = True
+    return changed

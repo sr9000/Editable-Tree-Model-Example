@@ -18,6 +18,82 @@ Nothing here is open. Re-open an item by moving it back to
 The following bugs/features were fixed or delivered in past phases;
 listed once here so future audits don't reopen them.
 
+### File-UX sweep (shipped 2026-05-26, branch `file-ux`)
+
+Single squashed series of commits. New menu/clipboard/context-menu UX
+plus a couple of undo and field-case bug fixes.
+
+- **Reload from Disk** — `Ctrl+R`, `app/main_window.py::reload_from_disk`
+  + `_confirm_reload_dirty_tab` + `_reload_tab_from_path`. Three-button
+  dialog: Discard memory edits / Overwrite disk with memory / Cancel.
+  Reloads via `load_file_with_format` and replays through
+  `tab._diff_apply`; clears undo stack and `setClean()` on success.
+  Disabled when no `tab.file_path`.
+- **Close Tab / Reopen Closed Tab** — `Ctrl+W` / `Ctrl+Shift+T`,
+  LIFO `_closed_tabs_stack` capped at `_MAX_CLOSED_TABS = 10`. Empty
+  untitled tabs close without prompt; non-empty untitled tabs prompt
+  via `confirm_close(..., prompt_for_untitled_nonempty=True)`
+  (`app/close_confirm.py`). Discard-on-close stores file-path-only
+  snapshot; reopen reloads from disk instead of resurrecting dirty
+  data.
+- **New From Clipboard** — `Ctrl+Space`, `MainWindow.new_from_clipboard`
+  → `tree_actions.clipboard.clipboard_to_tab_data()` (JSON, then YAML
+  single-doc, then YAML multi-doc; rejects bare scalars). Action gated
+  on `clipboard_text_is_valid_data()`.
+- **Copy as YAML text** — checkable File-menu toggle persists via
+  `state/clipboard_settings.py` (`clipboard/text_format` =
+  `json` | `yaml`). All copy paths (`build_tree_mime`,
+  `copy_selection_with_name`, `copy_selection_value_only`) route
+  through `_dump_text(payload)` which honours the setting and falls
+  back to a normalised JSON→YAML path when YAML's representer can't
+  encode `NumberAffix` etc.
+- **YAML paste** — `entries_from_mime` tries JSON first, then
+  `yaml.safe_load` accepting only `dict` / `list`. Internal
+  `application/x-json-tree` MIME still takes priority.
+- **Context-menu polish** — `tree_actions/context_menu.py::_add`
+  returns `None` for disabled actions, so inactive entries are hidden
+  rather than greyed. Type column (col 1) shows no menu instead of
+  Expand/Collapse-All. **Expand Recursively / Collapse Recursively**
+  scope to the selected subtree (root selection = whole document)
+  via `expand_selection_recursive` / `collapse_selection_recursive`
+  in `tree_actions/structure.py`. Switch Case on the root applies
+  document-wide. **Go To** action appears only while the tab's
+  `search_edit` has text; clears the filter, expands the path, and
+  selects the clicked cell.
+- **Save enabled only when dirty** — `main_window_actions.update_actions`
+  now also gates `fileSaveAction` on `tab.is_dirty`, gates
+  `fileReloadAction` on `tab.file_path`, gates close/reopen actions
+  appropriately, and is hooked into `fileMenu.aboutToShow` /
+  `viewMenu.aboutToShow` so menu state is fresh on open.
+- **Tab tooltips show full path** — `_refresh_tab_presentation(tab)`
+  sets both `tabText(display_name)` and `tabToolTip(file_path or
+  "Untitled")`; called from `_add_tab`, `_on_tab_dirty`, and the
+  reload path.
+- **Field-case tokenizer rewrite** — `tree_actions/field_case.py`
+  replaces the single regex with `_tokenize` that distinguishes
+  *hard separators* (`.`, `:`, …) from *standard separators*
+  (`_`, `-`). Each segment is re-rendered in the target case;
+  punctuation separators are preserved verbatim. Adds Unicode-letter
+  support and digit/letter boundary splitting (`http2` →
+  `Http2`/`http_2`). New cases covered in
+  `tests/test_field_case_actions.py`.
+- **Cross-parent move undo bug** — `undo/commands.py::_MoveRowsCmd`
+  now snapshots `source_names` at command construction. On redo into
+  an OBJECT parent that already contains a colliding name, the redo
+  path auto-renames (`x` → `x_2`); undo previously restored the
+  renamed string into the source. Both `redo` and `undo` arms now
+  consult `_original_name_for(...)` so undo restores the original
+  `name` exactly. Regression in
+  `tests/test_undo_multimove.py::test_cross_parent_move_undo_restores_original_name_after_collision_rename`.
+- **Tests** — new suites `test_reload_from_disk` (4),
+  `test_tab_lifecycle` (close/reopen, 14), `test_clipboard_yaml`
+  (21), `test_context_menu_visibility`, `test_context_menu_goto_search`,
+  `test_root_context_actions` (6). Existing
+  `test_tree_actions_clipboard` adjusted for the new JSON-wrapped
+  single-row copy format. `test_shortcuts_and_menu` gains
+  `test_main_menu_actions_are_disabled_when_inactive` and
+  `test_tab_tooltip_uses_full_path`.
+
 ### Step 7 — YAML support, multi-doc, schema picker, persistence (shipped 2026-05-16)
 - **`validation/_sanitize.py`** — `to_jsonschema_input` coerces `mpq`/`Decimal`/
   `datetime`/`date`/`time`/`bytes` to jsonschema-compatible primitives; precision loss is

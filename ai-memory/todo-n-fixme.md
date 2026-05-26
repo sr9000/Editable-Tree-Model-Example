@@ -1,7 +1,8 @@
 # TODO & FIXME
 
-_Last updated: **2026-05-23** (branch `new-kinds`, ~52 commits ahead
-of `master`; all three feature plans under `plans/` complete)._
+_Last updated: **2026-05-26** (branch `file-ux`; reload/close-reopen,
+YAML clipboard, search-aware Go To, hide-inactive context menu,
+field-case tokenizer fix, undo collision-rename fix)._
 
 Tracks **missing/incomplete features** (TODO) and **bugs/issues**
 (FIXME) discovered while auditing the editor codebase.
@@ -11,7 +12,36 @@ moved to [`history.md`](history.md) — see the pointer at the bottom.
 
 Format: `- [ ] [scope] description — file:symbol`
 
-> **`new-kinds` branch — closed items (this scan):**
+> **`file-ux` branch — closed items (2026-05-26):**
+> - [x] [ux] **Reload from Disk** action (`Ctrl+R`) with dirty-conflict
+>       dialog (Discard / Overwrite / Cancel).
+> - [x] [ux] **Close Tab** (`Ctrl+W`) and **Reopen Closed Tab**
+>       (`Ctrl+Shift+T`), LIFO stack capped at 10; discard-on-close
+>       reopens from disk; empty untitled tabs close without prompt.
+> - [x] [ux] **New From Clipboard** (`Ctrl+Space`) accepts JSON or
+>       YAML (single + multi-doc); rejects bare scalars.
+> - [x] [ux] **Copy as YAML text** toggle (File menu); persisted via
+>       `state/clipboard_settings.py`.
+> - [x] [ux] **YAML interop on paste** — `entries_from_mime` accepts
+>       YAML dict/list payloads after JSON parsing fails.
+> - [x] [ux] Context menu **hides** disabled actions instead of
+>       greying them; type column shows no menu.
+> - [x] [ux] **Expand / Collapse Recursively** scoped to selected
+>       subtree (root selection = whole document).
+> - [x] [ux] **Go To** context-menu action while filter is active —
+>       clears search and focuses the clicked cell.
+> - [x] [ux] Tighten `update_actions`: `Save` enabled only when
+>       `tab.is_dirty`; menus refreshed via `aboutToShow`.
+> - [x] [ux] Tab tooltip shows the full file path.
+> - [x] [bug] Field-case switch preserves non-standard punctuation
+>       (`.`, `:`) and supports Unicode letters; digit/letter
+>       boundaries handled (`tree_actions/field_case.py` tokenizer
+>       rewrite).
+> - [x] [bug] Cross-parent move undo restored the auto-renamed source
+>       name on collision; `_MoveRowsCmd` now snapshots
+>       `source_names` and restores them on undo.
+
+> **`new-kinds` branch — closed items:**
 > - [x] [feature] UTC datetime kind (`JsonType.DATETIMEUTC`) with
 >       trailing `Z`; full conversion lattice across the date/time
 >       family in `tree/types_datetime.py::convert_datetime`
@@ -299,9 +329,6 @@ Format: `- [ ] [scope] description — file:symbol`
 - [ ] [ux] Match-highlight delegate (`ValueDelegate.paint` override
       drawing a yellow background span over substring matches when
       a filter is active). — `delegates/value.py`
-- [ ] [ux] Tighten `MainWindow.update_actions` to enable `Save` only
-      when `tab.is_dirty`, or document that the current "always-on"
-      behaviour is intentional. — `app/main_window_actions.py`
 
 ### Code hygiene (low priority)
 - [ ] [hygiene] Drop the legacy `_demo_data()` seed and its

@@ -140,4 +140,60 @@ def test_context_menu_shows_shortcuts_for_registered_actions(qtbot):
     assert seen["Move Down"] == "Alt+Down"
     assert seen["Move Out of Parent (Up)"] == "Ctrl+Alt+Up"
     assert seen["Move Out of Parent (Down)"] == "Ctrl+Alt+Down"
-    assert seen["Sort Keys"] == "Ctrl+Alt+S"
+    assert "Sort Keys" not in seen
+
+
+def test_main_menu_actions_are_disabled_when_inactive(qtbot):
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        win.update_actions()
+        assert not win.fileSaveAction.isEnabled()
+        assert not win.fileSaveAsAction.isEnabled()
+        assert not win.fileCopyPathAction.isEnabled()
+
+        tab = win._add_tab(data={"a": 1}, file_path=None)
+        assert tab is not None
+        tab.file_path = "/tmp/demo.json"
+        win._refresh_tab_presentation(tab)
+        win.update_actions()
+        assert not win.fileSaveAction.isEnabled()
+        assert win.fileSaveAsAction.isEnabled()
+        assert win.fileCopyPathAction.isEnabled()
+
+        assert tab.push_insert_rows(
+            [{"parent_path": (), "row": 0, "value": 2, "name": "b"}],
+            label="mark dirty",
+        )
+        win.update_actions()
+        assert win.fileSaveAction.isEnabled()
+    finally:
+        for i in range(win.tabWidget.count()):
+            maybe_tab = win.tabWidget.widget(i)
+            if isinstance(maybe_tab, JsonTab):
+                maybe_tab.undo_stack.setClean()
+        win.close()
+        win.deleteLater()
+        QApplication.processEvents()
+
+
+def test_tab_tooltip_uses_full_path(qtbot):
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        full_path = "/tmp/very/deep/path/data.json"
+        tab = win._add_tab(data={"a": 1}, file_path=None)
+        assert tab is not None
+        tab.file_path = full_path
+        win._refresh_tab_presentation(tab)
+        index = win.tabWidget.indexOf(tab)
+        assert index >= 0
+        assert win.tabWidget.tabToolTip(index) == full_path
+    finally:
+        for i in range(win.tabWidget.count()):
+            maybe_tab = win.tabWidget.widget(i)
+            if isinstance(maybe_tab, JsonTab):
+                maybe_tab.undo_stack.setClean()
+        win.close()
+        win.deleteLater()
+        QApplication.processEvents()

@@ -91,7 +91,33 @@ tab.
 - Multi-selection copy/cut/paste/delete/duplicate.
 - Native drag-and-drop: move by default, copy with `Ctrl`.
 - Drop cycle guard: a row cannot be moved into its own descendant.
+- Context menu adapts to the selection — disabled actions are hidden
+  rather than greyed; **Expand / Collapse Recursively** scopes to
+  the selected subtree (or the whole document when the root is
+  selected).
 - Undo/redo and a **History** dialog powered by Qt's `QUndoStack`.
+
+### Tabs and files
+
+- Multiple documents open in tabs; the title bar shows a `*` for
+  unsaved changes and the tab tooltip shows the full file path.
+- **Reload from Disk** (`Ctrl+R`) re-reads the current file; if the
+  tab has unsaved edits you can Discard them, Overwrite the file with
+  the in-memory copy, or Cancel.
+- **Close Tab** (`Ctrl+W`) and **Reopen Closed Tab**
+  (`Ctrl+Shift+T`) — last 10 closed tabs are remembered. Empty
+  untitled tabs close without a prompt; untitled tabs that contain
+  data prompt to save first.
+- **New From Clipboard** (`Ctrl+Space`) opens a fresh tab from a
+  JSON or YAML payload on the system clipboard.
+
+### Clipboard
+
+- **Copy as YAML text** — File-menu toggle that switches the copy
+  text format between JSON (default) and YAML. The internal MIME
+  payload still round-trips through other tabs without loss.
+- Paste accepts JSON or YAML text from other apps; bare scalars are
+  ignored.
 
 ### Typed values and editors
 
@@ -175,26 +201,41 @@ Secret fields are detected by word-prefixes in field names (for
 example `password`, `api_key`, `authToken`, `private_key`). To edit the
 prefix list, use **File ▸ Secret word prefixes…**.
 
+### Find a row through the search filter
+
+1. Press `Ctrl+F` and type part of a key or value.
+2. Right-click a match and choose **Go To** — the filter clears and
+   the editor jumps to that row.
+
+### Reload a file edited externally
+
+If another tool changes the file on disk, press `Ctrl+R`. If you have
+unsaved edits in the tab, choose Discard to take the disk version,
+Overwrite to save your edits over disk, or Cancel.
+
 ---
 
 ## Essential shortcuts
 
-| Shortcut | Action |
-| --- | --- |
-| `Ctrl+N` / `Ctrl+O` | New / Open |
-| `Ctrl+S` / `Ctrl+Shift+S` | Save / Save As |
-| `Ctrl+F` | Focus filter |
-| `F2` or `Enter` | Edit current cell |
-| `Ctrl+I` / `Ctrl+Shift+I` | Insert sibling before / after |
-| `Del` | Remove selection |
-| `Ctrl+D` | Duplicate selection |
-| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / Cut / Paste |
-| `Ctrl+Shift+V` | Multi-paste: insert clipboard entries after selected targets |
-| `Ctrl+Alt+V` | Multi-paste: replace selected target values |
-| `Alt+↑` / `Alt+↓` | Move selection up / down |
-| `Ctrl+Alt+↑` / `Ctrl+Alt+↓` | Promote selection out of its parent |
-| `Ctrl+Alt+S` | Sort keys under selected object |
-| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |
+| Shortcut                       | Action                                                       |
+|--------------------------------|--------------------------------------------------------------|
+| `Ctrl+N` / `Ctrl+O`            | New / Open                                                   |
+| `Ctrl+Space`                   | New tab from clipboard (JSON or YAML)                        |
+| `Ctrl+R`                       | Reload current tab from disk                                 |
+| `Ctrl+S` / `Ctrl+Shift+S`      | Save / Save As                                               |
+| `Ctrl+W` / `Ctrl+Shift+T`      | Close current tab / Reopen last closed tab                   |
+| `Ctrl+F`                       | Focus filter                                                 |
+| `F2` or `Enter`                | Edit current cell                                            |
+| `Ctrl+I` / `Ctrl+Shift+I`      | Insert sibling before / after                                |
+| `Del`                          | Remove selection                                             |
+| `Ctrl+D`                       | Duplicate selection                                          |
+| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / Cut / Paste                                           |
+| `Ctrl+Shift+V`                 | Multi-paste: insert clipboard entries after selected targets |
+| `Ctrl+Alt+V`                   | Multi-paste: replace selected target values                  |
+| `Alt+↑` / `Alt+↓`              | Move selection up / down                                     |
+| `Ctrl+Alt+↑` / `Ctrl+Alt+↓`    | Promote selection out of its parent                          |
+| `Ctrl+Alt+S`                   | Sort keys under selected object                              |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset                                        |
 
 ---
 

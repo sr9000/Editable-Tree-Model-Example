@@ -1,6 +1,6 @@
 # Editable-Tree-Model-Example — repo map
 
-_Last scanned: **2026-05-23**. This is a PySide6 desktop
+_Last scanned: **2026-05-26**. This is a PySide6 desktop
 **structured-data editor** for JSON, JSON Lines, YAML, and
 multi-document YAML. It originated from Qt's "Editable Tree Model"
 example, but the current repository is a full app with typed cell
@@ -26,42 +26,44 @@ their shipped behaviours are documented below as normal capabilities
 
 ## 0) LLM quick-orientation table
 
-| If you need to…                                       | Look at                                                              |
-| ----------------------------------------------------- | -------------------------------------------------------------------- |
-| App entry / window setup                              | `main.py`, `app/main_window.py`, `mainwindow.ui`                     |
-| Menu wiring + enable/disable                          | `app/main_window_actions.py`                                         |
-| Per-document tab (model/view/undo/search)             | `documents/tab.py` + `documents/tab_*.py`                            |
-| Tree data model & node                                | `tree/model.py`, `tree/item.py`, `tree/model_roles.py`               |
-| Custom tree view (owns `startDrag`)                   | `tree/view.py` (`JsonTreeView`)                                      |
-| Type system / inference                               | `tree/types.py` (`JsonType`, `parse_json_type`)                      |
-| Cross-type coercion (kind switch)                     | `tree/item_coercion.py` (+ `tree/stubs.py`)                          |
-| Editors per type / display formatting                 | `delegates/value.py`, `delegates/value_formatting.py`                |
-| Type-column combobox                                  | `delegates/type_delegate.py`                                         |
-| Name column rename                                    | `delegates/name_delegate.py`                                         |
-| Modal editors (multiline / hex)                       | `dialogs/qmultiline_dlg.py`, `dialogs/qhexedit_dlg.py`               |
-| Context menu / clipboard / paste / structural ops     | `tree_actions/`                                                      |
-| Drag-and-drop policy / dispatch                       | `tree_actions/dnd.py`, `tree/model.py`, `tree/view.py`               |
-| Anchor-based move primitive                           | `tree_actions/anchors.py`                                            |
-| Filter / search                                       | `tree_filter_proxy.py`, `documents/tab_setup.py::init_search_filter` |
-| Typed undo commands + diff replay                     | `undo/commands.py`, `undo/diff.py`                                   |
-| File I/O (JSON / JSONL / YAML / YAML-multi)           | `io_formats/`                                                        |
-| Persisted view state (column widths, expansion, zoom) | `state/view_state.py`                                                |
-| Theme system (specs/loader/registry/icons)            | `themes/`                                                            |
-| Theme menu + follow-system + hot reload + scheme sync | `app/theme_controller.py`                                            |
-| Per-tab status / breadcrumb                           | `documents/tab_status.py`                                            |
-| Custom widgets                                        | `qhexedit/`, `qmultiline_editor.py`, `datetime_editor/`, `qbigint_spinbox/`, `qmpq_spinbox/` |
-| **Validation / schema**                               | `validation/`, `app/validation_dock.py`, `state/validation_settings.py` |
-| Schema registry / source identity                     | `validation/schema_registry.py`, `state/recent_schemas.py`, `dialogs/attach_schema_dlg.py` |
-| Window geometry / file drop                           | `app/main_window.py::_restore_window_geometry`, `show_with_restored_mode`, `dragEnterEvent`/`dropEvent` |
-| Configurable edit warning limits                      | `state/edit_limits.py`, `settings.py` (`*_WARNING_LIMIT_*`), `app/main_window.py::_setup_edit_limits_menu` |
-| Base64 attach / save context actions                  | `tree_actions/context_menu.py::attach_base64_from_file` / `save_base64_as_file` |
-| Validation badge (in-tree marker)                     | `delegates/validation_badge.py`, `tree/model_roles.py::VALIDATION_SEVERITY_ROLE` |
-| Color cell editor (`COLOR_RGB` / `COLOR_RGBA`)        | `delegates/color_codec.py`, `delegates/value.py::createEditor` (QColorDialog branch) |
-| Number-affix kinds (currency / units, int/float)      | `units/number_affix.py`, `delegates/number_affix_delegate.py`, `state/affix_mru.py`, `tree/item_coercion.py` |
+| If you need to…                                       | Look at                                                                                                                                                                                                               |
+|-------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| App entry / window setup                              | `main.py`, `app/main_window.py`, `mainwindow.ui`                                                                                                                                                                      |
+| Menu wiring + enable/disable                          | `app/main_window_actions.py`                                                                                                                                                                                          |
+| Per-document tab (model/view/undo/search)             | `documents/tab.py` + `documents/tab_*.py`                                                                                                                                                                             |
+| Tree data model & node                                | `tree/model.py`, `tree/item.py`, `tree/model_roles.py`                                                                                                                                                                |
+| Custom tree view (owns `startDrag`)                   | `tree/view.py` (`JsonTreeView`)                                                                                                                                                                                       |
+| Type system / inference                               | `tree/types.py` (`JsonType`, `parse_json_type`)                                                                                                                                                                       |
+| Cross-type coercion (kind switch)                     | `tree/item_coercion.py` (+ `tree/stubs.py`)                                                                                                                                                                           |
+| Editors per type / display formatting                 | `delegates/value.py`, `delegates/value_formatting.py`                                                                                                                                                                 |
+| Type-column combobox                                  | `delegates/type_delegate.py`                                                                                                                                                                                          |
+| Name column rename                                    | `delegates/name_delegate.py`                                                                                                                                                                                          |
+| Modal editors (multiline / hex)                       | `dialogs/qmultiline_dlg.py`, `dialogs/qhexedit_dlg.py`                                                                                                                                                                |
+| Context menu / clipboard / paste / structural ops     | `tree_actions/`                                                                                                                                                                                                       |
+| Drag-and-drop policy / dispatch                       | `tree_actions/dnd.py`, `tree/model.py`, `tree/view.py`                                                                                                                                                                |
+| Anchor-based move primitive                           | `tree_actions/anchors.py`                                                                                                                                                                                             |
+| Filter / search                                       | `tree_filter_proxy.py`, `documents/tab_setup.py::init_search_filter`                                                                                                                                                  |
+| Typed undo commands + diff replay                     | `undo/commands.py`, `undo/diff.py`                                                                                                                                                                                    |
+| File I/O (JSON / JSONL / YAML / YAML-multi)           | `io_formats/`                                                                                                                                                                                                         |
+| Persisted view state (column widths, expansion, zoom) | `state/view_state.py`                                                                                                                                                                                                 |
+| Theme system (specs/loader/registry/icons)            | `themes/`                                                                                                                                                                                                             |
+| Theme menu + follow-system + hot reload + scheme sync | `app/theme_controller.py`                                                                                                                                                                                             |
+| Per-tab status / breadcrumb                           | `documents/tab_status.py`                                                                                                                                                                                             |
+| Custom widgets                                        | `qhexedit/`, `qmultiline_editor.py`, `datetime_editor/`, `qbigint_spinbox/`, `qmpq_spinbox/`                                                                                                                          |
+| **Validation / schema**                               | `validation/`, `app/validation_dock.py`, `state/validation_settings.py`                                                                                                                                               |
+| Schema registry / source identity                     | `validation/schema_registry.py`, `state/recent_schemas.py`, `dialogs/attach_schema_dlg.py`                                                                                                                            |
+| Window geometry / file drop                           | `app/main_window.py::_restore_window_geometry`, `show_with_restored_mode`, `dragEnterEvent`/`dropEvent`                                                                                                               |
+| Configurable edit warning limits                      | `state/edit_limits.py`, `settings.py` (`*_WARNING_LIMIT_*`), `app/main_window.py::_setup_edit_limits_menu`                                                                                                            |
+| Clipboard text format (JSON/YAML toggle)              | `state/clipboard_settings.py`, `tree_actions/clipboard.py::_dump_text`, File ▸ Copy as YAML text                                                                                                                      |
+| Reload from disk, close/reopen tabs                   | `app/main_window.py::reload_from_disk` / `close_current_tab` / `reopen_closed_tab`, `app/close_confirm.py`                                                                                                            |
+| Base64 attach / save context actions                  | `tree_actions/context_menu.py::attach_base64_from_file` / `save_base64_as_file`                                                                                                                                       |
+| Validation badge (in-tree marker)                     | `delegates/validation_badge.py`, `tree/model_roles.py::VALIDATION_SEVERITY_ROLE`                                                                                                                                      |
+| Color cell editor (`COLOR_RGB` / `COLOR_RGBA`)        | `delegates/color_codec.py`, `delegates/value.py::createEditor` (QColorDialog branch)                                                                                                                                  |
+| Number-affix kinds (currency / units, int/float)      | `units/number_affix.py`, `delegates/number_affix_delegate.py`, `state/affix_mru.py`, `tree/item_coercion.py`                                                                                                          |
 | Secret kinds (`SECRET_LINE` / `SECRET_TEXT`)          | `validation/secret_names.py`, `state/secret_settings.py`, `tree/item.py::_promote_secret_from_name`, `qmultiline_editor.py` (sensitive mode), `delegates/value.py` (masked editors), `dialogs/secret_prefixes_dlg.py` |
-| UTC datetime (`DATETIMEUTC`)                          | `tree/types_datetime.py::convert_datetime`, `datetime_editor/` (regex/validator/enums), `tests/test_convert_datetime.py` |
-| Pseudo-text (empty / whitespace previews)             | `tree/types.py` (`EMPTY_*`, `WS_*`, `PSEUDO_TEXT_*`, `text_pseudotype_for`, `canonical_text_type`) |
-| Feature plans (per-feature DoD specs)                 | `plans/README.md` + `plans/01-utc-datetime.md` / `02-number-affix.md` / `03-secret-strings.md` |
+| UTC datetime (`DATETIMEUTC`)                          | `tree/types_datetime.py::convert_datetime`, `datetime_editor/` (regex/validator/enums), `tests/test_convert_datetime.py`                                                                                              |
+| Pseudo-text (empty / whitespace previews)             | `tree/types.py` (`EMPTY_*`, `WS_*`, `PSEUDO_TEXT_*`, `text_pseudotype_for`, `canonical_text_type`)                                                                                                                    |
+| Feature plans (per-feature DoD specs)                 | `plans/README.md` + `plans/01-utc-datetime.md` / `02-number-affix.md` / `03-secret-strings.md`                                                                                                                        |
 
 ---
 
@@ -350,35 +352,35 @@ from dialogs.secret_prefixes_dlg import SecretPrefixesDialog
 display in `delegates/value_formatting.py`; coercion in
 `tree/item_coercion.py`.
 
-| JsonType       | enum value      | Inline editor                | Display formatting                       | Coercion notes                                                   |
-| -------------- | --------------- | ---------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
-| `INTEGER`      | `"integer"`     | `QBigIntSpinBox`             | `str(int)`                               | int↔float/percent rounding; int sec/ms ↔ datetime parse          |
-| `FLOAT`        | `"float"`       | `QMpqSpinBox`                | `mpq_serialization` decimal              | stored as `gmpy2.mpq`                                            |
-| `PERCENT`      | `"percent"`     | `QMpqSpinBox` (`0..100 %`)   | `"50%"`, `"33.33%"`                      | UI is 0–100, storage is 0–1 mpq; auto-inferred when value ∈ [0,1] |
-| `INTEGER_CURRENCY` | `"int currency"` | affix composite editor | `"$1234"` / `"$ 1234"` | `NumberAffix(CURRENCY, affix, space, int)` |
-| `INTEGER_UNITS` | `"int units"` | affix composite editor | `"1234kg"` / `"1234 kg"` | `NumberAffix(UNITS, affix, space, int)` |
-| `FLOAT_CURRENCY` | `"float currency"` | affix composite editor | `"$3.5"` / `"$ 3.5"` | `NumberAffix(CURRENCY, affix, space, mpq)` |
-| `FLOAT_UNITS` | `"float units"` | affix composite editor | `"3.14rad"` / `"3.14 rad"` | `NumberAffix(UNITS, affix, space, mpq)` |
-| `BOOLEAN`      | `"boolean"`     | `QComboBox` (true/false)     | `"true"` / `"false"`                     | bool → str produces lowercase `"true"`/`"false"`                 |
-| `STRING`       | `"string"`      | `_CapsLockSafeLineEdit`      | elide at 80 chars                        | ASCII single-line                                                |
-| `UNICODE`      | `"utf-8 line"`  | `_CapsLockSafeLineEdit`      | elide at 80 chars                        | non-ASCII single-line                                            |
-| `MULTILINE`    | `"multiline"`   | `QMultilineDialog` (modal)   | `"line1 \| line2 \| ..."` joined preview | ASCII, has `\n` and (>1 newline OR >80 chars)                    |
-| `TEXT`         | `"utf-8 text"`  | `QMultilineDialog` (modal)   | joined preview                           | non-ASCII multiline                                              |
-| `SECRET_LINE`  | `"secret_line"` | masked `QLineEdit` + Show/Hide | always `••••••••`                      | name-prefix promotion; sticky; newline upgrades to `SECRET_TEXT` |
-| `SECRET_TEXT`  | `"secret_text"` | masked multiline editor + Show/Hide | always `••••••••`                 | name-prefix promotion; sticky; remains secret even single-line   |
-| `DATE`         | `"date"`        | `BetterDateTimeEditor`       | ISO date string                          | "now" placeholder if unparseable                                 |
-| `TIME`         | `"time"`        | `BetterDateTimeEditor`       | ISO time string                          | "now" placeholder                                                |
-| `DATETIME`     | `"datetime"`    | `BetterDateTimeEditor`       | ISO no-tz                                | int sec/ms parsing supported; "now" fallback                     |
-| `DATETIMEZONE` | `"dt+timezone"` | `BetterDateTimeEditor`       | ISO with offset                          | "now" fallback in local tz                                       |
-| `DATETIMEUTC`  | `"datetime utc"`| `BetterDateTimeEditor` (UTC) | ISO with trailing `Z`                    | `convert_datetime` performs real tz-shift from `DATETIMEZONE`; `+00:00` stays as `DATETIMEZONE` |
-| `BYTES`        | `"bytes"`       | `QHexDialog` (modal)         | `"<24 byte>"` via `units.format_bytes`   | base64 wire format; encode-on-switch from string/int             |
-| `ZLIB`         | `"zlib"`        | `QHexDialog` (modal)         | `"<…>"`                                  | base64+zlib; cross-format re-encode lossless when `old_type` known |
-| `GZIP`         | `"gzip"`        | `QHexDialog` (modal)         | `"<…>"`                                  | base64+gzip                                                      |
-| `COLOR_RGB`    | `"rgb"`         | `QColorDialog` (modal)       | `"#rrggbb"` + swatch icon                | inferred from `#rgb` / `#rrggbb`; serialised lowercase           |
-| `COLOR_RGBA`   | `"rgba"`        | `QColorDialog` w/ alpha      | `"#rrggbbaa"` + checkerboard swatch      | inferred from `#rgba` / `#rrggbbaa`                              |
-| `OBJECT`       | `"object"`      | n/a (children edited inline) | `"{N keys}  k: v, k2: v2, …"` (collapsed) | array→object preserves children, drops keys                      |
-| `ARRAY`        | `"array"`       | n/a                          | `"[N items]  v1, v2, v3"` (collapsed)    | object→array preserves children, drops keys                      |
-| `NULL`         | `"null"`        | n/a (col 2 not editable)     | `"null"`                                 | always editable type; never serialised as a string               |
+| JsonType           | enum value         | Inline editor                       | Display formatting                        | Coercion notes                                                                                  |
+|--------------------|--------------------|-------------------------------------|-------------------------------------------|-------------------------------------------------------------------------------------------------|
+| `INTEGER`          | `"integer"`        | `QBigIntSpinBox`                    | `str(int)`                                | int↔float/percent rounding; int sec/ms ↔ datetime parse                                         |
+| `FLOAT`            | `"float"`          | `QMpqSpinBox`                       | `mpq_serialization` decimal               | stored as `gmpy2.mpq`                                                                           |
+| `PERCENT`          | `"percent"`        | `QMpqSpinBox` (`0..100 %`)          | `"50%"`, `"33.33%"`                       | UI is 0–100, storage is 0–1 mpq; auto-inferred when value ∈ [0,1]                               |
+| `INTEGER_CURRENCY` | `"int currency"`   | affix composite editor              | `"$1234"` / `"$ 1234"`                    | `NumberAffix(CURRENCY, affix, space, int)`                                                      |
+| `INTEGER_UNITS`    | `"int units"`      | affix composite editor              | `"1234kg"` / `"1234 kg"`                  | `NumberAffix(UNITS, affix, space, int)`                                                         |
+| `FLOAT_CURRENCY`   | `"float currency"` | affix composite editor              | `"$3.5"` / `"$ 3.5"`                      | `NumberAffix(CURRENCY, affix, space, mpq)`                                                      |
+| `FLOAT_UNITS`      | `"float units"`    | affix composite editor              | `"3.14rad"` / `"3.14 rad"`                | `NumberAffix(UNITS, affix, space, mpq)`                                                         |
+| `BOOLEAN`          | `"boolean"`        | `QComboBox` (true/false)            | `"true"` / `"false"`                      | bool → str produces lowercase `"true"`/`"false"`                                                |
+| `STRING`           | `"string"`         | `_CapsLockSafeLineEdit`             | elide at 80 chars                         | ASCII single-line                                                                               |
+| `UNICODE`          | `"utf-8 line"`     | `_CapsLockSafeLineEdit`             | elide at 80 chars                         | non-ASCII single-line                                                                           |
+| `MULTILINE`        | `"multiline"`      | `QMultilineDialog` (modal)          | `"line1 \| line2 \| ..."` joined preview  | ASCII, has `\n` and (>1 newline OR >80 chars)                                                   |
+| `TEXT`             | `"utf-8 text"`     | `QMultilineDialog` (modal)          | joined preview                            | non-ASCII multiline                                                                             |
+| `SECRET_LINE`      | `"secret_line"`    | masked `QLineEdit` + Show/Hide      | always `••••••••`                         | name-prefix promotion; sticky; newline upgrades to `SECRET_TEXT`                                |
+| `SECRET_TEXT`      | `"secret_text"`    | masked multiline editor + Show/Hide | always `••••••••`                         | name-prefix promotion; sticky; remains secret even single-line                                  |
+| `DATE`             | `"date"`           | `BetterDateTimeEditor`              | ISO date string                           | "now" placeholder if unparseable                                                                |
+| `TIME`             | `"time"`           | `BetterDateTimeEditor`              | ISO time string                           | "now" placeholder                                                                               |
+| `DATETIME`         | `"datetime"`       | `BetterDateTimeEditor`              | ISO no-tz                                 | int sec/ms parsing supported; "now" fallback                                                    |
+| `DATETIMEZONE`     | `"dt+timezone"`    | `BetterDateTimeEditor`              | ISO with offset                           | "now" fallback in local tz                                                                      |
+| `DATETIMEUTC`      | `"datetime utc"`   | `BetterDateTimeEditor` (UTC)        | ISO with trailing `Z`                     | `convert_datetime` performs real tz-shift from `DATETIMEZONE`; `+00:00` stays as `DATETIMEZONE` |
+| `BYTES`            | `"bytes"`          | `QHexDialog` (modal)                | `"<24 byte>"` via `units.format_bytes`    | base64 wire format; encode-on-switch from string/int                                            |
+| `ZLIB`             | `"zlib"`           | `QHexDialog` (modal)                | `"<…>"`                                   | base64+zlib; cross-format re-encode lossless when `old_type` known                              |
+| `GZIP`             | `"gzip"`           | `QHexDialog` (modal)                | `"<…>"`                                   | base64+gzip                                                                                     |
+| `COLOR_RGB`        | `"rgb"`            | `QColorDialog` (modal)              | `"#rrggbb"` + swatch icon                 | inferred from `#rgb` / `#rrggbb`; serialised lowercase                                          |
+| `COLOR_RGBA`       | `"rgba"`           | `QColorDialog` w/ alpha             | `"#rrggbbaa"` + checkerboard swatch       | inferred from `#rgba` / `#rrggbbaa`                                                             |
+| `OBJECT`           | `"object"`         | n/a (children edited inline)        | `"{N keys}  k: v, k2: v2, …"` (collapsed) | array→object preserves children, drops keys                                                     |
+| `ARRAY`            | `"array"`          | n/a                                 | `"[N items]  v1, v2, v3"` (collapsed)     | object→array preserves children, drops keys                                                     |
+| `NULL`             | `"null"`           | n/a (col 2 not editable)            | `"null"`                                  | always editable type; never serialised as a string                                              |
 
 `COLOR_FAMILY = {COLOR_RGB, COLOR_RGBA}`. Helpers
 `looks_like_color_rgb` / `looks_like_color_rgba` drive inference;
@@ -438,33 +440,37 @@ Container preview (`delegates/value_formatting.py`):
 Defined in `mainwindow.ui` (window-level QActions) and
 `documents/tab_setup.py::init_shortcuts` (per-tab `QShortcut`s).
 
-| Shortcut       | Scope  | Action                                       |
-| -------------- | ------ | -------------------------------------------- |
-| `Ctrl+N`       | window | New (empty) tab                              |
-| `Ctrl+O`       | window | Open file dialog                             |
-| `Ctrl+S`       | window | Save                                         |
-| `Ctrl+Shift+S` | window | Save As                                      |
-| `Ctrl+Q`       | window | Exit                                         |
-| `Ctrl+I`       | window | Insert sibling **before**                    |
-| `Ctrl+Shift+I` | window | Insert sibling **after**                     |
-| `Del`          | window | Remove row                                   |
-| `Ctrl++`       | window | Zoom In                                      |
-| `Ctrl+-`       | window | Zoom Out                                     |
-| `Ctrl+0`       | window | Reset zoom                                   |
-| `Ctrl+F`       | tab    | Focus filter line edit                       |
-| `Ctrl+C`       | tab    | Copy selection                               |
-| `Ctrl+X`       | tab    | Cut selection                                |
-| `Ctrl+V`       | tab    | Paste                                        |
-| `Ctrl+Shift+V` | tab    | **Multi-insert** (`paste_insert_after_zip`) — zip-pair clipboard top-level entries with top-level selected targets; inserts each entry as sibling-after the matching target |
-| `Ctrl+Alt+V`   | tab    | **Multi-replace** (`paste_replace_zip`) — zip-pair clipboard top-level entries with top-level selected targets; replaces each target's value |
-| `Ctrl+D`       | tab    | Duplicate selection                          |
-| `Alt+Up`       | tab    | Move selected row(s) up; at row 0 bubble out before parent |
-| `Alt+Down`     | tab    | Move selected row(s) down; at last row bubble out after parent |
-| `Ctrl+Alt+Up`  | tab    | Move selection **out of parent** (promote to grandparent, before parent) |
-| `Ctrl+Alt+Down`| tab    | Move selection **out of parent** (promote to grandparent, after parent)  |
-| `Ctrl+Alt+S`   | tab    | Sort keys (under selected OBJECT)            |
-| `F2` / Enter   | tree   | Edit current cell (Qt default)               |
-| _mouse_        | tree   | **Drag-and-drop** — left-click+drag moves selection between/onto OBJECT/ARRAY rows; Ctrl-drag = copy; cycle-guard rejects drops into self/descendant; drop on a leaf becomes sibling-after |
+| Shortcut        | Scope  | Action                                                                                                                                                                                     |
+|-----------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Ctrl+N`        | window | New (empty) tab                                                                                                                                                                            |
+| `Ctrl+Space`    | window | **New From Clipboard** — parse system clipboard as JSON, then YAML (single + multi-doc); rejects bare scalars                                                                              |
+| `Ctrl+O`        | window | Open file dialog                                                                                                                                                                           |
+| `Ctrl+R`        | window | **Reload from Disk** — dirty tabs prompt Discard / Overwrite / Cancel                                                                                                                      |
+| `Ctrl+S`        | window | Save (enabled only when `tab.is_dirty`)                                                                                                                                                    |
+| `Ctrl+Shift+S`  | window | Save As                                                                                                                                                                                    |
+| `Ctrl+W`        | window | **Close current tab** (empty untitled closes silently; non-empty untitled prompts even when clean)                                                                                         |
+| `Ctrl+Shift+T`  | window | **Reopen last closed tab** (LIFO, capped at 10; discarded-dirty tabs reload from disk)                                                                                                     |
+| `Ctrl+Q`        | window | Exit                                                                                                                                                                                       |
+| `Ctrl+I`        | window | Insert sibling **before**                                                                                                                                                                  |
+| `Ctrl+Shift+I`  | window | Insert sibling **after**                                                                                                                                                                   |
+| `Del`           | window | Remove row                                                                                                                                                                                 |
+| `Ctrl++`        | window | Zoom In                                                                                                                                                                                    |
+| `Ctrl+-`        | window | Zoom Out                                                                                                                                                                                   |
+| `Ctrl+0`        | window | Reset zoom                                                                                                                                                                                 |
+| `Ctrl+F`        | tab    | Focus filter line edit                                                                                                                                                                     |
+| `Ctrl+C`        | tab    | Copy selection                                                                                                                                                                             |
+| `Ctrl+X`        | tab    | Cut selection                                                                                                                                                                              |
+| `Ctrl+V`        | tab    | Paste                                                                                                                                                                                      |
+| `Ctrl+Shift+V`  | tab    | **Multi-insert** (`paste_insert_after_zip`) — zip-pair clipboard top-level entries with top-level selected targets; inserts each entry as sibling-after the matching target                |
+| `Ctrl+Alt+V`    | tab    | **Multi-replace** (`paste_replace_zip`) — zip-pair clipboard top-level entries with top-level selected targets; replaces each target's value                                               |
+| `Ctrl+D`        | tab    | Duplicate selection                                                                                                                                                                        |
+| `Alt+Up`        | tab    | Move selected row(s) up; at row 0 bubble out before parent                                                                                                                                 |
+| `Alt+Down`      | tab    | Move selected row(s) down; at last row bubble out after parent                                                                                                                             |
+| `Ctrl+Alt+Up`   | tab    | Move selection **out of parent** (promote to grandparent, before parent)                                                                                                                   |
+| `Ctrl+Alt+Down` | tab    | Move selection **out of parent** (promote to grandparent, after parent)                                                                                                                    |
+| `Ctrl+Alt+S`    | tab    | Sort keys (under selected OBJECT)                                                                                                                                                          |
+| `F2` / Enter    | tree   | Edit current cell (Qt default)                                                                                                                                                             |
+| _mouse_         | tree   | **Drag-and-drop** — left-click+drag moves selection between/onto OBJECT/ARRAY rows; Ctrl-drag = copy; cycle-guard rejects drops into self/descendant; drop on a leaf becomes sibling-after |
 
 Undo/redo have no explicit shortcuts wired — the **History** menu owns
 Undo, Redo and "Show History…" via `app/history.py` (Qt's built-in
@@ -477,10 +483,13 @@ tree itself).
 
 ### Menu bar (from `mainwindow.ui` + runtime additions)
 
-- **File**: New, Open, *Recent* (submenu, ≤ 8, runtime), Save, Save As,
-  *Edit Warning Limits* (submenu — string chars / multiline chars /
-  bytes / attach-file bytes; current value shown in each label,
-  `QInputDialog` prompts for the new int),
+- **File**: New, **New From Clipboard** (Ctrl+Space), Open, *Recent*
+  (submenu, ≤ 8, runtime), **Reload from Disk** (Ctrl+R), Save,
+  Save As, **Close Tab** (Ctrl+W), **Reopen Closed Tab**
+  (Ctrl+Shift+T), **Copy as YAML text** (checkable; persists via
+  `state/clipboard_settings.py`), *Edit Warning Limits* (submenu —
+  string chars / multiline chars / bytes / attach-file bytes; current
+  value shown in each label, `QInputDialog` prompts for the new int),
   **Secret word prefixes…** (opens `SecretPrefixesDialog`; persists
   via `state.secret_settings`), Exit.
 - **Actions**: Insert Row (before), Insert Row after, Remove Row.
@@ -506,10 +515,17 @@ tree itself).
 
 ### Tree context menu (`tree_actions/context_menu.py::show_context_menu`)
 
-Column-aware. Top-level layout (when col 0 / col 2 has a selection):
+Column-aware. **Disabled actions are hidden, not greyed**
+(`_add(...)` returns `None` when `enabled=False`). Top-level layout
+(when col 0 / col 2 has a selection):
 
 - **Copy** — column-aware: name col → `copy_selection_with_name`,
   value col → `copy_selection_value_only`, otherwise full `copy_selection`.
+  All copy paths honour the **Copy as YAML text** File-menu toggle via
+  `_dump_text` in `tree_actions/clipboard.py`.
+- **Go To** — appears only when the tab's `search_edit` has text and a
+  clicked row is valid. Clears the filter, expands ancestors, scrolls
+  to the source row, selects it.
 - **Cut**
 - **Attach from…** / **Save as…** — enabled only when the
   single-row selection is a `BYTES` / `ZLIB` / `GZIP` cell. Routes
@@ -533,11 +549,20 @@ Column-aware. Top-level layout (when col 0 / col 2 has a selection):
     OBJECT/ARRAY)
 - **Duplicate**, **Delete** (disabled on root)
 - **Move Up / Move Down** (boundary-aware)
-- **Sort Keys / Sort Keys (Recursive)** (only enabled under OBJECT)
-- **Expand All / Collapse All**
+- **Sort Keys / Sort Keys (Recursive)** (enabled under OBJECT, including root)
+- **Expand Recursively / Collapse Recursively** — scoped to the
+  selected subtree(s); when root is selected, equivalent to
+  Expand All / Collapse All.
+- **Switch Case / Switch Case (Recursive)** — when root is selected,
+  applies to the whole document via `switch_document_case`.
 
-Column 1 (type column) shows only `Expand All` / `Collapse All` to avoid
-accidental edits while clicking the type cell.
+Column 1 (type column) shows **no menu** (returns `None`) so a stray
+click on the type cell does not pop a menu.
+
+YAML paste: `entries_from_mime` tries JSON first, then
+`yaml.safe_load` (dict/list only — bare scalars rejected) so any
+clipboard text that is structurally JSON or YAML is pasteable as a
+subtree.
 
 Clipboard MIME type is `application/x-json-tree`; payload preserves names
 so paste keeps full type info. Name-collision avoidance under OBJECT
@@ -553,12 +578,12 @@ parents uses `_copy_name` / `unique_child_name` to generate `_copy`,
 Defined in `io_formats/`. `detect_format(path)` dispatches by
 extension.
 
-| Format     | Extensions          | Constant                 | Load                                              | Dump                                                                         |
-| ---------- | ------------------- | ------------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------- |
-| JSON       | `.json`             | `SAVE_FORMAT_JSON`       | `simplejson.load(parse_float=mpq)`                | `simplejson.dumps(..., use_decimal=True, default=mpq_json_default, indent=2)` |
-| JSON Lines | `.jsonl`, `.ndjson` | `SAVE_FORMAT_JSONL`      | line-by-line `simplejson.loads(parse_float=mpq)`  | one `dumps` per row                                                          |
-| YAML       | `.yaml`, `.yml`     | `SAVE_FORMAT_YAML`       | `yaml.load_all(MpqSafeLoader)` (single doc)       | `yaml.dump(MpqSafeDumper)`                                                   |
-| YAML multi | `.yaml`, `.yml`     | `SAVE_FORMAT_YAML_MULTI` | `yaml.load_all` returns list                      | `yaml.dump_all(MpqSafeDumper)`                                               |
+| Format     | Extensions          | Constant                 | Load                                             | Dump                                                                          |
+|------------|---------------------|--------------------------|--------------------------------------------------|-------------------------------------------------------------------------------|
+| JSON       | `.json`             | `SAVE_FORMAT_JSON`       | `simplejson.load(parse_float=mpq)`               | `simplejson.dumps(..., use_decimal=True, default=mpq_json_default, indent=2)` |
+| JSON Lines | `.jsonl`, `.ndjson` | `SAVE_FORMAT_JSONL`      | line-by-line `simplejson.loads(parse_float=mpq)` | one `dumps` per row                                                           |
+| YAML       | `.yaml`, `.yml`     | `SAVE_FORMAT_YAML`       | `yaml.load_all(MpqSafeLoader)` (single doc)      | `yaml.dump(MpqSafeDumper)`                                                    |
+| YAML multi | `.yaml`, `.yml`     | `SAVE_FORMAT_YAML_MULTI` | `yaml.load_all` returns list                     | `yaml.dump_all(MpqSafeDumper)`                                                |
 
 Atomic writes via `os.replace` in `atomic_write(path, text)` →
 `save_file(path, data, save_format)`.
@@ -1060,6 +1085,135 @@ returns `"error"` for cells the `IssueIndex` flags (or `None`).
 red wave under the cell when the role is set;
 `ValueDelegate.paint` short-circuits to it before the default paint
 path.
+
+---
+
+## 15.6) File-UX sweep (2026-05-26)
+
+Adds reload, close/reopen, clipboard-format toggle, YAML paste,
+search-aware Go To, hide-inactive context menu, and dirty-aware Save.
+
+### Reload from Disk (`app/main_window.py`)
+
+- `reload_from_disk()` (Ctrl+R) — disabled unless
+  `tab.file_path and not tab.is_read_only`.
+- `_confirm_reload_dirty_tab(tab)` returns
+  `"reload" | "overwrite" | "cancel"` from a 3-button `QMessageBox`
+  (`Discard` / `Save` (overwrite) / `Cancel`).
+- `_reload_tab_from_path(tab, path)` reloads via
+  `load_file_with_format`, replays through `tab._diff_apply`, clears
+  the undo stack on changes, `setClean()`, updates `tab.save_format`
+  / `tab.file_path`, calls `revalidate()` and
+  `_refresh_tab_presentation(tab)`.
+
+### Close / Reopen tabs (`app/main_window.py`)
+
+- `_closed_tabs_stack: list[dict]` LIFO, capped at
+  `_MAX_CLOSED_TABS = 10`.
+- `close_current_tab()` (Ctrl+W) → `close_tab(index)`. The latter
+  builds a `snapshot` *before* removing the tab: clean tabs snapshot
+  full `to_json()`; **discarded dirty** tabs snapshot
+  `{"data": None, "file_path": ..., "save_format": ...}` so reopen
+  reloads from disk rather than resurrecting dirty memory.
+- `reopen_closed_tab()` (Ctrl+Shift+T) pops the stack: file-path-only
+  snapshots call `_open_path(file_path)`; data snapshots call
+  `_add_tab(data=..., file_path=..., save_format=...)`.
+- `app/close_confirm.py::confirm_close(window, tab, *,
+  prompt_for_untitled_nonempty=True)` adds an "Unsaved untitled tab"
+  question with Save / Discard / Cancel for untitled tabs that contain
+  data, *regardless of dirty state*. `closeEvent` calls it with
+  `prompt_for_untitled_nonempty=False` to keep app shutdown quiet.
+- Tab tooltip carries the full file path via
+  `_refresh_tab_presentation(tab)` which sets both
+  `tabText(tab.display_name())` and
+  `tabToolTip(tab.file_path or "Untitled")`.
+
+### Clipboard format toggle (`state/clipboard_settings.py`)
+
+- `CLIPBOARD_TEXT_FORMAT_JSON = "json"`,
+  `CLIPBOARD_TEXT_FORMAT_YAML = "yaml"` (default JSON) persisted under
+  `QSettings(APPLICATION_ID, "app")::clipboard/text_format`.
+- File menu **Copy as YAML text** (`MainWindow._copyAsYamlAction`,
+  checkable) toggles the setting.
+- `tree_actions/clipboard.py::_dump_text(payload)` is the single
+  serialisation entry point used by `build_tree_mime`,
+  `copy_selection_with_name`, `copy_selection_value_only`. YAML mode
+  uses `MpqSafeDumper`; for app-native values
+  (`NumberAffix`, secrets) without YAML representers it normalises via
+  `simplejson.dumps(..., default=mpq_json_default) → json.loads`
+  before re-dumping as YAML.
+- Single-row copies now always emit a JSON object (`{name: value}`),
+  not the legacy `"name": value` fragment. `copy_selection_value_only`
+  still emits the bare value.
+
+### Clipboard parsing (`tree_actions/clipboard.py`)
+
+- `entries_from_mime(mime)` order of attempts: internal
+  `application/x-json-tree` MIME → `json.loads(text)` → `yaml.safe_load(text)`
+  accepting only `dict` / `list`. Bare scalars (any plain string) are
+  rejected so the clipboard predicate stays sane.
+- `clipboard_text_is_valid_data()` — predicate driving the
+  **New From Clipboard** enabled state.
+- `clipboard_to_tab_data() -> (data, save_format)` — used by
+  `MainWindow.new_from_clipboard()` (Ctrl+Space). Tries JSON
+  (`SAVE_FORMAT_JSON`), then `yaml.safe_load_all` filtered to
+  `dict`/`list`; single document → `SAVE_FORMAT_YAML`, multi →
+  `SAVE_FORMAT_YAML_MULTI`.
+
+### Context-menu refinements (`tree_actions/context_menu.py`)
+
+- `_add(menu, text, slot, *, enabled=True, ...)` returns `None` when
+  `enabled=False`; callers therefore add nothing instead of greyed
+  entries. Submenu builders short-circuit on `enabled=False`.
+- Column 1 (type column) returns `None` outright — no context menu.
+- **Go To** (`_goto_row_and_clear_search`) appears only when
+  `_search_is_active(tree_view)` and the right-clicked index is
+  valid: clears the tab's `search_edit`, re-runs `_apply_filter`,
+  expands ancestors of the source path, scrolls to and selects the
+  clicked cell at the originally clicked column (clamped to 0–2).
+- Root selection enables `can_sort_keys` for OBJECT roots and routes
+  Switch Case / Switch Case (Recursive) and Expand/Collapse
+  Recursively to whole-document equivalents (see
+  `tree_actions/structure.py::expand_selection_recursive` /
+  `collapse_selection_recursive` / `switch_selection_case`).
+
+### Dirty-aware menu state (`app/main_window_actions.py`)
+
+- `update_actions` now hooks `fileMenu.aboutToShow` and
+  `viewMenu.aboutToShow` in addition to `actionsMenu.aboutToShow`.
+- `fileSaveAction.setEnabled(has_tab and can_edit and tab.is_dirty)`.
+- `fileReloadAction.setEnabled(has_tab and can_edit and bool(tab.file_path))`.
+- `fileNewFromClipboardAction.setEnabled(clipboard_text_is_valid_data())`.
+- `fileCloseTabAction.setEnabled(has_tab)`;
+  `fileReopenTabAction.setEnabled(bool(window._closed_tabs_stack))`.
+
+### Field-case tokenizer rewrite (`tree_actions/field_case.py`)
+
+- New `_tokenize(name)` distinguishes *hard separators*
+  (`_is_hard_separator` → punctuation/symbols other than `_` / `-`)
+  from *standard separators* (`_`, `-`). Hard separators are emitted
+  verbatim between rendered segments; standard separators are
+  consumed and segments re-rendered in the target case.
+- `_split_cased_word` recognises camelCase/PascalCase boundaries
+  (`prevLower→upper`, `digit→letter`, acronym tail `ABCdef → ABC | def`)
+  using Unicode-aware `.isalpha()` / `.isupper()` / `.islower()` /
+  `.isdigit()` rather than ASCII-only regex.
+- Result: `api.v1_field-name` → snake → `api.v1_field_name`,
+  `http2_server_v1` ↔ `Http2ServerV1`, Cyrillic
+  `привет_мир` → `приветМир`, etc.
+
+### Cross-parent move undo collision-rename fix (`undo/commands.py`)
+
+- `_MoveRowsCmd.__init__(..., source_names, ...)` snapshots the
+  source field names at construction time; `documents/tab.py`
+  collects them via `model.get_item(row0).name` in `_push_move_*`.
+- `_original_name_for(source, item)` is consulted on both `redo`
+  (when assigning into OBJECT destination, with collision-aware
+  `unique_child_name`) and `undo` (when restoring the source item's
+  name in the original parent). Previously undo recovered the
+  auto-renamed string (`x_2`), so two undo/redo cycles drifted the
+  field name. Now the original `x` is restored, and redo independently
+  recomputes `x_2`.
 
 ---
 

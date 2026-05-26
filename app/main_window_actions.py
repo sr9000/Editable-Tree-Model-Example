@@ -1,3 +1,4 @@
+from tree_actions.clipboard import clipboard_text_is_valid_data
 from tree_actions.field_case import FIELD_CASE_ORDER
 
 
@@ -5,12 +6,18 @@ def setup_connections(window):
     window.appExitAction.triggered.connect(window.close)
 
     window.fileCreateNewAction.triggered.connect(window.create_new_file)
+    window.fileNewFromClipboardAction.triggered.connect(window.new_from_clipboard)
     window.fileOpenAction.triggered.connect(window.open_file_dialog)
     window.fileSaveAction.triggered.connect(window.save_file)
     window.fileSaveAsAction.triggered.connect(window.save_file_as)
+    window.fileReloadAction.triggered.connect(window.reload_from_disk)
     window.fileCopyPathAction.triggered.connect(window.copy_current_file_path)
+    window.fileCloseTabAction.triggered.connect(window.close_current_tab)
+    window.fileReopenTabAction.triggered.connect(window.reopen_closed_tab)
 
+    window.fileMenu.aboutToShow.connect(window.update_actions)
     window.actionsMenu.aboutToShow.connect(window.update_actions)
+    window.viewMenu.aboutToShow.connect(window.update_actions)
     window.rowInsertAction.triggered.connect(window.insert_row_before)
     window.rowInsertAfterAction.triggered.connect(window.insert_row_after)
     window.rowRemoveAction.triggered.connect(window.remove_row)
@@ -44,9 +51,13 @@ def update_actions(window):
     can_edit = bool(tab and not tab.is_read_only)
     has_valid_index = bool(tab and tab.view.selectionModel().currentIndex().isValid())
 
-    window.fileSaveAction.setEnabled(has_tab and can_edit)
+    window.fileNewFromClipboardAction.setEnabled(clipboard_text_is_valid_data())
+    window.fileSaveAction.setEnabled(has_tab and can_edit and tab.is_dirty)
     window.fileSaveAsAction.setEnabled(has_tab and can_edit)
+    window.fileReloadAction.setEnabled(has_tab and can_edit and bool(tab.file_path))
     window.fileCopyPathAction.setEnabled(bool(tab and tab.file_path))
+    window.fileCloseTabAction.setEnabled(has_tab)
+    window.fileReopenTabAction.setEnabled(bool(window._closed_tabs_stack))
     window.rowInsertAction.setEnabled(has_valid_index and can_edit)
     window.rowInsertAfterAction.setEnabled(has_valid_index and can_edit)
     window.rowRemoveAction.setEnabled(has_valid_index and can_edit)
