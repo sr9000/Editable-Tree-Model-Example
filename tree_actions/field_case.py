@@ -30,7 +30,7 @@ FIELD_CASE_LABELS: dict[FieldCase, str] = {
     "PascalCase": "PascalCase",
 }
 
-_TOKEN_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+|\d+")
+_TOKEN_RE = re.compile(r"[A-Z]+\d*(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+\d*|[A-Z]+\d*|\d+")
 
 
 def _words(name: str) -> list[str]:

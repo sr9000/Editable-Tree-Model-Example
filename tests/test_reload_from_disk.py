@@ -45,12 +45,7 @@ def test_reload_action_enabled_state(qtbot):
         QApplication.processEvents()
 
 
-def test_reload_from_disk_saves_then_reloads(qtbot, tmp_path, monkeypatch):
-    """Dirty tab: Ok saves in-memory state to disk first, then reloads from that file.
-
-    The old 'Discard' path (reload disk content, losing local edits) is no longer
-    offered.  Reload now always saves dirty changes before re-reading the file.
-    """
+def test_reload_from_disk_discard_reloads_disk_state(qtbot, tmp_path, monkeypatch):
     doc = tmp_path / "data.json"
     _write_json(doc, {"a": 1})
 
@@ -65,15 +60,22 @@ def test_reload_from_disk_saves_then_reloads(qtbot, tmp_path, monkeypatch):
         assert tab.push_edit_value(a_value, 99, label="dirty")
         assert tab.is_dirty
 
-        monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Ok)
+        def _choose_discard(box):
+            for btn in box.buttons():
+                if "Discard In-Mem And Reload From Disk" in btn.text():
+                    return btn
+            return None
+
+        monkeypatch.setattr(QMessageBox, "exec", lambda box: _choose_discard(box) and box.clickedButton())
+        monkeypatch.setattr(QMessageBox, "clickedButton", _choose_discard)
+
+        _write_json(doc, {"a": 2})
 
         win.reload_from_disk()
 
-        # After save-first reload: in-memory value 99 was saved, then reloaded.
-        assert tab.model.root_item.to_json() == {"a": 99}
+        assert tab.model.root_item.to_json() == {"a": 2}
         assert not tab.is_dirty
-        # Confirm the file on disk was actually written.
-        assert json.loads(doc.read_text()) == {"a": 99}
+        assert json.loads(doc.read_text()) == {"a": 2}
     finally:
         for i in range(win.tabWidget.count()):
             maybe_tab = win.tabWidget.widget(i)
@@ -100,12 +102,59 @@ def test_reload_from_disk_cancel_keeps_current_state(qtbot, tmp_path, monkeypatc
         assert tab.is_dirty
 
         _write_json(doc, {"a": 2})
-        monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Cancel)
+        def _choose_cancel(box):
+            for btn in box.buttons():
+                if btn.text().replace("&", "") == "Cancel":
+                    return btn
+            return None
+
+        monkeypatch.setattr(QMessageBox, "exec", lambda box: _choose_cancel(box) and box.clickedButton())
+        monkeypatch.setattr(QMessageBox, "clickedButton", _choose_cancel)
 
         win.reload_from_disk()
 
         assert tab.model.root_item.to_json() == {"a": 99}
         assert tab.is_dirty
+    finally:
+        for i in range(win.tabWidget.count()):
+            maybe_tab = win.tabWidget.widget(i)
+            if isinstance(maybe_tab, JsonTab):
+                maybe_tab.undo_stack.setClean()
+        win.close()
+        win.deleteLater()
+        QApplication.processEvents()
+
+
+def test_reload_from_disk_overwrite_saves_then_reloads(qtbot, tmp_path, monkeypatch):
+    doc = tmp_path / "data.json"
+    _write_json(doc, {"a": 1})
+
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        assert win._open_path(str(doc))
+        tab = _current_tab(win)
+
+        a_name = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
+        a_value = a_name.siblingAtColumn(2)
+        assert tab.push_edit_value(a_value, 99, label="dirty")
+        assert tab.is_dirty
+
+        def _choose_overwrite(box):
+            for btn in box.buttons():
+                if "Overwrite Disk Data With In-Mem Changes" in btn.text():
+                    return btn
+            return None
+
+        monkeypatch.setattr(QMessageBox, "exec", lambda box: _choose_overwrite(box) and box.clickedButton())
+        monkeypatch.setattr(QMessageBox, "clickedButton", _choose_overwrite)
+
+        _write_json(doc, {"a": 2})
+        win.reload_from_disk()
+
+        assert tab.model.root_item.to_json() == {"a": 99}
+        assert not tab.is_dirty
+        assert json.loads(doc.read_text()) == {"a": 99}
     finally:
         for i in range(win.tabWidget.count()):
             maybe_tab = win.tabWidget.widget(i)

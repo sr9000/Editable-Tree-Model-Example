@@ -786,21 +786,35 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._on_tab_dirty(tab)
         return True
 
-    def _confirm_reload_dirty_tab(self, tab: JsonTab) -> bool:
+    def _confirm_reload_dirty_tab(self, tab: JsonTab) -> str:
         if not tab.is_dirty:
-            return True
+            return "reload"
+
         name = tab.display_name().replace(" *", "")
-        choice = QMessageBox.question(
-            self,
-            "Reload from disk",
-            f"'{name}' has unsaved changes.\n"
-            "Changes will be saved before reloading from disk.",
-            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Ok,
+        box = QMessageBox(self)
+        box.setWindowTitle("Reload from disk")
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setText(f"'{name}' has unsaved in-memory changes.")
+        box.setInformativeText("Choose whether to discard memory edits or overwrite disk data.")
+
+        discard_btn = box.addButton(
+            "Discard In-Mem And Reload From Disk",
+            QMessageBox.ButtonRole.DestructiveRole,
         )
-        if choice == QMessageBox.StandardButton.Cancel:
-            return False
-        return self._save_tab(tab, save_as=False)
+        overwrite_btn = box.addButton(
+            "Overwrite Disk Data With In-Mem Changes",
+            QMessageBox.ButtonRole.AcceptRole,
+        )
+        cancel_btn = box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(cancel_btn)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is discard_btn:
+            return "reload"
+        if clicked is overwrite_btn:
+            return "overwrite"
+        return "cancel"
 
     def _reload_tab_from_path(self, tab: JsonTab, path: str) -> bool:
         resolved = str(Path(path).resolve())
@@ -855,7 +869,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab = self._current_tab()
         if tab is None or tab.is_read_only or not tab.file_path:
             return
-        if not self._confirm_reload_dirty_tab(tab):
+        decision = self._confirm_reload_dirty_tab(tab)
+        if decision == "cancel":
+            return
+        if decision == "overwrite" and not self._save_tab(tab, save_as=False):
             return
         self._reload_tab_from_path(tab, tab.file_path)
 

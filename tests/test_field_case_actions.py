@@ -36,6 +36,14 @@ def test_convert_field_name_variants():
     assert convert_field_name("api:v1_field-name", "kebab-case") == "api:v1-field-name"
 
 
+def test_convert_field_name_snake_pascal_snake_roundtrip_keeps_digits():
+    original = "http2_server_v1"
+    pascal = convert_field_name(original, "PascalCase")
+    back = convert_field_name(pascal, "snake_case")
+    assert pascal == "Http2ServerV1"
+    assert back == original
+
+
 def test_switch_selection_case_non_recursive(qtbot):
     tab = _make_tab(qtbot, {"outerNode": {"innerKey": 1}, "tailValue": 2})
     _select_rows(tab, (0,))

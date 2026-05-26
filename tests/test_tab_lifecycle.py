@@ -96,6 +96,63 @@ def test_close_cancels_if_user_cancels(qtbot, monkeypatch):
         _cleanup(win)
 
 
+def test_close_empty_untitled_tab_without_prompt(qtbot, monkeypatch):
+    called = {"count": 0}
+
+    def _question(*_a, **_kw):
+        called["count"] += 1
+        return QMessageBox.StandardButton.Discard
+
+    monkeypatch.setattr(QMessageBox, "question", _question)
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        win._add_tab(data={})
+        win.close_current_tab()
+        assert _tab_count(win) == 0
+        assert called["count"] == 0
+    finally:
+        _cleanup(win)
+
+
+def test_close_nonempty_untitled_tab_prompts_and_cancel_keeps_tab(qtbot, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **kw: QMessageBox.StandardButton.Cancel)
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        tab = win._add_tab(data={"k": 1})
+        assert tab is not None
+        idx = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
+        tab.push_edit_value(idx.siblingAtColumn(2), 2, label="dirty")
+        win.close_current_tab()
+        assert _tab_count(win) == 1
+    finally:
+        _cleanup(win)
+
+
+def test_close_nonempty_untitled_tab_save_uses_save_as(qtbot, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **kw: QMessageBox.StandardButton.Save)
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        tab = win._add_tab(data={"k": 1})
+        assert tab is not None
+        idx = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
+        tab.push_edit_value(idx.siblingAtColumn(2), 2, label="dirty")
+        calls = {"save_as": []}
+
+        def _fake_save(tab, *, save_as=False):
+            calls["save_as"].append(save_as)
+            return True
+
+        monkeypatch.setattr(win, "_save_tab", _fake_save)
+        win.close_current_tab()
+        assert calls["save_as"] == [True]
+        assert _tab_count(win) == 0
+    finally:
+        _cleanup(win)
+
+
 # ---------------------------------------------------------------------------
 # Reopen closed tab (Ctrl+Shift+T)
 # ---------------------------------------------------------------------------
