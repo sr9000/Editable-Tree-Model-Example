@@ -46,7 +46,7 @@ from state.edit_limits import (
 )
 from state.recent_schemas import recent_schemas
 from state.secret_settings import get_secret_word_prefixes, set_secret_word_prefixes
-from tree_actions.clipboard import copy_selection
+from tree_actions.clipboard import clipboard_text_is_valid_data, clipboard_to_tab_data, copy_selection
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 from tree_actions.structure import switch_document_case as switch_case_document
@@ -55,6 +55,7 @@ from validation.schema_registry import SchemaSource, open_in_browser, schema_reg
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
+    _MAX_CLOSED_TABS = 10
     @staticmethod
     def _coerce_bool(value, *, default: bool) -> bool:
         if isinstance(value, bool):
@@ -94,6 +95,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._history_view: QUndoView | None = None
         self._bound_undo_tab: JsonTab | None = None
         self._startup_window_mode: str = "normal"
+        self._closed_tabs_stack: list[dict] = []
         self._settings = QSettings(APPLICATION_ID, "app")
         # All font preferences (regular family, monospace family, editor
         # point size, monospace-fields toggle) live in a single controller
@@ -112,6 +114,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileReloadAction.setShortcut(QKeySequence("Ctrl+R"))
         self.fileMenu.insertAction(self.fileSaveAction, self.fileReloadAction)
         self.fileMenu.insertSeparator(self.appExitAction)
+        # ── New From Clipboard ──────────────────────────────────────────────
+        self.fileNewFromClipboardAction = QAction("New From Clipboard", self)
+        self.fileNewFromClipboardAction.setShortcut(QKeySequence("Ctrl+Space"))
+        self.fileMenu.insertAction(self.fileOpenAction, self.fileNewFromClipboardAction)
+        # ── Copy-as-YAML toggle ─────────────────────────────────────────────
+        self._copyAsYamlAction = QAction(self.tr("Copy as YAML text"), self)
+        self._copyAsYamlAction.setCheckable(True)
+        from state.clipboard_settings import CLIPBOARD_TEXT_FORMAT_YAML, get_clipboard_text_format
+        self._copyAsYamlAction.setChecked(get_clipboard_text_format() == CLIPBOARD_TEXT_FORMAT_YAML)
+        self._copyAsYamlAction.toggled.connect(self._on_copy_as_yaml_toggled)
+        self.fileMenu.insertAction(self.appExitAction, self._copyAsYamlAction)
+        # ── Close / Reopen tabs ─────────────────────────────────────────────
+        self.fileCloseTabAction = QAction("Close Tab", self)
+        self.fileCloseTabAction.setShortcut(QKeySequence("Ctrl+W"))
+        self.fileReopenTabAction = QAction("Reopen Closed Tab", self)
+        self.fileReopenTabAction.setShortcut(QKeySequence("Ctrl+Shift+T"))
+        self.fileMenu.insertAction(self.appExitAction, self.fileCloseTabAction)
+        self.fileMenu.insertAction(self.appExitAction, self.fileReopenTabAction)
         self._setup_secret_prefixes_action()
         self._setup_edit_limits_menu()
         refresh_recent_menu(self)
@@ -591,6 +611,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.viewMenu.addAction(self.viewSelectRegularFontAction)
         self.viewMenu.addAction(self.viewSelectMonospaceFontAction)
 
+    def _on_copy_as_yaml_toggled(self, checked: bool) -> None:
+        from state.clipboard_settings import CLIPBOARD_TEXT_FORMAT_JSON, CLIPBOARD_TEXT_FORMAT_YAML, set_clipboard_text_format
+
+        set_clipboard_text_format(CLIPBOARD_TEXT_FORMAT_YAML if checked else CLIPBOARD_TEXT_FORMAT_JSON)
+        fmt = "YAML" if checked else "JSON"
+        self.statusBar.showMessage(self.tr("Copy text format: {fmt}").format(fmt=fmt), 2000)
+
     def setup_model(self, yaml_filename: str):
         if not yaml_filename:
             return
@@ -762,18 +789,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _confirm_reload_dirty_tab(self, tab: JsonTab) -> bool:
         if not tab.is_dirty:
             return True
+        name = tab.display_name().replace(" *", "")
         choice = QMessageBox.question(
             self,
             "Reload from disk",
-            f"Save changes to {tab.display_name().replace(' *', '')} before reloading?",
-            QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Save,
+            f"'{name}' has unsaved changes.\n"
+            "Changes will be saved before reloading from disk.",
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Ok,
         )
         if choice == QMessageBox.StandardButton.Cancel:
             return False
-        if choice == QMessageBox.StandardButton.Save:
-            return self._save_tab(tab, save_as=False)
-        return True
+        return self._save_tab(tab, save_as=False)
 
     def _reload_tab_from_path(self, tab: JsonTab, path: str) -> bool:
         resolved = str(Path(path).resolve())
@@ -835,11 +862,61 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def create_new_file(self):
         self._add_tab(data={}, file_path=None)
 
+    def new_from_clipboard(self) -> None:
+        data, save_format = clipboard_to_tab_data()
+        if data is None:
+            self.statusBar.showMessage("Clipboard does not contain valid JSON or YAML", 3000)
+            return
+        tab = self._add_tab(data=data, file_path=None, save_format=save_format)
+        if tab is not None:
+            self.statusBar.showMessage("New tab created from clipboard", 2000)
+
+    def close_current_tab(self) -> None:
+        tab = self._current_tab()
+        if tab is None:
+            return
+        index = self.tabWidget.indexOf(tab)
+        if index >= 0:
+            self.close_tab(index)
+
+    def reopen_closed_tab(self) -> None:
+        if not self._closed_tabs_stack:
+            return
+        snapshot = self._closed_tabs_stack.pop()
+        data = snapshot.get("data")
+        file_path = snapshot.get("file_path")
+        save_format = snapshot.get("save_format")
+        if data is None:
+            # User had discarded dirty changes — reload clean from disk if possible.
+            if file_path:
+                self._open_path(file_path)
+            else:
+                self._add_tab(data={})
+        else:
+            self._add_tab(data=data, file_path=file_path, save_format=save_format)
+        self.statusBar.showMessage("Reopened closed tab", 2000)
+        self.update_actions()
+
     def close_tab(self, index: int) -> None:
         widget = self.tabWidget.widget(index)
-        if isinstance(widget, JsonTab) and not self._confirm_close(widget):
-            return
+
+        snapshot = None
         if isinstance(widget, JsonTab):
+            was_dirty = widget.is_dirty
+            if not self._confirm_close(widget):
+                return
+            # Build reopen snapshot: if user discarded dirty edits, remember file path only.
+            if was_dirty and widget.is_dirty:
+                # Discard chosen — don't resurrect dirty state on reopen.
+                if widget.file_path:
+                    snapshot = {"data": None, "file_path": widget.file_path, "save_format": widget.save_format}
+            else:
+                try:
+                    src_idx = widget.model.index(0, 0, QModelIndex())
+                    snap_data = widget.model.get_item(src_idx).to_json() if src_idx.isValid() else {}
+                except Exception:
+                    snap_data = {}
+                snapshot = {"data": snap_data, "file_path": widget.file_path, "save_format": widget.save_format}
             self._schema_tab_pool.unregister(widget)
             view_state.save(widget)
         if widget is self._bound_undo_tab:
@@ -847,6 +924,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.tabWidget.removeTab(index)
         if widget is not None:
             widget.deleteLater()
+
+        if snapshot is not None:
+            self._closed_tabs_stack.append(snapshot)
+            if len(self._closed_tabs_stack) > self._MAX_CLOSED_TABS:
+                self._closed_tabs_stack.pop(0)
+
         self.update_actions()
         # Re-bind to whatever tab is now current (if any).
         current = self._current_tab()

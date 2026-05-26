@@ -537,6 +537,9 @@ def switch_selection_case(tree_view: QTreeView, case_style: FieldCase, *, recurs
     if model is None:
         return False
     rows = _top_level_selected_rows(tree_view) if recursive else _selected_rows(tree_view)
+    # When root is selected, treat it as a whole-document operation.
+    if any(idx.isValid() and _is_root_index(model, idx) for idx in rows):
+        return switch_document_case(tree_view, case_style)
     roots = [idx for idx in rows if idx.isValid() and not _is_root_index(model, idx)]
     if not roots:
         return False
@@ -590,7 +593,11 @@ def expand_selection_recursive(tree_view: QTreeView) -> bool:
     model, _proxy = _resolve_model(tree_view)
     if model is None:
         return False
-    roots = [idx for idx in _top_level_selected_rows(tree_view) if idx.isValid() and not _is_root_index(model, idx)]
+    all_rows = _top_level_selected_rows(tree_view)
+    # When root is selected, expand the whole document.
+    if any(idx.isValid() and _is_root_index(model, idx) for idx in all_rows):
+        return expand_all(tree_view)
+    roots = [idx for idx in all_rows if idx.isValid() and not _is_root_index(model, idx)]
     if not roots:
         return False
     changed = False
@@ -607,7 +614,11 @@ def collapse_selection_recursive(tree_view: QTreeView) -> bool:
     model, _proxy = _resolve_model(tree_view)
     if model is None:
         return False
-    roots = [idx for idx in _top_level_selected_rows(tree_view) if idx.isValid() and not _is_root_index(model, idx)]
+    all_rows = _top_level_selected_rows(tree_view)
+    # When root is selected, collapse the whole document.
+    if any(idx.isValid() and _is_root_index(model, idx) for idx in all_rows):
+        return collapse_all(tree_view)
+    roots = [idx for idx in all_rows if idx.isValid() and not _is_root_index(model, idx)]
     if not roots:
         return False
 

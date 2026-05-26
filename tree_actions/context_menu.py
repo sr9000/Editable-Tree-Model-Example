@@ -363,6 +363,9 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
             if item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
                 can_insert_child = True
             if item is source_model.root_item:
+                # Root is available for sort keys if it is an OBJECT.
+                if item.json_type is JsonType.OBJECT:
+                    can_sort_keys = True
                 continue
             has_non_root = True
             is_container = is_container or item.json_type in (JsonType.OBJECT, JsonType.ARRAY)
@@ -522,23 +525,22 @@ def show_context_menu(tree_view: QTreeView, position: QPoint, *, execute: bool =
         lambda: sort_selection_keys(tree_view, recursive=True),
         enabled=can_sort_keys,
     )
+    _add(context_menu, "Expand Recursively", lambda: expand_selection_recursive(tree_view), enabled=has_selection)
+    _add(context_menu, "Collapse Recursively", lambda: collapse_selection_recursive(tree_view), enabled=has_selection)
     _add_switch_case_submenu(
         context_menu,
         "Switch Case",
         tree_view,
         recursive=False,
-        enabled=has_non_root,
+        enabled=has_selection,
     )
     _add_switch_case_submenu(
         context_menu,
         "Switch Case (Recursive)",
         tree_view,
         recursive=True,
-        enabled=has_non_root,
+        enabled=has_selection,
     )
-
-    _add(context_menu, "Expand Recursively", lambda: expand_selection_recursive(tree_view), enabled=has_non_root)
-    _add(context_menu, "Collapse Recursively", lambda: collapse_selection_recursive(tree_view), enabled=has_non_root)
 
     while context_menu.actions() and context_menu.actions()[-1].isSeparator():
         context_menu.removeAction(context_menu.actions()[-1])

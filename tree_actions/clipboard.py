@@ -2,10 +2,11 @@ import json
 from typing import Any
 
 import simplejson
+import yaml
 from PySide6.QtCore import QMimeData
 from PySide6.QtWidgets import QApplication, QTreeView
 
-from mpq2py import mpq_json_default
+from mpq2py import MpqSafeDumper, mpq_json_default
 from tree.model import JsonTreeModel
 from tree.types import JsonType
 from tree_actions.selection import _index_path, _is_ancestor, _resolve_model, _selected_rows, selection_shape
@@ -14,8 +15,17 @@ from tree_actions.selection import top_level_source_rows as _top_level_selected_
 MIME_JSON_TREE = "application/x-json-tree"
 
 
+def _dump_text(payload: Any) -> str:
+    """Serialize *payload* to a string using the configured clipboard text format."""
+    from state.clipboard_settings import CLIPBOARD_TEXT_FORMAT_YAML, get_clipboard_text_format
+
+    if get_clipboard_text_format() == CLIPBOARD_TEXT_FORMAT_YAML:
+        return yaml.dump(payload, Dumper=MpqSafeDumper, allow_unicode=True, default_flow_style=False).rstrip()
+    return simplejson.dumps(payload, default=mpq_json_default, indent=2)
+
+
 def _get_val_str(item) -> str:
-    return simplejson.dumps(item.to_json(), default=mpq_json_default, indent=2)
+    return _dump_text(item.to_json())
 
 
 def _project_subtree(item, selected_paths: set[tuple[int, ...]], item_path: tuple[int, ...]) -> Any:
@@ -178,7 +188,7 @@ def build_tree_mime(model: JsonTreeModel, source_rows) -> QMimeData | None:
 
     source_paths = [list(_path_relative_to_root(model, idx)) for idx in rows]
     metadata = simplejson.dumps({"entries": entries, "source_paths": source_paths}, default=mpq_json_default)
-    text = simplejson.dumps(text_payload, default=mpq_json_default, indent=2)
+    text = _dump_text(text_payload)
 
     mime = QMimeData()
     mime.setData(MIME_JSON_TREE, metadata.encode("utf-8"))
@@ -223,9 +233,24 @@ def entries_from_mime(mime: QMimeData) -> list[dict[str, Any]] | None:
     if not text:
         return None
 
+    # Try JSON first, then YAML.
+    parsed = None
     try:
         parsed = json.loads(text)
     except Exception:
+        pass
+
+    if parsed is None:
+        try:
+            yaml_parsed = yaml.safe_load(text)
+            # Only accept structured types from YAML; bare scalars are ambiguous
+            # (any plain string would be "valid" YAML, which is not useful here).
+            if isinstance(yaml_parsed, (dict, list)):
+                parsed = yaml_parsed
+        except Exception:
+            pass
+
+    if parsed is None:
         return None
 
     if isinstance(parsed, dict):
@@ -264,6 +289,57 @@ def _clipboard_entries() -> list[dict[str, Any]] | None:
     return entries_from_mime(QApplication.clipboard().mimeData())
 
 
+def clipboard_text_is_valid_data() -> bool:
+    """Return True when the system clipboard contains pasteable JSON/YAML or in-app tree data."""
+    return entries_from_mime(QApplication.clipboard().mimeData()) is not None
+
+
+def clipboard_to_tab_data() -> tuple[Any, str | None]:
+    """Parse the system clipboard and return (data, save_format) for opening in a new tab.
+
+    Returns (None, None) when the clipboard contains nothing usable.
+    save_format uses SAVE_FORMAT_* constants from io_formats.detect.
+    """
+    from io_formats.detect import SAVE_FORMAT_JSON, SAVE_FORMAT_YAML, SAVE_FORMAT_YAML_MULTI
+
+    mime = QApplication.clipboard().mimeData()
+    if mime is None:
+        return None, None
+
+    # Internal app MIME takes priority.
+    if mime.hasFormat(MIME_JSON_TREE):
+        entries = entries_from_mime(mime)
+        if entries:
+            data = entries[0]["value"] if len(entries) == 1 else [e["value"] for e in entries]
+            return data, SAVE_FORMAT_JSON
+
+    text = mime.text().strip()
+    if not text:
+        return None, None
+
+    # JSON
+    try:
+        data = json.loads(text)
+        return data, SAVE_FORMAT_JSON
+    except Exception:
+        pass
+
+    # YAML — detect multi-doc via load_all
+    try:
+        docs = list(yaml.safe_load_all(text))
+        # Only accept structured types; bare scalars (strings, numbers) are not useful.
+        docs = [d for d in docs if isinstance(d, (dict, list))]
+        if not docs:
+            return None, None
+        if len(docs) > 1:
+            return docs, SAVE_FORMAT_YAML_MULTI
+        return docs[0], SAVE_FORMAT_YAML
+    except Exception:
+        pass
+
+    return None, None
+
+
 # ---------------------------------------------------------------------------
 # Clipboard copy actions — thin orchestrators over build_tree_mime
 # ---------------------------------------------------------------------------
@@ -296,17 +372,9 @@ def copy_selection_with_name(tree_view: QTreeView) -> bool:
 
     entries = _build_copy_entries(model, rows)
 
-    if len(rows) == 1:
-        item = model.get_item(rows[0])
-        val_str = _get_val_str(item)
-        if item.name is not None:
-            name_str = simplejson.dumps(item.name, default=mpq_json_default)
-            text = f"{name_str}: {val_str}"
-        else:
-            text = val_str
-    else:
-        text_payload = _entries_text_payload(model, rows, entries)
-        text = simplejson.dumps(text_payload, default=mpq_json_default, indent=2)
+    entries = _build_copy_entries(model, rows)
+    text_payload = _entries_text_payload(model, rows, entries)
+    text = _dump_text(text_payload)
 
     metadata = simplejson.dumps({"entries": entries}, default=mpq_json_default)
     mime = QMimeData()
@@ -327,11 +395,11 @@ def copy_selection_value_only(tree_view: QTreeView) -> bool:
 
     if len(rows) == 1:
         item = model.get_item(rows[0])
-        text = _get_val_str(item)
+        text = _dump_text(item.to_json())
     else:
         entries = _build_copy_entries(model, rows)
         text_payload = _entries_text_payload(model, rows, entries)
-        text = simplejson.dumps(text_payload, default=mpq_json_default, indent=2)
+        text = _dump_text(text_payload)
 
     mime = QMimeData()
     mime.setText(text)

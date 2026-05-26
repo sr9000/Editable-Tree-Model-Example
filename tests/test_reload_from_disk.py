@@ -45,7 +45,12 @@ def test_reload_action_enabled_state(qtbot):
         QApplication.processEvents()
 
 
-def test_reload_from_disk_replaces_content_and_cleans(qtbot, tmp_path, monkeypatch):
+def test_reload_from_disk_saves_then_reloads(qtbot, tmp_path, monkeypatch):
+    """Dirty tab: Ok saves in-memory state to disk first, then reloads from that file.
+
+    The old 'Discard' path (reload disk content, losing local edits) is no longer
+    offered.  Reload now always saves dirty changes before re-reading the file.
+    """
     doc = tmp_path / "data.json"
     _write_json(doc, {"a": 1})
 
@@ -60,13 +65,15 @@ def test_reload_from_disk_replaces_content_and_cleans(qtbot, tmp_path, monkeypat
         assert tab.push_edit_value(a_value, 99, label="dirty")
         assert tab.is_dirty
 
-        _write_json(doc, {"a": 2})
-        monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Discard)
+        monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Ok)
 
         win.reload_from_disk()
 
-        assert tab.model.root_item.to_json() == {"a": 2}
+        # After save-first reload: in-memory value 99 was saved, then reloaded.
+        assert tab.model.root_item.to_json() == {"a": 99}
         assert not tab.is_dirty
+        # Confirm the file on disk was actually written.
+        assert json.loads(doc.read_text()) == {"a": 99}
     finally:
         for i in range(win.tabWidget.count()):
             maybe_tab = win.tabWidget.widget(i)
