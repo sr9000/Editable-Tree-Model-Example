@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QApplication
 
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab import JsonTab
-from documents.tab_history_facade import TabHistoryFacade
+from documents.tab_history import TabHistoryController
 
 
 @pytest.fixture(scope="module")
@@ -28,7 +28,7 @@ def test_tab_exposes_mutations_gateway(tab):
 
 
 def test_tab_exposes_history_facade(tab):
-    assert isinstance(tab.history, TabHistoryFacade)
+    assert isinstance(tab.history, TabHistoryController)
     assert tab.history.undo_stack is tab.undo_stack
 
 

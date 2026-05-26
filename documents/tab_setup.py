@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer
-from PySide6.QtGui import QKeySequence, QShortcut, QUndoStack
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QMessageBox, QVBoxLayout
 
 from delegates.edit_context import DefaultEditContext, EditResult
@@ -129,7 +129,8 @@ def init_layout(tab) -> None:
 
 
 def init_model(tab, model_data: Any, show_root: bool) -> None:
-    tab.undo_stack = QUndoStack(tab)
+    # ``undo_stack`` is owned by ``TabHistoryController`` (Phase 2.2); the
+    # tab exposes it via a delegating property.
 
     tab.model = JsonTreeModel(model_data, tab.view, show_root=show_root, icon_provider=tab._icon_provider)
     tab.model.attach_view(tab.view)

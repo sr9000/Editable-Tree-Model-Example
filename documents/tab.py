@@ -12,7 +12,6 @@ from PySide6.QtCore import QEvent, QItemSelectionModel, QModelIndex, QPersistent
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.mutation_gateway import DocumentMutationGateway
-from documents.tab_history_facade import TabHistoryFacade
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
@@ -234,6 +233,11 @@ class JsonTab(QWidget):
         self._dirty = False
 
         init_model(self, model_data, show_root=show_root)
+        # Phase-2.2: undo stack and view-state map move to a dedicated
+        # QObject controller owned by the tab.
+        from documents.tab_history import TabHistoryController
+
+        self.history = TabHistoryController(self)
         self.affix_mru.bootstrap_from_tree(self.model.root_item)
         # Phase-0 façade: publishes a stable mutation seam over the current
         # in-tab implementation; later commits move the implementation out.
@@ -263,13 +267,8 @@ class JsonTab(QWidget):
         self._diff_applier = DiffApplier(self)
 
         self.undo_stack.cleanChanged.connect(self._on_clean_changed)
-        self._move_view_state_by_cmd_id: dict[int, dict[str, Any]] = {}
-        self._last_undo_index = self.undo_stack.index()
         self.undo_stack.indexChanged.connect(self._on_undo_index_changed)
         self.undo_stack.setClean()
-        # Phase-0 façade for undo/view-state.  Phase 2.2 swaps the
-        # implementation behind this attribute.
-        self.history = TabHistoryFacade(self)
         self._set_dirty(False)
 
     @property
@@ -285,6 +284,22 @@ class JsonTab(QWidget):
         return self.validation.schema_source
 
     # ----- deprecated private accessors kept for tests (Issue 16) -------
+    @property
+    def undo_stack(self):
+        return self.history.undo_stack
+
+    @property
+    def _move_view_state_by_cmd_id(self) -> dict:
+        return self.history._move_view_state_by_cmd_id
+
+    @property
+    def _last_undo_index(self) -> int:
+        return self.history.last_undo_index
+
+    @_last_undo_index.setter
+    def _last_undo_index(self, value: int) -> None:
+        self.history.last_undo_index = value
+
     @property
     def _schema(self):
         return self.validation.schema
