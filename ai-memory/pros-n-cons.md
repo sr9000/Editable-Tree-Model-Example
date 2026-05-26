@@ -1,11 +1,18 @@
 # JSON Editor — Pros & Cons
 
-_Last analysis: **2026-05-23** (branch `new-kinds`, ~52 commits ahead
-of `master`). On top of everything that landed on `master` (drag-and-
-drop Steps 1–10, jsonschema Step 7, schema-registry, PR #9
-`improve-ux`), this branch ships three feature plans
-(`plans/01-utc-datetime.md`, `plans/02-number-affix.md`,
-`plans/03-secret-strings.md`):_
+_Last analysis: **2026-05-26** (branch `file-ux`). Adds reload-from-
+disk, close/reopen tabs, New From Clipboard (JSON + YAML), Copy as
+YAML toggle, YAML interop on paste, search-aware Go To context
+action, hide-inactive context menu, recursive expand/collapse scoped
+to selection, dirty-aware Save, full-path tab tooltips, plus two
+focused bug fixes: field-case tokenizer (preserves `.` / `:`,
+Unicode, digit boundaries) and cross-parent move undo (collision
+auto-rename no longer leaks into the source name)._
+
+_Prior layers (still in place): UTC datetime, number affixes, secret
+strings, pseudo-text family, schema-registry, validation Step 7,
+drag-and-drop Steps 1–10, PR #9 `improve-ux`, and the original phase
+work._
 
 - **UTC datetime** — `JsonType.DATETIMEUTC` with `Z` suffix, full
   conversion lattice (`tree/types_datetime.py::convert_datetime`,
@@ -81,6 +88,56 @@ See `repo-map.md` for the full module breakdown.
 - **History dialog** — `QUndoView` bound to the active tab's stack.
 
 ### UX / functional features
+
+- **File-UX sweep** (branch `file-ux`, 2026-05-26):
+  - **Reload from Disk** (`Ctrl+R`) with a dirty-aware Discard /
+    Overwrite / Cancel dialog — replays disk data through
+    `tab._diff_apply`, preserves expansion and selection where
+    possible, clears the undo stack on success.
+  - **Close Tab** (`Ctrl+W`) and **Reopen Closed Tab**
+    (`Ctrl+Shift+T`) — LIFO stack of last 10 closed tabs. Empty
+    untitled tabs close silently; non-empty untitled tabs prompt
+    Save / Discard / Cancel even when clean. Discarded-dirty tabs
+    reopen by reloading from disk rather than resurrecting unsaved
+    edits.
+  - **New From Clipboard** (`Ctrl+Space`) — accepts JSON or YAML
+    (single + multi-doc); rejects bare scalars; action enabled only
+    when clipboard parses.
+  - **Copy as YAML text** — File-menu toggle, persisted via
+    `state/clipboard_settings.py`. Both copy and clipboard MIME
+    serialise through `_dump_text(...)` honouring the active format;
+    YAML mode normalises app-native values (`NumberAffix`, etc.)
+    through `mpq_json_default` when YAML lacks a direct representer.
+  - **YAML paste** — `entries_from_mime` falls back to
+    `yaml.safe_load` after JSON parsing fails, accepting only
+    `dict` / `list`.
+  - **Search-aware Go To** — context-menu action that appears only
+    while the tab's filter has text. Clears the filter and focuses
+    the clicked source row at the originally clicked column.
+  - **Hide-inactive context menu** — disabled entries are no longer
+    rendered (`_add` returns `None` when disabled); the type column
+    shows no menu at all.
+  - **Recursive expand/collapse scoped to selection** — `Expand
+    Recursively` / `Collapse Recursively` act on selected subtrees;
+    root selection equals whole-document. Switch Case on the root
+    also applies whole-document via `switch_document_case`.
+  - **Dirty-aware Save / fresh menus** — `update_actions` gates
+    `Save` on `tab.is_dirty`, `Reload from Disk` on `tab.file_path`,
+    Close/Reopen on the appropriate state. `fileMenu` / `viewMenu`
+    / `actionsMenu` refresh on `aboutToShow`.
+  - **Full-path tab tooltips** via `_refresh_tab_presentation`.
+  - **Field-case tokenizer rewrite** — `tree_actions/field_case.py`
+    now preserves non-standard punctuation (`.`, `:` etc.) between
+    segments, handles digit/letter boundaries (`http2`), and is
+    Unicode-aware (Cyrillic, accented Latin). Closes
+    `api.v1_field-name`, `non_standard:approach`, `привет_мир`
+    cases.
+  - **Cross-parent move undo collision fix** — `_MoveRowsCmd`
+    snapshots source names; undo restores them verbatim even when
+    redo had to auto-rename on destination-OBJECT collision.
+
+### UTC datetime, number affixes, secret strings, pseudo-text
+
 - **UTC datetime** (`new-kinds` plan 01) — first-class
   `JsonType.DATETIMEUTC` (`"datetime utc"`) serialised with trailing
   `Z`; full date/time conversion lattice in
