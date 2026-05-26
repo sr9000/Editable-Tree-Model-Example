@@ -62,7 +62,7 @@ def test_reload_from_disk_discard_reloads_disk_state(qtbot, tmp_path, monkeypatc
 
         def _choose_discard(box):
             for btn in box.buttons():
-                if "Discard In-Mem And Reload From Disk" in btn.text():
+                if "Discard Unsaved" in btn.text():
                     return btn
             return None
 
@@ -143,7 +143,7 @@ def test_reload_from_disk_overwrite_saves_then_reloads(qtbot, tmp_path, monkeypa
 
         def _choose_overwrite(box):
             for btn in box.buttons():
-                if "Overwrite Disk Data With In-Mem Changes" in btn.text():
+                if "Overwrite Disk" in btn.text():
                     return btn
             return None
 
