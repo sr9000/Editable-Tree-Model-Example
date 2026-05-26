@@ -801,16 +801,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         box.setWindowTitle("Reload from disk")
         box.setIcon(QMessageBox.Icon.Warning)
         box.setText(f"'{name}' has unsaved in-memory changes.")
-        box.setInformativeText("Choose whether to discard memory edits or overwrite disk data.")
+        box.setInformativeText("Choose whether to discard memory edits or save them and overwrite disk data.")
 
-        discard_btn = box.addButton(
-            "Discard Unsaved",
-            QMessageBox.ButtonRole.DestructiveRole,
-        )
-        overwrite_btn = box.addButton(
-            "Overwrite Disk",
-            QMessageBox.ButtonRole.AcceptRole,
-        )
+        discard_btn = box.addButton(QMessageBox.StandardButton.Discard)
+        overwrite_btn = box.addButton(QMessageBox.StandardButton.Save)
         cancel_btn = box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(cancel_btn)
         box.exec()

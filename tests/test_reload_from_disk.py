@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from PySide6.QtCore import QModelIndex
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton
 
 from app.main_window import MainWindow
 from documents.tab import JsonTab
@@ -61,8 +61,11 @@ def test_reload_from_disk_discard_reloads_disk_state(qtbot, tmp_path, monkeypatc
         assert tab.is_dirty
 
         def _choose_discard(box):
+            box: QMessageBox
+
             for btn in box.buttons():
-                if "Discard Unsaved" in btn.text():
+                btn: QPushButton
+                if QMessageBox.ButtonRole.DestructiveRole is box.buttonRole(btn):
                     return btn
             return None
 
@@ -142,8 +145,10 @@ def test_reload_from_disk_overwrite_saves_then_reloads(qtbot, tmp_path, monkeypa
         assert tab.is_dirty
 
         def _choose_overwrite(box):
+            box: QMessageBox
             for btn in box.buttons():
-                if "Overwrite Disk" in btn.text():
+                btn: QPushButton
+                if QMessageBox.ButtonRole.AcceptRole is box.buttonRole(btn):
                     return btn
             return None
 
