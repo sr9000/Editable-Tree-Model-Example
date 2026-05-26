@@ -10,7 +10,9 @@ def setup_connections(window):
     window.fileSaveAsAction.triggered.connect(window.save_file_as)
     window.fileCopyPathAction.triggered.connect(window.copy_current_file_path)
 
+    window.fileMenu.aboutToShow.connect(window.update_actions)
     window.actionsMenu.aboutToShow.connect(window.update_actions)
+    window.viewMenu.aboutToShow.connect(window.update_actions)
     window.rowInsertAction.triggered.connect(window.insert_row_before)
     window.rowInsertAfterAction.triggered.connect(window.insert_row_after)
     window.rowRemoveAction.triggered.connect(window.remove_row)
@@ -44,7 +46,7 @@ def update_actions(window):
     can_edit = bool(tab and not tab.is_read_only)
     has_valid_index = bool(tab and tab.view.selectionModel().currentIndex().isValid())
 
-    window.fileSaveAction.setEnabled(has_tab and can_edit)
+    window.fileSaveAction.setEnabled(has_tab and can_edit and tab.is_dirty)
     window.fileSaveAsAction.setEnabled(has_tab and can_edit)
     window.fileCopyPathAction.setEnabled(bool(tab and tab.file_path))
     window.rowInsertAction.setEnabled(has_valid_index and can_edit)

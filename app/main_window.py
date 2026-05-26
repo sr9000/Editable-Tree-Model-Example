@@ -667,6 +667,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self._history_view.setStack(tab.undo_stack)
         self.update_actions()
 
+    def _refresh_tab_presentation(self, tab: JsonTab) -> None:
+        index = self.tabWidget.indexOf(tab)
+        if index < 0:
+            return
+        self.tabWidget.setTabText(index, tab.display_name())
+        self.tabWidget.setTabToolTip(index, tab.file_path or "Untitled")
+
     def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> JsonTab | None:
         from state.validation_settings import auto_rescan_enabled
 
@@ -692,6 +699,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         tab_index = self.tabWidget.addTab(tab, tab.display_name())
         self.tabWidget.setCurrentIndex(tab_index)
+        self._refresh_tab_presentation(tab)
         self.fonts.subscribe(tab)
         tab.dirtyChanged.connect(lambda _dirty, t=tab: self._on_tab_dirty(t))
 
@@ -710,9 +718,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return tab
 
     def _on_tab_dirty(self, tab: JsonTab) -> None:
-        index = self.tabWidget.indexOf(tab)
-        if index >= 0:
-            self.tabWidget.setTabText(index, tab.display_name())
+        self._refresh_tab_presentation(tab)
         self.update_actions()
 
     def _open_path(self, path: str) -> bool:
