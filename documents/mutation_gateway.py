@@ -52,6 +52,15 @@ class DocumentMutationGateway:
     def push_move_rows_anchor(self, *args, **kwargs) -> bool:
         return self._tab.push_move_rows_anchor(*args, **kwargs)
 
+    def push_move_rows(self, *args, **kwargs) -> bool:
+        return self._tab.push_move_rows(*args, **kwargs)
+
+    def push_sort_keys(self, *args, **kwargs) -> bool:
+        return self._tab.push_sort_keys(*args, **kwargs)
+
+    def push_switch_field_case(self, *args, **kwargs) -> bool:
+        return self._tab.push_switch_field_case(*args, **kwargs)
+
     # ----- macro framing --------------------------------------------------
     def begin_macro(self, label: str) -> None:
         self._tab.undo_stack.beginMacro(label)

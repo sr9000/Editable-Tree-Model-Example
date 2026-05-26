@@ -115,7 +115,7 @@ def handle_drop(view, model, mime, action: Qt.DropAction, row: int, column: int,
             # overridden ``startDrag`` skips Qt's default post-drag
             # ``clearOrRemove`` (which would otherwise delete the freshly
             # placed destination rows — the "disappearing item" bug).
-            moved = tab.push_move_rows(source_rows, target_parent, target_row, label="drag move")
+            moved = tab.mutations.push_move_rows(source_rows, target_parent, target_row, label="drag move")
             if moved and view is not None and hasattr(view, "mark_drag_handled_internally"):
                 view.mark_drag_handled_internally()
             if moved:

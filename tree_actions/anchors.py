@@ -39,7 +39,7 @@ class MoveAnchor:
 
 
 def _index_path_from_tab(index: QModelIndex, tab) -> tuple[int, ...]:
-    return tab._index_path(index)
+    return tab.mutations.index_path(index)
 
 
 def anchor_at_end(parent_index: QModelIndex, tab) -> MoveAnchor:
@@ -66,7 +66,7 @@ def anchor_after_index(sibling_index: QModelIndex, tab) -> MoveAnchor:
         return anchor_at_end(QModelIndex(), tab)
     sibling_path = _index_path_from_tab(sibling_index, tab)
     parent_path = sibling_path[:-1]
-    parent_index = tab._index_from_path(parent_path)
+    parent_index = tab.mutations.index_from_path(parent_path)
     if sibling_index.row() + 1 >= tab.model.rowCount(parent_index):
         return MoveAnchor(parent_path=parent_path, is_at_end=True)
     next_sibling_path = parent_path + (sibling_index.row() + 1,)
@@ -121,7 +121,7 @@ def resolve_anchor_target(
     adjusted_parent_path = adjust_path_for_removed_sources(anchor.parent_path, detached_source_paths)
 
     if anchor.is_at_end:
-        parent_index = tab._index_from_path(adjusted_parent_path)
+        parent_index = tab.mutations.index_from_path(adjusted_parent_path)
         return adjusted_parent_path, model.rowCount(parent_index)
 
     assert anchor.before_sibling_path is not None
@@ -156,7 +156,7 @@ def pre_pop_target_row_to_anchor(
     Used by the back-compat ``push_move_rows(sources, target_parent, target_row)``
     signature.
     """
-    parent_path = tab._index_path(target_parent)
+    parent_path = tab.mutations.index_path(target_parent)
     n = tab.model.rowCount(target_parent)
     if target_row >= n:
         return MoveAnchor(parent_path=parent_path, is_at_end=True)

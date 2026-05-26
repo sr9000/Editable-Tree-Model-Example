@@ -743,7 +743,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab.resize_key_columns()
         if tab.model.show_root:
             source_index = tab.model.index(0, 0, QModelIndex())
-            tab.view.setCurrentIndex(tab._source_to_view(source_index))
+            tab.view.setCurrentIndex(tab.mutations.source_to_view(source_index))
         view_state.restore(tab)
         # Re-broadcast: ``view_state.restore`` may have rewritten ``_font_pt``
         # from a previously-saved per-tab value; the global controller wins.

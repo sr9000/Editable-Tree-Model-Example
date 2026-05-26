@@ -174,13 +174,13 @@ def _goto_row_and_clear_search(tree_view: QTreeView, clicked_index) -> bool:
         if callable(apply_filter):
             apply_filter()
 
-    idx = tab._index_from_path(source_path)
+    idx = tab.mutations.index_from_path(source_path)
     if not idx.isValid():
         return False
     source_target = idx.siblingAtColumn(target_col)
     if not source_target.isValid():
         source_target = idx.siblingAtColumn(0)
-    view_target = tab._source_to_view(source_target)
+    view_target = tab.mutations.source_to_view(source_target)
     if not view_target.isValid():
         return False
 
@@ -257,7 +257,7 @@ def _set_value_from_context(tree_view: QTreeView, value_index, value: str) -> bo
         return False
     tab = _find_enter_edit_target(tree_view)
     if tab is not None and hasattr(tab, "commit_set_data"):
-        return bool(tab.commit_set_data(value_index, value, Qt.ItemDataRole.EditRole))
+        return bool(tab.mutations.commit_set_data(value_index, value, Qt.ItemDataRole.EditRole))
     model = value_index.model()
     if model is None:
         return False
