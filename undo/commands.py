@@ -278,14 +278,19 @@ class _MoveRowsCmd(QUndoCommand):
         tab: "JsonTab",
         text: str,
         sources: list[tuple[tuple, int]],
+        source_names: list[Any] | None,
         anchor,
     ):
         super().__init__(text)
         self._tab = tab
         self._sources = sources  # list of (parent_path, row), original positions
+        self._source_names = {src: name for src, name in zip(sources, source_names or [], strict=False)}
         self._anchor = anchor
         # Populated during redo; used by undo and by the post-hook to drive selection.
         self._placed: list[tuple[tuple, int]] = []
+
+    def _original_name_for(self, source: tuple[tuple, int], item: object) -> Any:
+        return self._source_names.get(source, getattr(item, "name", None))
 
     # ------------------------------------------------------------------
     # Public accessors — used by the action layer for post-redo hooks
@@ -346,13 +351,16 @@ class _MoveRowsCmd(QUndoCommand):
         insert_row = max(0, min(insert_row, t_parent_item.child_count()))
 
         self._placed = []
-        for offset, (_sp, _sr, item) in enumerate(detached):
+        for offset, (sp, sr, item) in enumerate(detached):
             ins_row = insert_row + offset
             item.parent_item = t_parent_item
+            original_name = self._original_name_for((sp, sr), item)
             if t_parent_item.json_type is JsonType.OBJECT:
-                base = item.name.strip() if isinstance(item.name, str) and item.name.strip() else "new_key"
+                base = original_name.strip() if isinstance(original_name, str) and original_name.strip() else "new_key"
                 item.name = unique_child_name(t_parent_item.child_items, base=base, used_names=used_names)
                 used_names.add(item.name)
+            else:
+                item.name = original_name
             with model.rows_insertion(t_parent, ins_row, 1):
                 t_parent_item.child_items.insert(ins_row, item)
                 t_parent_item.mark_children_dirty()
@@ -384,14 +392,22 @@ class _MoveRowsCmd(QUndoCommand):
             p = tab._index_from_path(parent_path)
             parent_item = model.get_item(p)
             item.parent_item = parent_item
+            original_name = self._original_name_for((parent_path, row), item)
             if parent_item.json_type is JsonType.OBJECT:
                 used = used_by_parent.setdefault(
                     parent_path,
                     {c.name for c in parent_item.child_items if isinstance(c.name, str)},
                 )
-                base = item.name.strip() if isinstance(item.name, str) and item.name.strip() else "new_key"
-                item.name = unique_child_name(parent_item.child_items, base=base, used_names=used)
+                if isinstance(original_name, str) and original_name.strip() and original_name not in used:
+                    item.name = original_name
+                else:
+                    base = (
+                        original_name.strip() if isinstance(original_name, str) and original_name.strip() else "new_key"
+                    )
+                    item.name = unique_child_name(parent_item.child_items, base=base, used_names=used)
                 used.add(item.name)
+            else:
+                item.name = original_name
             with model.rows_insertion(p, row, 1):
                 parent_item.child_items.insert(row, item)
                 parent_item.mark_children_dirty()

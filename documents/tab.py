@@ -1034,9 +1034,11 @@ class JsonTab(QWidget):
 
         # Snapshot every source's (parent_path, row) BEFORE any mutation.
         source_paths: list[tuple[tuple, int]] = []
+        source_names: list[Any] = []
         for idx in sources:
             row0 = self.model.index(idx.row(), 0, idx.parent())
             source_paths.append((self._index_path(row0.parent()), row0.row()))
+            source_names.append(self.model.get_item(row0).name)
 
         # Cycle guard.
         if anchor_is_cycle(anchor, source_paths):
@@ -1064,7 +1066,7 @@ class JsonTab(QWidget):
         # Build the command.
         move_view_state = self._capture_move_view_state(sources)
         target_qname = self._qualified_name(self.model.index(sources[0].row(), 0, sources[0].parent()))
-        cmd = _MoveRowsCmd(self, _make_label(label, target_qname), source_paths, anchor)
+        cmd = _MoveRowsCmd(self, _make_label(label, target_qname), source_paths, source_names, anchor)
         self.undo_stack.push(cmd)
         self._move_view_state_by_cmd_id[id(cmd)] = move_view_state
         # Expose placed paths for action-layer post-hooks (esp. macros).

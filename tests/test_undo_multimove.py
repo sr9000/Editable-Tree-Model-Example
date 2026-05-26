@@ -132,6 +132,39 @@ def test_cross_parent_multimove_and_undo(qtbot):
     assert tab.model.get_item(c_idx).to_json() == []
 
 
+def test_cross_parent_move_undo_restores_original_name_after_collision_rename(qtbot):
+    """Undo must restore the source field name even if redo auto-renamed on collision."""
+    tab = _make_tab(
+        qtbot,
+        {
+            "foo": {"x": 1},
+            "bar": {"x": 2},
+        },
+    )
+
+    foo_idx = _idx(tab, 0)
+    bar_idx = _idx(tab, 1)
+    bar_x = tab.model.index(0, 0, bar_idx)
+
+    assert tab.push_move_rows([bar_x], foo_idx, 1)
+    assert tab.model.root_item.to_json() == {
+        "foo": {"x": 1, "x_2": 2},
+        "bar": {},
+    }
+
+    tab.undo_stack.undo()
+    assert tab.model.root_item.to_json() == {
+        "foo": {"x": 1},
+        "bar": {"x": 2},
+    }
+
+    tab.undo_stack.redo()
+    assert tab.model.root_item.to_json() == {
+        "foo": {"x": 1, "x_2": 2},
+        "bar": {},
+    }
+
+
 # ---------------------------------------------------------------------------
 # Test 4 — Cycle guard: parent into its own descendant → False, no command
 # ---------------------------------------------------------------------------
