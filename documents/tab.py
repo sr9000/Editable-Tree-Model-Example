@@ -12,6 +12,7 @@ from PySide6.QtCore import QEvent, QItemSelectionModel, QModelIndex, QPersistent
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.mutation_gateway import DocumentMutationGateway
+from documents.tab_history_facade import TabHistoryFacade
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
@@ -276,6 +277,9 @@ class JsonTab(QWidget):
         self._last_undo_index = self.undo_stack.index()
         self.undo_stack.indexChanged.connect(self._on_undo_index_changed)
         self.undo_stack.setClean()
+        # Phase-0 façade for undo/view-state.  Phase 2.2 swaps the
+        # implementation behind this attribute.
+        self.history = TabHistoryFacade(self)
         self._set_dirty(False)
 
     @property
