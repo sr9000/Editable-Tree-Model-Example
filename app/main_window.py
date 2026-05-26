@@ -845,8 +845,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.statusBar.showMessage(f"Reloaded: {resolved}", 2000)
         return True
 
-    def _confirm_close(self, tab: JsonTab) -> bool:
-        return confirm_close(self, tab)
+    def _confirm_close(self, tab: JsonTab, *, prompt_for_untitled_nonempty: bool = True) -> bool:
+        return confirm_close(self, tab, prompt_for_untitled_nonempty=prompt_for_untitled_nonempty)
 
     def open_file_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -1107,7 +1107,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._theme_controller.shutdown()
         for i in range(self.tabWidget.count() - 1, -1, -1):
             widget = self.tabWidget.widget(i)
-            if isinstance(widget, JsonTab) and not self._confirm_close(widget):
+            if isinstance(widget, JsonTab) and not self._confirm_close(widget, prompt_for_untitled_nonempty=False):
                 event.ignore()
                 return
             if isinstance(widget, JsonTab):

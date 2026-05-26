@@ -12,8 +12,8 @@ def _has_meaningful_data(tab) -> bool:
     return data is not None
 
 
-def confirm_close(window, tab) -> bool:
-    if not tab.file_path and tab.is_dirty and _has_meaningful_data(tab):
+def confirm_close(window, tab, *, prompt_for_untitled_nonempty: bool = True) -> bool:
+    if prompt_for_untitled_nonempty and not tab.file_path and _has_meaningful_data(tab):
         choice = QMessageBox.question(
             window,
             "Unsaved untitled tab",

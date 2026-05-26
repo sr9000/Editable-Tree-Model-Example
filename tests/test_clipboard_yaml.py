@@ -197,6 +197,41 @@ def test_copy_as_yaml(qtbot):
         _reset_format()
 
 
+def test_copy_as_yaml_handles_number_affix_in_deep_object(qtbot):
+    from units.number_affix import AffixKind, NumberAffix
+
+    set_clipboard_text_format(CLIPBOARD_TEXT_FORMAT_YAML)
+    try:
+        payload = {
+            "nested": {
+                "arr": [
+                    {
+                        "endpoint": NumberAffix(
+                            kind=AffixKind.CURRENCY,
+                            affix="https://1.2.3.4:",
+                            space=False,
+                            number=6443,
+                        )
+                    }
+                ]
+            }
+        }
+        model = JsonTreeModel(payload)
+        view = QTreeView()
+        qtbot.addWidget(view)
+        view.setModel(model)
+        idx = model.index(0, 0, QModelIndex())
+        from PySide6.QtCore import QItemSelectionModel
+
+        view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+        view.selectionModel().setCurrentIndex(idx, QItemSelectionModel.SelectionFlag.NoUpdate)
+        assert copy_selection(view)
+        parsed = yaml.safe_load(QApplication.clipboard().mimeData().text())
+        assert parsed == {"nested": {"arr": [{"endpoint": "https://1.2.3.4:6443"}]}}
+    finally:
+        _reset_format()
+
+
 # ---------------------------------------------------------------------------
 # New From Clipboard action
 # ---------------------------------------------------------------------------

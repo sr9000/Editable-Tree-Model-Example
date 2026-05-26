@@ -20,7 +20,13 @@ def _dump_text(payload: Any) -> str:
     from state.clipboard_settings import CLIPBOARD_TEXT_FORMAT_YAML, get_clipboard_text_format
 
     if get_clipboard_text_format() == CLIPBOARD_TEXT_FORMAT_YAML:
-        return yaml.dump(payload, Dumper=MpqSafeDumper, allow_unicode=True, default_flow_style=False).rstrip()
+        try:
+            return yaml.dump(payload, Dumper=MpqSafeDumper, allow_unicode=True, default_flow_style=False).rstrip()
+        except yaml.representer.RepresenterError:
+            # Some app-native values (for example NumberAffix) are JSON-serializable
+            # via mpq_json_default but do not have direct YAML representers.
+            normalized = json.loads(simplejson.dumps(payload, default=mpq_json_default))
+            return yaml.dump(normalized, Dumper=MpqSafeDumper, allow_unicode=True, default_flow_style=False).rstrip()
     return simplejson.dumps(payload, default=mpq_json_default, indent=2)
 
 

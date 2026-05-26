@@ -116,6 +116,25 @@ def test_close_empty_untitled_tab_without_prompt(qtbot, monkeypatch):
         _cleanup(win)
 
 
+def test_close_nonempty_untitled_tab_prompts_even_if_clean(qtbot, monkeypatch):
+    called = {"count": 0}
+
+    def _question(*_a, **_kw):
+        called["count"] += 1
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "question", _question)
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        win._add_tab(data={"k": 1})
+        win.close_current_tab()
+        assert _tab_count(win) == 1
+        assert called["count"] == 1
+    finally:
+        _cleanup(win)
+
+
 def test_close_nonempty_untitled_tab_prompts_and_cancel_keeps_tab(qtbot, monkeypatch):
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **kw: QMessageBox.StandardButton.Cancel)
     win = MainWindow(yaml_filename="")
