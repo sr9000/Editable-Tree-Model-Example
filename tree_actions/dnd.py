@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtCore import QMimeData, QModelIndex, Qt
 
 from tree.types import JsonType
+from tree.view import JsonTreeView
 from tree_actions._tab_lookup import find_owning_tab
 from tree_actions.clipboard import MIME_JSON_TREE, entries_from_mime, source_paths_from_mime
 from tree_actions.paste import paste_entries_at
@@ -60,7 +61,7 @@ def can_drop(model, mime, action: Qt.DropAction, row: int, column: int, parent: 
         return False
     if mime is None:
         return False
-    if not mime.hasFormat(MIME_JSON_TREE) and not (hasattr(mime, "text") and mime.text().strip()):
+    if not mime.hasFormat(MIME_JSON_TREE) and not (isinstance(mime, QMimeData) and mime.text().strip()):
         return False
     if not entries_from_mime(mime):
         return False
@@ -114,7 +115,7 @@ def handle_drop(view, model, mime, action: Qt.DropAction, row: int, column: int,
             # ``clearOrRemove`` (which would otherwise delete the freshly
             # placed destination rows — the "disappearing item" bug).
             moved = tab.mutations.push_move_rows(source_rows, target_parent, target_row, label="drag move")
-            if moved and view is not None and hasattr(view, "mark_drag_handled_internally"):
+            if moved and isinstance(view, JsonTreeView):
                 view.mark_drag_handled_internally()
             if moved:
                 _notify_drop(tab, action, len(source_rows), target_parent)

@@ -4,13 +4,13 @@ from collections import OrderedDict
 from typing import Any
 
 import settings
+from tree.item import JsonTreeItem
 from units.number_affix import AffixKind, NumberAffix
 
 
 class AffixMRU:
     def __init__(self, max_size: int | None = None) -> None:
-        configured = getattr(settings, "NUMBER_AFFIX_MRU_SIZE", 50)
-        self._max_size = int(max_size if max_size is not None else configured)
+        self._max_size = int(max_size if max_size is not None else settings.NUMBER_AFFIX_MRU_SIZE)
         self._prefix: OrderedDict[str, None] = OrderedDict()
         self._suffix: OrderedDict[str, None] = OrderedDict()
 
@@ -36,12 +36,10 @@ class AffixMRU:
             if isinstance(node, NumberAffix):
                 self.push(node.kind, node.affix)
                 return
-            # JsonTreeItem leaves keep typed data on .value; inspect it before recursing.
-            if hasattr(node, "value") and isinstance(getattr(node, "value", None), NumberAffix):
-                value = getattr(node, "value")
-                self.push(value.kind, value.affix)
-            if hasattr(node, "child_items"):
-                for child in getattr(node, "child_items", []):
+            if isinstance(node, JsonTreeItem):
+                if isinstance(node.value, NumberAffix):
+                    self.push(node.value.kind, node.value.affix)
+                for child in node.child_items:
                     walk(child)
                 return
             if isinstance(node, dict):

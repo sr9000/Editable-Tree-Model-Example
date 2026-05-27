@@ -4,6 +4,7 @@ from typing import Any
 from PySide6.QtCore import QItemSelection, QItemSelectionModel, Qt
 from PySide6.QtGui import QUndoCommand
 
+from tree.item import JsonTreeItem
 from tree.item_names import unique_child_name
 from tree.types import JsonType
 from units.number_affix import AffixKind, NumberAffix
@@ -175,8 +176,8 @@ class _ChangeTypeCmd(QUndoCommand):
         else:
             return
 
-        mru = getattr(self._tab, "affix_mru", None)
-        if mru is None or not hasattr(mru, "items"):
+        mru = self._tab.affix_mru
+        if mru is None:
             return
         mru_items = mru.items(kind)
         if not mru_items:
@@ -290,7 +291,11 @@ class _MoveRowsCmd(QUndoCommand):
         self._placed: list[tuple[tuple, int]] = []
 
     def _original_name_for(self, source: tuple[tuple, int], item: object) -> Any:
-        return self._source_names.get(source, getattr(item, "name", None))
+        # item is a JsonTreeItem when called from the command lifecycle; the
+        # ``object`` annotation is kept loose for forward-compat with redo
+        # callbacks that may pass a placeholder before the model resolves it.
+        fallback = item.name if isinstance(item, JsonTreeItem) else None
+        return self._source_names.get(source, fallback)
 
     # ------------------------------------------------------------------
     # Public accessors — used by the action layer for post-redo hooks

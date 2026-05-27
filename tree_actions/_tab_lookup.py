@@ -1,6 +1,7 @@
 """Typed ancestor-walk helper to find the owning ``JsonTab`` of a widget.
 
-Replaces ad-hoc ``hasattr(widget, "push_insert_rows")`` discovery in
+Replaces ad-hoc parent-chain capability probing (``push_insert_rows`` /
+``push_move_rows`` / ``edit_name_or_value_from_enter`` and similar) in
 ``tree_actions/*``. Uses ``isinstance(JsonTab)`` so the OOP contract is
 explicit and a pre-commit hook can forbid stringly-typed reflection.
 
