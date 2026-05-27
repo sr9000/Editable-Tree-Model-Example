@@ -158,7 +158,8 @@ def test_large_leaf_edit_does_not_store_full_document(qtbot):
     assert cmd._new_value == "after"
     # Defensive: there is no attribute holding the full document on the cmd.
     for attr in ("_before", "_after"):
-        assert not hasattr(cmd, attr), f"_EditValueCmd unexpectedly stores {attr}"  # allow: asserts typed cmd has no diff fields
+        msg = f"_EditValueCmd unexpectedly stores {attr}"
+        assert not hasattr(cmd, attr), msg  # allow: asserts typed cmd has no diff fields
 
 
 def test_delete_stores_removed_subset_only(qtbot):

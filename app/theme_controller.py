@@ -18,6 +18,7 @@ except (ImportError, AttributeError):
     except ImportError:
         _is_valid = None
 
+from app.runtime_compat import accent_color_role, color_scheme_setter, has_color_scheme_changed_signal
 from state.theme_settings import (
     get_follow_system,
     get_watch_user_dir,
@@ -26,11 +27,6 @@ from state.theme_settings import (
     set_manual_theme_name,
     set_preferred_theme_name,
     set_watch_user_dir,
-)
-from app.runtime_compat import (
-    accent_color_role,
-    color_scheme_setter,
-    has_color_scheme_changed_signal,
 )
 from themes import ThemeRegistry
 from themes.icon_provider import IconProvider

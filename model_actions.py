@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QTreeView
+
 from tree.model_protocol import TreeModelLike
 from tree.types import JsonType
 

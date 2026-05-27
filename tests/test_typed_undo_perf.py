@@ -167,7 +167,8 @@ def test_no_routine_action_pushes_full_document_snapshot(qtbot):
         cmd = tab.undo_stack.command(i)
         # Snapshot fields must not exist on the typed commands.
         for forbidden in ("_before", "_after"):
-            assert not hasattr(cmd, forbidden), f"command {i} ({type(cmd).__name__}) has {forbidden}"  # allow: asserts typed cmd shape
+            msg = f"command {i} ({type(cmd).__name__}) has {forbidden}"
+            assert not hasattr(cmd, forbidden), msg  # allow: asserts typed cmd shape
         # The transitive size of the command's state must be FAR below
         # the full document size: any single typed entry stores at most
         # one affected subtree (a single inner dict of ~2 fields here).
