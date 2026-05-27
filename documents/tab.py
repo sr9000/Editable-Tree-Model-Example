@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QItemSelectionModel, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QItemSelectionModel, QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.mutation_gateway import DocumentMutationGateway
+from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
 from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_services
 from documents.tab_editability import JsonTabEditabilityController
@@ -131,6 +132,7 @@ def _demo_data() -> dict[str, Any]:
 
 
 class JsonTab(QWidget):
+    _appearance: JsonTabAppearanceController | None = None
     _navigation: JsonTabNavigationController | None = None
     _editability: JsonTabEditabilityController | None = None
 
@@ -170,6 +172,7 @@ class JsonTab(QWidget):
     ):
         super().__init__(parent)
         self.data_store = JsonTabData()
+        self._appearance = JsonTabAppearanceController(self.data_store)
         self._navigation = JsonTabNavigationController(self.data_store, self.edit_name_or_value_from_enter)
         self._editability = JsonTabEditabilityController(self.data_store)
 
@@ -371,74 +374,29 @@ class JsonTab(QWidget):
         _emit_ranges(QModelIndex())
 
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
-        self.data_store._theme = theme
-        self.data_store._icon_provider = icon_provider or self.data_store._icon_provider
-        self.data_store.name_delegate.set_theme(theme)
-        self.data_store.value_delegate.set_theme(theme)
-        self.data_store.type_delegate.set_theme(theme)
-        self.data_store.type_delegate.set_icon_provider(self.data_store._icon_provider)
-        self.data_store.model.set_icon_provider(self.data_store._icon_provider)
-
-        roles = [
-            Qt.ItemDataRole.ForegroundRole,
-            Qt.ItemDataRole.BackgroundRole,
-            Qt.ItemDataRole.FontRole,
-            Qt.ItemDataRole.DecorationRole,
-        ]
-
-        def emit_ranges(parent: QModelIndex) -> None:
-            rows = self.data_store.model.rowCount(parent)
-            if rows <= 0:
-                return
-
-            top_left = self.data_store.model.index(0, 0, parent)
-            bottom_right = self.data_store.model.index(rows - 1, self.data_store.model.columnCount(parent) - 1, parent)
-            self.data_store.model.dataChanged.emit(top_left, bottom_right, roles)
-
-            for row in range(rows):
-                child_parent = self.data_store.model.index(row, 0, parent)
-                emit_ranges(child_parent)
-
-        emit_ranges(QModelIndex())
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.set_theme(theme, icon_provider)
 
     def set_monospace_fields_enabled(self, enabled: bool) -> None:
-        enabled = bool(enabled)
-        if self.data_store._monospace_fields_enabled == enabled:
-            return
-        self.data_store._monospace_fields_enabled = enabled
-        self.data_store.name_delegate.set_monospace_fields_enabled(enabled)
-        self.data_store.value_delegate.set_monospace_fields_enabled(enabled)
-        self.data_store.view.viewport().update()
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.set_monospace_fields_enabled(enabled)
 
     def set_regular_font_family(self, family: str) -> None:
-        if not family:
-            return
-        family = str(family)
-        if self.data_store._regular_font_family == family:
-            return
-        self.data_store._regular_font_family = family
-        font = self.data_store.view.font()
-        font.setFamily(family)
-        if font.pointSizeF() <= 0:
-            font.setPointSize(max(6, int(self.data_store._font_pt or 10)))
-        self.data_store.view.setFont(font)
-        self._sync_icon_size_with_font()
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.set_regular_font_family(family)
 
     def set_monospace_font_family(self, family: str) -> None:
-        if not family:
-            return
-        family = str(family)
-        if self.data_store._monospace_font_family == family:
-            return
-        self.data_store._monospace_font_family = family
-        self.data_store.name_delegate.set_monospace_font_family(family)
-        self.data_store.value_delegate.set_monospace_font_family(family)
-        self.data_store.view.viewport().update()
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.set_monospace_font_family(family)
 
     def set_editor_font_point_size(self, point_size: int) -> None:
-        old_pt = self.data_store._font_pt
-        self._set_font_pt(point_size)
-        self._scale_columns_for_font(old_pt, self.data_store._font_pt)
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.set_editor_font_point_size(point_size)
 
     def apply_font_profile(self, profile) -> None:
         """Aspect entry point called by ``FontController``.
@@ -448,12 +406,9 @@ class JsonTab(QWidget):
         come last because it triggers a viewport repaint that picks up
         the freshly-installed delegate fonts.
         """
-        if profile.regular_family:
-            self.set_regular_font_family(profile.regular_family)
-        self.set_editor_font_point_size(profile.editor_point_size)
-        if profile.monospace_family:
-            self.set_monospace_font_family(profile.monospace_family)
-        self.set_monospace_fields_enabled(profile.monospace_fields_enabled)
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.apply_font_profile(profile)
 
     @staticmethod
     def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
@@ -493,13 +448,9 @@ class JsonTab(QWidget):
         manually resized (tracked in ``_user_sized_columns``) are left alone.
         Pass ``force=True`` (e.g. on model reset) to override.
         """
-        self.data_store._programmatic_column_resize = True
-        try:
-            for col in (0, 1):
-                if force or col not in self.data_store._user_sized_columns:
-                    self.data_store.view.resizeColumnToContents(col)
-        finally:
-            self.data_store._programmatic_column_resize = False
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.resize_key_columns(force=force)
 
     def _scale_columns_for_font(self, old_pt: int, new_pt: int) -> None:
         """Proportionally scale name/type column widths when the font changes.
@@ -507,47 +458,35 @@ class JsonTab(QWidget):
         Columns the user has hand-resized are left alone.  The value column
         (col 2) is never touched because it is set to stretch.
         """
-        if old_pt <= 0 or new_pt <= 0 or old_pt == new_pt:
-            return
-        scale = new_pt / old_pt
-        self.data_store._programmatic_column_resize = True
-        try:
-            for col in (0, 1):
-                if col in self.data_store._user_sized_columns:
-                    continue  # respect the user's manual choice
-                current = self.data_store.view.columnWidth(col)
-                new_w = max(20, min(2000, int(current * scale)))
-                self.data_store.view.setColumnWidth(col, new_w)
-        finally:
-            self.data_store._programmatic_column_resize = False
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.scale_columns_for_font(old_pt, new_pt)
 
     def _set_font_pt(self, pt: int) -> None:
-        clamped = max(6, min(48, int(pt)))
-        self.data_store._font_pt = clamped
-        font = self.data_store.view.font()
-        font.setPointSize(clamped)
-        self.data_store.view.setFont(font)
-        self._sync_icon_size_with_font()
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.set_font_pt(pt)
 
     def _sync_icon_size_with_font(self) -> None:
         # Keep type-column icons visually in step with the active tree font.
-        px = max(12, min(64, int(round(self.data_store.view.fontMetrics().height() * 1.1))))
-        self.data_store.view.setIconSize(QSize(px, px))
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.sync_icon_size_with_font()
 
     def zoom_in(self) -> None:
-        old_pt = self.data_store._font_pt
-        self._set_font_pt(self.data_store._font_pt + 1)
-        self._scale_columns_for_font(old_pt, self.data_store._font_pt)
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.zoom_in()
 
     def zoom_out(self) -> None:
-        old_pt = self.data_store._font_pt
-        self._set_font_pt(self.data_store._font_pt - 1)
-        self._scale_columns_for_font(old_pt, self.data_store._font_pt)
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.zoom_out()
 
     def zoom_reset(self) -> None:
-        old_pt = self.data_store._font_pt
-        self._set_font_pt(self.data_store._default_font_pt)
-        self._scale_columns_for_font(old_pt, self.data_store._font_pt)
+        appearance = self._appearance
+        if appearance is not None:
+            appearance.zoom_reset()
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
         # ``change_type`` already emitted ``dataChanged`` for the row, which
