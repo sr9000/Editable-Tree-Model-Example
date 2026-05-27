@@ -32,18 +32,18 @@ def bind_undo_signals(window, tab) -> None:
     previous = window._bound_undo_tab
     if previous is not None:
         try:
-            previous.undo_stack.canUndoChanged.disconnect(window.undoAction.setEnabled)
-            previous.undo_stack.canRedoChanged.disconnect(window.redoAction.setEnabled)
+            previous.data_store.undo_stack.canUndoChanged.disconnect(window.undoAction.setEnabled)
+            previous.data_store.undo_stack.canRedoChanged.disconnect(window.redoAction.setEnabled)
         except (TypeError, RuntimeError):
             pass
 
     window._bound_undo_tab = tab
 
     if tab is not None:
-        tab.undo_stack.canUndoChanged.connect(window.undoAction.setEnabled)
-        tab.undo_stack.canRedoChanged.connect(window.redoAction.setEnabled)
-        window.undoAction.setEnabled(tab.undo_stack.canUndo())
-        window.redoAction.setEnabled(tab.undo_stack.canRedo())
+        tab.data_store.undo_stack.canUndoChanged.connect(window.undoAction.setEnabled)
+        tab.data_store.undo_stack.canRedoChanged.connect(window.redoAction.setEnabled)
+        window.undoAction.setEnabled(tab.data_store.undo_stack.canUndo())
+        window.redoAction.setEnabled(tab.data_store.undo_stack.canRedo())
         window.showHistoryAction.setEnabled(True)
     else:
         window.undoAction.setEnabled(False)
@@ -54,13 +54,13 @@ def bind_undo_signals(window, tab) -> None:
 def do_undo(window) -> None:
     tab = window._current_tab()
     if tab is not None:
-        tab.undo_stack.undo()
+        tab.data_store.undo_stack.undo()
 
 
 def do_redo(window) -> None:
     tab = window._current_tab()
     if tab is not None:
-        tab.undo_stack.redo()
+        tab.data_store.undo_stack.redo()
 
 
 def show_history_dialog(window) -> None:
@@ -77,7 +77,7 @@ def show_history_dialog(window) -> None:
         window._history_view.setEmptyLabel("<initial state>")
         layout.addWidget(window._history_view)
 
-    window._history_view.setStack(tab.undo_stack)
+    window._history_view.setStack(tab.data_store.undo_stack)
     window._history_dialog.show()
     window._history_dialog.raise_()
     window._history_dialog.activateWindow()

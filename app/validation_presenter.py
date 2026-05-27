@@ -89,7 +89,7 @@ class DockValidationPresenter(QObject):
         win._bound_validation_tab = tab
         if tab is not None:
             tab.validationChanged.connect(self.on_tab_validation_changed)
-            self.on_tab_validation_changed(tab.issue_index)
+            self.on_tab_validation_changed(tab.data_store.issue_index)
         else:
             win._validation_status_label.setVisible(False)
 
@@ -130,8 +130,8 @@ class DockValidationPresenter(QObject):
         tab = self._win._current_tab()
         if tab is None:
             return
-        if tab.file_path:
-            clear_schema_path(Path(tab.file_path))
+        if tab.data_store.file_path:
+            clear_schema_path(Path(tab.data_store.file_path))
         tab.clear_schema()
 
     def on_attach_schema_requested(self) -> None:
@@ -139,7 +139,7 @@ class DockValidationPresenter(QObject):
         tab = win._current_tab()
         if tab is None:
             return
-        source = AttachSchemaDialog.ask(win, start_dir=tab.file_path or "")
+        source = AttachSchemaDialog.ask(win, start_dir=tab.data_store.file_path or "")
         if source is None:
             return
         self.attach_schema_source(source)
@@ -161,16 +161,16 @@ class DockValidationPresenter(QObject):
             return
 
         tab.set_schema_from_source(source)
-        if tab.file_path:
-            write_schema_ref_str(Path(tab.file_path), source.key)
+        if tab.data_store.file_path:
+            write_schema_ref_str(Path(tab.data_store.file_path), source.key)
         win.statusBar.showMessage(win.tr("Schema attached: {name}").format(name=source.display), 2000)
 
     def on_reload_schema_requested(self) -> None:
         win = self._win
         tab = win._current_tab()
-        if tab is None or tab.schema_source is None:
+        if tab is None or tab.data_store.schema_source is None:
             return
-        if get_schema_registry().reload(tab.schema_source) is None:
+        if get_schema_registry().reload(tab.data_store.schema_source) is None:
             win.statusBar.showMessage(win.tr("Reload failed"), 3000)
             return
         tab.revalidate()
@@ -179,10 +179,10 @@ class DockValidationPresenter(QObject):
     def on_open_schema_file_requested(self) -> None:
         win = self._win
         tab = win._current_tab()
-        if tab is None or tab.schema_source is None:
+        if tab is None or tab.data_store.schema_source is None:
             return
 
-        source = tab.schema_source
+        source = tab.data_store.schema_source
         if source is None:
             return
         if source.kind == "url":
@@ -216,7 +216,7 @@ class DockValidationPresenter(QObject):
             )
             schema_tab.goto_validation_issue(fake_issue)
 
-        source = tab.schema_source
+        source = tab.data_store.schema_source
         if source is None:
             return
         schema_tab = win._schema_tab_pool.open_or_focus(win, source)
@@ -299,7 +299,7 @@ class DockValidationPresenter(QObject):
             empty.setEnabled(False)
 
         tab = win._current_tab()
-        source = tab.schema_source if tab is not None else None
+        source = tab.data_store.schema_source if tab is not None else None
         has_source = source is not None
         win._schemas_open_current_action.setEnabled(has_source)
         win._schemas_copy_path_action.setEnabled(has_source)

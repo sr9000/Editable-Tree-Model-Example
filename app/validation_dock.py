@@ -151,7 +151,7 @@ class ValidationDock(QDockWidget):
                     pass
             # Disconnect tree selection sync
             try:
-                sm = self._tab.view.selectionModel()
+                sm = self._tab.data_store.view.selectionModel()
                 if sm is not None:
                     sm.currentChanged.disconnect(self._on_tree_selection_changed)
             except (RuntimeError, TypeError):
@@ -171,11 +171,11 @@ class ValidationDock(QDockWidget):
 
         tab.validationChanged.connect(self._on_validation_changed)
         tab.schemaChanged.connect(self._on_schema_changed)
-        self._on_schema_changed(tab.schema_ref)
-        self._on_validation_changed(tab.issue_index)
+        self._on_schema_changed(tab.data_store.schema_ref)
+        self._on_validation_changed(tab.data_store.issue_index)
 
         # Sync tree selection → dock highlight
-        sm = tab.view.selectionModel()
+        sm = tab.data_store.view.selectionModel()
         if sm is not None:
             sm.currentChanged.connect(self._on_tree_selection_changed)
 
@@ -225,7 +225,7 @@ class ValidationDock(QDockWidget):
         menu = QMenu(self)
         act_schema = menu.addAction(self.tr("Go to schema rule"))
         has_schema = self._tab is not None and (
-            self._tab.schema_ref.path is not None or self._tab.schema_ref.url is not None
+            self._tab.data_store.schema_ref.path is not None or self._tab.data_store.schema_ref.url is not None
         )
         act_schema.setEnabled(has_schema and bool(issue.schema_path))
         chosen = menu.exec(self.list_view.viewport().mapToGlobal(QPoint(pos)))

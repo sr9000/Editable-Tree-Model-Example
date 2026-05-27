@@ -120,3 +120,17 @@ class JsonTabData:
     @property
     def is_read_only(self) -> bool:
         return self._read_only
+
+    # ----- validation / history convenience -----------------------------
+
+    @property
+    def issue_index(self):
+        return self.validation.issue_index if self.validation is not None else None
+
+    @property
+    def auto_rescan(self) -> bool:
+        return self.validation.auto_rescan if self.validation is not None else False
+
+    @property
+    def last_move_placed(self) -> list[tuple[tuple, int]]:
+        return self._last_move_placed

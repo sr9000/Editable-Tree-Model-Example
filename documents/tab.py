@@ -35,7 +35,6 @@ from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model_roles import VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType
-from tree.view import JsonTreeView
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
 from tree_actions.selection import selected_source_rows
@@ -72,17 +71,6 @@ from validation.schema_source import SchemaRef
 
 if TYPE_CHECKING:
     from PySide6.QtGui import QKeyEvent
-    from PySide6.QtWidgets import QLineEdit
-
-    from delegates.name_delegate import NameDelegate
-    from delegates.type_delegate import JsonTypeDelegate
-    from delegates.value import ValueDelegate
-    from documents.json_tab_ui import Ui_JsonTab
-    from documents.tab_history import TabHistoryController
-    from documents.tab_io_controller import TabIOController
-    from documents.tab_validation import TabValidationController
-    from tree.model import JsonTreeModel
-    from tree_filter_proxy import TreeFilterProxy
 
 
 def _make_label(text: str, target_qname: str) -> str:
@@ -149,248 +137,12 @@ class JsonTab(QWidget):
     schemaChanged = Signal(object)
     validationChanged = Signal(object)
 
-    @property
-    def ui(self) -> Ui_JsonTab | None:
-        return self.data_store.ui
-
-    @ui.setter
-    def ui(self, value) -> None:
-        self.data_store.ui = value
-
-    @property
-    def view(self) -> JsonTreeView | None:
-        return self.data_store.view
-
-    @view.setter
-    def view(self, value) -> None:
-        self.data_store.view = value
-
-    @property
-    def search_edit(self) -> QLineEdit | None:
-        return self.data_store.search_edit
-
-    @search_edit.setter
-    def search_edit(self, value) -> None:
-        self.data_store.search_edit = value
-
-    @property
-    def model(self) -> JsonTreeModel:
-        return self.data_store.model
-
-    @model.setter
-    def model(self, value) -> None:
-        self.data_store.model = value
-
-    @property
-    def proxy(self) -> TreeFilterProxy:
-        return self.data_store.proxy
-
-    @proxy.setter
-    def proxy(self, value) -> None:
-        self.data_store.proxy = value
-
-    @property
-    def name_delegate(self) -> NameDelegate:
-        return self.data_store.name_delegate
-
-    @name_delegate.setter
-    def name_delegate(self, value) -> None:
-        self.data_store.name_delegate = value
-
-    @property
-    def type_delegate(self) -> JsonTypeDelegate:
-        return self.data_store.type_delegate
-
-    @type_delegate.setter
-    def type_delegate(self, value) -> None:
-        self.data_store.type_delegate = value
-
-    @property
-    def value_delegate(self) -> ValueDelegate:
-        return self.data_store.value_delegate
-
-    @value_delegate.setter
-    def value_delegate(self, value) -> None:
-        self.data_store.value_delegate = value
-
-    @property
-    def _default_font_pt(self) -> int:
-        return self.data_store._default_font_pt
-
-    @_default_font_pt.setter
-    def _default_font_pt(self, value: int) -> None:
-        self.data_store._default_font_pt = value
-
-    @property
-    def _font_pt(self) -> int:
-        return self.data_store._font_pt
-
-    @_font_pt.setter
-    def _font_pt(self, value: int) -> None:
-        self.data_store._font_pt = value
-
-    @property
-    def _user_sized_columns(self) -> set[int]:
-        return self.data_store._user_sized_columns
-
-    @_user_sized_columns.setter
-    def _user_sized_columns(self, value: set[int]) -> None:
-        self.data_store._user_sized_columns = value
-
-    @property
-    def _programmatic_column_resize(self) -> bool:
-        return self.data_store._programmatic_column_resize
-
-    @_programmatic_column_resize.setter
-    def _programmatic_column_resize(self, value: bool) -> None:
-        self.data_store._programmatic_column_resize = value
-
-    @property
-    def _host(self):
-        return self.data_store._host
-
-    @_host.setter
-    def _host(self, value):
-        self.data_store._host = value
-
-    @property
-    def _theme(self):
-        return self.data_store._theme
-
-    @_theme.setter
-    def _theme(self, value):
-        self.data_store._theme = value
-
-    @property
-    def _icon_provider(self):
-        return self.data_store._icon_provider
-
-    @_icon_provider.setter
-    def _icon_provider(self, value):
-        self.data_store._icon_provider = value
-
-    @property
-    def _read_only(self) -> bool:
-        return self.data_store._read_only
-
-    @_read_only.setter
-    def _read_only(self, value: bool) -> None:
-        self.data_store._read_only = value
-
-    @property
-    def _monospace_fields_enabled(self) -> bool:
-        return self.data_store._monospace_fields_enabled
-
-    @_monospace_fields_enabled.setter
-    def _monospace_fields_enabled(self, value: bool) -> None:
-        self.data_store._monospace_fields_enabled = value
-
-    @property
-    def _regular_font_family(self) -> str | None:
-        return self.data_store._regular_font_family
-
-    @_regular_font_family.setter
-    def _regular_font_family(self, value: str | None) -> None:
-        self.data_store._regular_font_family = value
-
-    @property
-    def _monospace_font_family(self) -> str | None:
-        return self.data_store._monospace_font_family
-
-    @_monospace_font_family.setter
-    def _monospace_font_family(self, value: str | None) -> None:
-        self.data_store._monospace_font_family = value
-
-    @property
-    def _last_move_placed(self) -> list[tuple[tuple, int]]:
-        return self.data_store._last_move_placed
-
-    @_last_move_placed.setter
-    def _last_move_placed(self, value: list[tuple[tuple, int]]) -> None:
-        self.data_store._last_move_placed = value
-
-    @property
-    def affix_mru(self) -> AffixMRU:
-        return self.data_store.affix_mru
-
-    @affix_mru.setter
-    def affix_mru(self, value: AffixMRU) -> None:
-        self.data_store.affix_mru = value
-
-    @property
-    def io(self) -> TabIOController:
-        return self.data_store.io
-
-    @io.setter
-    def io(self, value: TabIOController) -> None:
-        self.data_store.io = value
-
-    @property
-    def history(self) -> TabHistoryController:
-        return self.data_store.history
-
-    @history.setter
-    def history(self, value: TabHistoryController) -> None:
-        self.data_store.history = value
-
-    @property
-    def mutations(self) -> DocumentMutationGateway:
-        return self.data_store.mutations
-
-    @mutations.setter
-    def mutations(self, value: DocumentMutationGateway) -> None:
-        self.data_store.mutations = value
-
-    @property
-    def validation(self) -> TabValidationController:
-        return self.data_store.validation
-
-    @validation.setter
-    def validation(self, value: TabValidationController) -> None:
-        self.data_store.validation = value
-
-    @property
-    def _diff_applier(self) -> DiffApplier:
-        return self.data_store._diff_applier
-
-    @_diff_applier.setter
-    def _diff_applier(self, value: DiffApplier) -> None:
-        self.data_store._diff_applier = value
-
-    @property
-    def _editable_view_edit_triggers(self):
-        return self.data_store._editable_view_edit_triggers
-
-    @_editable_view_edit_triggers.setter
-    def _editable_view_edit_triggers(self, value):
-        self.data_store._editable_view_edit_triggers = value
-
-    @property
-    def _editable_drag_enabled(self):
-        return self.data_store._editable_drag_enabled
-
-    @_editable_drag_enabled.setter
-    def _editable_drag_enabled(self, value):
-        self.data_store._editable_drag_enabled = value
-
-    @property
-    def _editable_accept_drops(self):
-        return self.data_store._editable_accept_drops
-
-    @_editable_accept_drops.setter
-    def _editable_accept_drops(self, value):
-        self.data_store._editable_accept_drops = value
-
-    @property
-    def _editable_drag_drop_mode(self):
-        return self.data_store._editable_drag_drop_mode
-
-    @_editable_drag_drop_mode.setter
-    def _editable_drag_drop_mode(self, value):
-        self.data_store._editable_drag_drop_mode = value
-
     def eventFilter(self, watched, event):  # type: ignore[override]
-        view = self.view
+        # ``eventFilter`` can fire during ``super().__init__`` before our
+        # own ``__init__`` has populated ``self.data_store``.
+        data_store = None
+        data_store = self.data_store
+        view = data_store.view if data_store is not None else None
         if view is not None and watched in (view, view.viewport()):
             if event.type() == QEvent.Type.KeyPress:
                 key_event = cast("QKeyEvent", event)
@@ -405,13 +157,13 @@ class JsonTab(QWidget):
         return super().eventFilter(watched, event)
 
     def _toggle_current_row_expansion_with_space(self) -> None:
-        current = self.view.currentIndex()
+        current = self.data_store.view.currentIndex()
         if not current.isValid():
             return
         row_anchor = current.siblingAtColumn(0)
         if not row_anchor.isValid():
             return
-        self.view.setExpanded(row_anchor, not self.view.isExpanded(row_anchor))
+        self.data_store.view.setExpanded(row_anchor, not self.data_store.view.isExpanded(row_anchor))
 
     def _handle_arrow_navigation(self, key: Qt.Key, modifiers: Qt.KeyboardModifier) -> bool:
         """Use arrows for cell navigation; never expand/collapse rows."""
@@ -420,7 +172,7 @@ class JsonTab(QWidget):
         if key not in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
             return False
 
-        current = self.view.currentIndex()
+        current = self.data_store.view.currentIndex()
         if not current.isValid():
             return True
 
@@ -428,18 +180,18 @@ class JsonTab(QWidget):
         if key == Qt.Key.Key_Left:
             target = current.siblingAtColumn(max(0, current.column() - 1))
         elif key == Qt.Key.Key_Right:
-            last_col = max(0, self.view.model().columnCount(current.parent()) - 1)
+            last_col = max(0, self.data_store.view.model().columnCount(current.parent()) - 1)
             target = current.siblingAtColumn(min(last_col, current.column() + 1))
         elif key == Qt.Key.Key_Up:
-            above = self.view.indexAbove(current)
+            above = self.data_store.view.indexAbove(current)
             if above.isValid():
                 target = above
         elif key == Qt.Key.Key_Down:
-            below = self.view.indexBelow(current)
+            below = self.data_store.view.indexBelow(current)
             if below.isValid():
                 target = below
 
-        self.view.setCurrentIndex(target)
+        self.data_store.view.setCurrentIndex(target)
         return True
 
     def __init__(
@@ -461,13 +213,13 @@ class JsonTab(QWidget):
         self.data_store = JsonTabData()
 
         # All parts stored inside self.data_store are populated here:
-        self.ui = None
-        self.view = None
-        self.search_edit = None
-        self._default_font_pt = 10
-        self._font_pt = 10
-        self._user_sized_columns = set()
-        self._programmatic_column_resize = False
+        self.data_store.ui = None
+        self.data_store.view = None
+        self.data_store.search_edit = None
+        self.data_store._default_font_pt = 10
+        self.data_store._font_pt = 10
+        self.data_store._user_sized_columns = set()
+        self.data_store._programmatic_column_resize = False
 
         resolved_services = services or build_legacy_json_tab_services(
             update_actions_callback=update_actions_callback,
@@ -483,160 +235,118 @@ class JsonTab(QWidget):
                 icon_provider=icon_provider if icon_provider is not None else services.icon_provider,
             )
 
-        self._host = resolved_services.host
-        self._theme = resolved_services.theme
-        self._icon_provider = resolved_services.icon_provider
-        self._read_only = False
-        self._monospace_fields_enabled = False
-        self._regular_font_family = None
-        self._monospace_font_family = None
-        self._last_move_placed = []
+        self.data_store._host = resolved_services.host
+        self.data_store._theme = resolved_services.theme
+        self.data_store._icon_provider = resolved_services.icon_provider
+        self.data_store._read_only = False
+        self.data_store._monospace_fields_enabled = False
+        self.data_store._regular_font_family = None
+        self.data_store._monospace_font_family = None
+        self.data_store._last_move_placed = []
 
         init_layout(self)
-        self._editable_view_edit_triggers = self.view.editTriggers()
-        self._editable_drag_enabled = self.view.dragEnabled()
-        self._editable_accept_drops = self.view.acceptDrops()
-        self._editable_drag_drop_mode = self.view.dragDropMode()
+        self.data_store._editable_view_edit_triggers = self.data_store.view.editTriggers()
+        self.data_store._editable_drag_enabled = self.data_store.view.dragEnabled()
+        self.data_store._editable_accept_drops = self.data_store.view.acceptDrops()
+        self.data_store._editable_drag_drop_mode = self.data_store.view.dragDropMode()
         self._sync_icon_size_with_font()
 
         # option to edit headers is not needed
-        # self.header_editor = HeaderViewEditorMixin(self.view.header())
+        # self.header_editor = HeaderViewEditorMixin(self.data_store.view.header())
 
         if data is _DEFAULT_DATA:
             model_data = _demo_data()
         else:
             model_data = data if data is not None else {}
 
-        self.affix_mru = AffixMRU()
+        self.data_store.affix_mru = AffixMRU()
 
         # Phase-2.3: file path / save format / dirty flag move to a
         # QObject controller owned by the tab.
         from documents.tab_io_controller import TabIOController
 
-        self.io = TabIOController(self, file_path=file_path, save_format=save_format)
-        self.io.dirtyChanged.connect(self.dirtyChanged.emit)
+        self.data_store.io = TabIOController(self, file_path=file_path, save_format=save_format)
+        self.data_store.io.dirtyChanged.connect(self.dirtyChanged.emit)
 
         init_model(self, model_data, show_root=show_root)
         # Phase-2.2: undo stack and view-state map move to a dedicated
         # QObject controller owned by the tab.
         from documents.tab_history import TabHistoryController
 
-        self.history = TabHistoryController(self)
-        self.affix_mru.bootstrap_from_tree(self.model.root_item)
+        self.data_store.history = TabHistoryController(self)
+        self.data_store.affix_mru.bootstrap_from_tree(self.data_store.model.root_item)
         # Phase-0 façade: publishes a stable mutation seam over the current
         # in-tab implementation; later commits move the implementation out.
-        self.mutations = DocumentMutationGateway(self)
+        self.data_store.mutations = DocumentMutationGateway(self)
 
         # Phase-2.1: schema / validation / debounce timer / registry binding
         # are owned by an explicit QObject controller parented to the tab.
         from documents.tab_validation import TabValidationController
 
-        self.validation = TabValidationController(
+        self.data_store.validation = TabValidationController(
             self,
-            self.model,
+            self.data_store.model,
             on_schema_changed=lambda ref: self.schemaChanged.emit(ref),
             on_validation_changed=lambda idx: self.validationChanged.emit(idx),
             initial_data=model_data,
         )
 
         init_delegates_and_connections(self)
-        self.set_monospace_fields_enabled(self._monospace_fields_enabled)
+        self.set_monospace_fields_enabled(self.data_store._monospace_fields_enabled)
         init_shortcuts(self)
         init_search_filter(self)
         # Plug the severity provider before init_validation_state so the first
         # revalidate() → dataChanged repaint already has the provider ready.
-        self.model.set_issue_index_provider(self._severity_provider)
+        self.data_store.model.set_issue_index_provider(self._severity_provider)
         self.validationChanged.connect(self._on_validation_changed)
         init_validation_state(self, model_data)
-        self._diff_applier = DiffApplier(self)
+        self.data_store._diff_applier = DiffApplier(self)
 
-        self.undo_stack.cleanChanged.connect(self._on_clean_changed)
-        self.undo_stack.indexChanged.connect(self._on_undo_index_changed)
-        self.undo_stack.setClean()
+        self.data_store.undo_stack.cleanChanged.connect(self._on_clean_changed)
+        self.data_store.undo_stack.indexChanged.connect(self._on_undo_index_changed)
+        self.data_store.undo_stack.setClean()
         self._set_dirty(False)
-
-    @property
-    def schema(self) -> dict[str, Any] | None:
-        return self.validation.schema
-
-    @property
-    def schema_ref(self) -> SchemaRef:
-        return self.validation.schema_ref
-
-    @property
-    def schema_source(self) -> SchemaSource | None:
-        return self.validation.schema_source
-
-    # ----- deprecated private accessors kept for tests (Issue 16) -------
-    @property
-    def undo_stack(self):
-        return self.history.undo_stack
-
-    @property
-    def _move_view_state_by_cmd_id(self) -> dict:
-        return self.history._move_view_state_by_cmd_id
-
-    @property
-    def _last_undo_index(self) -> int:
-        return self.history.last_undo_index
-
-    @_last_undo_index.setter
-    def _last_undo_index(self, value: int) -> None:
-        self.history.last_undo_index = value
-
-    @property
-    def is_read_only(self) -> bool:
-        return self._read_only
 
     def set_read_only(self, enabled: bool) -> None:
         enabled = bool(enabled)
-        if self._read_only == enabled:
+        if self.data_store._read_only == enabled:
             return
-        self._read_only = enabled
-        self.model.set_read_only(enabled)
+        self.data_store._read_only = enabled
+        self.data_store.model.set_read_only(enabled)
         if enabled:
-            self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-            self.view.setDragEnabled(False)
-            self.view.setAcceptDrops(False)
-            self.view.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
+            self.data_store.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+            self.data_store.view.setDragEnabled(False)
+            self.data_store.view.setAcceptDrops(False)
+            self.data_store.view.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
         else:
-            self.view.setEditTriggers(self._editable_view_edit_triggers)
-            self.view.setDragEnabled(self._editable_drag_enabled)
-            self.view.setAcceptDrops(self._editable_accept_drops)
-            self.view.setDragDropMode(self._editable_drag_drop_mode)
+            self.data_store.view.setEditTriggers(self.data_store._editable_view_edit_triggers)
+            self.data_store.view.setDragEnabled(self.data_store._editable_drag_enabled)
+            self.data_store.view.setAcceptDrops(self.data_store._editable_accept_drops)
+            self.data_store.view.setDragDropMode(self.data_store._editable_drag_drop_mode)
 
     def set_schema_view_source(self, source: SchemaSource | None) -> None:
-        self.validation.set_schema_view_source(source)
-
-    @property
-    def issue_index(self) -> IssueIndex:
-        return self.validation.issue_index
+        self.data_store.validation.set_schema_view_source(source)
 
     def _init_validation_state(self, model_data: Any, *, doc_path: Path | None = None) -> None:
-        self.validation.init_state(model_data, doc_path=doc_path)
+        self.data_store.validation.init_state(model_data, doc_path=doc_path)
 
     def set_schema(self, ref: SchemaRef) -> None:
-        self.validation.set_schema(ref)
+        self.data_store.validation.set_schema(ref)
 
     def set_schema_from_source(self, source: SchemaSource) -> None:
-        self.validation.set_schema_from_source(source)
+        self.data_store.validation.set_schema_from_source(source)
 
     def clear_schema(self) -> None:
-        self.validation.clear_schema()
+        self.data_store.validation.clear_schema()
 
     def closeEvent(self, event):  # type: ignore[override]
-        self.validation.release()
+        self.data_store.validation.release()
         super().closeEvent(event)
 
     def revalidate(self) -> None:
-        self.validation.revalidate()
+        self.data_store.validation.revalidate()
 
     # ── auto-rescan API ───────────────────────────────────────────────────
-
-    @property
-    def auto_rescan(self) -> bool:
-        """True when model mutations trigger debounced revalidation."""
-        return self.validation.auto_rescan
 
     def set_auto_rescan(self, enabled: bool) -> None:
         """Enable or disable automatic revalidation on model mutations.
@@ -646,12 +356,12 @@ class JsonTab(QWidget):
         250 ms trailing debounce timer that calls ``revalidate()``.
         Disabling cancels any pending debounce.
         """
-        self.validation.set_auto_rescan(enabled)
+        self.data_store.validation.set_auto_rescan(enabled)
 
     # ─────────────────────────────────────────────────────────────────────
 
     def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
-        root_data = self.model.root_item.to_json()
+        root_data = self.data_store.model.root_item.to_json()
         model_path = instance_path_to_model_path(root_data, issue.instance_path)
         if model_path is None:
             self.show_status("Validation issue path no longer exists", 2000)
@@ -668,7 +378,7 @@ class JsonTab(QWidget):
             self.show_status("Validation issue path no longer exists", 2000)
             return False
 
-        sm = self.view.selectionModel()
+        sm = self.data_store.view.selectionModel()
         if sm is not None:
             sm.select(
                 view_row,
@@ -676,8 +386,8 @@ class JsonTab(QWidget):
             )
             sm.setCurrentIndex(view_row, QItemSelectionModel.SelectionFlag.NoUpdate)
 
-        self.view.setCurrentIndex(view_row)
-        self.view.scrollTo(view_row, QAbstractItemView.ScrollHint.PositionAtCenter)
+        self.data_store.view.setCurrentIndex(view_row)
+        self.data_store.view.scrollTo(view_row, QAbstractItemView.ScrollHint.PositionAtCenter)
 
         if not edit:
             return True
@@ -685,43 +395,43 @@ class JsonTab(QWidget):
         source_value = source_row.siblingAtColumn(2)
         if not source_value.isValid():
             return True
-        if not (self.model.flags(source_value) & Qt.ItemFlag.ItemIsEditable):
+        if not (self.data_store.model.flags(source_value) & Qt.ItemFlag.ItemIsEditable):
             return True
 
         view_value = self._source_to_view(source_value)
         if not view_value.isValid():
             return True
-        self.view.setCurrentIndex(view_value)
-        self.view.edit(view_value)
+        self.data_store.view.setCurrentIndex(view_value)
+        self.data_store.view.edit(view_value)
         return True
 
     def _severity_provider(self, model_path: tuple[int, ...]) -> str | None:
         """Lazily queried by the model for VALIDATION_SEVERITY_ROLE."""
-        return self.validation.severity_for(model_path)
+        return self.data_store.validation.severity_for(model_path)
 
     def _on_validation_changed(self, _index: IssueIndex) -> None:
         """Emit recursive dataChanged so all visible rows repaint their badges."""
 
         def _emit_ranges(parent: QModelIndex) -> None:
-            rows = self.model.rowCount(parent)
+            rows = self.data_store.model.rowCount(parent)
             if rows <= 0:
                 return
-            top_left = self.model.index(0, 0, parent)
-            bottom_right = self.model.index(rows - 1, self.model.columnCount(parent) - 1, parent)
-            self.model.dataChanged.emit(top_left, bottom_right, [VALIDATION_SEVERITY_ROLE])
+            top_left = self.data_store.model.index(0, 0, parent)
+            bottom_right = self.data_store.model.index(rows - 1, self.data_store.model.columnCount(parent) - 1, parent)
+            self.data_store.model.dataChanged.emit(top_left, bottom_right, [VALIDATION_SEVERITY_ROLE])
             for row in range(rows):
-                _emit_ranges(self.model.index(row, 0, parent))
+                _emit_ranges(self.data_store.model.index(row, 0, parent))
 
         _emit_ranges(QModelIndex())
 
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
-        self._theme = theme
-        self._icon_provider = icon_provider or self._icon_provider
-        self.name_delegate.set_theme(theme)
-        self.value_delegate.set_theme(theme)
-        self.type_delegate.set_theme(theme)
-        self.type_delegate.set_icon_provider(self._icon_provider)
-        self.model.set_icon_provider(self._icon_provider)
+        self.data_store._theme = theme
+        self.data_store._icon_provider = icon_provider or self.data_store._icon_provider
+        self.data_store.name_delegate.set_theme(theme)
+        self.data_store.value_delegate.set_theme(theme)
+        self.data_store.type_delegate.set_theme(theme)
+        self.data_store.type_delegate.set_icon_provider(self.data_store._icon_provider)
+        self.data_store.model.set_icon_provider(self.data_store._icon_provider)
 
         roles = [
             Qt.ItemDataRole.ForegroundRole,
@@ -731,58 +441,58 @@ class JsonTab(QWidget):
         ]
 
         def emit_ranges(parent: QModelIndex) -> None:
-            rows = self.model.rowCount(parent)
+            rows = self.data_store.model.rowCount(parent)
             if rows <= 0:
                 return
 
-            top_left = self.model.index(0, 0, parent)
-            bottom_right = self.model.index(rows - 1, self.model.columnCount(parent) - 1, parent)
-            self.model.dataChanged.emit(top_left, bottom_right, roles)
+            top_left = self.data_store.model.index(0, 0, parent)
+            bottom_right = self.data_store.model.index(rows - 1, self.data_store.model.columnCount(parent) - 1, parent)
+            self.data_store.model.dataChanged.emit(top_left, bottom_right, roles)
 
             for row in range(rows):
-                child_parent = self.model.index(row, 0, parent)
+                child_parent = self.data_store.model.index(row, 0, parent)
                 emit_ranges(child_parent)
 
         emit_ranges(QModelIndex())
 
     def set_monospace_fields_enabled(self, enabled: bool) -> None:
         enabled = bool(enabled)
-        if self._monospace_fields_enabled == enabled:
+        if self.data_store._monospace_fields_enabled == enabled:
             return
-        self._monospace_fields_enabled = enabled
-        self.name_delegate.set_monospace_fields_enabled(enabled)
-        self.value_delegate.set_monospace_fields_enabled(enabled)
-        self.view.viewport().update()
+        self.data_store._monospace_fields_enabled = enabled
+        self.data_store.name_delegate.set_monospace_fields_enabled(enabled)
+        self.data_store.value_delegate.set_monospace_fields_enabled(enabled)
+        self.data_store.view.viewport().update()
 
     def set_regular_font_family(self, family: str) -> None:
         if not family:
             return
         family = str(family)
-        if self._regular_font_family == family:
+        if self.data_store._regular_font_family == family:
             return
-        self._regular_font_family = family
-        font = self.view.font()
+        self.data_store._regular_font_family = family
+        font = self.data_store.view.font()
         font.setFamily(family)
         if font.pointSizeF() <= 0:
-            font.setPointSize(max(6, int(self._font_pt or 10)))
-        self.view.setFont(font)
+            font.setPointSize(max(6, int(self.data_store._font_pt or 10)))
+        self.data_store.view.setFont(font)
         self._sync_icon_size_with_font()
 
     def set_monospace_font_family(self, family: str) -> None:
         if not family:
             return
         family = str(family)
-        if self._monospace_font_family == family:
+        if self.data_store._monospace_font_family == family:
             return
-        self._monospace_font_family = family
-        self.name_delegate.set_monospace_font_family(family)
-        self.value_delegate.set_monospace_font_family(family)
-        self.view.viewport().update()
+        self.data_store._monospace_font_family = family
+        self.data_store.name_delegate.set_monospace_font_family(family)
+        self.data_store.value_delegate.set_monospace_font_family(family)
+        self.data_store.view.viewport().update()
 
     def set_editor_font_point_size(self, point_size: int) -> None:
-        old_pt = self._font_pt
+        old_pt = self.data_store._font_pt
         self._set_font_pt(point_size)
-        self._scale_columns_for_font(old_pt, self._font_pt)
+        self._scale_columns_for_font(old_pt, self.data_store._font_pt)
 
     def apply_font_profile(self, profile) -> None:
         """Aspect entry point called by ``FontController``.
@@ -807,7 +517,7 @@ class JsonTab(QWidget):
         return source_to_view(self, source_index)
 
     def _apply_filter(self) -> None:
-        self.proxy.set_filter_text(self.search_edit.text())
+        self.data_store.proxy.set_filter_text(self.data_store.search_edit.text())
 
     # ── Public typed accessors (Stage 01 of getattr-elimination plan) ──────
 
@@ -816,20 +526,14 @@ class JsonTab(QWidget):
         self._apply_filter()
 
     def refresh_actions(self) -> None:
-        self._host.refresh_actions()
+        self.data_store._host.refresh_actions()
 
     def show_status(self, message: str, timeout_ms: int = 3000) -> None:
         """Publish *message* via the injected host."""
-        self._host.show_status_message(message, timeout_ms)
+        self.data_store._host.show_status_message(message, timeout_ms)
 
     def show_permanent_message(self, message: str) -> None:
-        self._host.show_permanent_message(message)
-
-    @property
-    def last_move_placed(self) -> list[tuple[tuple, int]]:
-        """``(parent_path, row)`` tuples produced by the most recent
-        ``push_move_rows_anchor`` call. Empty before the first move."""
-        return self._last_move_placed
+        self.data_store._host.show_permanent_message(message)
 
     def _on_model_reset(self) -> None:
         # Force-resize so a brand-new model always gets snug initial widths,
@@ -843,13 +547,13 @@ class JsonTab(QWidget):
         manually resized (tracked in ``_user_sized_columns``) are left alone.
         Pass ``force=True`` (e.g. on model reset) to override.
         """
-        self._programmatic_column_resize = True
+        self.data_store._programmatic_column_resize = True
         try:
             for col in (0, 1):
-                if force or col not in self._user_sized_columns:
-                    self.view.resizeColumnToContents(col)
+                if force or col not in self.data_store._user_sized_columns:
+                    self.data_store.view.resizeColumnToContents(col)
         finally:
-            self._programmatic_column_resize = False
+            self.data_store._programmatic_column_resize = False
 
     def _scale_columns_for_font(self, old_pt: int, new_pt: int) -> None:
         """Proportionally scale name/type column widths when the font changes.
@@ -860,52 +564,52 @@ class JsonTab(QWidget):
         if old_pt <= 0 or new_pt <= 0 or old_pt == new_pt:
             return
         scale = new_pt / old_pt
-        self._programmatic_column_resize = True
+        self.data_store._programmatic_column_resize = True
         try:
             for col in (0, 1):
-                if col in self._user_sized_columns:
+                if col in self.data_store._user_sized_columns:
                     continue  # respect the user's manual choice
-                current = self.view.columnWidth(col)
+                current = self.data_store.view.columnWidth(col)
                 new_w = max(20, min(2000, int(current * scale)))
-                self.view.setColumnWidth(col, new_w)
+                self.data_store.view.setColumnWidth(col, new_w)
         finally:
-            self._programmatic_column_resize = False
+            self.data_store._programmatic_column_resize = False
 
     def _set_font_pt(self, pt: int) -> None:
         clamped = max(6, min(48, int(pt)))
-        self._font_pt = clamped
-        font = self.view.font()
+        self.data_store._font_pt = clamped
+        font = self.data_store.view.font()
         font.setPointSize(clamped)
-        self.view.setFont(font)
+        self.data_store.view.setFont(font)
         self._sync_icon_size_with_font()
 
     def _sync_icon_size_with_font(self) -> None:
         # Keep type-column icons visually in step with the active tree font.
-        px = max(12, min(64, int(round(self.view.fontMetrics().height() * 1.1))))
-        self.view.setIconSize(QSize(px, px))
+        px = max(12, min(64, int(round(self.data_store.view.fontMetrics().height() * 1.1))))
+        self.data_store.view.setIconSize(QSize(px, px))
 
     def zoom_in(self) -> None:
-        old_pt = self._font_pt
-        self._set_font_pt(self._font_pt + 1)
-        self._scale_columns_for_font(old_pt, self._font_pt)
+        old_pt = self.data_store._font_pt
+        self._set_font_pt(self.data_store._font_pt + 1)
+        self._scale_columns_for_font(old_pt, self.data_store._font_pt)
 
     def zoom_out(self) -> None:
-        old_pt = self._font_pt
-        self._set_font_pt(self._font_pt - 1)
-        self._scale_columns_for_font(old_pt, self._font_pt)
+        old_pt = self.data_store._font_pt
+        self._set_font_pt(self.data_store._font_pt - 1)
+        self._scale_columns_for_font(old_pt, self.data_store._font_pt)
 
     def zoom_reset(self) -> None:
-        old_pt = self._font_pt
-        self._set_font_pt(self._default_font_pt)
-        self._scale_columns_for_font(old_pt, self._font_pt)
+        old_pt = self.data_store._font_pt
+        self._set_font_pt(self.data_store._default_font_pt)
+        self._scale_columns_for_font(old_pt, self.data_store._font_pt)
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
         # ``change_type`` already emitted ``dataChanged`` for the row, which
         # closes any persistent inline editor that might have been open on
         # the value cell. We additionally close it explicitly so the row is
         # in a clean state before any auto-reopen below.
-        value_index = self.model.index(item_index.row(), 2, item_index.parent())
-        self.view.closePersistentEditor(self._source_to_view(value_index))
+        value_index = self.data_store.model.index(item_index.row(), 2, item_index.parent())
+        self.data_store.view.closePersistentEditor(self._source_to_view(value_index))
 
         if lossy:
             self.show_status("Type change dropped existing child nodes", 3000)
@@ -916,7 +620,7 @@ class JsonTab(QWidget):
         # delegate entirely so ``_interactive`` stays ``False`` and we
         # avoid the spurious "edit: editing failed" warning that
         # ``tests/test_smoke_mainwindow.py`` regression-tests.
-        if not self.type_delegate.interactive:
+        if not self.data_store.type_delegate.interactive:
             return
         if not value_index.isValid():
             return
@@ -932,14 +636,14 @@ class JsonTab(QWidget):
         value_index = QModelIndex(value_pindex) if isinstance(value_pindex, QPersistentModelIndex) else value_pindex
         if not value_index.isValid():
             return
-        flags = self.model.flags(value_index)
+        flags = self.data_store.model.flags(value_index)
         if not (flags & Qt.ItemFlag.ItemIsEditable):
             return
         view_index = self._source_to_view(value_index)
         if not view_index.isValid():
             return
-        self.view.setCurrentIndex(view_index)
-        self.view.edit(view_index)
+        self.data_store.view.setCurrentIndex(view_index)
+        self.data_store.view.edit(view_index)
 
     def edit_name_or_value_from_enter(self) -> None:
         """Start editing from Enter with type-column support.
@@ -947,15 +651,15 @@ class JsonTab(QWidget):
         - Name/Value columns: edit the current editable cell.
         - Type column: open the inline type combobox editor.
         """
-        if self.view.state() == QAbstractItemView.State.EditingState:
+        if self.data_store.view.state() == QAbstractItemView.State.EditingState:
             return
-        current = self.view.currentIndex()
+        current = self.data_store.view.currentIndex()
         if not current.isValid():
             return
 
         if current.column() == 1:
-            if self.view.model().flags(current) & Qt.ItemFlag.ItemIsEditable:
-                self.view.edit(current)
+            if self.data_store.view.model().flags(current) & Qt.ItemFlag.ItemIsEditable:
+                self.data_store.view.edit(current)
                 QTimer.singleShot(0, self._open_active_type_combo_popup)
             return
 
@@ -964,65 +668,37 @@ class JsonTab(QWidget):
             candidates.append(current)
         candidates.extend((current.siblingAtColumn(2), current.siblingAtColumn(0)))
 
-        model = self.view.model()
+        model = self.data_store.view.model()
         for idx in candidates:
             if not idx.isValid():
                 continue
             if not (model.flags(idx) & Qt.ItemFlag.ItemIsEditable):
                 continue
-            self.view.setCurrentIndex(idx)
-            self.view.edit(idx)
+            self.data_store.view.setCurrentIndex(idx)
+            self.data_store.view.edit(idx)
             return
 
     def _open_active_type_combo_popup(self) -> None:
-        for combo in self.view.findChildren(QComboBox):
-            if combo.parent() is self.view.viewport() and combo.isVisible():
+        for combo in self.data_store.view.findChildren(QComboBox):
+            if combo.parent() is self.data_store.view.viewport() and combo.isVisible():
                 combo.showPopup()
                 return
 
-    @property
-    def is_dirty(self) -> bool:
-        return self.io.dirty
-
-    @property
-    def file_path(self) -> str | None:
-        return self.io.file_path
-
-    @file_path.setter
-    def file_path(self, value: str | None) -> None:
-        self.io.file_path = value
-
-    @property
-    def save_format(self) -> str | None:
-        return self.io.save_format
-
-    @save_format.setter
-    def save_format(self, value: str | None) -> None:
-        self.io.save_format = value
-
-    @property
-    def _dirty(self) -> bool:
-        return self.io.dirty
-
-    @_dirty.setter
-    def _dirty(self, value: bool) -> None:
-        self.io.set_dirty(value)
-
     def _set_dirty(self, dirty: bool) -> None:
-        self.io.set_dirty(dirty)
+        self.data_store.io.set_dirty(dirty)
 
     def _on_clean_changed(self, clean: bool) -> None:
-        self.io.on_clean_changed(clean)
+        self.data_store.io.on_clean_changed(clean)
 
     def display_name(self) -> str:
-        if self.file_path:
+        if self.data_store.file_path:
             # ``os.path.basename`` is platform-aware on POSIX (only "/") so we
             # also strip "\\" explicitly to handle Windows-style paths produced
             # by ``QFileDialog`` and similar APIs regardless of host OS.
-            name = os.path.basename(self.file_path.replace("\\", "/")) or "Untitled"
+            name = os.path.basename(self.data_store.file_path.replace("\\", "/")) or "Untitled"
         else:
             name = "Untitled"
-        return f"{name} *" if self._dirty else name
+        return f"{name} *" if self.data_store.is_dirty else name
 
     def save(self) -> bool:
         return tab_save(self)
@@ -1058,12 +734,12 @@ class JsonTab(QWidget):
         paths: list[tuple[int, ...]] = []
 
         def visit(parent_index: QModelIndex) -> None:
-            for r in range(self.model.rowCount(parent_index)):
-                child = self.model.index(r, 0, parent_index)
+            for r in range(self.data_store.model.rowCount(parent_index)):
+                child = self.data_store.model.index(r, 0, parent_index)
                 if not child.isValid():
                     continue
                 view_child = self._source_to_view(child)
-                if self.view.isExpanded(view_child):
+                if self.data_store.view.isExpanded(view_child):
                     paths.append(self._index_path(child))
                     visit(child)
 
@@ -1073,20 +749,20 @@ class JsonTab(QWidget):
     def _capture_move_view_state(self, sources: list) -> dict[str, Any]:
         roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]] = {}
         for idx in sources:
-            row0 = self.model.index(idx.row(), 0, idx.parent())
+            row0 = self.data_store.model.index(idx.row(), 0, idx.parent())
             if not row0.isValid():
                 continue
             key = (self._index_path(row0.parent()), row0.row())
             view_idx = self._source_to_view(row0)
             roots_state[key] = {
-                "expanded_root": bool(view_idx.isValid() and self.view.isExpanded(view_idx)),
-                "expanded_rel": list(iter_expanded_relative_paths(self.view, row0)),
+                "expanded_root": bool(view_idx.isValid() and self.data_store.view.isExpanded(view_idx)),
+                "expanded_rel": list(iter_expanded_relative_paths(self.data_store.view, row0)),
             }
 
-        selected_paths = [self._index_path(idx) for idx in selected_source_rows(self.view) if idx.isValid()]
-        current_src = self._proxy_to_source(self.view.currentIndex())
+        selected_paths = [self._index_path(idx) for idx in selected_source_rows(self.data_store.view) if idx.isValid()]
+        current_src = self._proxy_to_source(self.data_store.view.currentIndex())
         if current_src.isValid():
-            current_src = self.model.index(current_src.row(), 0, current_src.parent())
+            current_src = self.data_store.model.index(current_src.row(), 0, current_src.parent())
         current_path = self._index_path(current_src) if current_src.isValid() else None
         return {
             "roots": roots_state,
@@ -1111,18 +787,18 @@ class JsonTab(QWidget):
                 continue
             target_parent_path, target_row = target_root
             target_parent = self._index_from_path(target_parent_path)
-            target_index = self.model.index(target_row, 0, target_parent)
+            target_index = self.data_store.model.index(target_row, 0, target_parent)
             if not target_index.isValid():
                 continue
             target_view = self._source_to_view(target_index)
             if target_view.isValid():
-                self.view.setExpanded(target_view, bool(state.get("expanded_root", False)))
-            apply_expanded_relative_paths(self.view, target_index, state.get("expanded_rel", []))
+                self.data_store.view.setExpanded(target_view, bool(state.get("expanded_root", False)))
+            apply_expanded_relative_paths(self.data_store.view, target_index, state.get("expanded_rel", []))
 
     def _restore_selection_paths(self, paths: list[tuple[int, ...]], current_path: tuple[int, ...] | None) -> None:
         from PySide6.QtCore import QItemSelection, QItemSelectionModel
 
-        sm = self.view.selectionModel()
+        sm = self.data_store.view.selectionModel()
         if sm is None:
             return
         selection = QItemSelection()
@@ -1149,7 +825,7 @@ class JsonTab(QWidget):
             sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def _apply_move_view_state(self, cmd: _MoveRowsCmd, *, undo: bool) -> None:
-        state = self._move_view_state_by_cmd_id.get(id(cmd))
+        state = self.data_store._move_view_state_by_cmd_id.get(id(cmd))
         if state is None:
             return
         roots_state = state.get("roots", {})
@@ -1163,36 +839,36 @@ class JsonTab(QWidget):
         self._restore_selection_at_paths(cmd.placed_paths)
 
     def _on_undo_index_changed(self, new_index: int) -> None:
-        old_index = self._last_undo_index
+        old_index = self.data_store._last_undo_index
         if new_index == old_index:
             return
 
         if new_index > old_index:
             for i in range(old_index, new_index):
-                cmd = self.undo_stack.command(i)
-                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in self._move_view_state_by_cmd_id:
+                cmd = self.data_store.undo_stack.command(i)
+                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in self.data_store._move_view_state_by_cmd_id:
                     self._apply_move_view_state(cmd, undo=False)
         else:
             for i in range(old_index - 1, new_index - 1, -1):
-                cmd = self.undo_stack.command(i)
-                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in self._move_view_state_by_cmd_id:
+                cmd = self.data_store.undo_stack.command(i)
+                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in self.data_store._move_view_state_by_cmd_id:
                     self._apply_move_view_state(cmd, undo=True)
-        self._last_undo_index = new_index
+        self.data_store._last_undo_index = new_index
 
     # ------------------------------------------------------------------
     # Smart-restore diff helpers
     # ------------------------------------------------------------------
 
     def _diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool:
-        return self._diff_applier.apply(item, target, item_index)
+        return self.data_store._diff_applier.apply(item, target, item_index)
 
     # -- low-level mutators used by diff and typed commands --------------
 
     def _emit_row_changed(self, item_index: QModelIndex) -> None:
-        self._diff_applier.emit_row_changed(item_index)
+        self.data_store._diff_applier.emit_row_changed(item_index)
 
     def _clear_children(self, item: JsonTreeItem, item_index: QModelIndex) -> None:
-        self._diff_applier.clear_children(item, item_index)
+        self.data_store._diff_applier.clear_children(item, item_index)
 
     def _convert_container(
         self,
@@ -1201,10 +877,10 @@ class JsonTab(QWidget):
         new_type: JsonType,
         value: Any,
     ) -> None:
-        self._diff_applier.convert_container(item, item_index, new_type, value)
+        self.data_store._diff_applier.convert_container(item, item_index, new_type, value)
 
     def _convert_to_leaf(self, item: JsonTreeItem, item_index: QModelIndex, target: Any) -> None:
-        self._diff_applier.convert_to_leaf(item, item_index, target)
+        self.data_store._diff_applier.convert_to_leaf(item, item_index, target)
 
     def _insert_typed_item(
         self,
@@ -1214,31 +890,31 @@ class JsonTab(QWidget):
         value: Any,
         name: str | int | None = None,
     ) -> bool:
-        return self._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
+        return self.data_store._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
 
     def _diff_object(self, item: JsonTreeItem, target_dict: dict, item_index: QModelIndex) -> bool:
-        return self._diff_applier.diff_object(item, target_dict, item_index)
+        return self.data_store._diff_applier.diff_object(item, target_dict, item_index)
 
     def _diff_array(self, item: JsonTreeItem, target_list: list, item_index: QModelIndex) -> bool:
-        return self._diff_applier.diff_array(item, target_list, item_index)
+        return self.data_store._diff_applier.diff_array(item, target_list, item_index)
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
-        return self.mutations.commit_set_data(index, value, role)
+        return self.data_store.mutations.commit_set_data(index, value, role)
 
     # ------------------------------------------------------------------
     # Typed-command public API (action/compensation, no full-tree snapshot)
     # ------------------------------------------------------------------
 
     def push_move_row(self, parent_index: QModelIndex, src: int, dst: int, *, label: str = "move row") -> bool:
-        if self._read_only:
+        if self.data_store._read_only:
             return False
         if src == dst:
             return False
-        parent_item = self.model.get_item(parent_index)
+        parent_item = self.data_store.model.get_item(parent_index)
         n = parent_item.child_count()
         if not (0 <= src < n and 0 <= dst < n):
             return False
-        source_idx = self.model.index(src, 0, parent_index)
+        source_idx = self.data_store.model.index(src, 0, parent_index)
         # push_move_rows uses pre-pop target_row; dst is post-pop.
         # Forward move (src < dst): removing src shifts later rows down by 1,
         # so pre-pop target = dst + 1 to land at the same final position.
@@ -1269,7 +945,7 @@ class JsonTab(QWidget):
         """
         from tree_actions.anchors import anchor_is_cycle, anchor_is_no_op, resolve_anchor_insert_row
 
-        if self._read_only:
+        if self.data_store._read_only:
             return False
         if not sources:
             return False
@@ -1278,9 +954,9 @@ class JsonTab(QWidget):
         source_paths: list[tuple[tuple, int]] = []
         source_names: list[Any] = []
         for idx in sources:
-            row0 = self.model.index(idx.row(), 0, idx.parent())
+            row0 = self.data_store.model.index(idx.row(), 0, idx.parent())
             source_paths.append((self._index_path(row0.parent()), row0.row()))
-            source_names.append(self.model.get_item(row0).name)
+            source_names.append(self.data_store.model.get_item(row0).name)
 
         # Cycle guard.
         if anchor_is_cycle(anchor, source_paths):
@@ -1292,11 +968,11 @@ class JsonTab(QWidget):
         if anchor_is_no_op(anchor, source_paths):
             return False
         if anchor.is_at_end:
-            insert_row = resolve_anchor_insert_row(self.model, self, anchor, source_paths)
+            insert_row = resolve_anchor_insert_row(self.data_store.model, self, anchor, source_paths)
             same_parent_sources = sorted(r for p, r in source_paths if p == anchor.parent_path)
             if same_parent_sources:
                 parent_index = self._index_from_path(anchor.parent_path)
-                parent_count = self.model.rowCount(parent_index)
+                parent_count = self.data_store.model.rowCount(parent_index)
                 last_src = same_parent_sources[-1]
                 is_contiguous = all(b - a == 1 for a, b in zip(same_parent_sources, same_parent_sources[1:]))
                 # If the block is contiguous and already sits as the suffix,
@@ -1306,12 +982,12 @@ class JsonTab(QWidget):
 
         # Build the command.
         move_view_state = self._capture_move_view_state(sources)
-        target_qname = self._qualified_name(self.model.index(sources[0].row(), 0, sources[0].parent()))
+        target_qname = self._qualified_name(self.data_store.model.index(sources[0].row(), 0, sources[0].parent()))
         cmd = _MoveRowsCmd(self, _make_label(label, target_qname), source_paths, source_names, anchor)
-        self.undo_stack.push(cmd)
-        self._move_view_state_by_cmd_id[id(cmd)] = move_view_state
+        self.data_store.undo_stack.push(cmd)
+        self.data_store._move_view_state_by_cmd_id[id(cmd)] = move_view_state
         # Expose placed paths for action-layer post-hooks (esp. macros).
-        self._last_move_placed = cmd.placed_paths
+        self.data_store._last_move_placed = cmd.placed_paths
         self._apply_move_view_state(cmd, undo=False)
         return True
 
@@ -1327,7 +1003,7 @@ class JsonTab(QWidget):
         (pre-pop convention) into a ``MoveAnchor`` and delegates."""
         from tree_actions.anchors import pre_pop_target_row_to_anchor
 
-        if self._read_only:
+        if self.data_store._read_only:
             return False
         if not sources:
             return False
@@ -1345,14 +1021,14 @@ class JsonTab(QWidget):
             return
         from PySide6.QtCore import QItemSelection, QItemSelectionModel
 
-        sm = self.view.selectionModel()
+        sm = self.data_store.view.selectionModel()
         if sm is None:
             return
         selection = QItemSelection()
         first_view_idx = None
         for parent_path, row in placed:
             p = self._index_from_path(parent_path)
-            src_idx = self.model.index(row, 0, p)
+            src_idx = self.data_store.model.index(row, 0, p)
             view_idx = self._source_to_view(src_idx)
             if view_idx.isValid():
                 selection.select(view_idx, view_idx)
@@ -1366,11 +1042,11 @@ class JsonTab(QWidget):
             sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
-        if self._read_only:
+        if self.data_store._read_only:
             return False
         if not name_index.isValid() or name_index.column() != 0:
             return False
-        item = self.model.get_item(name_index)
+        item = self.data_store.model.get_item(name_index)
         if not isinstance(new_name, str):
             return False
         candidate = new_name.strip()
@@ -1384,16 +1060,16 @@ class JsonTab(QWidget):
                 return False
         target_qname = self._qualified_name(name_index)
         cmd = _RenameCmd(self, _make_label(label, target_qname), self._index_path(name_index), item.name, candidate)
-        self.undo_stack.push(cmd)
+        self.data_store.undo_stack.push(cmd)
         return True
 
     def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
-        if self._read_only:
+        if self.data_store._read_only:
             return False
         if not value_index.isValid() or value_index.column() != 2:
             return False
-        name_idx = self.model.index(value_index.row(), 0, value_index.parent())
-        item = self.model.get_item(name_idx)
+        name_idx = self.data_store.model.index(value_index.row(), 0, value_index.parent())
+        item = self.data_store.model.get_item(name_idx)
         old_subtree = item.to_json()
         # Honour explicit_type strict coercion when the type was pinned.
         if item.explicit_type and item.json_type not in (JsonType.OBJECT, JsonType.ARRAY):
@@ -1408,11 +1084,11 @@ class JsonTab(QWidget):
             return False
         target_qname = self._qualified_name(name_idx)
         cmd = _EditValueCmd(self, _make_label(label, target_qname), self._index_path(name_idx), old_subtree, applied)
-        self.undo_stack.push(cmd)
+        self.data_store.undo_stack.push(cmd)
         return True
 
     def push_change_type(self, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
-        if self._read_only:
+        if self.data_store._read_only:
             return False
         if not type_index.isValid() or type_index.column() != 1:
             return False
@@ -1420,8 +1096,8 @@ class JsonTab(QWidget):
             target_type = new_type if isinstance(new_type, JsonType) else JsonType(str(new_type))
         except ValueError:
             return False
-        name_idx = self.model.index(type_index.row(), 0, type_index.parent())
-        item = self.model.get_item(name_idx)
+        name_idx = self.data_store.model.index(type_index.row(), 0, type_index.parent())
+        item = self.data_store.model.get_item(name_idx)
         if item.json_type is target_type:
             return False
         warn_fraction_loss = self._would_drop_fraction_on_type_change(item, target_type)
@@ -1438,7 +1114,7 @@ class JsonTab(QWidget):
             old_type,
             target_type,
         )
-        self.undo_stack.push(cmd)
+        self.data_store.undo_stack.push(cmd)
         if warn_fraction_loss:
             self.show_status("Fractional part discarded during float-to-integer conversion", 3000)
         return True
@@ -1464,7 +1140,7 @@ class JsonTab(QWidget):
 
     def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
         """``inserts`` is a list of ``{parent_path, row, value, name}``."""
-        if self._read_only:
+        if self.data_store._read_only:
             return False
         if not inserts:
             return False
@@ -1474,19 +1150,19 @@ class JsonTab(QWidget):
             else self._qualified_name(self._index_from_path(inserts[0]["parent_path"]))
         )
         cmd = _InsertRowsCmd(self, _make_label(label, qname), inserts)
-        self.undo_stack.push(cmd)
+        self.data_store.undo_stack.push(cmd)
         return True
 
     def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
-        if self._read_only:
+        if self.data_store._read_only:
             return False
         if not indexes:
             return False
         ordered = sorted(indexes, key=lambda i: (self._index_path(i.parent()), i.row()), reverse=True)
         removals = []
         for idx in ordered:
-            row0 = self.model.index(idx.row(), 0, idx.parent())
-            item = self.model.get_item(row0)
+            row0 = self.data_store.model.index(idx.row(), 0, idx.parent())
+            item = self.data_store.model.get_item(row0)
             removals.append(
                 {
                     "parent_path": self._index_path(idx.parent()),
@@ -1497,15 +1173,15 @@ class JsonTab(QWidget):
             )
         target_qname = self._qualified_name(ordered[0])
         cmd = _RemoveRowsCmd(self, _make_label(label, target_qname), removals)
-        self.undo_stack.push(cmd)
+        self.data_store.undo_stack.push(cmd)
         return True
 
     def push_sort_keys(self, index: QModelIndex, *, recursive: bool = False, label: str | None = None) -> bool:
-        if self._read_only:
+        if self.data_store._read_only:
             return False
         if not index.isValid():
             return False
-        item = self.model.get_item(index)
+        item = self.data_store.model.get_item(index)
         if item.json_type is not JsonType.OBJECT:
             return False
         old_subtree = item.to_json()
@@ -1514,7 +1190,7 @@ class JsonTab(QWidget):
         target_qname = self._qualified_name(index)
         text = label if label is not None else ("sort keys recursive" if recursive else "sort keys")
         cmd = _SortKeysCmd(self, _make_label(text, target_qname), self._index_path(index), old_subtree, recursive)
-        self.undo_stack.push(cmd)
+        self.data_store.undo_stack.push(cmd)
         return True
 
     def push_switch_field_case(
@@ -1524,7 +1200,7 @@ class JsonTab(QWidget):
         label: str = "switch field case",
         target_qname: str | None = None,
     ) -> bool:
-        if self._read_only:
+        if self.data_store._read_only:
             return False
         if not renames:
             return False
@@ -1543,7 +1219,7 @@ class JsonTab(QWidget):
             idx = self._index_from_path(path)
             if not idx.isValid():
                 continue
-            item = self.model.get_item(idx)
+            item = self.data_store.model.get_item(idx)
             if item.name != old_name:
                 continue
             parent = item.parent_item
@@ -1558,7 +1234,7 @@ class JsonTab(QWidget):
         # Preflight: reject operations that would create duplicate sibling names.
         for parent_path, updates in by_parent.items():
             parent_index = self._index_from_path(parent_path)
-            parent_item = self.model.get_item(parent_index)
+            parent_item = self.data_store.model.get_item(parent_index)
             final_names: list[str] = []
             for row, child in enumerate(parent_item.child_items):
                 if not isinstance(child.name, str):
@@ -1570,7 +1246,7 @@ class JsonTab(QWidget):
         first_index = self._index_from_path(normalized[0]["path"])
         qname = target_qname if target_qname is not None else self._qualified_name(first_index)
         cmd = _SwitchFieldCaseCmd(self, _make_label(label, qname), normalized)
-        self.undo_stack.push(cmd)
+        self.data_store.undo_stack.push(cmd)
         return True
 
     def _run_tree_action(
@@ -1590,48 +1266,48 @@ class JsonTab(QWidget):
         move_out_down: bool = False,
         sort_keys: bool = False,
     ) -> None:
-        if self._read_only:
+        if self.data_store._read_only:
             return
         changed = False
         if copy_only:
-            changed = copy_selection(self.view)
+            changed = copy_selection(self.data_store.view)
         elif cut:
-            changed = cut_selection(self.view)
+            changed = cut_selection(self.data_store.view)
         elif paste:
-            changed = paste_auto(self.view)
+            changed = paste_auto(self.data_store.view)
         elif paste_zip:
-            changed = paste_insert_after_zip(self.view)
+            changed = paste_insert_after_zip(self.data_store.view)
         elif replace_zip:
-            changed = paste_replace_zip(self.view)
+            changed = paste_replace_zip(self.data_store.view)
         elif delete:
-            changed = delete_selection(self.view)
+            changed = delete_selection(self.data_store.view)
         elif duplicate:
-            changed = duplicate_selection(self.view)
+            changed = duplicate_selection(self.data_store.view)
         elif move_up:
-            changed = move_selection_up(self.view)
+            changed = move_selection_up(self.data_store.view)
         elif move_down:
-            changed = move_selection_down(self.view)
+            changed = move_selection_down(self.data_store.view)
         elif move_out_up:
-            changed = move_selection_out_up(self.view)
+            changed = move_selection_out_up(self.data_store.view)
         elif move_out_down:
-            changed = move_selection_out_down(self.view)
+            changed = move_selection_out_down(self.data_store.view)
         elif sort_keys:
-            changed = sort_selection_keys(self.view, recursive=False)
+            changed = sort_selection_keys(self.data_store.view, recursive=False)
 
         if changed:
             self.show_status(success_message, 1500)
 
     def insert_sibling_before(self) -> bool:
-        if self._read_only:
+        if self.data_store._read_only:
             return False
-        return insert_sibling_before(self.view)
+        return insert_sibling_before(self.data_store.view)
 
     def insert_sibling_after(self) -> bool:
-        if self._read_only:
+        if self.data_store._read_only:
             return False
-        return insert_sibling_after(self.view)
+        return insert_sibling_after(self.data_store.view)
 
     def insert_child(self) -> bool:
-        if self._read_only:
+        if self.data_store._read_only:
             return False
-        return insert_child_current(self.view)
+        return insert_child_current(self.data_store.view)

@@ -2,7 +2,7 @@
 
 This module publishes a *stable seam* on top of the current ``JsonTab`` API.
 External callers (``tree_actions``, ``undo``, ``app``) should go through
-``tab.mutations.*`` so that the underlying implementation can move out of
+``tab.data_store.mutations.*`` so that the underlying implementation can move out of
 ``JsonTab`` in a later commit without churning every call site.
 
 For Phase 0 every method here simply delegates back to the existing
@@ -44,7 +44,7 @@ class DocumentMutationGateway:
         tab method becomes a one-line delegation.
         """
         tab = self._tab
-        if tab._read_only:
+        if tab.data_store._read_only:
             return False
         if role != Qt.ItemDataRole.EditRole or not index.isValid():
             return False
@@ -83,10 +83,10 @@ class DocumentMutationGateway:
 
     # ----- macro framing --------------------------------------------------
     def begin_macro(self, label: str) -> None:
-        self._tab.undo_stack.beginMacro(label)
+        self._tab.data_store.undo_stack.beginMacro(label)
 
     def end_macro(self) -> None:
-        self._tab.undo_stack.endMacro()
+        self._tab.data_store.undo_stack.endMacro()
 
     # ----- path / view helpers (read-only) -------------------------------
     def index_path(self, index: QModelIndex) -> tuple[int, ...]:

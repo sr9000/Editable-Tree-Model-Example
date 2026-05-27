@@ -53,7 +53,7 @@ class TabLifecyclePresenter(QObject):
         if index < 0:
             return
         self._tab_widget.setTabText(index, tab.display_name())
-        self._tab_widget.setTabToolTip(index, tab.file_path or "Untitled")
+        self._tab_widget.setTabToolTip(index, tab.data_store.file_path or "Untitled")
 
     def on_tab_dirty(self, tab: JsonTab) -> None:
         self.refresh_tab_presentation(tab)
@@ -80,8 +80,8 @@ class TabLifecyclePresenter(QObject):
                 save_format=save_format,
                 services=JsonTabServices(
                     host=_MainWindowJsonTabHost(win),
-                    theme=win._theme,
-                    icon_provider=win._icon_provider,
+                    theme=win.data_store._theme,
+                    icon_provider=win.data_store._icon_provider,
                 ),
             )
         except Exception as exc:  # noqa: BLE001
@@ -96,11 +96,11 @@ class TabLifecyclePresenter(QObject):
         win.fonts.subscribe(tab)
         tab.dirtyChanged.connect(lambda _dirty, t=tab: self.on_tab_dirty(t))
 
-        tab.view.expandAll()
+        tab.data_store.view.expandAll()
         tab.resize_key_columns()
-        if tab.model.show_root:
-            source_index = tab.model.index(0, 0, QModelIndex())
-            tab.view.setCurrentIndex(tab.mutations.source_to_view(source_index))
+        if tab.data_store.model.show_root:
+            source_index = tab.data_store.model.index(0, 0, QModelIndex())
+            tab.data_store.view.setCurrentIndex(tab.data_store.mutations.source_to_view(source_index))
         view_state.restore(tab)
         # Re-broadcast: ``view_state.restore`` may have rewritten ``_font_pt``
         # from a previously-saved per-tab value; the global controller wins.
@@ -122,7 +122,7 @@ class TabLifecyclePresenter(QObject):
             tab.resize_key_columns()
         if win._history_dialog is not None and win._history_dialog.isVisible():
             if tab is not None and win._history_view is not None:
-                win._history_view.setStack(tab.undo_stack)
+                win._history_view.setStack(tab.data_store.undo_stack)
         win.update_actions()
 
     # ── close ─────────────────────────────────────────────────────────────

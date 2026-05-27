@@ -47,7 +47,7 @@ def _select_rows(view: QTreeView, *indexes) -> None:
 def _select_tab(tab: JsonTab, *source_indexes) -> None:
     first, *rest = source_indexes
     vi = tab._source_to_view(first)
-    sm = tab.view.selectionModel()
+    sm = tab.data_store.view.selectionModel()
     sm.select(vi, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows)
     sm.setCurrentIndex(vi, QItemSelectionModel.SelectionFlag.NoUpdate)
     for src in rest:
@@ -63,7 +63,7 @@ def _select_tab(tab: JsonTab, *source_indexes) -> None:
 def test_extended_selection_mode_on_json_tab(qtbot):
     tab = JsonTab(lambda *_: None, data={"a": 1})
     qtbot.addWidget(tab)
-    assert tab.view.selectionMode() == QAbstractItemView.SelectionMode.ExtendedSelection
+    assert tab.data_store.view.selectionMode() == QAbstractItemView.SelectionMode.ExtendedSelection
 
 
 # ---------------------------------------------------------------------------
@@ -154,21 +154,21 @@ def test_copy_paste_roundtrip_disjoint_selection(qtbot):
     tab = JsonTab(lambda *_: None, data={"a": 1, "b": 2, "c": 3, "target": []})
     qtbot.addWidget(tab)
 
-    a = tab.model.index(0, 0, QModelIndex())
-    b = tab.model.index(1, 0, QModelIndex())
-    c = tab.model.index(2, 0, QModelIndex())
+    a = tab.data_store.model.index(0, 0, QModelIndex())
+    b = tab.data_store.model.index(1, 0, QModelIndex())
+    c = tab.data_store.model.index(2, 0, QModelIndex())
 
     _select_tab(tab, a, b, c)
-    assert copy_selection(tab.view)
+    assert copy_selection(tab.data_store.view)
 
     # Select the "target" array and paste into it as children
-    target = tab.model.index(3, 0, QModelIndex())
+    target = tab.data_store.model.index(3, 0, QModelIndex())
     _select_tab(tab, target)
-    tab.view.expand(tab._source_to_view(target))
+    tab.data_store.view.expand(tab._source_to_view(target))
 
-    assert paste_from_clipboard(tab.view)
+    assert paste_from_clipboard(tab.data_store.view)
 
-    result = tab.model.get_item(target).to_json()
+    result = tab.data_store.model.get_item(target).to_json()
     assert isinstance(result, list)
     assert len(result) == 3
     # Values 1, 2, 3 must be present (order preserved)

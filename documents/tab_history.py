@@ -44,10 +44,10 @@ class TabHistoryController(QObject):
 
     # ----- expansion capture --------------------------------------------
     def iter_expanded_relative_paths(self, root_index):
-        return iter_expanded_relative_paths(self._tab.view, root_index)
+        return iter_expanded_relative_paths(self._tab.data_store.view, root_index)
 
     def apply_expanded_relative_paths(self, root_index, paths) -> None:
-        apply_expanded_relative_paths(self._tab.view, root_index, paths)
+        apply_expanded_relative_paths(self._tab.data_store.view, root_index, paths)
 
 
 __all__ = ["TabHistoryController"]

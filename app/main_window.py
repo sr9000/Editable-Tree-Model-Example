@@ -298,7 +298,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _current_view(self) -> QTreeView | None:
         tab = self._current_tab()
-        return tab.view if tab is not None else None
+        return tab.data_store.view if tab is not None else None
 
     def setup_connections(self):
         setup_main_window_connections(self)
@@ -380,23 +380,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _save_tab(self, tab: JsonTab, *, save_as: bool = False) -> bool:
         from state.validation_settings import clear_schema_path
 
-        if tab.is_read_only:
+        if tab.data_store.is_read_only:
             return False
-        old_path = tab.file_path
+        old_path = tab.data_store.file_path
         ok = tab.save_as() if save_as else tab.save()
         if not ok:
             return False
-        if save_as and isinstance(old_path, str) and tab.file_path and old_path != tab.file_path:
+        if save_as and isinstance(old_path, str) and tab.data_store.file_path and old_path != tab.data_store.file_path:
             view_state.discard(old_path)
             clear_schema_path(Path(old_path))
         view_state.save(tab)
-        if tab.file_path:
-            push_recent(self, tab.file_path)
+        if tab.data_store.file_path:
+            push_recent(self, tab.data_store.file_path)
         self._on_tab_dirty(tab)
         return True
 
     def _confirm_reload_dirty_tab(self, tab: JsonTab) -> str:
-        if not tab.is_dirty:
+        if not tab.data_store.is_dirty:
             return "reload"
 
         name = tab.display_name().replace(" *", "")
@@ -429,14 +429,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QMessageBox.critical(self, "Reload failed", f"Could not reload {resolved}:\n{exc}")
             return False
 
-        root_index = tab.model.index(0, 0, QModelIndex()) if tab.model.show_root else QModelIndex()
-        root_item = tab.model.get_item(root_index)
+        root_index = tab.data_store.model.index(0, 0, QModelIndex()) if tab.data_store.model.show_root else QModelIndex()
+        root_item = tab.data_store.model.get_item(root_index)
         changed = tab._diff_apply(root_item, data, root_index)
         if changed:
-            tab.undo_stack.clear()
-        tab.undo_stack.setClean()
-        tab.save_format = source_format
-        tab.file_path = resolved
+            tab.data_store.undo_stack.clear()
+        tab.data_store.undo_stack.setClean()
+        tab.data_store.save_format = source_format
+        tab.data_store.file_path = resolved
         tab.revalidate()
         self._refresh_tab_presentation(tab)
         self.update_actions()
@@ -471,14 +471,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def reload_from_disk(self) -> None:
         tab = self._current_tab()
-        if tab is None or tab.is_read_only or not tab.file_path:
+        if tab is None or tab.data_store.is_read_only or not tab.data_store.file_path:
             return
         decision = self._confirm_reload_dirty_tab(tab)
         if decision == "cancel":
             return
         if decision == "overwrite" and not self._save_tab(tab, save_as=False):
             return
-        self._reload_tab_from_path(tab, tab.file_path)
+        self._reload_tab_from_path(tab, tab.data_store.file_path)
 
     def create_new_file(self):
         self._add_tab(data={}, file_path=None)
@@ -586,7 +586,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def select_regular_font(self) -> None:
         tab = self._current_tab()
-        seed = QFont(tab.view.font()) if tab is not None else QFont(self.font())
+        seed = QFont(tab.data_store.view.font()) if tab is not None else QFont(self.font())
         if self.fonts.profile.regular_family:
             seed.setFamily(self.fonts.profile.regular_family)
         seed = self._normalize_font_for_dialog(seed)
@@ -611,11 +611,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def copy_current_file_path(self) -> None:
         """Put the absolute path of the current tab on the system clipboard."""
         tab = self._current_tab()
-        if tab is None or not tab.file_path:
+        if tab is None or not tab.data_store.file_path:
             self.statusBar.showMessage(self.tr("No file path to copy"), 2000)
             return
-        QApplication.clipboard().setText(tab.file_path)
-        self.statusBar.showMessage(self.tr("Copied: {path}").format(path=tab.file_path), 2000)
+        QApplication.clipboard().setText(tab.data_store.file_path)
+        self.statusBar.showMessage(self.tr("Copied: {path}").format(path=tab.data_store.file_path), 2000)
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._theme_controller.shutdown()

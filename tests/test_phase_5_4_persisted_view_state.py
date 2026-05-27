@@ -38,22 +38,22 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     qtbot.addWidget(tab)
 
     for column in range(3):
-        tab.view.setColumnWidth(column, 140 + (column * 25))
+        tab.data_store.view.setColumnWidth(column, 140 + (column * 25))
 
-    root = tab.model.index(0, 0, QModelIndex())
-    foo = tab.model.index(0, 0, root)
-    bar = tab.model.index(0, 0, foo)
-    leaf = tab.model.index(1, 0, bar)
+    root = tab.data_store.model.index(0, 0, QModelIndex())
+    foo = tab.data_store.model.index(0, 0, root)
+    bar = tab.data_store.model.index(0, 0, foo)
+    leaf = tab.data_store.model.index(1, 0, bar)
 
-    tab.view.collapseAll()
-    tab.view.expand(tab._source_to_view(root))
-    tab.view.expand(tab._source_to_view(foo))
-    tab.view.setCurrentIndex(tab._source_to_view(leaf))
+    tab.data_store.view.collapseAll()
+    tab.data_store.view.expand(tab._source_to_view(root))
+    tab.data_store.view.expand(tab._source_to_view(foo))
+    tab.data_store.view.setCurrentIndex(tab._source_to_view(leaf))
 
     tab.zoom_in()
     tab.zoom_in()
-    saved_font_pt = tab.view.font().pointSize()
-    saved_widths = [tab.view.columnWidth(column) for column in range(3)]
+    saved_font_pt = tab.data_store.view.font().pointSize()
+    saved_widths = [tab.data_store.view.columnWidth(column) for column in range(3)]
 
     save(tab)
 
@@ -95,13 +95,13 @@ def test_save_as_discards_old_view_state_group(tmp_path, monkeypatch, qtbot):
 
     old_path = str(tmp_path / "old.json")
     new_path = str(tmp_path / "new.json")
-    tab.file_path = old_path
+    tab.data_store.file_path = old_path
 
-    tab.view.setColumnWidth(0, 222)
+    tab.data_store.view.setColumnWidth(0, 222)
     save(tab)
 
     def _fake_save_as() -> bool:
-        tab.file_path = new_path
+        tab.data_store.file_path = new_path
         return True
 
     monkeypatch.setattr(tab, "save_as", _fake_save_as)
@@ -120,6 +120,6 @@ def test_save_as_discards_old_view_state_group(tmp_path, monkeypatch, qtbot):
     assert isinstance(new_widths, list)
     assert int(new_widths[0]) == 222
 
-    tab.undo_stack.setClean()
+    tab.data_store.undo_stack.setClean()
     win.close()
     win.deleteLater()

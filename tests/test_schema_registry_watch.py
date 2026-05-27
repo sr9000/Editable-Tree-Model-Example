@@ -31,7 +31,7 @@ def test_file_change_reloads_in_place_and_revalidates_tab(qtbot, tmp_path, monke
 
     entry = registry.lookup(source)
     assert entry is not None
-    assert len(tab.issue_index.all_issues()) == 0
+    assert len(tab.data_store.issue_index.all_issues()) == 0
 
     seen: list[SchemaSource] = []
     registry.schemaReloaded.connect(lambda reloaded: seen.append(reloaded))
@@ -49,7 +49,7 @@ def test_file_change_reloads_in_place_and_revalidates_tab(qtbot, tmp_path, monke
 
     assert seen == [source]
     assert entry.inline["properties"]["v"]["type"] == "string"
-    assert len(tab.issue_index.all_issues()) == 1
+    assert len(tab.data_store.issue_index.all_issues()) == 1
 
 
 def test_url_sources_are_not_watched(monkeypatch):

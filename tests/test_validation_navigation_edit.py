@@ -31,11 +31,11 @@ def test_goto_validation_issue_edit_targets_value_column_for_leaf(qtbot):
             origin="manual",
         )
     )
-    issue = tab.issue_index.all_issues()[0]
+    issue = tab.data_store.issue_index.all_issues()[0]
 
     assert tab.goto_validation_issue(issue, edit=True)
 
-    current = tab._proxy_to_source(tab.view.currentIndex())
+    current = tab._proxy_to_source(tab.data_store.view.currentIndex())
     assert current.isValid()
     assert tab._qualified_name(current.siblingAtColumn(0)).endswith(".a.b")
     assert current.column() == 2
@@ -58,11 +58,11 @@ def test_goto_validation_issue_edit_ignores_container_value_cell(qtbot):
             origin="manual",
         )
     )
-    issue = tab.issue_index.all_issues()[0]
+    issue = tab.data_store.issue_index.all_issues()[0]
 
     assert tab.goto_validation_issue(issue, edit=True)
 
-    current = tab._proxy_to_source(tab.view.currentIndex())
+    current = tab._proxy_to_source(tab.data_store.view.currentIndex())
     assert current.isValid()
     assert tab._qualified_name(current.siblingAtColumn(0)).endswith(".a")
     assert current.column() == 0

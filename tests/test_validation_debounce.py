@@ -100,8 +100,8 @@ def test_rapid_mutations_collapse_to_one_revalidation(qtbot):
 
     # Perform 10 rapid push_rename mutations on the 'x' key at the doc level.
     # Use push_change_type to avoid no-op detection; alternate INTEGER / FLOAT.
-    doc_idx = tab.model.index(0, 0)
-    x_name_idx = tab.model.index(0, 0, doc_idx)
+    doc_idx = tab.data_store.model.index(0, 0)
+    x_name_idx = tab.data_store.model.index(0, 0, doc_idx)
     type_idx = x_name_idx.siblingAtColumn(1)
 
     types = [JsonType.FLOAT, JsonType.INTEGER] * 5

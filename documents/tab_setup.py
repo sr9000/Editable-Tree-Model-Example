@@ -25,7 +25,7 @@ class JsonTabEditContext(DefaultEditContext):
 
     Holds a weakref-style direct reference to the host tab (lifetime is
     coupled to the tab anyway because the delegate is parented to it).
-    Routes commits through ``tab.mutations.commit_set_data`` so the seam
+    Routes commits through ``tab.data_store.mutations.commit_set_data`` so the seam
     published in Phase 0 is honoured, and exposes ``affix_mru`` /
     ``icon_provider`` / status callback collaborators owned by the tab.
     """
@@ -39,7 +39,7 @@ class JsonTabEditContext(DefaultEditContext):
         idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
         if idx.model() is None:
             return EditResult(accepted=False)
-        accepted = bool(self._tab.mutations.commit_set_data(idx, value, role))
+        accepted = bool(self._tab.data_store.mutations.commit_set_data(idx, value, role))
         return EditResult(accepted=accepted)
 
     # ---- collaborators ----
@@ -50,10 +50,10 @@ class JsonTabEditContext(DefaultEditContext):
             pass
 
     def icon_provider(self):  # type: ignore[override]
-        return self._tab._icon_provider
+        return self._tab.data_store._icon_provider
 
     def affix_mru(self):  # type: ignore[override]
-        return self._tab.affix_mru
+        return self._tab.data_store.affix_mru
 
     # ---- confirmation dialogs (parented to a real widget) ----
     def confirm_large_text_edit(  # type: ignore[override]
@@ -93,51 +93,51 @@ class JsonTabEditContext(DefaultEditContext):
 
 
 def init_layout(tab: "JsonTab") -> None:
-    tab.ui = Ui_JsonTab()
-    tab.ui.setupUi(tab)
-    tab.search_edit = tab.ui.searchEdit
-    tab.view = tab.ui.treeView
+    tab.data_store.ui = Ui_JsonTab()
+    tab.data_store.ui.setupUi(tab)
+    tab.data_store.search_edit = tab.data_store.ui.searchEdit
+    tab.data_store.view = tab.data_store.ui.treeView
 
-    tab.view.setUniformRowHeights(True)
-    tab.view.setAlternatingRowColors(True)
-    tab.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-    tab.view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
-    tab.view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-    tab.view.setAnimated(False)
-    tab.view.setAllColumnsShowFocus(True)
-    tab.view.setDragEnabled(True)
-    tab.view.setAcceptDrops(True)
-    tab.view.setDropIndicatorShown(True)
-    tab.view.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
-    tab.view.setDefaultDropAction(Qt.DropAction.MoveAction)
-    tab.view.installEventFilter(tab)
-    tab.view.viewport().installEventFilter(tab)
-    initial_pt = tab.view.font().pointSize()
-    tab._default_font_pt = initial_pt if initial_pt > 0 else 10
-    tab._font_pt = tab._default_font_pt
+    tab.data_store.view.setUniformRowHeights(True)
+    tab.data_store.view.setAlternatingRowColors(True)
+    tab.data_store.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+    tab.data_store.view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+    tab.data_store.view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+    tab.data_store.view.setAnimated(False)
+    tab.data_store.view.setAllColumnsShowFocus(True)
+    tab.data_store.view.setDragEnabled(True)
+    tab.data_store.view.setAcceptDrops(True)
+    tab.data_store.view.setDropIndicatorShown(True)
+    tab.data_store.view.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+    tab.data_store.view.setDefaultDropAction(Qt.DropAction.MoveAction)
+    tab.data_store.view.installEventFilter(tab)
+    tab.data_store.view.viewport().installEventFilter(tab)
+    initial_pt = tab.data_store.view.font().pointSize()
+    tab.data_store._default_font_pt = initial_pt if initial_pt > 0 else 10
+    tab.data_store._font_pt = tab.data_store._default_font_pt
 
     # Tracks which columns the user has manually resized (drag or persisted state).
-    tab._user_sized_columns = set()  # set[int]
+    tab.data_store._user_sized_columns = set()  # set[int]
     # Guard: True while code is programmatically resizing columns so the
     # sectionResized handler does not mis-classify that as a user action.
-    tab._programmatic_column_resize = False
+    tab.data_store._programmatic_column_resize = False
 
 
 def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
     # ``undo_stack`` is owned by ``TabHistoryController`` (Phase 2.2); the
     # tab exposes it via a delegating property.
 
-    tab.model = JsonTreeModel(model_data, tab.view, show_root=show_root, icon_provider=tab._icon_provider)
-    tab.model.attach_view(tab.view)
-    tab.proxy = TreeFilterProxy(tab)
-    tab.proxy.setSourceModel(tab.model)
+    tab.data_store.model = JsonTreeModel(model_data, tab.data_store.view, show_root=show_root, icon_provider=tab.data_store._icon_provider)
+    tab.data_store.model.attach_view(tab.data_store.view)
+    tab.data_store.proxy = TreeFilterProxy(tab)
+    tab.data_store.proxy.setSourceModel(tab.data_store.model)
 
-    tab.view.setModel(tab.proxy)
-    tab.model.modelReset.connect(tab._on_model_reset)
+    tab.data_store.view.setModel(tab.data_store.proxy)
+    tab.data_store.model.modelReset.connect(tab._on_model_reset)
 
 
 def init_validation_state(tab: "JsonTab", model_data: Any) -> None:
-    doc_path = Path(tab.file_path).expanduser().resolve() if tab.file_path else None
+    doc_path = Path(tab.data_store.file_path).expanduser().resolve() if tab.data_store.file_path else None
     tab._init_validation_state(model_data, doc_path=doc_path)
 
 
@@ -145,50 +145,50 @@ def init_delegates_and_connections(tab: "JsonTab") -> None:
     edit_context = JsonTabEditContext(tab)
     tab._edit_context = edit_context  # kept for tests / debugging
 
-    tab.name_delegate = NameDelegate(tab, theme=tab._theme, edit_context=edit_context)
-    tab.type_delegate = JsonTypeDelegate(
-        tab, theme=tab._theme, icon_provider=tab._icon_provider, edit_context=edit_context
+    tab.data_store.name_delegate = NameDelegate(tab, theme=tab.data_store._theme, edit_context=edit_context)
+    tab.data_store.type_delegate = JsonTypeDelegate(
+        tab, theme=tab.data_store._theme, icon_provider=tab.data_store._icon_provider, edit_context=edit_context
     )
-    tab.value_delegate = ValueDelegate(tab, theme=tab._theme, edit_context=edit_context)
+    tab.data_store.value_delegate = ValueDelegate(tab, theme=tab.data_store._theme, edit_context=edit_context)
 
-    tab.view.setItemDelegateForColumn(0, tab.name_delegate)
-    tab.view.setItemDelegateForColumn(1, tab.type_delegate)
-    tab.view.setItemDelegateForColumn(2, tab.value_delegate)
+    tab.data_store.view.setItemDelegateForColumn(0, tab.data_store.name_delegate)
+    tab.data_store.view.setItemDelegateForColumn(1, tab.data_store.type_delegate)
+    tab.data_store.view.setItemDelegateForColumn(2, tab.data_store.value_delegate)
 
     def _refresh_actions(*_args) -> None:
         tab.refresh_actions()
 
-    tab.view.selectionModel().selectionChanged.connect(_refresh_actions)
-    tab.view.selectionModel().currentChanged.connect(tab._on_current_changed)
-    tab.model.typeChanged.connect(tab._on_type_changed)
-    tab.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-    tab.view.customContextMenuRequested.connect(functools.partial(show_context_menu, tab.view))
+    tab.data_store.view.selectionModel().selectionChanged.connect(_refresh_actions)
+    tab.data_store.view.selectionModel().currentChanged.connect(tab._on_current_changed)
+    tab.data_store.model.typeChanged.connect(tab._on_type_changed)
+    tab.data_store.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+    tab.data_store.view.customContextMenuRequested.connect(functools.partial(show_context_menu, tab.data_store.view))
 
     # Track user-initiated column resizes.  The guard flag prevents
     # programmatic resizes (resizeColumnToContents / setColumnWidth from
     # zoom helpers) from being mis-classified as user actions.
     def _on_section_resized(logical: int, _old: int, _new: int) -> None:
-        if not tab._programmatic_column_resize:
-            tab._user_sized_columns.add(logical)
+        if not tab.data_store._programmatic_column_resize:
+            tab.data_store._user_sized_columns.add(logical)
 
-    tab.view.header().sectionResized.connect(_on_section_resized)
+    tab.data_store.view.header().sectionResized.connect(_on_section_resized)
 
 
 def init_shortcuts(tab: "JsonTab") -> None:
-    tab._copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, tab.view)
+    tab._copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, tab.data_store.view)
     tab._copy_shortcut.activated.connect(lambda: tab._run_tree_action("Copied selection", copy_only=True))
 
-    tab._cut_shortcut = QShortcut(QKeySequence.StandardKey.Cut, tab.view)
+    tab._cut_shortcut = QShortcut(QKeySequence.StandardKey.Cut, tab.data_store.view)
     tab._cut_shortcut.activated.connect(lambda: tab._run_tree_action("Cut selection", cut=True))
 
-    tab._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, tab.view)
+    tab._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, tab.data_store.view)
     tab._paste_shortcut.activated.connect(lambda: tab._run_tree_action("Pasted JSON", paste=True))
 
     # Step 10: Ctrl+Shift+V = multi-insert after each paired selected target.
-    tab._paste_zip_shortcut = QShortcut(QKeySequence("Ctrl+Shift+V"), tab.view)
+    tab._paste_zip_shortcut = QShortcut(QKeySequence("Ctrl+Shift+V"), tab.data_store.view)
     tab._paste_zip_shortcut.activated.connect(lambda: tab._run_tree_action("Inserted at selection", paste_zip=True))
 
-    tab._replace_zip_shortcut = QShortcut(QKeySequence("Ctrl+Alt+V"), tab.view)
+    tab._replace_zip_shortcut = QShortcut(QKeySequence("Ctrl+Alt+V"), tab.data_store.view)
     tab._replace_zip_shortcut.activated.connect(
         lambda: tab._run_tree_action("Replaced values at selection", replace_zip=True)
     )
@@ -196,28 +196,28 @@ def init_shortcuts(tab: "JsonTab") -> None:
     # Delete is owned by MainWindow's rowRemoveAction (Del). Keeping a second
     # per-tab Delete shortcut causes ambiguous shortcut warnings.
 
-    tab._duplicate_shortcut = QShortcut(QKeySequence("Ctrl+D"), tab.view)
+    tab._duplicate_shortcut = QShortcut(QKeySequence("Ctrl+D"), tab.data_store.view)
     tab._duplicate_shortcut.activated.connect(lambda: tab._run_tree_action("Duplicated selection", duplicate=True))
 
-    tab._move_up_shortcut = QShortcut(QKeySequence("Alt+Up"), tab.view)
+    tab._move_up_shortcut = QShortcut(QKeySequence("Alt+Up"), tab.data_store.view)
     tab._move_up_shortcut.activated.connect(lambda: tab._run_tree_action("Moved up", move_up=True))
 
-    tab._move_down_shortcut = QShortcut(QKeySequence("Alt+Down"), tab.view)
+    tab._move_down_shortcut = QShortcut(QKeySequence("Alt+Down"), tab.data_store.view)
     tab._move_down_shortcut.activated.connect(lambda: tab._run_tree_action("Moved down", move_down=True))
 
-    tab._move_out_up_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Up"), tab.view)
+    tab._move_out_up_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Up"), tab.data_store.view)
     tab._move_out_up_shortcut.activated.connect(lambda: tab._run_tree_action("Moved out of parent", move_out_up=True))
 
-    tab._move_out_down_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Down"), tab.view)
+    tab._move_out_down_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Down"), tab.data_store.view)
     tab._move_out_down_shortcut.activated.connect(
         lambda: tab._run_tree_action("Moved out of parent", move_out_down=True)
     )
 
-    tab._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), tab.view)
+    tab._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), tab.data_store.view)
     tab._sort_shortcut.activated.connect(lambda: tab._run_tree_action("Sorted keys", sort_keys=True))
 
-    tab._find_shortcut = QShortcut(QKeySequence.StandardKey.Find, tab.view)
-    tab._find_shortcut.activated.connect(tab.search_edit.setFocus)
+    tab._find_shortcut = QShortcut(QKeySequence.StandardKey.Find, tab.data_store.view)
+    tab._find_shortcut.activated.connect(tab.data_store.search_edit.setFocus)
 
     # Zoom shortcuts are owned by MainWindow QAction entries (View menu).
     # Keeping a second per-tab QShortcut copy causes ambiguous shortcut warnings.
@@ -228,4 +228,4 @@ def init_search_filter(tab: "JsonTab") -> None:
     tab._filter_timer.setSingleShot(True)
     tab._filter_timer.setInterval(300)
     tab._filter_timer.timeout.connect(tab._apply_filter)
-    tab.search_edit.textChanged.connect(lambda _text: tab._filter_timer.start())
+    tab.data_store.search_edit.textChanged.connect(lambda _text: tab._filter_timer.start())

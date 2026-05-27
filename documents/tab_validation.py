@@ -97,8 +97,8 @@ class TabValidationController(QObject):
     def init_state(self, model_data: Any, *, doc_path: Path | None = None) -> None:
         from state.validation_settings import _is_url, read_schema_ref_str
 
-        if doc_path is None and self._tab.file_path:
-            doc_path = Path(self._tab.file_path).expanduser().resolve()
+        if doc_path is None and self._tab.data_store.file_path:
+            doc_path = Path(self._tab.data_store.file_path).expanduser().resolve()
         ref = discover_schema(doc_path, model_data)
 
         if ref.origin == "none" and doc_path is not None:
@@ -162,7 +162,7 @@ class TabValidationController(QObject):
         issues: list[ValidationIssue] = []
         if self._schema is not None:
             sanitized = to_jsonschema_input(root_data)
-            if self._tab.save_format == SAVE_FORMAT_YAML_MULTI and isinstance(sanitized, list):
+            if self._tab.data_store.save_format == SAVE_FORMAT_YAML_MULTI and isinstance(sanitized, list):
                 issues = validate_yaml_documents(sanitized, self._schema)
             else:
                 issues = validate_document(sanitized, self._schema)

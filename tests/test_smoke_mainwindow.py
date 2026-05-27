@@ -22,9 +22,9 @@ from tree.types import JsonType
 
 
 def _ensure_seed_row(tab: JsonTab) -> QModelIndex:
-    if tab.model.show_root:
-        root = tab.model.index(0, 0, QModelIndex())
-        if tab.model.rowCount(root) == 0:
+    if tab.data_store.model.show_root:
+        root = tab.data_store.model.index(0, 0, QModelIndex())
+        if tab.data_store.model.rowCount(root) == 0:
             assert tab.push_insert_rows(
                 [
                     {
@@ -36,9 +36,9 @@ def _ensure_seed_row(tab: JsonTab) -> QModelIndex:
                 ],
                 label="seed row",
             )
-        return tab.model.index(0, 0, root)
+        return tab.data_store.model.index(0, 0, root)
 
-    if tab.model.rowCount() == 0:
+    if tab.data_store.model.rowCount() == 0:
         assert tab.push_insert_rows(
             [
                 {
@@ -50,7 +50,7 @@ def _ensure_seed_row(tab: JsonTab) -> QModelIndex:
             ],
             label="seed row",
         )
-    return tab.model.index(0, 0)
+    return tab.data_store.model.index(0, 0)
 
 
 @pytest.fixture(scope="module")
@@ -68,7 +68,7 @@ def main_window(qapp):
     for i in range(win.tabWidget.count()):
         tab = win.tabWidget.widget(i)
         if isinstance(tab, JsonTab):
-            tab.undo_stack.setClean()
+            tab.data_store.undo_stack.setClean()
     win.close()
     win.deleteLater()
 
@@ -205,7 +205,7 @@ def test_create_new_file_action_opens_tab(main_window):
     assert main_window.tabWidget.count() == 1
     tab = main_window.tabWidget.widget(0)
     assert isinstance(tab, JsonTab)
-    assert tab.model.rowCount() == 1
+    assert tab.data_store.model.rowCount() == 1
 
 
 def test_create_multiple_new_file_tabs(main_window):
@@ -238,14 +238,14 @@ def test_view_monospace_toggle_updates_tab_delegates(main_window):
     assert isinstance(tab, JsonTab)
 
     main_window.toggle_monospace_fields(True)
-    assert tab._monospace_fields_enabled is True
-    assert tab.name_delegate._monospace_fields_enabled is True
-    assert tab.value_delegate._monospace_fields_enabled is True
+    assert tab.data_store._monospace_fields_enabled is True
+    assert tab.data_store.name_delegate._monospace_fields_enabled is True
+    assert tab.data_store.value_delegate._monospace_fields_enabled is True
 
     main_window.toggle_monospace_fields(False)
-    assert tab._monospace_fields_enabled is False
-    assert tab.name_delegate._monospace_fields_enabled is False
-    assert tab.value_delegate._monospace_fields_enabled is False
+    assert tab.data_store._monospace_fields_enabled is False
+    assert tab.data_store.name_delegate._monospace_fields_enabled is False
+    assert tab.data_store.value_delegate._monospace_fields_enabled is False
 
 
 def test_setting_font_families_updates_active_tab(main_window):
@@ -254,11 +254,11 @@ def test_setting_font_families_updates_active_tab(main_window):
     assert isinstance(tab, JsonTab)
 
     main_window.set_regular_font_family("Serif")
-    assert tab.view.font().family() == "Serif"
+    assert tab.data_store.view.font().family() == "Serif"
 
     main_window.set_monospace_font_family("Monospace")
-    assert tab.name_delegate._mono_family == "Monospace"
-    assert tab.value_delegate._mono_family == "Monospace"
+    assert tab.data_store.name_delegate._mono_family == "Monospace"
+    assert tab.data_store.value_delegate._mono_family == "Monospace"
 
 
 def test_zoom_updates_global_editor_font_size_for_all_tabs(main_window):
@@ -284,7 +284,7 @@ def test_select_regular_font_accepts_bool_font_tuple_order(main_window, monkeypa
     tab = main_window.tabWidget.currentWidget()
     assert isinstance(tab, JsonTab)
 
-    chosen = QFont(tab.view.font())
+    chosen = QFont(tab.data_store.view.font())
     chosen.setFamily("Serif")
 
     def _fake_get_font(*_args, **_kwargs):
@@ -293,7 +293,7 @@ def test_select_regular_font_accepts_bool_font_tuple_order(main_window, monkeypa
 
     monkeypatch.setattr(main_window_module.QFontDialog, "getFont", _fake_get_font)
     main_window.select_regular_font()
-    assert tab.view.font().family() == "Serif"
+    assert tab.data_store.view.font().family() == "Serif"
 
 
 @pytest.mark.parametrize(
@@ -313,10 +313,10 @@ def test_type_change_does_not_log_edit_failed(main_window, qt_messages, json_typ
     main_window.create_new_file()
     tab = main_window.tabWidget.currentWidget()
     row0 = _ensure_seed_row(tab)
-    type_index = tab.model.index(row0.row(), 1, row0.parent())
+    type_index = tab.data_store.model.index(row0.row(), 1, row0.parent())
 
     qt_messages.clear()
-    assert tab.model.setData(type_index, json_type, Qt.ItemDataRole.EditRole)
+    assert tab.data_store.model.setData(type_index, json_type, Qt.ItemDataRole.EditRole)
 
     failed = [m for m in qt_messages if "edit: editing failed" in m]
     assert not failed, f"Unexpected Qt warnings: {failed}"
@@ -339,7 +339,7 @@ def test_cycling_inline_types_does_not_log_edit_failed(main_window, qt_messages,
     main_window.create_new_file()
     tab = main_window.tabWidget.currentWidget()
     row0 = _ensure_seed_row(tab)
-    type_index = tab.model.index(row0.row(), 1, row0.parent())
+    type_index = tab.data_store.model.index(row0.row(), 1, row0.parent())
 
     cycle = [
         JsonType.INTEGER,
@@ -354,7 +354,7 @@ def test_cycling_inline_types_does_not_log_edit_failed(main_window, qt_messages,
 
     qt_messages.clear()
     for tp in cycle:
-        assert tab.model.setData(type_index, tp, Qt.ItemDataRole.EditRole)
+        assert tab.data_store.model.setData(type_index, tp, Qt.ItemDataRole.EditRole)
         # Let any QTimer.singleShot(0) callbacks run.
         qapp.processEvents()
 

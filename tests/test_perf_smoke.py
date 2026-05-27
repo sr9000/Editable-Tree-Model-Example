@@ -22,10 +22,10 @@ def _make_big_tab(qtbot, *, fanout: int = 200) -> JsonTab:
     big_array = [{"k": i, "v": f"item-{i}"} for i in range(fanout)]
     arr_value_idx = None
     # Find the seed "array" key.
-    for r in range(tab.model.rowCount(QModelIndex())):
-        name_idx = tab.model.index(r, 0, QModelIndex())
-        if tab.model.data(name_idx) == "array":
-            arr_value_idx = tab.model.index(r, 2, QModelIndex())
+    for r in range(tab.data_store.model.rowCount(QModelIndex())):
+        name_idx = tab.data_store.model.index(r, 0, QModelIndex())
+        if tab.data_store.model.data(name_idx) == "array":
+            arr_value_idx = tab.data_store.model.index(r, 2, QModelIndex())
             break
     assert arr_value_idx is not None
     assert tab.commit_set_data(arr_value_idx, big_array, Qt.ItemDataRole.EditRole)
@@ -45,10 +45,10 @@ def test_row_index_is_o1_per_call(qtbot):
     """
     tab = _make_big_tab(qtbot, fanout=5000)
     array_item = None
-    for r in range(tab.model.rowCount(QModelIndex())):
-        name_idx = tab.model.index(r, 0, QModelIndex())
-        if tab.model.data(name_idx) == "array":
-            array_item = tab.model.get_item(name_idx)
+    for r in range(tab.data_store.model.rowCount(QModelIndex())):
+        name_idx = tab.data_store.model.index(r, 0, QModelIndex())
+        if tab.data_store.model.data(name_idx) == "array":
+            array_item = tab.data_store.model.get_item(name_idx)
             break
     assert array_item is not None
     assert len(array_item.child_items) == 5000
@@ -71,20 +71,20 @@ def test_commit_set_data_on_big_tree_is_responsive(qtbot):
     tab = _make_big_tab(qtbot, fanout=2000)
 
     arr_idx = None
-    for r in range(tab.model.rowCount(QModelIndex())):
-        if tab.model.data(tab.model.index(r, 0, QModelIndex())) == "array":
-            arr_idx = tab.model.index(r, 0, QModelIndex())
+    for r in range(tab.data_store.model.rowCount(QModelIndex())):
+        if tab.data_store.model.data(tab.data_store.model.index(r, 0, QModelIndex())) == "array":
+            arr_idx = tab.data_store.model.index(r, 0, QModelIndex())
             break
     assert arr_idx is not None
 
     # Select an inner row of the big array and move it up.
-    inner = tab.model.index(500, 0, arr_idx)
+    inner = tab.data_store.model.index(500, 0, arr_idx)
     v_inner = _view_idx(tab, inner)
-    tab.view.setCurrentIndex(v_inner)
-    tab.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    tab.data_store.view.setCurrentIndex(v_inner)
+    tab.data_store.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     start = time.perf_counter()
-    assert move_selection_up(tab.view)
+    assert move_selection_up(tab.data_store.view)
     elapsed_move = time.perf_counter() - start
 
     # Generous bound: a single move on 2k siblings should be well under 2s.
@@ -92,12 +92,12 @@ def test_commit_set_data_on_big_tree_is_responsive(qtbot):
 
     # Undo and redo should each be similarly responsive.
     start = time.perf_counter()
-    tab.undo_stack.undo()
+    tab.data_store.undo_stack.undo()
     elapsed_undo = time.perf_counter() - start
     assert elapsed_undo < 2.0, f"undo too slow: {elapsed_undo:.3f}s"
 
     start = time.perf_counter()
-    tab.undo_stack.redo()
+    tab.data_store.undo_stack.redo()
     elapsed_redo = time.perf_counter() - start
     assert elapsed_redo < 2.0, f"redo too slow: {elapsed_redo:.3f}s"
 
@@ -105,48 +105,48 @@ def test_commit_set_data_on_big_tree_is_responsive(qtbot):
 def test_no_op_set_data_does_not_push(qtbot):
     """``push_edit_value`` skips pushing when nothing changed (subset compare)."""
     tab = _make_big_tab(qtbot, fanout=500)
-    initial_count = tab.undo_stack.count()
+    initial_count = tab.data_store.undo_stack.count()
 
     # Re-applying the duplicate of an array element produces an identical
     # subtree; the no-op detector must skip the push.
     arr_idx = None
-    for r in range(tab.model.rowCount(QModelIndex())):
-        if tab.model.data(tab.model.index(r, 0, QModelIndex())) == "array":
-            arr_idx = tab.model.index(r, 0, QModelIndex())
+    for r in range(tab.data_store.model.rowCount(QModelIndex())):
+        if tab.data_store.model.data(tab.data_store.model.index(r, 0, QModelIndex())) == "array":
+            arr_idx = tab.data_store.model.index(r, 0, QModelIndex())
             break
     assert arr_idx is not None
 
-    inner_value = tab.model.index(0, 2, arr_idx)
-    same = tab.model.get_item(inner_value).to_json()
+    inner_value = tab.data_store.model.index(0, 2, arr_idx)
+    same = tab.data_store.model.get_item(inner_value).to_json()
     # Setting the same value must not push.
     assert not tab.commit_set_data(inner_value, same, Qt.ItemDataRole.EditRole)
-    assert tab.undo_stack.count() == initial_count
+    assert tab.data_store.undo_stack.count() == initial_count
 
 
 def test_duplicate_then_undo_redo_on_big_array(qtbot):
     tab = _make_big_tab(qtbot, fanout=1000)
 
     arr_idx = None
-    for r in range(tab.model.rowCount(QModelIndex())):
-        if tab.model.data(tab.model.index(r, 0, QModelIndex())) == "array":
-            arr_idx = tab.model.index(r, 0, QModelIndex())
+    for r in range(tab.data_store.model.rowCount(QModelIndex())):
+        if tab.data_store.model.data(tab.data_store.model.index(r, 0, QModelIndex())) == "array":
+            arr_idx = tab.data_store.model.index(r, 0, QModelIndex())
             break
     assert arr_idx is not None
 
-    inner = tab.model.index(50, 0, arr_idx)
+    inner = tab.data_store.model.index(50, 0, arr_idx)
     v_inner = _view_idx(tab, inner)
-    tab.view.setCurrentIndex(v_inner)
-    tab.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    tab.data_store.view.setCurrentIndex(v_inner)
+    tab.data_store.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     before = tab._snapshot()
-    assert duplicate_selection(tab.view)
+    assert duplicate_selection(tab.data_store.view)
     after = tab._snapshot()
     assert after != before
 
-    tab.undo_stack.undo()
+    tab.data_store.undo_stack.undo()
     assert tab._snapshot() == before
 
-    tab.undo_stack.redo()
+    tab.data_store.undo_stack.redo()
     assert tab._snapshot() == after
 
 
@@ -162,44 +162,44 @@ def test_expansion_preserved_across_undo_redo(qtbot):
     # Expand the seeded "object" node and the big "array" node.
     obj_idx = None
     arr_idx = None
-    for r in range(tab.model.rowCount(QModelIndex())):
-        name = tab.model.data(tab.model.index(r, 0, QModelIndex()))
+    for r in range(tab.data_store.model.rowCount(QModelIndex())):
+        name = tab.data_store.model.data(tab.data_store.model.index(r, 0, QModelIndex()))
         if name == "object":
-            obj_idx = tab.model.index(r, 0, QModelIndex())
+            obj_idx = tab.data_store.model.index(r, 0, QModelIndex())
         elif name == "array":
-            arr_idx = tab.model.index(r, 0, QModelIndex())
+            arr_idx = tab.data_store.model.index(r, 0, QModelIndex())
     assert obj_idx is not None and arr_idx is not None
     v_obj = _view_idx(tab, obj_idx)
     v_arr = _view_idx(tab, arr_idx)
-    tab.view.setExpanded(v_obj, True)
-    tab.view.setExpanded(v_arr, True)
-    assert tab.view.isExpanded(v_obj)
-    assert tab.view.isExpanded(v_arr)
+    tab.data_store.view.setExpanded(v_obj, True)
+    tab.data_store.view.setExpanded(v_arr, True)
+    assert tab.data_store.view.isExpanded(v_obj)
+    assert tab.data_store.view.isExpanded(v_arr)
 
     # Edit a leaf inside the array — sibling expansion must survive
     # the resulting commit + the subsequent undo + redo.
-    inner_v = tab.model.index(10, 2, arr_idx)
+    inner_v = tab.data_store.model.index(10, 2, arr_idx)
     assert tab.commit_set_data(inner_v, {"k": 99, "v": "edited"}, Qt.ItemDataRole.EditRole)
 
     # Re-fetch indexes (model identity may shift after restore-then-redo).
     obj_idx = None
     arr_idx = None
-    for r in range(tab.model.rowCount(QModelIndex())):
-        name = tab.model.data(tab.model.index(r, 0, QModelIndex()))
+    for r in range(tab.data_store.model.rowCount(QModelIndex())):
+        name = tab.data_store.model.data(tab.data_store.model.index(r, 0, QModelIndex()))
         if name == "object":
-            obj_idx = tab.model.index(r, 0, QModelIndex())
+            obj_idx = tab.data_store.model.index(r, 0, QModelIndex())
         elif name == "array":
-            arr_idx = tab.model.index(r, 0, QModelIndex())
-    assert tab.view.isExpanded(_view_idx(tab, obj_idx))
-    assert tab.view.isExpanded(_view_idx(tab, arr_idx))
+            arr_idx = tab.data_store.model.index(r, 0, QModelIndex())
+    assert tab.data_store.view.isExpanded(_view_idx(tab, obj_idx))
+    assert tab.data_store.view.isExpanded(_view_idx(tab, arr_idx))
 
-    tab.undo_stack.undo()
-    assert tab.view.isExpanded(_view_idx(tab, obj_idx))
-    assert tab.view.isExpanded(_view_idx(tab, arr_idx))
+    tab.data_store.undo_stack.undo()
+    assert tab.data_store.view.isExpanded(_view_idx(tab, obj_idx))
+    assert tab.data_store.view.isExpanded(_view_idx(tab, arr_idx))
 
-    tab.undo_stack.redo()
-    assert tab.view.isExpanded(_view_idx(tab, obj_idx))
-    assert tab.view.isExpanded(_view_idx(tab, arr_idx))
+    tab.data_store.undo_stack.redo()
+    assert tab.data_store.view.isExpanded(_view_idx(tab, obj_idx))
+    assert tab.data_store.view.isExpanded(_view_idx(tab, arr_idx))
 
 
 def test_undo_walking_is_responsive(qtbot):
@@ -208,27 +208,27 @@ def test_undo_walking_is_responsive(qtbot):
 
     tab = _make_big_tab(qtbot, fanout=3000)
     arr_idx = None
-    for r in range(tab.model.rowCount(QModelIndex())):
-        if tab.model.data(tab.model.index(r, 0, QModelIndex())) == "array":
-            arr_idx = tab.model.index(r, 0, QModelIndex())
+    for r in range(tab.data_store.model.rowCount(QModelIndex())):
+        if tab.data_store.model.data(tab.data_store.model.index(r, 0, QModelIndex())) == "array":
+            arr_idx = tab.data_store.model.index(r, 0, QModelIndex())
             break
-    inner = tab.model.index(1500, 0, arr_idx)
+    inner = tab.data_store.model.index(1500, 0, arr_idx)
     v_inner = _view_idx(tab, inner)
-    tab.view.setCurrentIndex(v_inner)
-    tab.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    tab.data_store.view.setCurrentIndex(v_inner)
+    tab.data_store.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     # 10 mutations.
     for _ in range(10):
-        assert move_selection_up(tab.view)
+        assert move_selection_up(tab.data_store.view)
 
     start = time.perf_counter()
     for _ in range(10):
-        tab.undo_stack.undo()
+        tab.data_store.undo_stack.undo()
     undo_elapsed = time.perf_counter() - start
 
     start = time.perf_counter()
     for _ in range(10):
-        tab.undo_stack.redo()
+        tab.data_store.undo_stack.redo()
     redo_elapsed = time.perf_counter() - start
 
     # Generous bound for slow CI machines; on developer hardware these

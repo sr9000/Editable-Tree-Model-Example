@@ -27,7 +27,7 @@ def _restore_color_scheme():
 
 
 def _current_source_path(tab) -> tuple[int, ...]:
-    current_view = tab.view.currentIndex()
+    current_view = tab.data_store.view.currentIndex()
     source = tab._proxy_to_source(current_view)
     return tab._index_path(source)
 
@@ -43,28 +43,28 @@ def test_switching_theme_preserves_undo_expansion_and_selection(qtbot, tmp_path,
     tab = win._add_tab(data={"a": {"b": [1, 2]}}, file_path=None)
     assert tab is not None
 
-    root = tab.model.index(0, 0, QModelIndex())
-    a = tab.model.index(0, 0, root)
-    b = tab.model.index(0, 0, a)
-    leaf = tab.model.index(1, 0, b)
+    root = tab.data_store.model.index(0, 0, QModelIndex())
+    a = tab.data_store.model.index(0, 0, root)
+    b = tab.data_store.model.index(0, 0, a)
+    leaf = tab.data_store.model.index(1, 0, b)
 
-    tab.view.expand(tab._source_to_view(root))
-    tab.view.expand(tab._source_to_view(a))
-    tab.view.setCurrentIndex(tab._source_to_view(leaf))
+    tab.data_store.view.expand(tab._source_to_view(root))
+    tab.data_store.view.expand(tab._source_to_view(a))
+    tab.data_store.view.setCurrentIndex(tab._source_to_view(leaf))
 
-    type_idx = tab.model.index(1, 1, b)
-    assert tab.model.setData(type_idx, "string", Qt.ItemDataRole.EditRole)
+    type_idx = tab.data_store.model.index(1, 1, b)
+    assert tab.data_store.model.setData(type_idx, "string", Qt.ItemDataRole.EditRole)
 
-    count_before = tab.undo_stack.count()
-    clean_before = tab.undo_stack.cleanIndex()
+    count_before = tab.data_store.undo_stack.count()
+    clean_before = tab.data_store.undo_stack.cleanIndex()
     expanded_before = sorted(tab._collect_expanded_paths())
     current_before = _current_source_path(tab)
 
-    target = win._theme_registry.default_for_mode("dark" if win._theme.mode == "light" else "light")
+    target = win._theme_registry.default_for_mode("dark" if win.data_store._theme.mode == "light" else "light")
     win._apply_theme(target)
 
-    assert tab.undo_stack.count() == count_before
-    assert tab.undo_stack.cleanIndex() == clean_before
+    assert tab.data_store.undo_stack.count() == count_before
+    assert tab.data_store.undo_stack.cleanIndex() == clean_before
     assert sorted(tab._collect_expanded_paths()) == expanded_before
     assert _current_source_path(tab) == current_before
 
@@ -89,7 +89,7 @@ def test_follow_system_setting_persists_across_mainwindow_instances(qtbot, tmp_p
     second = MainWindow(yaml_filename="")
     qtbot.addWidget(second)
 
-    assert second._theme.name == "Default Dark"
+    assert second.data_store._theme.name == "Default Dark"
     assert second._theme_follow_action is not None
     assert second._theme_follow_action.isChecked() is False
 
@@ -146,11 +146,11 @@ def test_apply_theme_emits_datachanged_across_tabs(qtbot, tmp_path, monkeypatch)
 
         signals: dict[object, list[tuple[int, int, list[Qt.ItemDataRole]]]] = {tab: [] for tab in tabs}
         for tab in tabs:
-            tab.model.dataChanged.connect(
+            tab.data_store.model.dataChanged.connect(
                 lambda top, bottom, roles, t=tab: signals[t].append((top.column(), bottom.column(), list(roles)))
             )
 
-        target = win._theme_registry.default_for_mode("dark" if win._theme.mode == "light" else "light")
+        target = win._theme_registry.default_for_mode("dark" if win.data_store._theme.mode == "light" else "light")
         win._apply_theme(target)
 
         for tab in tabs:

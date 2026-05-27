@@ -100,12 +100,12 @@ def test_startup_applies_saved_theme_to_qt_scheme_and_palette(qtbot, tmp_path, m
     if setter is None:
         pytest.skip("Qt version does not support setColorScheme")
 
-    assert win._theme.mode == "dark"
+    assert win.data_store._theme.mode == "dark"
     assert style_hints.colorScheme() == Qt.ColorScheme.Dark
     app_widget = QApplication.instance()
     assert isinstance(app_widget, QApplication)
     pal = app_widget.palette()
-    assert pal.color(QPalette.ColorRole.AlternateBase).name().lower() == win._theme.palette.alternate_bg.name().lower()
+    assert pal.color(QPalette.ColorRole.AlternateBase).name().lower() == win.data_store._theme.palette.alternate_bg.name().lower()
 
 
 def test_no_feedback_loop_on_scheme_change(qtbot, tmp_path, monkeypatch):
@@ -144,6 +144,6 @@ def test_no_feedback_loop_on_scheme_change(qtbot, tmp_path, monkeypatch):
     # Even if signal fires, _suppress_scheme_signal flag prevents re-applying
     # The signal may fire 0 or 1 times (depending on Qt internals),
     # but apply_theme must not be called recursively — verify theme is as expected
-    assert win._theme.mode == "dark"
+    assert win.data_store._theme.mode == "dark"
 
     style_hints.colorSchemeChanged.disconnect(counting_handler)

@@ -17,7 +17,7 @@ def _make_tab(qtbot, data) -> JsonTab:
 
 
 def _select_value_cell(tab: JsonTab, path: tuple[int, ...]) -> None:
-    sm = tab.view.selectionModel()
+    sm = tab.data_store.view.selectionModel()
     src = tab._index_from_path(path).siblingAtColumn(2)
     view = tab._source_to_view(src)
     sm.select(view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
@@ -25,7 +25,7 @@ def _select_value_cell(tab: JsonTab, path: tuple[int, ...]) -> None:
 
 
 def _value_at(tab: JsonTab, path: tuple[int, ...]) -> str:
-    return str(tab.model.get_item(tab._index_from_path(path)).value)
+    return str(tab.data_store.model.get_item(tab._index_from_path(path)).value)
 
 
 def test_attach_base64_from_file_replaces_value(qtbot, tmp_path, monkeypatch):
@@ -42,7 +42,7 @@ def test_attach_base64_from_file_replaces_value(qtbot, tmp_path, monkeypatch):
         lambda *_args, **_kwargs: (str(source), ""),
     )
 
-    assert attach_base64_from_file(tab.view)
+    assert attach_base64_from_file(tab.data_store.view)
     assert _value_at(tab, (0,)) == base64.b64encode(payload).decode("ascii")
 
 
@@ -68,7 +68,7 @@ def test_attach_base64_from_file_warns_and_can_cancel_large_file(qtbot, tmp_path
     monkeypatch.setattr("tree_actions.context_menu.QMessageBox.warning", _warn)
 
     before = _value_at(tab, (0,))
-    assert not attach_base64_from_file(tab.view)
+    assert not attach_base64_from_file(tab.data_store.view)
     assert calls == ["warned"]
     assert _value_at(tab, (0,)) == before
 
@@ -85,5 +85,5 @@ def test_save_base64_as_file_writes_decoded_payload(qtbot, tmp_path, monkeypatch
         lambda *_args, **_kwargs: (str(target), ""),
     )
 
-    assert save_base64_as_file(tab.view)
+    assert save_base64_as_file(tab.data_store.view)
     assert target.read_bytes() == payload
