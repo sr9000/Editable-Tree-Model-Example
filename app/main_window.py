@@ -26,32 +26,20 @@ from app.main_window_actions import setup_connections as setup_main_window_conne
 from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, refresh_recent_menu
 from app.schema_tab_pool import SchemaTabPool
+from app.app_settings import AppSettingsPresenter
 from app.tab_lifecycle import TabLifecyclePresenter
 from app.theme_controller import ThemeController
 from app.validation_dock import ValidationDock
 from dialogs.attach_schema_dlg import AttachSchemaDialog
-from dialogs.secret_prefixes_dlg import SecretPrefixesDialog
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
-from state.edit_limits import (
-    get_attach_file_warning_limit_bytes,
-    get_binary_edit_warning_limit_bytes,
-    get_multiline_edit_warning_limit_chars,
-    get_string_edit_warning_limit_chars,
-    set_attach_file_warning_limit_bytes,
-    set_binary_edit_warning_limit_bytes,
-    set_multiline_edit_warning_limit_chars,
-    set_string_edit_warning_limit_chars,
-)
 from state.recent_schemas import recent_schemas
-from state.secret_settings import get_secret_word_prefixes, set_secret_word_prefixes
 from tree_actions.clipboard import clipboard_text_is_valid_data, clipboard_to_tab_data, copy_selection
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 from tree_actions.structure import switch_document_case as switch_case_document
-from units import counts, format_bytes
 from validation.schema_registry import SchemaSource, open_in_browser, schema_registry
 
 
@@ -134,8 +122,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileReopenTabAction.setShortcut(QKeySequence("Ctrl+Shift+T"))
         self.fileMenu.insertAction(self.appExitAction, self.fileCloseTabAction)
         self.fileMenu.insertAction(self.appExitAction, self.fileReopenTabAction)
-        self._setup_secret_prefixes_action()
-        self._setup_edit_limits_menu()
+        self._app_settings = AppSettingsPresenter(self)
         refresh_recent_menu(self)
         self._setup_schemas_menu()
         self._setup_validation_dock()
@@ -442,116 +429,34 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._schemas_open_current_action.setEnabled(has_source)
         self._schemas_copy_path_action.setEnabled(has_source)
 
-    def _setup_edit_limits_menu(self) -> None:
-        self._limits_menu = QMenu(self.tr("Edit Warning Limits"), self)
-        self._limit_string_action = QAction(self)
-        self._limit_multiline_action = QAction(self)
-        self._limit_binary_action = QAction(self)
-        self._limit_attach_action = QAction(self)
+    # ── Edit-warning-limits + secret-prefixes presenter shims (Phase 3.2) ─
 
-        self._limit_string_action.triggered.connect(self._set_string_warning_limit)
-        self._limit_multiline_action.triggered.connect(self._set_multiline_warning_limit)
-        self._limit_binary_action.triggered.connect(self._set_binary_warning_limit)
-        self._limit_attach_action.triggered.connect(self._set_attach_warning_limit)
+    @property
+    def _limits_menu(self):
+        return self._app_settings.limits_menu
 
-        self._limits_menu.addAction(self._limit_string_action)
-        self._limits_menu.addAction(self._limit_multiline_action)
-        self._limits_menu.addAction(self._limit_binary_action)
-        self._limits_menu.addAction(self._limit_attach_action)
-        self._limits_menu.aboutToShow.connect(self._refresh_edit_limits_menu_entries)
-        self._refresh_edit_limits_menu_entries()
+    @property
+    def _limit_string_action(self):
+        return self._app_settings.limit_string_action
 
-        self.fileMenu.insertMenu(self.appExitAction, self._limits_menu)
-        self.fileMenu.insertSeparator(self.appExitAction)
+    @property
+    def _limit_multiline_action(self):
+        return self._app_settings.limit_multiline_action
 
-    def _setup_secret_prefixes_action(self) -> None:
-        self._secret_prefixes_action = QAction(self.tr("Secret word prefixes..."), self)
-        self._secret_prefixes_action.triggered.connect(self._edit_secret_prefixes)
-        self.fileMenu.insertAction(self.appExitAction, self._secret_prefixes_action)
+    @property
+    def _limit_binary_action(self):
+        return self._app_settings.limit_binary_action
 
-    def _edit_secret_prefixes(self) -> None:
-        dlg = SecretPrefixesDialog(get_secret_word_prefixes(), self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
-        prefixes = set_secret_word_prefixes(dlg.prefixes())
-        self.statusBar.showMessage(self.tr("Updated {n} secret prefixes").format(n=len(prefixes)), 2000)
+    @property
+    def _limit_attach_action(self):
+        return self._app_settings.limit_attach_action
+
+    @property
+    def _secret_prefixes_action(self):
+        return self._app_settings.secret_prefixes_action
 
     def _refresh_edit_limits_menu_entries(self) -> None:
-        string_limit = get_string_edit_warning_limit_chars()
-        multiline_limit = get_multiline_edit_warning_limit_chars()
-        binary_limit = get_binary_edit_warning_limit_bytes()
-        attach_limit = get_attach_file_warning_limit_bytes()
-
-        self._limit_string_action.setText(
-            self.tr("String edit limit... ({value} chars)").format(value=counts(string_limit))
-        )
-        self._limit_multiline_action.setText(
-            self.tr("Multiline text limit... ({value} chars)").format(value=counts(multiline_limit))
-        )
-        self._limit_binary_action.setText(
-            self.tr("Bytes edit limit... ({value})").format(value=format_bytes(binary_limit))
-        )
-        self._limit_attach_action.setText(
-            self.tr("Attach file size limit... ({value})").format(value=format_bytes(attach_limit))
-        )
-
-    def _prompt_limit_value(self, *, title: str, label: str, current: int) -> int | None:
-        value, ok = QInputDialog.getInt(self, title, label, current, 1, 2_147_483_647, 1)
-        if not ok:
-            return None
-        return int(value)
-
-    def _set_string_warning_limit(self) -> None:
-        current = get_string_edit_warning_limit_chars()
-        value = self._prompt_limit_value(
-            title=self.tr("String Edit Warning Limit"),
-            label=self.tr("Warn when string length exceeds (chars):"),
-            current=current,
-        )
-        if value is None:
-            return
-        set_string_edit_warning_limit_chars(value)
-        self._refresh_edit_limits_menu_entries()
-        self.statusBar.showMessage(self.tr("Updated string edit warning limit"), 2000)
-
-    def _set_multiline_warning_limit(self) -> None:
-        current = get_multiline_edit_warning_limit_chars()
-        value = self._prompt_limit_value(
-            title=self.tr("Multiline Edit Warning Limit"),
-            label=self.tr("Warn when multiline length exceeds (chars):"),
-            current=current,
-        )
-        if value is None:
-            return
-        set_multiline_edit_warning_limit_chars(value)
-        self._refresh_edit_limits_menu_entries()
-        self.statusBar.showMessage(self.tr("Updated multiline edit warning limit"), 2000)
-
-    def _set_binary_warning_limit(self) -> None:
-        current = get_binary_edit_warning_limit_bytes()
-        value = self._prompt_limit_value(
-            title=self.tr("Bytes Edit Warning Limit"),
-            label=self.tr("Warn when binary size exceeds (bytes):"),
-            current=current,
-        )
-        if value is None:
-            return
-        set_binary_edit_warning_limit_bytes(value)
-        self._refresh_edit_limits_menu_entries()
-        self.statusBar.showMessage(self.tr("Updated bytes edit warning limit"), 2000)
-
-    def _set_attach_warning_limit(self) -> None:
-        current = get_attach_file_warning_limit_bytes()
-        value = self._prompt_limit_value(
-            title=self.tr("Attach File Warning Limit"),
-            label=self.tr("Warn when attaching file larger than (bytes):"),
-            current=current,
-        )
-        if value is None:
-            return
-        set_attach_file_warning_limit_bytes(value)
-        self._refresh_edit_limits_menu_entries()
-        self.statusBar.showMessage(self.tr("Updated attach file warning limit"), 2000)
+        self._app_settings.refresh_edit_limits_menu_entries()
 
     def _bind_validation_status(self, tab) -> None:
         """Connect/disconnect the permanent validation status label to *tab*."""
