@@ -21,7 +21,6 @@ from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.schema_registry import SchemaSource
-from validation.schema_registry import schema_registry as _default_registry
 from validation.schema_source import SchemaRef, discover_schema, load_schema
 from validation.validator import validate_document
 from validation.yaml_validate import validate_yaml_documents
@@ -34,7 +33,10 @@ def _registry():
     """
     import documents.tab as _tab_module
 
-    return getattr(_tab_module, "schema_registry", _default_registry)
+    # ``documents.tab`` re-exports the default registry as a module
+    # attribute so this access is direct (no reflection). Tests still
+    # rebind via ``monkeypatch.setattr(documents.tab, 'schema_registry', ...)``.
+    return _tab_module.schema_registry
 
 
 class TabValidationController(QObject):

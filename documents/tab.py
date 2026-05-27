@@ -64,6 +64,7 @@ from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
 from validation.schema_registry import SchemaSource
+from validation.schema_registry import schema_registry as schema_registry  # re-exported module attribute; tests monkeypatch this name
 from validation.schema_source import SchemaRef
 
 

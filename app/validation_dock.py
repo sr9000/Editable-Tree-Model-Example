@@ -140,11 +140,13 @@ class ValidationDock(QDockWidget):
         if self._tab is tab:
             return
         if self._tab is not None:
-            for sig_name in ("validationChanged", "schemaChanged"):
+            # Disconnect (signal, slot) pairs explicitly — no name-based reflection.
+            for signal, slot in (
+                (self._tab.validationChanged, self._on_validation_changed),
+                (self._tab.schemaChanged, self._on_schema_changed),
+            ):
                 try:
-                    getattr(self._tab, sig_name).disconnect(
-                        getattr(self, f"_on_{sig_name.replace('Changed', '_changed')}")
-                    )
+                    signal.disconnect(slot)
                 except (RuntimeError, TypeError):
                     pass
             # Disconnect tree selection sync
@@ -186,7 +188,7 @@ class ValidationDock(QDockWidget):
     def _on_schema_changed(self, ref: "SchemaRef") -> None:
         has_schema = ref.origin != "none"
         has_path = ref.path is not None
-        has_url = getattr(ref, "url", None) is not None
+        has_url = ref.url is not None
         self._btn_rescan.setEnabled(has_schema)
         self._btn_clear_schema.setVisible(ref.origin in ("inline", "sibling", "manual"))
         self._act_reload.setEnabled(has_path or has_url)
@@ -223,7 +225,7 @@ class ValidationDock(QDockWidget):
         menu = QMenu(self)
         act_schema = menu.addAction(self.tr("Go to schema rule"))
         has_schema = self._tab is not None and (
-            self._tab.schema_ref.path is not None or getattr(self._tab.schema_ref, "url", None) is not None
+            self._tab.schema_ref.path is not None or self._tab.schema_ref.url is not None
         )
         act_schema.setEnabled(has_schema and bool(issue.schema_path))
         chosen = menu.exec(self.list_view.viewport().mapToGlobal(QPoint(pos)))
