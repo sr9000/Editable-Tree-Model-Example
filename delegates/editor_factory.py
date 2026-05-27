@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import binascii
+import sys
 import zlib
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QColorDialog,
     QComboBox,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QWidget,
     QHBoxLayout,
@@ -42,6 +44,10 @@ from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
 from settings import SECRET_HIDE_ON_FOCUS_OUT
+from state.edit_limits import (
+    get_multiline_edit_warning_limit_chars,
+    get_string_edit_warning_limit_chars,
+)
 from tree.item import JsonTreeItem
 from tree.types import TEXT_LINE_FAMILY, TEXT_MULTI_FAMILY, JsonType
 
@@ -181,14 +187,18 @@ def _confirm_large_binary_edit(delegate: ValueDelegate, host, payload_size: int)
 def _confirm_large_text_edit(
     delegate: ValueDelegate, host, *, text_len: int, limit: int, title: str, kind: str
 ) -> bool:
-    import delegates.value as value_module
-    from PySide6.QtWidgets import QMessageBox
+    # Keep test monkeypatch compatibility without importing delegates.value,
+    # which avoids a runtime circular dependency.
+    value_module = sys.modules.get("delegates.value")
+    module_warning = None
+    if value_module is not None:
+        module_qmessagebox = getattr(value_module, "QMessageBox", None)
+        module_warning = getattr(module_qmessagebox, "warning", None)
 
-    # Check if QMessageBox.warning is monkeypatched in delegates.value:
-    if getattr(value_module.QMessageBox, "warning") is not QMessageBox.warning:
+    if callable(module_warning) and module_warning is not QMessageBox.warning:
         from units import counts
 
-        answer = value_module.QMessageBox.warning(
+        answer = module_warning(
             host,
             title,
             f"{kind} is {counts(text_len)} chars!\nLimit is {counts(limit)}.\nContinue editing?",
@@ -204,8 +214,6 @@ def _confirm_large_text_edit(
 def create_value_editor(
     delegate: ValueDelegate, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex
 ) -> QWidget | None:
-    import delegates.value as value_module
-
     src_idx = _source_index(index)
     item: JsonTreeItem = src_idx.internalPointer()
 
@@ -240,7 +248,7 @@ def create_value_editor(
             editor.addItem("false", False)
         case _ if item.json_type in TEXT_LINE_FAMILY:
             text_len = len(str(item.value or ""))
-            limit = value_module.get_string_edit_warning_limit_chars()
+            limit = _string_edit_limit_chars()
             if not _confirm_large_text_edit(
                 delegate,
                 parent,
@@ -258,7 +266,7 @@ def create_value_editor(
             editor = BetterDateTimeEditor(parent)
         case _ if item.json_type in TEXT_MULTI_FAMILY:
             text_len = len(str(item.value or ""))
-            limit = value_module.get_multiline_edit_warning_limit_chars()
+            limit = _multiline_edit_limit_chars()
             if not _confirm_large_text_edit(
                 delegate,
                 parent,
@@ -279,7 +287,7 @@ def create_value_editor(
             return None
         case JsonType.SECRET_TEXT:
             text_len = len(str(item.value or ""))
-            limit = value_module.get_multiline_edit_warning_limit_chars()
+            limit = _multiline_edit_limit_chars()
             if not _confirm_large_text_edit(
                 delegate,
                 parent,
@@ -475,3 +483,23 @@ def _category_for_json_type(json_type: JsonType) -> DateTimeCategory | None:
             return DateTimeCategory.DateTimeUTC
         case _:
             return None
+
+
+def _string_edit_limit_chars() -> int:
+    value_module = sys.modules.get("delegates.value")
+    getter = getattr(value_module, "get_string_edit_warning_limit_chars", None) if value_module is not None else None
+    if callable(getter):
+        return int(getter())
+    return get_string_edit_warning_limit_chars()
+
+
+def _multiline_edit_limit_chars() -> int:
+    value_module = sys.modules.get("delegates.value")
+    getter = (
+        getattr(value_module, "get_multiline_edit_warning_limit_chars", None)
+        if value_module is not None
+        else None
+    )
+    if callable(getter):
+        return int(getter())
+    return get_multiline_edit_warning_limit_chars()
