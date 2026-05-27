@@ -6,10 +6,10 @@ import os
 import zlib
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import Any, Callable
 
 import gmpy2
-from PySide6.QtCore import QEvent, QItemSelectionModel, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QItemSelectionModel, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.mutation_gateway import DocumentMutationGateway
@@ -18,6 +18,7 @@ from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_se
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
+from documents.tab_navigation import JsonTabNavigationController
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
 from documents.tab_setup import (
     init_delegates_and_connections,
@@ -68,10 +69,6 @@ from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
 from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef
-
-if TYPE_CHECKING:
-    from PySide6.QtGui import QKeyEvent
-
 
 def _make_label(text: str, target_qname: str) -> str:
     timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
@@ -133,66 +130,26 @@ def _demo_data() -> dict[str, Any]:
 
 
 class JsonTab(QWidget):
+    _navigation: JsonTabNavigationController | None = None
+
     dirtyChanged = Signal(bool)
     schemaChanged = Signal(object)
     validationChanged = Signal(object)
 
     def eventFilter(self, watched, event):  # type: ignore[override]
-        # ``eventFilter`` can fire during ``super().__init__`` before our
-        # own ``__init__`` has populated ``self.data_store``.
-        data_store = None
-        data_store = self.data_store
-        view = data_store.view if data_store is not None else None
-        if view is not None and watched in (view, view.viewport()):
-            if event.type() == QEvent.Type.KeyPress:
-                key_event = cast("QKeyEvent", event)
-                if key_event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                    self.edit_name_or_value_from_enter()
-                    return True
-                if key_event.key() == Qt.Key.Key_Space and key_event.modifiers() == Qt.KeyboardModifier.NoModifier:
-                    self._toggle_current_row_expansion_with_space()
-                    return True
-                if self._handle_arrow_navigation(key_event.key(), key_event.modifiers()):
-                    return True
+        navigation = self._navigation
+        if navigation is not None and navigation.handle_event_filter(watched, event):
+            return True
         return super().eventFilter(watched, event)
 
     def _toggle_current_row_expansion_with_space(self) -> None:
-        current = self.data_store.view.currentIndex()
-        if not current.isValid():
-            return
-        row_anchor = current.siblingAtColumn(0)
-        if not row_anchor.isValid():
-            return
-        self.data_store.view.setExpanded(row_anchor, not self.data_store.view.isExpanded(row_anchor))
+        navigation = self._navigation
+        if navigation is not None:
+            navigation.toggle_current_row_expansion_with_space()
 
-    def _handle_arrow_navigation(self, key: Qt.Key, modifiers: Qt.KeyboardModifier) -> bool:
-        """Use arrows for cell navigation; never expand/collapse rows."""
-        if modifiers != Qt.KeyboardModifier.NoModifier:
-            return False
-        if key not in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
-            return False
-
-        current = self.data_store.view.currentIndex()
-        if not current.isValid():
-            return True
-
-        target = QModelIndex(current)
-        if key == Qt.Key.Key_Left:
-            target = current.siblingAtColumn(max(0, current.column() - 1))
-        elif key == Qt.Key.Key_Right:
-            last_col = max(0, self.data_store.view.model().columnCount(current.parent()) - 1)
-            target = current.siblingAtColumn(min(last_col, current.column() + 1))
-        elif key == Qt.Key.Key_Up:
-            above = self.data_store.view.indexAbove(current)
-            if above.isValid():
-                target = above
-        elif key == Qt.Key.Key_Down:
-            below = self.data_store.view.indexBelow(current)
-            if below.isValid():
-                target = below
-
-        self.data_store.view.setCurrentIndex(target)
-        return True
+    def _handle_arrow_navigation(self, key: int | Qt.Key, modifiers: Qt.KeyboardModifier) -> bool:
+        navigation = self._navigation
+        return navigation is not None and navigation.handle_arrow_navigation(key, modifiers)
 
     def __init__(
         self,
@@ -211,6 +168,7 @@ class JsonTab(QWidget):
     ):
         super().__init__(parent)
         self.data_store = JsonTabData()
+        self._navigation = JsonTabNavigationController(self.data_store, self.edit_name_or_value_from_enter)
 
         # All parts stored inside self.data_store are populated here:
         self.data_store.ui = None
