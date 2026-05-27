@@ -69,7 +69,10 @@ def test_undo_redo_commit_set_data(qtbot):
 
 
 def _keys_in_order(tab: JsonTab) -> list[str]:
-    return [tab.data_store.model.index(r, 0, QModelIndex()).data() for r in range(tab.data_store.model.rowCount(QModelIndex()))]
+    return [
+        tab.data_store.model.index(r, 0, QModelIndex()).data()
+        for r in range(tab.data_store.model.rowCount(QModelIndex()))
+    ]
 
 
 def test_undo_redo_move_object_member_up(qtbot):

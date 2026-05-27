@@ -17,7 +17,9 @@ def test_currency_affix_editor_commit(qtbot):
     qtbot.addWidget(tab)
 
     index = _value_index(tab)
-    editor = tab.data_store.value_delegate.createEditor(tab.data_store.view, QStyleOptionViewItem(), tab._source_to_view(index))
+    editor = tab.data_store.value_delegate.createEditor(
+        tab.data_store.view, QStyleOptionViewItem(), tab._source_to_view(index)
+    )
     assert isinstance(editor, AffixCompositeEditor)
     tab.data_store.value_delegate.setEditorData(editor, tab._source_to_view(index))
 
@@ -35,7 +37,9 @@ def test_units_affix_editor_commit_float(qtbot):
     qtbot.addWidget(tab)
 
     index = _value_index(tab)
-    editor = tab.data_store.value_delegate.createEditor(tab.data_store.view, QStyleOptionViewItem(), tab._source_to_view(index))
+    editor = tab.data_store.value_delegate.createEditor(
+        tab.data_store.view, QStyleOptionViewItem(), tab._source_to_view(index)
+    )
     assert isinstance(editor, AffixCompositeEditor)
     tab.data_store.value_delegate.setEditorData(editor, tab._source_to_view(index))
 
@@ -55,7 +59,9 @@ def test_invalid_affix_refuses_commit(qtbot):
     index = _value_index(tab)
     original = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex())).value
 
-    editor = tab.data_store.value_delegate.createEditor(tab.data_store.view, QStyleOptionViewItem(), tab._source_to_view(index))
+    editor = tab.data_store.value_delegate.createEditor(
+        tab.data_store.view, QStyleOptionViewItem(), tab._source_to_view(index)
+    )
     assert isinstance(editor, AffixCompositeEditor)
     editor.affix_combo.setCurrentText("")
     editor.number_editor.setValue(10)

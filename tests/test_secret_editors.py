@@ -16,7 +16,10 @@ def test_secret_line_editor_is_password_with_toggle(qtbot):
     tab.data_store.view.setCurrentIndex(idx)
     tab.data_store.view.edit(idx)
 
-    qtbot.waitUntil(lambda: tab.data_store.view.findChild(QLineEdit) is not None and tab.data_store.view.findChild(QPushButton) is not None)
+    qtbot.waitUntil(
+        lambda: tab.data_store.view.findChild(QLineEdit) is not None
+        and tab.data_store.view.findChild(QPushButton) is not None
+    )
     editor = tab.data_store.view.findChild(QLineEdit)
     assert editor is not None
     assert editor.echoMode() == QLineEdit.EchoMode.Password

@@ -127,7 +127,9 @@ def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
     # ``undo_stack`` is owned by ``TabHistoryController`` (Phase 2.2); the
     # tab exposes it via a delegating property.
 
-    tab.data_store.model = JsonTreeModel(model_data, tab.data_store.view, show_root=show_root, icon_provider=tab.data_store._icon_provider)
+    tab.data_store.model = JsonTreeModel(
+        model_data, tab.data_store.view, show_root=show_root, icon_provider=tab.data_store._icon_provider
+    )
     tab.data_store.model.attach_view(tab.data_store.view)
     tab.data_store.proxy = TreeFilterProxy(tab)
     tab.data_store.proxy.setSourceModel(tab.data_store.model)

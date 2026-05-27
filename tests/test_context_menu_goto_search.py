@@ -50,7 +50,9 @@ def test_goto_clears_search_and_focuses_clicked_field(qtbot):
     tab.data_store.view.expandAll()
     QApplication.processEvents()
 
-    target_source = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex())))
+    target_source = tab.data_store.model.index(
+        0, 0, tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
+    )
     target_path = _index_path(target_source)
 
     tab.data_store.search_edit.setText("needle")

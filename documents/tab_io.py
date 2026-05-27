@@ -18,7 +18,9 @@ def save(tab) -> bool:
     if not tab.data_store.file_path:
         return save_as(tab)
     try:
-        save_file(tab.data_store.file_path, tab.data_store.model.root_item.to_json(), save_format=tab.data_store.save_format)
+        save_file(
+            tab.data_store.file_path, tab.data_store.model.root_item.to_json(), save_format=tab.data_store.save_format
+        )
     except Exception as exc:
         tab.show_status(f"Save failed: {exc}", 4000)
         return False

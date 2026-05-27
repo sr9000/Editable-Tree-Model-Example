@@ -429,7 +429,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QMessageBox.critical(self, "Reload failed", f"Could not reload {resolved}:\n{exc}")
             return False
 
-        root_index = tab.data_store.model.index(0, 0, QModelIndex()) if tab.data_store.model.show_root else QModelIndex()
+        root_index = (
+            tab.data_store.model.index(0, 0, QModelIndex()) if tab.data_store.model.show_root else QModelIndex()
+        )
         root_item = tab.data_store.model.get_item(root_index)
         changed = tab._diff_apply(root_item, data, root_index)
         if changed:

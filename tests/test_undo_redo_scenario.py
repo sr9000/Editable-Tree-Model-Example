@@ -112,7 +112,9 @@ def test_undo_redo_comprehensive_scenario(qtbot):
             ), f"action expected to push exactly one command at step {prev_count + 1}"
             states.append(_state(tab))
         else:
-            assert tab.data_store.undo_stack.count() == prev_count, f"action expected NOT to push but did at step {prev_count + 1}"
+            assert (
+                tab.data_store.undo_stack.count() == prev_count
+            ), f"action expected NOT to push but did at step {prev_count + 1}"
 
     # 1. Edit a value: commit_set_data on a value column (column 2).
     # NOTE: re-fetch indexes immediately before each step in case earlier
