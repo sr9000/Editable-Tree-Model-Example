@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFontDialog,
-    QInputDialog,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -18,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 import state.view_state as view_state
+from app.app_settings import AppSettingsPresenter
 from app.close_confirm import confirm_close
 from app.font_controller import FontController
 from app.history import bind_undo_signals, setup_history_menu
@@ -25,7 +25,6 @@ from app.main_window_actions import setup_connections as setup_main_window_conne
 from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, refresh_recent_menu
 from app.schema_tab_pool import SchemaTabPool
-from app.app_settings import AppSettingsPresenter
 from app.tab_lifecycle import TabLifecyclePresenter
 from app.theme_controller import ThemeController
 from app.validation_presenter import DockValidationPresenter
@@ -33,11 +32,10 @@ from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
-from tree_actions.clipboard import clipboard_text_is_valid_data, clipboard_to_tab_data, copy_selection
+from tree_actions.clipboard import clipboard_to_tab_data, copy_selection
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 from tree_actions.structure import switch_document_case as switch_case_document
-from validation.schema_registry import SchemaSource
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -204,9 +202,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _setup_schemas_menu(self) -> None:  # pragma: no cover - retained for back-compat
         return
 
-
     def _rebuild_schemas_menu(self) -> None:
         self._dock_validation.rebuild_schemas_menu()
+
+    def _on_go_to_schema_rule_requested(self, issue) -> None:
+        self._dock_validation.on_go_to_schema_rule_requested(issue)
 
     # ── Edit-warning-limits + secret-prefixes presenter shims (Phase 3.2) ─
 

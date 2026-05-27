@@ -77,7 +77,6 @@ class JsonTypeDelegate(QStyledItemDelegate):
         self._edit_context = ctx
         return ctx
 
-
     def _set_active_type_edit_index(self, source_index: QModelIndex) -> None:
         next_index = QPersistentModelIndex(source_index) if source_index.isValid() else None
         current_index = self._active_type_edit_index

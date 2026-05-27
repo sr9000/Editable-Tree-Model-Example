@@ -7,10 +7,7 @@ from PySide6.QtCore import QSettings
 from app.app_settings import AppSettingsPresenter
 from app.main_window import MainWindow
 from settings import APPLICATION_ID
-from state.edit_limits import (
-    get_string_edit_warning_limit_chars,
-    set_string_edit_warning_limit_chars,
-)
+from state.edit_limits import get_string_edit_warning_limit_chars, set_string_edit_warning_limit_chars
 
 
 def _clear() -> None:

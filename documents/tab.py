@@ -2,7 +2,6 @@ import base64
 import gzip
 import os
 import zlib
-from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -25,7 +24,6 @@ from documents.tab_setup import (
     init_validation_state,
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
-from io_formats.detect import SAVE_FORMAT_YAML_MULTI
 from state.affix_mru import AffixMRU
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from themes import LIGHT_DEFAULT
@@ -62,14 +60,11 @@ from undo.commands import (
 )
 from undo.diff import DiffApplier
 from units.number_affix import NumberAffix
-from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
-from validation.schema_registry import SchemaSource, schema_registry
-from validation.schema_source import SchemaRef, discover_schema, load_schema
-from validation.validator import validate_document
-from validation.yaml_validate import validate_yaml_documents
+from validation.schema_registry import SchemaSource
+from validation.schema_source import SchemaRef
 
 
 def _make_label(text: str, target_qname: str) -> str:
@@ -304,7 +299,6 @@ class JsonTab(QWidget):
     def _last_undo_index(self, value: int) -> None:
         self.history.last_undo_index = value
 
-
     @property
     def is_read_only(self) -> bool:
         return self._read_only
@@ -368,7 +362,6 @@ class JsonTab(QWidget):
         Disabling cancels any pending debounce.
         """
         self.validation.set_auto_rescan(enabled)
-
 
     # ─────────────────────────────────────────────────────────────────────
 

@@ -85,8 +85,7 @@ class JsonTabEditContext(DefaultEditContext):
         answer = QMessageBox.warning(
             parent if parent is not None else self._tab,
             "Large binary value",
-            f"Binary value is {format_bytes(payload_size)}!\n"
-            f"Limit is {format_bytes(limit)}.\nContinue editing?",
+            f"Binary value is {format_bytes(payload_size)}!\n" f"Limit is {format_bytes(limit)}.\nContinue editing?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

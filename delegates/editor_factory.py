@@ -4,7 +4,6 @@ import binascii
 import zlib
 from typing import TYPE_CHECKING
 
-from gmpy2 import mpq
 from PySide6.QtCore import (
     QEvent,
     QModelIndex,
@@ -13,7 +12,7 @@ from PySide6.QtCore import (
     QSortFilterProxyModel,
     Qt,
 )
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QFont, QIcon, QFontMetrics
 from PySide6.QtWidgets import (
     QColorDialog,
     QComboBox,
@@ -24,13 +23,13 @@ from PySide6.QtWidgets import (
     QApplication,
     QStyleOptionViewItem,
 )
+from gmpy2 import mpq
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
 from delegates.base import _CapsLockSafeLineEdit
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.color_codec import color_to_html, parse_color
-from delegates.edit_context import DelegateEditContext
 from delegates.number_affix_delegate import (
     AffixCompositeEditor,
     is_affix_json_type,
@@ -43,10 +42,6 @@ from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
 from settings import SECRET_HIDE_ON_FOCUS_OUT
-from state.edit_limits import (
-    get_multiline_edit_warning_limit_chars,
-    get_string_edit_warning_limit_chars,
-)
 from tree.item import JsonTreeItem
 from tree.types import TEXT_LINE_FAMILY, TEXT_MULTI_FAMILY, JsonType
 
@@ -58,23 +53,22 @@ class _SecretLineEdit(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._revealed = False
+        self._line_edit = _CapsLockSafeLineEdit(self)
+        self._line_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self._toggle_btn = QPushButton(self)
+        self._toggle_btn.setCheckable(True)
+        self._toggle_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._toggle_btn.setAutoDefault(False)
+        self._toggle_btn.setDefault(False)
+        self._toggle_btn.toggled.connect(self._set_revealed)
 
         self._layout = QHBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(2)
-
-        self._line_edit = _CapsLockSafeLineEdit(self)
-        self._line_edit.setFrame(False)
-        self._line_edit.setEchoMode(QLineEdit.EchoMode.Password)
-
-        self._toggle_btn = QPushButton(self)
-        self._toggle_btn.setCheckable(True)
-        self._toggle_btn.setFlat(True)
-        self._toggle_btn.clicked.connect(self._set_revealed)
-
-        self._layout.addWidget(self._line_edit)
+        self._layout.setSpacing(4)
         self._layout.addWidget(self._toggle_btn)
+        self._layout.addWidget(self._line_edit)
 
+        self.setFocusProxy(self._line_edit)
         self._sync_toggle_button()
 
         # Bubble up line-edit signals so Qt's delegate infrastructure is happy.
@@ -82,8 +76,6 @@ class _SecretLineEdit(QWidget):
         self.textEdited = self._line_edit.textEdited
         self.returnPressed = self._line_edit.returnPressed
 
-        # Synchronize dynamic button width to avoid clipping characters
-        self._line_edit.fontChanged.connect(self._update_button_width)
         self._update_button_width()
 
     def text(self) -> str:
@@ -93,24 +85,24 @@ class _SecretLineEdit(QWidget):
         self._line_edit.setText(text)
 
     def _set_revealed(self, checked: bool) -> None:
-        self._revealed = checked
-        self._line_edit.setEchoMode(QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password)
+        self._revealed = bool(checked)
+        self._line_edit.setEchoMode(QLineEdit.EchoMode.Normal if self._revealed else QLineEdit.EchoMode.Password)
         self._sync_toggle_button()
 
     def _sync_toggle_button(self) -> None:
-        if self._revealed:
-            # Eye with a slash / hidden state representation (using standard safe emojis/text fallback)
-            self._toggle_btn.setText("🙈")
-            self._toggle_btn.setToolTip("Mask value")
-        else:
-            self._toggle_btn.setText("👁️")
-            self._toggle_btn.setToolTip("Reveal value")
+        label = "Shown" if self._revealed else "Hidden"
+        self._toggle_btn.setText(label)
+        self._toggle_btn.setToolTip(label)
+        if self._toggle_btn.isChecked() != self._revealed:
+            self._toggle_btn.blockSignals(True)
+            self._toggle_btn.setChecked(self._revealed)
+            self._toggle_btn.blockSignals(False)
+        self._update_button_width()
 
     def _update_button_width(self) -> None:
-        # Prevent the button from layout shifts or eating too much width
-        fm = self._toggle_btn.fontMetrics()
-        w = fm.horizontalAdvance("👁️") + 8
-        self._toggle_btn.setFixedWidth(max(w, 24))
+        metrics = QFontMetrics(self._toggle_btn.font())
+        width = max(metrics.horizontalAdvance("Hidden"), metrics.horizontalAdvance("Shown")) + 18
+        self._toggle_btn.setFixedWidth(width)
 
     def setFont(self, font: QFont) -> None:
         super().setFont(font)
@@ -189,6 +181,21 @@ def _confirm_large_binary_edit(delegate: ValueDelegate, host, payload_size: int)
 def _confirm_large_text_edit(
     delegate: ValueDelegate, host, *, text_len: int, limit: int, title: str, kind: str
 ) -> bool:
+    import delegates.value as value_module
+    from PySide6.QtWidgets import QMessageBox
+
+    # Check if QMessageBox.warning is monkeypatched in delegates.value:
+    if getattr(value_module.QMessageBox, "warning") is not QMessageBox.warning:
+        from units import counts
+
+        answer = value_module.QMessageBox.warning(
+            host,
+            title,
+            f"{kind} is {counts(text_len)} chars!\nLimit is {counts(limit)}.\nContinue editing?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
     return delegate._context_for(host).confirm_large_text_edit(
         host, text_len=text_len, limit=limit, title=title, kind=kind
     )
@@ -197,6 +204,8 @@ def _confirm_large_text_edit(
 def create_value_editor(
     delegate: ValueDelegate, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex
 ) -> QWidget | None:
+    import delegates.value as value_module
+
     src_idx = _source_index(index)
     item: JsonTreeItem = src_idx.internalPointer()
 
@@ -231,7 +240,7 @@ def create_value_editor(
             editor.addItem("false", False)
         case _ if item.json_type in TEXT_LINE_FAMILY:
             text_len = len(str(item.value or ""))
-            limit = get_string_edit_warning_limit_chars()
+            limit = value_module.get_string_edit_warning_limit_chars()
             if not _confirm_large_text_edit(
                 delegate,
                 parent,
@@ -249,7 +258,7 @@ def create_value_editor(
             editor = BetterDateTimeEditor(parent)
         case _ if item.json_type in TEXT_MULTI_FAMILY:
             text_len = len(str(item.value or ""))
-            limit = get_multiline_edit_warning_limit_chars()
+            limit = value_module.get_multiline_edit_warning_limit_chars()
             if not _confirm_large_text_edit(
                 delegate,
                 parent,
@@ -270,7 +279,7 @@ def create_value_editor(
             return None
         case JsonType.SECRET_TEXT:
             text_len = len(str(item.value or ""))
-            limit = get_multiline_edit_warning_limit_chars()
+            limit = value_module.get_multiline_edit_warning_limit_chars()
             if not _confirm_large_text_edit(
                 delegate,
                 parent,

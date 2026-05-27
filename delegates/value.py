@@ -1,70 +1,24 @@
-import binascii
-import zlib
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
+from PySide6.QtGui import QFont, QFontDatabase, QIcon, QPainter, QPixmap
+from PySide6.QtWidgets import QStyle, QStyleOptionViewItem, QTreeView, QWidget
 
-from gmpy2 import mpq
-from PySide6.QtCore import (
-    QAbstractItemModel,
-    QEvent,
-    QModelIndex,
-    QObject,
-    QPersistentModelIndex,
-    QSortFilterProxyModel,
-    Qt,
-)
-from PySide6.QtGui import QFont, QFontDatabase, QFontMetrics, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import (
-    QApplication,
-    QColorDialog,
-    QComboBox,
-    QHBoxLayout,
-    QLineEdit,
-    QMessageBox,
-    QPushButton,
-    QStyle,
-    QStyleOptionViewItem,
-    QTreeView,
-    QWidget,
-)
-
-from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
-from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase, paint_editor_underlay
-from delegates.bytes_codec import decode_bytes, encode_bytes
-from delegates.color_codec import color_to_html, parse_color
-from delegates.edit_context import DefaultEditContext, DelegateEditContext, EditResult
-from delegates.number_affix_delegate import (
-    AffixCompositeEditor,
-    is_affix_json_type,
-    kind_for_json_type,
-    normalize_affix_value,
-    validate_affix_value,
-)
-from delegates.validation_badge import draw_severity_badge
-from delegates.value_formatting import _apply_type_style, format_default, format_with_type
+from delegates.base import _TextEditorDelegateBase, paint_editor_underlay
+from delegates.color_codec import parse_color
+from delegates.edit_context import DefaultEditContext, DelegateEditContext
 from delegates.editor_factory import (
-    _SecretLineEdit,
     _SecretEditorWatcher,
     create_value_editor,
     set_value_editor_data,
     set_value_model_data,
 )
-from dialogs.qhexedit_dlg import QHexDialog
-from dialogs.qmultiline_dlg import QMultilineDialog
-from qbigint_spinbox import QBigIntSpinBox
-from qmpq_spinbox import QMpqSpinBox
-from settings import SECRET_HIDE_ON_FOCUS_OUT
-from state.edit_limits import (
-    get_binary_edit_warning_limit_bytes,
-    get_multiline_edit_warning_limit_chars,
-    get_string_edit_warning_limit_chars,
-)
+from delegates.validation_badge import draw_severity_badge
+from delegates.value_formatting import _apply_type_style, format_default, format_with_type
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model_roles import JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE
-from tree.types import TEXT_LINE_FAMILY, TEXT_MULTI_FAMILY, JsonType
-from units import counts, format_bytes
-
+from tree.types import JsonType
 
 
 def _tab_adapter_context(host) -> DelegateEditContext:

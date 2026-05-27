@@ -157,9 +157,7 @@ class DockValidationPresenter(QObject):
 
         entry = schema_registry.acquire(source, tab)
         if entry is None:
-            win.statusBar.showMessage(
-                win.tr("Could not load schema: {name}").format(name=source.display), 3000
-            )
+            win.statusBar.showMessage(win.tr("Could not load schema: {name}").format(name=source.display), 3000)
             return
 
         tab.set_schema_from_source(source)
@@ -243,9 +241,7 @@ class DockValidationPresenter(QObject):
         win._schemas_open_current_action = QAction(win.tr("Open current schema"), win)
         win._schemas_open_current_action.triggered.connect(
             lambda: (
-                self.open_schema_source(win._current_tab().schema_source)
-                if win._current_tab() is not None
-                else None
+                self.open_schema_source(win._current_tab().schema_source) if win._current_tab() is not None else None
             )
         )
         win._schemas_copy_path_action = QAction(win.tr("Copy full path"), win)
