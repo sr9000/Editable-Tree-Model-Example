@@ -68,6 +68,16 @@ class JsonTypeDelegate(QStyledItemDelegate):
     def set_edit_context(self, context: DelegateEditContext | None) -> None:
         self._edit_context = context
 
+    @property
+    def interactive(self) -> bool:
+        """True while a user-driven type-combo commit is in flight.
+
+        Stable, typed read of the otherwise-private ``_interactive``
+        backchannel that ``JsonTab._on_type_changed`` consults to decide
+        whether to auto-reopen the value editor.
+        """
+        return self._interactive
+
     def _context_for(self, host) -> DelegateEditContext:
         if self._edit_context is not None:
             return self._edit_context

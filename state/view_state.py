@@ -69,7 +69,7 @@ def state_key(path: str) -> str:
 
 
 def save(tab) -> None:
-    if not getattr(tab, "file_path", None):
+    if not tab.file_path:
         return
 
     settings = QSettings(APPLICATION_ID, "view_state")
@@ -81,7 +81,7 @@ def save(tab) -> None:
     current_index = tab.view.currentIndex()
     current_path = list(tab._index_path(current_index)) if current_index.isValid() else []
 
-    font_pt = int(getattr(tab, "_font_pt", tab.view.font().pointSize() or 10))
+    font_pt = int(tab._font_pt or tab.view.font().pointSize() or 10)
 
     settings.setValue("col_widths", widths)
     settings.setValue("expanded", expanded_paths)
@@ -91,7 +91,7 @@ def save(tab) -> None:
 
 
 def restore(tab) -> bool:
-    if not getattr(tab, "file_path", None):
+    if not tab.file_path:
         return False
 
     settings = QSettings(APPLICATION_ID, "view_state")
@@ -113,7 +113,7 @@ def restore(tab) -> bool:
     if not has_state:
         return False
 
-    if font_pt is not None and hasattr(tab, "_set_font_pt"):
+    if font_pt is not None:
         tab._set_font_pt(font_pt)
 
     if widths is not None:
@@ -123,8 +123,7 @@ def restore(tab) -> bool:
         # The persisted widths represent the user's last explicit preference;
         # treat name (0) and type (1) columns as user-sized so zoom helpers
         # won't snap them back to content width.
-        if hasattr(tab, "_user_sized_columns"):
-            tab._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
+        tab._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
 
     if expanded is not None:
         tab.view.collapseAll()

@@ -132,7 +132,7 @@ class JsonTab(QWidget):
     validationChanged = Signal(object)
 
     def eventFilter(self, watched, event):  # type: ignore[override]
-        view = getattr(self, "view", None)
+        view = self.view
         if view is not None and watched in (view, view.viewport()):
             if event.type() == QEvent.Type.KeyPress:
                 if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -197,6 +197,11 @@ class JsonTab(QWidget):
         save_format: str | None = None,
     ):
         super().__init__(parent)
+
+        # Predeclare attributes consumed by lifecycle hooks (eventFilter,
+        # view_state restore, etc.) so direct attribute access is safe even
+        # before init_layout / init_model wire them up.
+        self.view = None  # set by init_layout below
 
         self._status_message_callback = status_message_callback
         self._permanent_message_callback = permanent_message_callback
@@ -485,7 +490,7 @@ class JsonTab(QWidget):
         font = self.view.font()
         font.setFamily(family)
         if font.pointSizeF() <= 0:
-            font.setPointSize(max(6, int(getattr(self, "_font_pt", 10) or 10)))
+            font.setPointSize(max(6, int(self._font_pt or 10)))
         self.view.setFont(font)
         self._sync_icon_size_with_font()
 
@@ -540,8 +545,8 @@ class JsonTab(QWidget):
         """Publish *message* via the injected status-bar callback.
 
         No-op when the tab was constructed without a status callback
-        (e.g. headless tests). Replaces ad-hoc
-        ``getattr(tab, "_status_message_callback", None)`` reads.
+        (e.g. headless tests). Replaces ad-hoc reflective reads of the
+        private ``_status_message_callback`` attribute.
         """
         cb = self._status_message_callback
         if cb is not None:
@@ -638,7 +643,7 @@ class JsonTab(QWidget):
         # delegate entirely so ``_interactive`` stays ``False`` and we
         # avoid the spurious "edit: editing failed" warning that
         # ``tests/test_smoke_mainwindow.py`` regression-tests.
-        if not getattr(self.type_delegate, "_interactive", False):
+        if not self.type_delegate.interactive:
             return
         if not value_index.isValid():
             return
