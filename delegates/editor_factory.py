@@ -192,10 +192,10 @@ def create_value_editor(
             ctx = delegate._context_for(parent)
             mru = ctx.affix_mru()
             kind = kind_for_json_type(item.json_type)
-            mru_items = mru.items(kind) if mru is not None and hasattr(mru, "items") else []
+            mru_items = mru.items(kind) if mru is not None else []
             icon = QIcon()
             provider = ctx.icon_provider()
-            if provider is not None and hasattr(provider, "for_key"):
+            if provider is not None:
                 key = "affix_prefix" if kind.value == "prefix" else "affix_suffix"
                 icon = provider.for_key(key)
             editor = AffixCompositeEditor(parent, json_type=item.json_type, mru_items=mru_items)
@@ -431,7 +431,7 @@ def set_value_model_data(delegate: ValueDelegate, editor: QWidget, model, index:
         editor.set_invalid(False)
         if _commit(delegate, index, validated, Qt.ItemDataRole.EditRole, host=editor):
             mru = delegate._context_for(editor).affix_mru()
-            if mru is not None and hasattr(mru, "push"):
+            if mru is not None:
                 mru.push(validated.kind, validated.affix)
         return
 

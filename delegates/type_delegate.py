@@ -1,6 +1,6 @@
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSize, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
 from delegates.base import paint_editor_underlay
 from delegates.edit_context import DefaultEditContext, DelegateEditContext, EditResult
@@ -138,7 +138,7 @@ class JsonTypeDelegate(QStyledItemDelegate):
         editor = QComboBox(parent)
         icon_size = QSize(max(12, option.fontMetrics.height()), max(12, option.fontMetrics.height()))
         host_view = option.widget
-        if host_view is not None and hasattr(host_view, "iconSize"):
+        if isinstance(host_view, QAbstractItemView):
             host_size = host_view.iconSize()
             if host_size.isValid():
                 icon_size = host_size

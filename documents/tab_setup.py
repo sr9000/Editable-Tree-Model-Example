@@ -41,19 +41,16 @@ class JsonTabEditContext(DefaultEditContext):
 
     # ---- collaborators ----
     def notify_status(self, message: str, timeout_ms: int = 0) -> None:  # type: ignore[override]
-        cb = getattr(self._tab, "_status_message_callback", None)
-        if cb is None:
-            return
         try:
-            cb(message, timeout_ms)
+            self._tab.show_status(message, timeout_ms)
         except Exception:
             pass
 
     def icon_provider(self):  # type: ignore[override]
-        return getattr(self._tab, "_icon_provider", None)
+        return self._tab._icon_provider
 
     def affix_mru(self):  # type: ignore[override]
-        return getattr(self._tab, "affix_mru", None)
+        return self._tab.affix_mru
 
     # ---- confirmation dialogs (parented to a real widget) ----
     def confirm_large_text_edit(  # type: ignore[override]
