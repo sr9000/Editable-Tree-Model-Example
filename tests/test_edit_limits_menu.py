@@ -31,7 +31,7 @@ def test_file_menu_limit_actions_persist_updates(qtbot, monkeypatch):
     def _pick(*_args, **_kwargs):
         return next(picks), True
 
-    monkeypatch.setattr("app.main_window.QInputDialog.getInt", _pick)
+    monkeypatch.setattr("app.app_settings.QInputDialog.getInt", _pick)
 
     win._limit_string_action.trigger()
     win._limit_multiline_action.trigger()

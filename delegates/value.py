@@ -1,11 +1,15 @@
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QFont, QFontDatabase, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import QStyle, QStyleOptionViewItem, QTreeView, QWidget
+from PySide6.QtWidgets import QMessageBox, QStyle, QStyleOptionViewItem, QTreeView, QWidget
 
 from datetime_editor.enums import DateTimeCategory
 from delegates.base import _TextEditorDelegateBase, paint_editor_underlay
 from delegates.color_codec import parse_color
 from delegates.edit_context import DefaultEditContext, DelegateEditContext
+from state.edit_limits import (
+    get_multiline_edit_warning_limit_chars,
+    get_string_edit_warning_limit_chars,
+)
 from delegates.editor_factory import (
     _SecretEditorWatcher,
     create_value_editor,
