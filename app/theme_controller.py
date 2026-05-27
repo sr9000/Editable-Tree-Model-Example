@@ -27,6 +27,11 @@ from state.theme_settings import (
     set_preferred_theme_name,
     set_watch_user_dir,
 )
+from app.runtime_compat import (
+    accent_color_role,
+    color_scheme_setter,
+    has_color_scheme_changed_signal,
+)
 from themes import ThemeRegistry
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
@@ -83,7 +88,7 @@ class ThemeController:
         if isinstance(app, QGuiApplication):
             self._theme = resolve_active_theme(self._theme_registry, app)
             style_hints = app.styleHints()
-            if hasattr(style_hints, "colorSchemeChanged"):
+            if has_color_scheme_changed_signal(style_hints):
                 self._scheme_proxy = _ColorSchemeProxy(parent, self)
                 style_hints.colorSchemeChanged.connect(self._scheme_proxy.on_changed)
         else:
@@ -171,8 +176,9 @@ class ThemeController:
         pal.setColor(QPalette.ColorRole.WindowText, palette.base_fg)
         pal.setColor(QPalette.ColorRole.Highlight, palette.selection_bg)
         pal.setColor(QPalette.ColorRole.HighlightedText, palette.selection_fg)
-        if hasattr(QPalette.ColorRole, "Accent"):
-            pal.setColor(QPalette.ColorRole.Accent, palette.accent)
+        accent_role = accent_color_role()
+        if accent_role is not None:
+            pal.setColor(accent_role, palette.accent)
         app.setPalette(pal)
 
     def _sync_app_color_scheme(self, theme: ThemeSpec) -> None:
@@ -180,7 +186,7 @@ class ThemeController:
         if not isinstance(app, QGuiApplication):
             return
         style_hints = app.styleHints()
-        setter = getattr(style_hints, "setColorScheme", None)
+        setter = color_scheme_setter(style_hints)
         if setter is None:
             return  # older Qt — nothing to do, leave system default
         target = Qt.ColorScheme.Dark if theme.mode == "dark" else Qt.ColorScheme.Light
@@ -369,7 +375,7 @@ class ThemeController:
         app = QGuiApplication.instance()
         if isinstance(app, QGuiApplication):
             style_hints = app.styleHints()
-            if hasattr(style_hints, "colorSchemeChanged"):
+            if has_color_scheme_changed_signal(style_hints):
                 try:
                     style_hints.colorSchemeChanged.disconnect(self._scheme_proxy.on_changed)
                 except (RuntimeError, TypeError):

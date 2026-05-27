@@ -5,10 +5,12 @@ from typing import Literal
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
 
+from app.runtime_compat import system_color_scheme
+
 
 def detect_system_mode(app: QGuiApplication) -> Literal["light", "dark"]:
     hints = app.styleHints()
-    color_scheme = hints.colorScheme() if hasattr(hints, "colorScheme") else None
+    color_scheme = system_color_scheme(hints)
     if color_scheme == Qt.ColorScheme.Dark:
         return "dark"
     if color_scheme == Qt.ColorScheme.Light:

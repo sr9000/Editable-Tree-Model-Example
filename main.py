@@ -5,6 +5,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from app.main_window import MainWindow
+from app.runtime_compat import meipass_root
 
 
 def _resolve_app_icon() -> QIcon:
@@ -14,7 +15,7 @@ def _resolve_app_icon() -> QIcon:
     ``sys._MEIPASS``; in a normal source checkout it lives next to the
     repository root.
     """
-    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    base = meipass_root() or Path(__file__).resolve().parent
     icon_path = base / "packaging" / "linux" / "editabletreemodel.png"
     if icon_path.is_file():
         return QIcon(str(icon_path))

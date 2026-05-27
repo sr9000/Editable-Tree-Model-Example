@@ -3,12 +3,14 @@ from zoneinfo import ZoneInfo
 
 from PySide6.QtCore import QDateTime, QTimeZone
 
+from app.runtime_compat import tz_name
+
 
 def qtdatetime(dt: datetime):
     if dt.tzinfo is None or dt.utcoffset() is None:
         raise ValueError("tz-aware datetime required for `qtdatetime()`")
 
-    tzid = getattr(dt.tzinfo, "key", None) or getattr(dt.tzinfo, "zone", None)
+    tzid = tz_name(dt)
     tz = QTimeZone(tzid.encode()) if tzid else QTimeZone(int(dt.utcoffset().total_seconds()))
 
     return QDateTime.fromMSecsSinceEpoch(round(dt.timestamp() * 1000), tz)
