@@ -224,19 +224,3 @@ class ValueDelegate(_TextEditorDelegateBase):
 
     def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
         set_value_model_data(self, editor, model, index)
-
-    @staticmethod
-    def _category_for_json_type(json_type: JsonType) -> DateTimeCategory | None:
-        match json_type:
-            case JsonType.TIME:
-                return DateTimeCategory.Time
-            case JsonType.DATE:
-                return DateTimeCategory.Date
-            case JsonType.DATETIME:
-                return DateTimeCategory.DateTime
-            case JsonType.DATETIMEZONE:
-                return DateTimeCategory.DateTimeWithTZ
-            case JsonType.DATETIMEUTC:
-                return DateTimeCategory.DateTimeUTC
-            case _:
-                return None

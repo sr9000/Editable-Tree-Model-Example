@@ -34,7 +34,7 @@ Filtered to remove dunder methods, obvious callbacks, and property shims. These 
 | ✅ `MainWindow.insert_column`                  |     `app/main_window.py:529` |  `2` |                                                            |
 | ✅ `MainWindow.remove_column`                  |     `app/main_window.py:556` | `13` |                                                            |
 | ✅ `MainWindow.copy_action`                    |     `app/main_window.py:643` |  `9` |                                                            |
-| `ValueDelegate._category_for_json_type`       |     `delegates/value.py:229` | `14` | missed by Vulture because same-named free function is used |
+| ✅ `ValueDelegate._category_for_json_type`     |     `delegates/value.py:229` | `14` | missed by Vulture because same-named free function is used |
 | `JsonTab.zoom_reset`                          |       `documents/tab.py:593` |  `4` |                                                            |
 | `JsonTab._size_hint_for_item`                 |       `documents/tab.py:741` |  `2` |                                                            |
 | `JsonTab._clear_children`                     |       `documents/tab.py:890` |  `2` |                                                            |
