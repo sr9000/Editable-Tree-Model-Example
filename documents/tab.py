@@ -31,12 +31,12 @@ from documents.tab_setup import (
     init_validation_state,
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
+from documents.tab_validation_view import JsonTabValidationViewController
 from state.affix_mru import AffixMRU
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
-from tree.model_roles import VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
@@ -68,7 +68,6 @@ from undo.diff import DiffApplier
 from units.number_affix import NumberAffix
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
-from validation.json_pointer import instance_path_to_model_path
 from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef
 
@@ -135,6 +134,7 @@ class JsonTab(QWidget):
     _appearance: JsonTabAppearanceController | None = None
     _navigation: JsonTabNavigationController | None = None
     _editability: JsonTabEditabilityController | None = None
+    _validation_view: JsonTabValidationViewController | None = None
 
     dirtyChanged = Signal(bool)
     schemaChanged = Signal(object)
@@ -175,6 +175,7 @@ class JsonTab(QWidget):
         self._appearance = JsonTabAppearanceController(self.data_store)
         self._navigation = JsonTabNavigationController(self.data_store, self.edit_name_or_value_from_enter)
         self._editability = JsonTabEditabilityController(self.data_store)
+        self._validation_view = JsonTabValidationViewController(self)
 
         # All parts stored inside self.data_store are populated here:
         self.data_store.ui = None
@@ -310,68 +311,18 @@ class JsonTab(QWidget):
     # ─────────────────────────────────────────────────────────────────────
 
     def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
-        root_data = self.data_store.model.root_item.to_json()
-        model_path = instance_path_to_model_path(root_data, issue.instance_path)
-        if model_path is None:
-            self.show_status("Validation issue path no longer exists", 2000)
-            return False
-
-        source_row = self._index_from_path(model_path)
-        if not source_row.isValid():
-            self.show_status("Validation issue path no longer exists", 2000)
-            return False
-
-        source_row = source_row.siblingAtColumn(0)
-        view_row = self._source_to_view(source_row)
-        if not view_row.isValid():
-            self.show_status("Validation issue path no longer exists", 2000)
-            return False
-
-        sm = self.data_store.view.selectionModel()
-        if sm is not None:
-            sm.select(
-                view_row,
-                QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
-            )
-            sm.setCurrentIndex(view_row, QItemSelectionModel.SelectionFlag.NoUpdate)
-
-        self.data_store.view.setCurrentIndex(view_row)
-        self.data_store.view.scrollTo(view_row, QAbstractItemView.ScrollHint.PositionAtCenter)
-
-        if not edit:
-            return True
-
-        source_value = source_row.siblingAtColumn(2)
-        if not source_value.isValid():
-            return True
-        if not (self.data_store.model.flags(source_value) & Qt.ItemFlag.ItemIsEditable):
-            return True
-
-        view_value = self._source_to_view(source_value)
-        if not view_value.isValid():
-            return True
-        self.data_store.view.setCurrentIndex(view_value)
-        self.data_store.view.edit(view_value)
-        return True
+        validation_view = self._validation_view
+        return validation_view is not None and validation_view.goto_validation_issue(issue, edit=edit)
 
     def _severity_provider(self, model_path: tuple[int, ...]) -> str | None:
         """Lazily queried by the model for VALIDATION_SEVERITY_ROLE."""
-        return self.data_store.validation.severity_for(model_path)
+        validation_view = self._validation_view
+        return validation_view.severity_provider(model_path) if validation_view is not None else None
 
     def _on_validation_changed(self, _index: IssueIndex) -> None:
-        """Emit recursive dataChanged so all visible rows repaint their badges."""
-
-        def _emit_ranges(parent: QModelIndex) -> None:
-            rows = self.data_store.model.rowCount(parent)
-            if rows <= 0:
-                return
-            top_left = self.data_store.model.index(0, 0, parent)
-            bottom_right = self.data_store.model.index(rows - 1, self.data_store.model.columnCount(parent) - 1, parent)
-            self.data_store.model.dataChanged.emit(top_left, bottom_right, [VALIDATION_SEVERITY_ROLE])
-            for row in range(rows):
-                _emit_ranges(self.data_store.model.index(row, 0, parent))
-
-        _emit_ranges(QModelIndex())
+        validation_view = self._validation_view
+        if validation_view is not None:
+            validation_view.on_validation_changed(_index)
 
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
         appearance = self._appearance
