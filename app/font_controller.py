@@ -25,7 +25,7 @@ from typing import Protocol, runtime_checkable
 
 from PySide6.QtCore import QObject, QSettings, Signal
 from PySide6.QtGui import QFont, QFontDatabase
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 
 _MIN_PT = 6
 _MAX_PT = 48
@@ -191,18 +191,16 @@ class FontController(QObject):
         self.profileChanged.emit(self._profile)
 
     def _notify_one(self, target: object) -> None:
-        apply = getattr(target, "apply_font_profile", None)
-        if callable(apply):
+        if isinstance(target, FontProfileAware):
             try:
-                apply(self._profile)
+                target.apply_font_profile(self._profile)
             except RuntimeError:
                 # Underlying C++ object was deleted between scheduling and now.
                 pass
             return
-        set_font = getattr(target, "setFont", None)
-        if callable(set_font):
+        if isinstance(target, QWidget):
             try:
-                set_font(self._profile.regular_font(base=getattr(target, "font", lambda: None)()))
+                target.setFont(self._profile.regular_font(base=target.font()))
             except RuntimeError:
                 pass
 
