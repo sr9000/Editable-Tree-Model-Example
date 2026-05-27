@@ -52,16 +52,16 @@ def test_cross_tab_copy_drop_keeps_source_unchanged(qtbot):
     target = _make_tab(qtbot, {"right": {}})
 
     left = _idx(source, 0)
-    a = source.model.index(0, 0, left)
-    b = source.model.index(1, 0, left)
-    mime = source.model.mimeData([a, b])
+    a = source.data_store.model.index(0, 0, left)
+    b = source.data_store.model.index(1, 0, left)
+    mime = source.data_store.model.mimeData([a, b])
 
     right = _idx(target, 0)
-    ok = target.model.dropMimeData(mime, Qt.DropAction.CopyAction, 0, 0, right)
+    ok = target.data_store.model.dropMimeData(mime, Qt.DropAction.CopyAction, 0, 0, right)
     assert ok
 
-    assert source.model.root_item.to_json() == {"left": {"a": 1, "b": 2}}
-    assert target.model.root_item.to_json() == {"right": {"a": 1, "b": 2}}
+    assert source.data_store.model.root_item.to_json() == {"left": {"a": 1, "b": 2}}
+    assert target.data_store.model.root_item.to_json() == {"right": {"a": 1, "b": 2}}
 
 
 def test_on_row_drop_onto_primitive_falls_back_to_sibling_after(qtbot):
@@ -89,15 +89,15 @@ def test_move_action_without_internal_source_falls_back_to_copy(qtbot):
     target = _make_tab(qtbot, {"right": {}})
 
     left = _idx(source, 0)
-    a = source.model.index(0, 0, left)
-    mime = source.model.mimeData([a])
+    a = source.data_store.model.index(0, 0, left)
+    mime = source.data_store.model.mimeData([a])
 
     right = _idx(target, 0)
-    ok = target.model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, right)
+    ok = target.data_store.model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, right)
     assert ok
 
-    assert source.model.root_item.to_json() == {"left": {"a": 1}}
-    assert target.model.root_item.to_json() == {"right": {"a": 1}}
+    assert source.data_store.model.root_item.to_json() == {"left": {"a": 1}}
+    assert target.data_store.model.root_item.to_json() == {"right": {"a": 1}}
 
 
 def test_internal_move_view_skips_post_drag_clear_or_remove(qtbot):

@@ -241,13 +241,15 @@ class DockValidationPresenter(QObject):
         win._schemas_open_current_action = QAction(win.tr("Open current schema"), win)
         win._schemas_open_current_action.triggered.connect(
             lambda: (
-                self.open_schema_source(win._current_tab().schema_source) if win._current_tab() is not None else None
+                self.open_schema_source(win._current_tab().data_store.schema_source)
+                if win._current_tab() is not None
+                else None
             )
         )
         win._schemas_copy_path_action = QAction(win.tr("Copy full path"), win)
         win._schemas_copy_path_action.triggered.connect(
             lambda: (
-                self.copy_schema_source_key(win._current_tab().schema_source)
+                self.copy_schema_source_key(win._current_tab().data_store.schema_source)
                 if win._current_tab() is not None
                 else None
             )

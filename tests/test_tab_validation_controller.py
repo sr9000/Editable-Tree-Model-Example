@@ -72,4 +72,4 @@ def test_closed_tab_is_collectable(_qapp):
     # The C++ side may still hold the object until the event loop spins again;
     # this assertion only verifies the timer is off, not C++ destruction.
     # The point of this test is that release() makes the tab safe to discard.
-    assert ref() is None or not ref().validation.debounce_timer.isActive()
+    assert ref() is None or not ref().data_store.validation.debounce_timer.isActive()

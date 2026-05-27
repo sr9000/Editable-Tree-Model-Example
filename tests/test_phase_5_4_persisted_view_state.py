@@ -68,18 +68,18 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     assert restore(restored)
 
     for column in range(3):
-        assert restored.view.columnWidth(column) == saved_widths[column]
+        assert restored.data_store.view.columnWidth(column) == saved_widths[column]
 
-    root2 = restored.model.index(0, 0, QModelIndex())
-    foo2 = restored.model.index(0, 0, root2)
-    bar2 = restored.model.index(0, 0, foo2)
-    leaf2 = restored.model.index(1, 0, bar2)
+    root2 = restored.data_store.model.index(0, 0, QModelIndex())
+    foo2 = restored.data_store.model.index(0, 0, root2)
+    bar2 = restored.data_store.model.index(0, 0, foo2)
+    leaf2 = restored.data_store.model.index(1, 0, bar2)
 
-    assert restored.view.isExpanded(restored._source_to_view(root2))
-    assert restored.view.isExpanded(restored._source_to_view(foo2))
-    assert not restored.view.isExpanded(restored._source_to_view(bar2))
-    assert restored.view.currentIndex() == restored._source_to_view(leaf2)
-    assert restored.view.font().pointSize() == saved_font_pt
+    assert restored.data_store.view.isExpanded(restored._source_to_view(root2))
+    assert restored.data_store.view.isExpanded(restored._source_to_view(foo2))
+    assert not restored.data_store.view.isExpanded(restored._source_to_view(bar2))
+    assert restored.data_store.view.currentIndex() == restored._source_to_view(leaf2)
+    assert restored.data_store.view.font().pointSize() == saved_font_pt
 
 
 def test_save_as_discards_old_view_state_group(tmp_path, monkeypatch, qtbot):

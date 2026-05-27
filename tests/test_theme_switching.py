@@ -60,7 +60,7 @@ def test_switching_theme_preserves_undo_expansion_and_selection(qtbot, tmp_path,
     expanded_before = sorted(tab._collect_expanded_paths())
     current_before = _current_source_path(tab)
 
-    target = win._theme_registry.default_for_mode("dark" if win.data_store._theme.mode == "light" else "light")
+    target = win._theme_registry.default_for_mode("dark" if win._theme.mode == "light" else "light")
     win._apply_theme(target)
 
     assert tab.data_store.undo_stack.count() == count_before
@@ -89,7 +89,7 @@ def test_follow_system_setting_persists_across_mainwindow_instances(qtbot, tmp_p
     second = MainWindow(yaml_filename="")
     qtbot.addWidget(second)
 
-    assert second.data_store._theme.name == "Default Dark"
+    assert second._theme.name == "Default Dark"
     assert second._theme_follow_action is not None
     assert second._theme_follow_action.isChecked() is False
 
@@ -150,7 +150,7 @@ def test_apply_theme_emits_datachanged_across_tabs(qtbot, tmp_path, monkeypatch)
                 lambda top, bottom, roles, t=tab: signals[t].append((top.column(), bottom.column(), list(roles)))
             )
 
-        target = win._theme_registry.default_for_mode("dark" if win.data_store._theme.mode == "light" else "light")
+        target = win._theme_registry.default_for_mode("dark" if win._theme.mode == "light" else "light")
         win._apply_theme(target)
 
         for tab in tabs:

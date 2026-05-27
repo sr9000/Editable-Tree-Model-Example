@@ -144,9 +144,9 @@ def test_go_to_schema_rule_works_for_url_backed_in_memory_schema(qtbot, monkeypa
     assert schema_tab is first_schema_tab
     assert window.tabWidget.count() == before_count + 1
 
-    current = schema_tab._proxy_to_source(schema_tab.view.currentIndex())
+    current = schema_tab._proxy_to_source(schema_tab.data_store.view.currentIndex())
     assert current.isValid()
-    assert schema_tab.model._index_path(current) == instance_path_to_model_path(schema, issue.schema_path)
+    assert schema_tab.data_store.model._index_path(current) == instance_path_to_model_path(schema, issue.schema_path)
 
 
 def test_go_to_schema_rule_focuses_existing_file_backed_schema_tab(qtbot, tmp_path):
@@ -172,7 +172,7 @@ def test_go_to_schema_rule_focuses_existing_file_backed_schema_tab(qtbot, tmp_pa
     app.processEvents()
     existing_schema_tab = window._current_tab()
     assert existing_schema_tab is not None
-    assert existing_schema_tab.file_path == str(schema_path.resolve())
+    assert existing_schema_tab.data_store.file_path == str(schema_path.resolve())
 
     window.tabWidget.setCurrentWidget(tab)
     before_count = window.tabWidget.count()

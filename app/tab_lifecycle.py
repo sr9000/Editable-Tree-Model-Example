@@ -80,8 +80,8 @@ class TabLifecyclePresenter(QObject):
                 save_format=save_format,
                 services=JsonTabServices(
                     host=_MainWindowJsonTabHost(win),
-                    theme=win.data_store._theme,
-                    icon_provider=win.data_store._icon_provider,
+                    theme=win._theme,
+                    icon_provider=win._icon_provider,
                 ),
             )
         except Exception as exc:  # noqa: BLE001
@@ -142,21 +142,29 @@ class TabLifecyclePresenter(QObject):
 
         snapshot = None
         if isinstance(widget, JsonTab):
-            was_dirty = widget.is_dirty
+            was_dirty = widget.data_store.is_dirty
             if not win._confirm_close(widget):
                 return
             # Build reopen snapshot: if user discarded dirty edits, remember file path only.
-            if was_dirty and widget.is_dirty:
+            if was_dirty and widget.data_store.is_dirty:
                 # Discard chosen — don't resurrect dirty state on reopen.
-                if widget.file_path:
-                    snapshot = {"data": None, "file_path": widget.file_path, "save_format": widget.save_format}
+                if widget.data_store.file_path:
+                    snapshot = {
+                        "data": None,
+                        "file_path": widget.data_store.file_path,
+                        "save_format": widget.data_store.save_format,
+                    }
             else:
                 try:
-                    src_idx = widget.model.index(0, 0, QModelIndex())
-                    snap_data = widget.model.get_item(src_idx).to_json() if src_idx.isValid() else {}
+                    src_idx = widget.data_store.model.index(0, 0, QModelIndex())
+                    snap_data = widget.data_store.model.get_item(src_idx).to_json() if src_idx.isValid() else {}
                 except Exception:  # noqa: BLE001
                     snap_data = {}
-                snapshot = {"data": snap_data, "file_path": widget.file_path, "save_format": widget.save_format}
+                snapshot = {
+                    "data": snap_data,
+                    "file_path": widget.data_store.file_path,
+                    "save_format": widget.data_store.save_format,
+                }
             win._schema_tab_pool.unregister(widget)
             view_state.save(widget)
         if widget is win._bound_undo_tab:

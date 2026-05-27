@@ -115,7 +115,10 @@ class SchemaTabPool(QObject):
             widget = window.tabWidget.widget(i)
             if not isinstance(widget, JsonTab):
                 continue
-            if widget.file_path and str(Path(widget.file_path).expanduser().resolve()) == resolved:
+            if (
+                widget.data_store.file_path
+                and str(Path(widget.data_store.file_path).expanduser().resolve()) == resolved
+            ):
                 return widget
         return None
 

@@ -8,8 +8,7 @@ QMainWindow.statusBar() method that broke "Create new file").
 from time import sleep
 
 import pytest
-from PySide6.QtCore import (QByteArray, QMimeData, QModelIndex, QSettings, Qt,
-                            QUrl, qInstallMessageHandler)
+from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, Qt, QUrl, qInstallMessageHandler
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QStatusBar
 from pytestqt.plugin import qtbot
@@ -270,13 +269,13 @@ def test_zoom_updates_global_editor_font_size_for_all_tabs(main_window):
     second = main_window.tabWidget.currentWidget()
     assert isinstance(second, JsonTab)
 
-    before_first = first.view.font().pointSize()
-    before_second = second.view.font().pointSize()
+    before_first = first.data_store.view.font().pointSize()
+    before_second = second.data_store.view.font().pointSize()
 
     main_window.zoom_in()
 
-    assert first.view.font().pointSize() == before_first + 1
-    assert second.view.font().pointSize() == before_second + 1
+    assert first.data_store.view.font().pointSize() == before_first + 1
+    assert second.data_store.view.font().pointSize() == before_second + 1
 
 
 def test_select_regular_font_accepts_bool_font_tuple_order(main_window, monkeypatch):

@@ -34,8 +34,8 @@ def test_tabs_share_single_registry_entry_and_release_on_close(qtbot, tmp_path, 
     source = SchemaSource.for_file(schema_path)
     entry = get_schema_registry().lookup(source)
     assert entry is not None
-    assert tab_a.schema is tab_b.schema
-    assert tab_a.schema is entry.inline
+    assert tab_a.data_store.schema is tab_b.data_store.schema
+    assert tab_a.data_store.schema is entry.inline
     assert entry.ref_count == 2
     assert calls["count"] == 1
 
