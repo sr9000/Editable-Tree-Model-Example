@@ -4,6 +4,7 @@ from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QTreeView
 
 from tree.types import JsonType
+from tree_actions._tab_lookup import find_owning_tab
 from tree_actions.clipboard import _clipboard_entries
 from tree_actions.selection import (
     _index_path,
@@ -18,10 +19,7 @@ from tree_actions.selection import (
 
 
 def _tab_of(tree_view: QTreeView):
-    parent = tree_view.parent()
-    if parent is not None and hasattr(parent, "push_insert_rows"):
-        return parent
-    return None
+    return find_owning_tab(tree_view)
 
 
 def has_clipboard_entries() -> bool:

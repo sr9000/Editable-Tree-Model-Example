@@ -12,6 +12,7 @@ from model_actions import (
     action_sort_keys,
 )
 from tree.types import JsonType
+from tree_actions._tab_lookup import find_owning_tab
 from tree_actions.anchors import MoveAnchor, anchor_after_index, anchor_before_index
 from tree_actions.clipboard import copy_selection
 from tree_actions.field_case import FieldCase, convert_field_name
@@ -21,10 +22,7 @@ from tree_actions.selection import top_level_source_rows as _top_level_selected_
 
 
 def _tab_of(tree_view: QTreeView):
-    parent = tree_view.parent()
-    if parent is not None and hasattr(parent, "push_insert_rows"):
-        return parent
-    return None
+    return find_owning_tab(tree_view)
 
 
 def insert_sibling_before(tree_view: QTreeView) -> bool:
@@ -214,15 +212,11 @@ def _ordered_non_root_rows(tree_view: QTreeView):
 
 
 def _status_partial_move(tab) -> None:
-    callback = getattr(tab, "_status_message_callback", None)
-    if callback is not None:
-        callback("Moved part of the selection", 2000)
+    tab.show_status("Moved part of the selection", 2000)
 
 
 def _status_cannot_move_out_of_root(tab) -> None:
-    callback = getattr(tab, "_status_message_callback", None)
-    if callback is not None:
-        callback("Cannot move root-level rows out of parent", 2000)
+    tab.show_status("Cannot move root-level rows out of parent", 2000)
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +328,7 @@ def _move_selection_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
             if not live_rows:
                 continue
             if tab.mutations.push_move_rows_anchor(live_rows, anchor, label=label):
-                placed_total.extend(getattr(tab, "_last_move_placed", []))
+                placed_total.extend(tab.last_move_placed)
                 moved += 1
     finally:
         tab.mutations.end_macro()
@@ -421,7 +415,7 @@ def _move_selection_out_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
             if not live_rows:
                 continue
             if tab.mutations.push_move_rows_anchor(live_rows, anchor, label=label):
-                placed_total.extend(getattr(tab, "_last_move_placed", []))
+                placed_total.extend(tab.last_move_placed)
                 moved += 1
     finally:
         tab.mutations.end_macro()

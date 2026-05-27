@@ -206,6 +206,9 @@ class JsonTab(QWidget):
         self._monospace_fields_enabled = False
         self._regular_font_family: str | None = None
         self._monospace_font_family: str | None = None
+        # Initialized up front so callers can read ``last_move_placed`` even
+        # before the first move command has executed.
+        self._last_move_placed: list[tuple[tuple, int]] = []
 
         init_layout(self)
         self._editable_view_edit_triggers = self.view.editTriggers()
@@ -526,6 +529,29 @@ class JsonTab(QWidget):
 
     def _apply_filter(self) -> None:
         self.proxy.set_filter_text(self.search_edit.text())
+
+    # ── Public typed accessors (Stage 01 of getattr-elimination plan) ──────
+
+    def apply_filter(self) -> None:
+        """Re-apply the search filter to the proxy model."""
+        self._apply_filter()
+
+    def show_status(self, message: str, timeout_ms: int = 3000) -> None:
+        """Publish *message* via the injected status-bar callback.
+
+        No-op when the tab was constructed without a status callback
+        (e.g. headless tests). Replaces ad-hoc
+        ``getattr(tab, "_status_message_callback", None)`` reads.
+        """
+        cb = self._status_message_callback
+        if cb is not None:
+            cb(message, timeout_ms)
+
+    @property
+    def last_move_placed(self) -> list[tuple[tuple, int]]:
+        """``(parent_path, row)`` tuples produced by the most recent
+        ``push_move_rows_anchor`` call. Empty before the first move."""
+        return self._last_move_placed
 
     def _on_model_reset(self) -> None:
         # Force-resize so a brand-new model always gets snug initial widths,
