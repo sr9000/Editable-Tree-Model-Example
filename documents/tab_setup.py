@@ -1,20 +1,23 @@
 import functools
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import QAbstractItemView, QLineEdit, QMessageBox, QVBoxLayout
+from PySide6.QtWidgets import QAbstractItemView, QMessageBox
 
 from delegates.edit_context import DefaultEditContext, EditResult
 from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
+from documents.json_tab_ui import Ui_JsonTab
 from tree.model import JsonTreeModel
-from tree.view import JsonTreeView
 from tree_actions.context_menu import show_context_menu
 from tree_filter_proxy import TreeFilterProxy
 from units import counts, format_bytes
+
+if TYPE_CHECKING:
+    from documents.tab import JsonTab
 
 
 class JsonTabEditContext(DefaultEditContext):
@@ -89,13 +92,12 @@ class JsonTabEditContext(DefaultEditContext):
         return answer == QMessageBox.StandardButton.Yes
 
 
-def init_layout(tab) -> None:
-    tab.layout = QVBoxLayout(tab)
+def init_layout(tab: "JsonTab") -> None:
+    tab.ui = Ui_JsonTab()
+    tab.ui.setupUi(tab)
+    tab.search_edit = tab.ui.searchEdit
+    tab.view = tab.ui.treeView
 
-    tab.search_edit = QLineEdit(tab)
-    tab.search_edit.setPlaceholderText("Filter (Ctrl+F)")
-
-    tab.view = JsonTreeView(tab)
     tab.view.setUniformRowHeights(True)
     tab.view.setAlternatingRowColors(True)
     tab.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -120,11 +122,8 @@ def init_layout(tab) -> None:
     # sectionResized handler does not mis-classify that as a user action.
     tab._programmatic_column_resize = False
 
-    tab.layout.addWidget(tab.search_edit)
-    tab.layout.addWidget(tab.view)
 
-
-def init_model(tab, model_data: Any, show_root: bool) -> None:
+def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
     # ``undo_stack`` is owned by ``TabHistoryController`` (Phase 2.2); the
     # tab exposes it via a delegating property.
 
@@ -137,12 +136,12 @@ def init_model(tab, model_data: Any, show_root: bool) -> None:
     tab.model.modelReset.connect(tab._on_model_reset)
 
 
-def init_validation_state(tab, model_data: Any) -> None:
+def init_validation_state(tab: "JsonTab", model_data: Any) -> None:
     doc_path = Path(tab.file_path).expanduser().resolve() if tab.file_path else None
     tab._init_validation_state(model_data, doc_path=doc_path)
 
 
-def init_delegates_and_connections(tab, update_actions_callback) -> None:
+def init_delegates_and_connections(tab: "JsonTab") -> None:
     edit_context = JsonTabEditContext(tab)
     tab._edit_context = edit_context  # kept for tests / debugging
 
@@ -156,7 +155,10 @@ def init_delegates_and_connections(tab, update_actions_callback) -> None:
     tab.view.setItemDelegateForColumn(1, tab.type_delegate)
     tab.view.setItemDelegateForColumn(2, tab.value_delegate)
 
-    tab.view.selectionModel().selectionChanged.connect(update_actions_callback)
+    def _refresh_actions(*_args) -> None:
+        tab.refresh_actions()
+
+    tab.view.selectionModel().selectionChanged.connect(_refresh_actions)
     tab.view.selectionModel().currentChanged.connect(tab._on_current_changed)
     tab.model.typeChanged.connect(tab._on_type_changed)
     tab.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -172,7 +174,7 @@ def init_delegates_and_connections(tab, update_actions_callback) -> None:
     tab.view.header().sectionResized.connect(_on_section_resized)
 
 
-def init_shortcuts(tab) -> None:
+def init_shortcuts(tab: "JsonTab") -> None:
     tab._copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, tab.view)
     tab._copy_shortcut.activated.connect(lambda: tab._run_tree_action("Copied selection", copy_only=True))
 
@@ -221,7 +223,7 @@ def init_shortcuts(tab) -> None:
     # Keeping a second per-tab QShortcut copy causes ambiguous shortcut warnings.
 
 
-def init_search_filter(tab) -> None:
+def init_search_filter(tab: "JsonTab") -> None:
     tab._filter_timer = QTimer(tab)
     tab._filter_timer.setSingleShot(True)
     tab._filter_timer.setInterval(300)

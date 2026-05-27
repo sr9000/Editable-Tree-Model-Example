@@ -18,6 +18,21 @@ from PySide6.QtWidgets import QMessageBox, QTabWidget
 
 import state.view_state as view_state
 from documents.tab import JsonTab
+from documents.tab_dependencies import JsonTabServices
+
+
+class _MainWindowJsonTabHost:
+    def __init__(self, window) -> None:
+        self._window = window
+
+    def refresh_actions(self) -> None:
+        self._window.update_actions()
+
+    def show_status_message(self, message: str, timeout_ms: int = 0) -> None:
+        self._window.statusBar.showMessage(message, timeout_ms)
+
+    def show_permanent_message(self, message: str) -> None:
+        self._window.statusBar.showMessage(message, 0)
 
 
 class TabLifecyclePresenter(QObject):
@@ -58,16 +73,16 @@ class TabLifecyclePresenter(QObject):
         win = self._win
         try:
             tab = JsonTab(
-                win.update_actions,
-                win.statusBar.showMessage,
                 data=data,
                 file_path=file_path,
                 show_root=True,
                 parent=win,
-                permanent_message_callback=lambda msg: win.statusBar.showMessage(msg, 0),
-                theme=win._theme,
-                icon_provider=win._icon_provider,
                 save_format=save_format,
+                services=JsonTabServices(
+                    host=_MainWindowJsonTabHost(win),
+                    theme=win._theme,
+                    icon_provider=win._icon_provider,
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             QMessageBox.critical(win, "Error", f"Failed to create tab:\n{exc}")

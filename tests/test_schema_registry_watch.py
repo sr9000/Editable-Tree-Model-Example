@@ -7,7 +7,6 @@ from validation.schema_registry import SchemaRegistry, SchemaSource
 from validation.schema_source import SchemaRef
 
 schema_registry_module = importlib.import_module("validation.schema_registry")
-tab_module = importlib.import_module("documents.tab")
 
 
 class _Tab:
@@ -16,7 +15,7 @@ class _Tab:
 
 def test_file_change_reloads_in_place_and_revalidates_tab(qtbot, tmp_path, monkeypatch):
     registry = SchemaRegistry()
-    monkeypatch.setattr(tab_module, "schema_registry", registry, raising=False)
+    monkeypatch.setattr(schema_registry_module, "schema_registry", registry, raising=False)
 
     schema_path = tmp_path / "live.schema.json"
     schema_path.write_text(

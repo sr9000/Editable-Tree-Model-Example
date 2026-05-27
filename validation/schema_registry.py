@@ -245,3 +245,7 @@ class SchemaRegistry(QObject):
 
 
 schema_registry = SchemaRegistry()
+
+
+def get_schema_registry() -> SchemaRegistry:
+    return schema_registry

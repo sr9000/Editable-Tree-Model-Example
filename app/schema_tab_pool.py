@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from PySide6.QtCore import QObject
 
 from documents.tab import JsonTab
-from validation.schema_registry import SchemaSource, schema_registry
+from validation.schema_registry import SchemaSource, get_schema_registry
 
 if TYPE_CHECKING:
     from app.main_window import MainWindow
@@ -84,10 +84,10 @@ class SchemaTabPool(QObject):
             return tab
 
         # URL-backed schema viewers are opened from registry materialized data.
-        entry = schema_registry.lookup(source)
+        entry = get_schema_registry().lookup(source)
         acquired_here = False
         if entry is None:
-            entry = schema_registry.acquire(source, self._registry_token)
+            entry = get_schema_registry().acquire(source, self._registry_token)
             acquired_here = True
         if entry is None:
             return None
@@ -98,14 +98,14 @@ class SchemaTabPool(QObject):
         tab = window._add_tab(data=data, file_path=None)
         if tab is None:
             if acquired_here:
-                schema_registry.release(source, self._registry_token)
+                get_schema_registry().release(source, self._registry_token)
             return None
 
         self.register(tab, source, read_only=True)
         self._apply_url_tab_title(window, tab, source)
 
         if acquired_here:
-            schema_registry.release(source, self._registry_token)
+            get_schema_registry().release(source, self._registry_token)
         return tab
 
     @staticmethod

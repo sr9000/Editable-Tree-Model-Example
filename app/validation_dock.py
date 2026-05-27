@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from app.validation_panel_model import IssueListModel
 from state.recent_schemas import recent_schemas
-from validation.schema_registry import SchemaSource, schema_registry
+from validation.schema_registry import SchemaSource, get_schema_registry
 
 if TYPE_CHECKING:
     from documents.tab import JsonTab
@@ -243,7 +243,7 @@ class ValidationDock(QDockWidget):
         for source in recents:
             if source.kind == "file":
                 text = self.tr("📂 {name}").format(name=source.display)
-                enabled = schema_registry.exists(source)
+                enabled = get_schema_registry().exists(source)
             else:
                 text = self.tr("🌐 {name}").format(name=source.display)
                 enabled = True

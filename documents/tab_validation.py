@@ -17,6 +17,7 @@ from PySide6.QtCore import QObject, QTimer
 
 from io_formats.detect import SAVE_FORMAT_YAML_MULTI
 from tree.model_roles import VALIDATION_SEVERITY_ROLE
+from validation import get_schema_registry
 from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
@@ -24,19 +25,6 @@ from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef, discover_schema, load_schema
 from validation.validator import validate_document
 from validation.yaml_validate import validate_yaml_documents
-
-
-def _registry():
-    """Late-bound registry lookup so tests can monkeypatch
-    ``documents.tab.schema_registry`` and have controllers honour the
-    substitution.
-    """
-    import documents.tab as _tab_module
-
-    # ``documents.tab`` re-exports the default registry as a module
-    # attribute so this access is direct (no reflection). Tests still
-    # rebind via ``monkeypatch.setattr(documents.tab, 'schema_registry', ...)``.
-    return _tab_module.schema_registry
 
 
 class TabValidationController(QObject):
@@ -81,7 +69,7 @@ class TabValidationController(QObject):
             self._model.rowsMoved.connect(self._schedule_debounced_revalidation),
             self._model.modelReset.connect(self._schedule_debounced_revalidation),
         ]
-        _registry().schemaReloaded.connect(self._on_registry_schema_reloaded)
+        get_schema_registry().schemaReloaded.connect(self._on_registry_schema_reloaded)
         self._released = False
 
     # ----- read-only views ----------------------------------------------
@@ -152,10 +140,12 @@ class TabValidationController(QObject):
 
     def _swap_source(self, source: SchemaSource | None, ref: SchemaRef) -> None:
         if self._schema_source is not None:
-            _registry().release(self._schema_source, self._tab)
+            get_schema_registry().release(self._schema_source, self._tab)
 
         inline_hint = ref.inline if isinstance(ref.inline, Mapping) else None
-        entry = _registry().acquire(source, self._tab, inline_hint=inline_hint) if source is not None else None
+        entry = (
+            get_schema_registry().acquire(source, self._tab, inline_hint=inline_hint) if source is not None else None
+        )
 
         self._schema_source = source
         self._schema_ref = ref
@@ -223,11 +213,11 @@ class TabValidationController(QObject):
         self.debounce_timer.stop()
 
         if self._schema_source is not None:
-            _registry().release(self._schema_source, self._tab)
+            get_schema_registry().release(self._schema_source, self._tab)
             self._schema_source = None
 
         try:
-            _registry().schemaReloaded.disconnect(self._on_registry_schema_reloaded)
+            get_schema_registry().schemaReloaded.disconnect(self._on_registry_schema_reloaded)
         except (RuntimeError, TypeError):
             pass
         for sig, slot in (

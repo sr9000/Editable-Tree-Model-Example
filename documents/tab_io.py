@@ -20,12 +20,10 @@ def save(tab) -> bool:
     try:
         save_file(tab.file_path, tab.model.root_item.to_json(), save_format=tab.save_format)
     except Exception as exc:
-        if tab._status_message_callback is not None:
-            tab._status_message_callback(f"Save failed: {exc}", 4000)
+        tab.show_status(f"Save failed: {exc}", 4000)
         return False
     tab.undo_stack.setClean()
-    if tab._status_message_callback is not None:
-        tab._status_message_callback(f"Saved: {tab.file_path}", 2000)
+    tab.show_status(f"Saved: {tab.file_path}", 2000)
     return True
 
 

@@ -9,7 +9,6 @@ from PySide6.QtWidgets import QApplication
 
 from documents.tab import JsonTab
 from documents.tab_validation import TabValidationController
-from validation.schema_registry import schema_registry
 from validation.schema_source import SchemaRef
 
 

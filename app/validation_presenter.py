@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QApplication, QLabel, QMenu
 from app.validation_dock import ValidationDock
 from dialogs.attach_schema_dlg import AttachSchemaDialog
 from state.recent_schemas import recent_schemas
-from validation.schema_registry import SchemaSource, open_in_browser, schema_registry
+from validation.schema_registry import SchemaSource, get_schema_registry, open_in_browser
 
 
 class DockValidationPresenter(QObject):
@@ -155,7 +155,7 @@ class DockValidationPresenter(QObject):
         if tab is None:
             return
 
-        entry = schema_registry.acquire(source, tab)
+        entry = get_schema_registry().acquire(source, tab)
         if entry is None:
             win.statusBar.showMessage(win.tr("Could not load schema: {name}").format(name=source.display), 3000)
             return
@@ -170,7 +170,7 @@ class DockValidationPresenter(QObject):
         tab = win._current_tab()
         if tab is None or tab.schema_source is None:
             return
-        if schema_registry.reload(tab.schema_source) is None:
+        if get_schema_registry().reload(tab.schema_source) is None:
             win.statusBar.showMessage(win.tr("Reload failed"), 3000)
             return
         tab.revalidate()

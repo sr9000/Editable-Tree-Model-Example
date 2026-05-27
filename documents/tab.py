@@ -1,16 +1,19 @@
+from __future__ import annotations
+
 import base64
 import gzip
 import os
 import zlib
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 import gmpy2
 from PySide6.QtCore import QEvent, QItemSelectionModel, QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.mutation_gateway import DocumentMutationGateway
+from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_services
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
@@ -26,12 +29,12 @@ from documents.tab_setup import (
 from documents.tab_status import on_current_changed, size_hint_for_item
 from state.affix_mru import AffixMRU
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
-from themes import LIGHT_DEFAULT
-from themes.icon_provider import IconProvider, StubIconProvider
+from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model_roles import VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType
+from tree.view import JsonTreeView
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
 from tree_actions.selection import selected_source_rows
@@ -64,10 +67,18 @@ from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
 from validation.schema_registry import SchemaSource
-from validation.schema_registry import (
-    schema_registry as schema_registry,
-)  # re-exported module attribute; tests monkeypatch this name
 from validation.schema_source import SchemaRef
+
+if TYPE_CHECKING:
+    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtWidgets import QLineEdit
+
+    from delegates.name_delegate import NameDelegate
+    from delegates.type_delegate import JsonTypeDelegate
+    from delegates.value import ValueDelegate
+    from documents.json_tab_ui import Ui_JsonTab
+    from tree.model import JsonTreeModel
+    from tree_filter_proxy import TreeFilterProxy
 
 
 def _make_label(text: str, target_qname: str) -> str:
@@ -138,13 +149,14 @@ class JsonTab(QWidget):
         view = self.view
         if view is not None and watched in (view, view.viewport()):
             if event.type() == QEvent.Type.KeyPress:
-                if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                key_event = cast("QKeyEvent", event)
+                if key_event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                     self.edit_name_or_value_from_enter()
                     return True
-                if event.key() == Qt.Key.Key_Space and event.modifiers() == Qt.KeyboardModifier.NoModifier:
+                if key_event.key() == Qt.Key.Key_Space and key_event.modifiers() == Qt.KeyboardModifier.NoModifier:
                     self._toggle_current_row_expansion_with_space()
                     return True
-                if self._handle_arrow_navigation(event.key(), event.modifiers()):
+                if self._handle_arrow_navigation(key_event.key(), key_event.modifiers()):
                     return True
         return super().eventFilter(watched, event)
 
@@ -188,7 +200,7 @@ class JsonTab(QWidget):
 
     def __init__(
         self,
-        update_actions_callback,
+        update_actions_callback: Callable[[], None] | None = None,
         status_message_callback: Callable[[str, int], None] | None = None,
         data: Any = _DEFAULT_DATA,
         file_path: str | None = None,
@@ -198,18 +210,44 @@ class JsonTab(QWidget):
         theme: ThemeSpec | None = None,
         icon_provider: IconProvider | None = None,
         save_format: str | None = None,
+        *,
+        services: JsonTabServices | None = None,
     ):
         super().__init__(parent)
 
         # Predeclare attributes consumed by lifecycle hooks (eventFilter,
         # view_state restore, etc.) so direct attribute access is safe even
         # before init_layout / init_model wire them up.
-        self.view = None  # set by init_layout below
+        self.ui: Ui_JsonTab | None = None
+        self.view: JsonTreeView | None = None
+        self.search_edit: QLineEdit | None = None
+        self.model: JsonTreeModel
+        self.proxy: TreeFilterProxy
+        self.name_delegate: NameDelegate
+        self.type_delegate: JsonTypeDelegate
+        self.value_delegate: ValueDelegate
+        self._default_font_pt = 10
+        self._font_pt = 10
+        self._user_sized_columns: set[int] = set()
+        self._programmatic_column_resize = False
 
-        self._status_message_callback = status_message_callback
-        self._permanent_message_callback = permanent_message_callback
-        self._theme = theme or LIGHT_DEFAULT
-        self._icon_provider: IconProvider = icon_provider or StubIconProvider()
+        resolved_services = services or build_legacy_json_tab_services(
+            update_actions_callback=update_actions_callback,
+            status_message_callback=status_message_callback,
+            permanent_message_callback=permanent_message_callback,
+            theme=theme,
+            icon_provider=icon_provider,
+        )
+        if services is not None and (theme is not None or icon_provider is not None):
+            resolved_services = JsonTabServices(
+                host=services.host,
+                theme=theme if theme is not None else services.theme,
+                icon_provider=icon_provider if icon_provider is not None else services.icon_provider,
+            )
+
+        self._host = resolved_services.host
+        self._theme = resolved_services.theme
+        self._icon_provider = resolved_services.icon_provider
         self._read_only = False
         self._monospace_fields_enabled = False
         self._regular_font_family: str | None = None
@@ -265,7 +303,7 @@ class JsonTab(QWidget):
             initial_data=model_data,
         )
 
-        init_delegates_and_connections(self, update_actions_callback)
+        init_delegates_and_connections(self)
         self.set_monospace_fields_enabled(self._monospace_fields_enabled)
         init_shortcuts(self)
         init_search_filter(self)
@@ -380,21 +418,18 @@ class JsonTab(QWidget):
         root_data = self.model.root_item.to_json()
         model_path = instance_path_to_model_path(root_data, issue.instance_path)
         if model_path is None:
-            if self._status_message_callback is not None:
-                self._status_message_callback("Validation issue path no longer exists", 2000)
+            self.show_status("Validation issue path no longer exists", 2000)
             return False
 
         source_row = self._index_from_path(model_path)
         if not source_row.isValid():
-            if self._status_message_callback is not None:
-                self._status_message_callback("Validation issue path no longer exists", 2000)
+            self.show_status("Validation issue path no longer exists", 2000)
             return False
 
         source_row = source_row.siblingAtColumn(0)
         view_row = self._source_to_view(source_row)
         if not view_row.isValid():
-            if self._status_message_callback is not None:
-                self._status_message_callback("Validation issue path no longer exists", 2000)
+            self.show_status("Validation issue path no longer exists", 2000)
             return False
 
         sm = self.view.selectionModel()
@@ -544,16 +579,15 @@ class JsonTab(QWidget):
         """Re-apply the search filter to the proxy model."""
         self._apply_filter()
 
-    def show_status(self, message: str, timeout_ms: int = 3000) -> None:
-        """Publish *message* via the injected status-bar callback.
+    def refresh_actions(self) -> None:
+        self._host.refresh_actions()
 
-        No-op when the tab was constructed without a status callback
-        (e.g. headless tests). Replaces ad-hoc reflective reads of the
-        private ``_status_message_callback`` attribute.
-        """
-        cb = self._status_message_callback
-        if cb is not None:
-            cb(message, timeout_ms)
+    def show_status(self, message: str, timeout_ms: int = 3000) -> None:
+        """Publish *message* via the injected host."""
+        self._host.show_status_message(message, timeout_ms)
+
+    def show_permanent_message(self, message: str) -> None:
+        self._host.show_permanent_message(message)
 
     @property
     def last_move_placed(self) -> list[tuple[tuple, int]]:
@@ -637,8 +671,8 @@ class JsonTab(QWidget):
         value_index = self.model.index(item_index.row(), 2, item_index.parent())
         self.view.closePersistentEditor(self._source_to_view(value_index))
 
-        if lossy and self._status_message_callback is not None:
-            self._status_message_callback("Type change dropped existing child nodes", 3000)
+        if lossy:
+            self.show_status("Type change dropped existing child nodes", 3000)
 
         # Auto-reopen the value editor only when the type change came from
         # a user-driven combo commit (Phase 5.1). Programmatic
@@ -1014,8 +1048,7 @@ class JsonTab(QWidget):
 
         # Cycle guard.
         if anchor_is_cycle(anchor, source_paths):
-            if self._status_message_callback is not None:
-                self._status_message_callback("Cannot move a parent into its own descendant", 3000)
+            self.show_status("Cannot move a parent into its own descendant", 3000)
             return False
 
         # No-op guard (path-only). For at_end, resolve to a concrete row first
@@ -1170,8 +1203,8 @@ class JsonTab(QWidget):
             target_type,
         )
         self.undo_stack.push(cmd)
-        if warn_fraction_loss and self._status_message_callback is not None:
-            self._status_message_callback("Fractional part discarded during float-to-integer conversion", 3000)
+        if warn_fraction_loss:
+            self.show_status("Fractional part discarded during float-to-integer conversion", 3000)
         return True
 
     @staticmethod
@@ -1349,8 +1382,8 @@ class JsonTab(QWidget):
         elif sort_keys:
             changed = sort_selection_keys(self.view, recursive=False)
 
-        if changed and self._status_message_callback is not None:
-            self._status_message_callback(success_message, 1500)
+        if changed:
+            self.show_status(success_message, 1500)
 
     def insert_sibling_before(self) -> bool:
         if self._read_only:
