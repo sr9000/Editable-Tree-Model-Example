@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, Qt, QTimer
+from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, QTimer
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFontDialog,
     QInputDialog,
-    QLabel,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -29,18 +28,16 @@ from app.schema_tab_pool import SchemaTabPool
 from app.app_settings import AppSettingsPresenter
 from app.tab_lifecycle import TabLifecyclePresenter
 from app.theme_controller import ThemeController
-from app.validation_dock import ValidationDock
-from dialogs.attach_schema_dlg import AttachSchemaDialog
+from app.validation_presenter import DockValidationPresenter
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
-from state.recent_schemas import recent_schemas
 from tree_actions.clipboard import clipboard_text_is_valid_data, clipboard_to_tab_data, copy_selection
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 from tree_actions.structure import switch_document_case as switch_case_document
-from validation.schema_registry import SchemaSource, open_in_browser, schema_registry
+from validation.schema_registry import SchemaSource
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -124,8 +121,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileMenu.insertAction(self.appExitAction, self.fileReopenTabAction)
         self._app_settings = AppSettingsPresenter(self)
         refresh_recent_menu(self)
-        self._setup_schemas_menu()
-        self._setup_validation_dock()
+        self._dock_validation = DockValidationPresenter(self)
         self._setup_switch_case_actions_menu()
         self._setup_font_actions()
         self._setup_monospace_action()
@@ -202,232 +198,51 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         event.ignore()
 
-    def _setup_validation_dock(self) -> None:
-        from state.validation_settings import auto_rescan_enabled
+    def _setup_validation_dock(self) -> None:  # pragma: no cover - retained for back-compat
+        # Now handled by DockValidationPresenter during __init__; this shim
+        # is left as a no-op for any external caller that may have invoked it.
+        return
 
-        self.validation_dock = ValidationDock(self)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.validation_dock)
-        self.validation_dock.issueActivated.connect(
-            lambda issue, edit: self._on_validation_issue_activated(issue, edit=edit)
-        )
-        self.validation_dock.rescanRequested.connect(self._on_rescan_requested)
-        self.validation_dock.autoRescanToggled.connect(self._on_auto_rescan_toggled)
-        self.validation_dock.clearSchemaRequested.connect(self._on_clear_schema_requested)
-        self.validation_dock.attachSchemaRequested.connect(self._on_attach_schema_requested)
-        self.validation_dock.attachRecentSchemaRequested.connect(self._on_attach_recent_schema_requested)
-        self.validation_dock.reloadSchemaRequested.connect(self._on_reload_schema_requested)
-        self.validation_dock.openSchemaFileRequested.connect(self._on_open_schema_file_requested)
-        self.validation_dock.goToSchemaRuleRequested.connect(self._on_go_to_schema_rule_requested)
-
-        # Initialise checkbox from the persisted global setting.
-        self.validation_dock.set_auto_rescan_checked(auto_rescan_enabled())
-
-        # Permanent right-aligned label on the status bar for validation summary.
-        self._validation_status_label = QLabel("", self)
-        self._validation_status_label.setVisible(False)
-        self.statusBar.addPermanentWidget(self._validation_status_label)
-        self._bound_validation_tab = None
-
-        self.viewValidationPanelAction = QAction(self.tr("Validation Panel"), self)
-        self.viewValidationPanelAction.setCheckable(True)
-        self.viewMenu.addSeparator()
-        self.viewMenu.addAction(self.viewValidationPanelAction)
-
-        dock_state = self._settings.value("validation/dock_state")
-        if isinstance(dock_state, QByteArray):
-            self.restoreState(dock_state)
-        elif isinstance(dock_state, (bytes, bytearray)):
-            self.restoreState(QByteArray(dock_state))
-
-        visible = self._coerce_bool(self._settings.value("validation/dock_visible", True), default=True)
-        self.validation_dock.setVisible(visible)
-        self.viewValidationPanelAction.setChecked(visible)
-
-    # ── validation dock handlers ──────────────────────────────────────────
+    # ── validation dock handlers (shims to DockValidationPresenter) ──────
 
     def _on_rescan_requested(self) -> None:
-        tab = self._current_tab()
-        if tab is not None:
-            tab.revalidate()
+        self._dock_validation.on_rescan_requested()
 
     def _on_auto_rescan_toggled(self, enabled: bool) -> None:
-        from state.validation_settings import set_auto_rescan_enabled
-
-        set_auto_rescan_enabled(enabled)
-        for tab in self._theme_tabs():
-            tab.set_auto_rescan(enabled)
+        self._dock_validation.on_auto_rescan_toggled(enabled)
 
     def _on_clear_schema_requested(self) -> None:
-        from state.validation_settings import clear_schema_path
-
-        tab = self._current_tab()
-        if tab is None:
-            return
-        if tab.file_path:
-            clear_schema_path(Path(tab.file_path))
-        tab.clear_schema()
+        self._dock_validation.on_clear_schema_requested()
 
     def _on_attach_schema_requested(self) -> None:
-        tab = self._current_tab()
-        if tab is None:
-            return
-        source = AttachSchemaDialog.ask(self, start_dir=tab.file_path or "")
-        if source is None:
-            return
-
-        self._attach_schema_source(source)
+        self._dock_validation.on_attach_schema_requested()
 
     def _on_attach_recent_schema_requested(self, source: SchemaSource) -> None:
-        self._attach_schema_source(source)
+        self._dock_validation.on_attach_recent_schema_requested(source)
 
     def _attach_schema_source(self, source: SchemaSource) -> None:
-        from state.validation_settings import write_schema_ref_str
-
-        tab = self._current_tab()
-        if tab is None:
-            return
-
-        entry = schema_registry.acquire(source, tab)
-        if entry is None:
-            self.statusBar.showMessage(self.tr("Could not load schema: {name}").format(name=source.display), 3000)
-            return
-
-        tab.set_schema_from_source(source)
-        if tab.file_path:
-            write_schema_ref_str(Path(tab.file_path), source.key)
-        self.statusBar.showMessage(self.tr("Schema attached: {name}").format(name=source.display), 2000)
+        self._dock_validation.attach_schema_source(source)
 
     def _on_reload_schema_requested(self) -> None:
-        tab = self._current_tab()
-        if tab is None or tab.schema_source is None:
-            return
-        if schema_registry.reload(tab.schema_source) is None:
-            self.statusBar.showMessage(self.tr("Reload failed"), 3000)
-            return
-        tab.revalidate()
-        self.statusBar.showMessage(self.tr("Schema reloaded"), 2000)
+        self._dock_validation.on_reload_schema_requested()
 
     def _on_open_schema_file_requested(self) -> None:
-        tab = self._current_tab()
-        if tab is None or tab.schema_source is None:
-            return
-
-        source = tab.schema_source
-        if source is None:
-            return
-        if source.kind == "url":
-            if not open_in_browser(source):
-                self.statusBar.showMessage(self.tr("Could not open schema URL"), 3000)
-            return
-
-        path = source.key
-        import os
-
-        if not os.path.exists(path):
-            self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
-            return
-        self._open_path(path)
+        self._dock_validation.on_open_schema_file_requested()
 
     def _on_go_to_schema_rule_requested(self, issue) -> None:
-        """Open the schema and navigate to the rule that triggered *issue*."""
-        tab = self._current_tab()
-        if tab is None:
-            return
+        self._dock_validation.on_go_to_schema_rule_requested(issue)
 
-        from validation.issue import ValidationIssue
-
-        def _navigate(schema_tab):
-            if schema_tab is None or not issue.schema_path:
-                return
-            fake_issue = ValidationIssue(
-                message="",
-                instance_path=issue.schema_path,
-                schema_path=(),
-                kind="",
-            )
-            schema_tab.goto_validation_issue(fake_issue)
-
-        source = tab.schema_source
-        if source is None:
-            return
-        schema_tab = self._schema_tab_pool.open_or_focus(self, source)
-        if schema_tab is None:
-            if source.kind == "file":
-                self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
-            else:
-                self.statusBar.showMessage(self.tr("Could not fetch schema for navigation"), 3000)
-            return
-        _navigate(schema_tab)
-
-    def _setup_schemas_menu(self) -> None:
-        self.schemasMenu = QMenu(self.tr("Schemas"), self)
-        self.menuBar.insertMenu(self.viewMenu.menuAction(), self.schemasMenu)
-
-        self._schemas_attach_action = QAction(self.tr("Attach schema…"), self)
-        self._schemas_attach_action.triggered.connect(self._on_attach_schema_requested)
-        self._schemas_recent_menu = QMenu(self.tr("Recent"), self)
-        self._schemas_open_current_action = QAction(self.tr("Open current schema"), self)
-        self._schemas_open_current_action.triggered.connect(
-            lambda: (
-                self._open_schema_source(self._current_tab().schema_source) if self._current_tab() is not None else None
-            )
-        )
-        self._schemas_copy_path_action = QAction(self.tr("Copy full path"), self)
-        self._schemas_copy_path_action.triggered.connect(
-            lambda: (
-                self._copy_schema_source_key(self._current_tab().schema_source)
-                if self._current_tab() is not None
-                else None
-            )
-        )
-
-        self.schemasMenu.aboutToShow.connect(self._rebuild_schemas_menu)
+    def _setup_schemas_menu(self) -> None:  # pragma: no cover - retained for back-compat
+        return
 
     def _open_schema_source(self, source: SchemaSource | None) -> None:
-        if source is None:
-            return
-        tab = self._schema_tab_pool.open_or_focus(self, source)
-        if tab is None:
-            if source.kind == "file":
-                self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
-            else:
-                self.statusBar.showMessage(self.tr("Could not open schema URL"), 3000)
+        self._dock_validation.open_schema_source(source)
 
     def _copy_schema_source_key(self, source: SchemaSource | None) -> None:
-        if source is None:
-            return
-        QApplication.clipboard().setText(source.key)
-        self.statusBar.showMessage(self.tr("Copied schema path"), 1500)
+        self._dock_validation.copy_schema_source_key(source)
 
     def _rebuild_schemas_menu(self) -> None:
-        self.schemasMenu.clear()
-        self.schemasMenu.addAction(self._schemas_attach_action)
-        self.schemasMenu.addMenu(self._schemas_recent_menu)
-        self.schemasMenu.addSeparator()
-        self.schemasMenu.addAction(self._schemas_open_current_action)
-        self.schemasMenu.addAction(self._schemas_copy_path_action)
-
-        self._schemas_recent_menu.clear()
-        for source in recent_schemas()[:8]:
-            label = (
-                self.tr("📂 {name}").format(name=source.display)
-                if source.kind == "file"
-                else self.tr("🌐 {name}").format(name=source.display)
-            )
-            action = self._schemas_recent_menu.addAction(label)
-            if source.kind == "file":
-                action.setEnabled(Path(source.key).exists())
-            action.triggered.connect(lambda _checked=False, s=source: self._open_schema_source(s))
-
-        if not self._schemas_recent_menu.actions():
-            empty = self._schemas_recent_menu.addAction(self.tr("<empty>"))
-            empty.setEnabled(False)
-
-        tab = self._current_tab()
-        source = tab.schema_source if tab is not None else None
-        has_source = source is not None
-        self._schemas_open_current_action.setEnabled(has_source)
-        self._schemas_copy_path_action.setEnabled(has_source)
+        self._dock_validation.rebuild_schemas_menu()
 
     # ── Edit-warning-limits + secret-prefixes presenter shims (Phase 3.2) ─
 
@@ -459,36 +274,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._app_settings.refresh_edit_limits_menu_entries()
 
     def _bind_validation_status(self, tab) -> None:
-        """Connect/disconnect the permanent validation status label to *tab*."""
-        if self._bound_validation_tab is not None:
-            try:
-                self._bound_validation_tab.validationChanged.disconnect(self._on_tab_validation_changed)
-            except (RuntimeError, TypeError):
-                pass
-        self._bound_validation_tab = tab
-        if tab is not None:
-            tab.validationChanged.connect(self._on_tab_validation_changed)
-            self._on_tab_validation_changed(tab.issue_index)
-        else:
-            self._validation_status_label.setVisible(False)
+        self._dock_validation.bind_validation_status(tab)
 
     def _on_tab_validation_changed(self, issue_index) -> None:
-        from documents.tab_status import format_validation_status
-
-        text = format_validation_status(issue_index)
-        if text:
-            self._validation_status_label.setText(text)
-            self._validation_status_label.setVisible(True)
-        else:
-            self._validation_status_label.setVisible(False)
+        self._dock_validation.on_tab_validation_changed(issue_index)
 
     # ─────────────────────────────────────────────────────────────────────
 
     def _on_validation_issue_activated(self, issue, *, edit: bool = False) -> None:
-        tab = self._current_tab()
-        if tab is None:
-            return
-        tab.goto_validation_issue(issue, edit=edit)
+        self._dock_validation.on_validation_issue_activated(issue, edit=edit)
 
     def _setup_monospace_action(self) -> None:
         self.viewMonospaceFieldsAction = QAction("Monospace Names && Values", self)
