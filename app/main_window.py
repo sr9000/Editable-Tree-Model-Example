@@ -32,7 +32,7 @@ from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
-from tree_actions.clipboard import clipboard_to_tab_data, copy_selection
+from tree_actions.clipboard import clipboard_to_tab_data
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 from tree_actions.structure import switch_document_case as switch_case_document
@@ -324,29 +324,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._theme_controller.setup_theme_menu(self.viewMenu)
         self._theme_follow_action = self._theme_controller.follow_action
 
-    def _rebuild_theme_menu_entries(self) -> None:
-        self._theme_controller.rebuild_theme_menu_entries()
-
-    def _refresh_theme_menu_checks(self) -> None:
-        self._theme_controller.refresh_theme_menu_checks()
-
     def _on_theme_selected(self, name: str) -> None:
         self._theme_controller.on_theme_selected(name)
 
     def _on_follow_system_toggled(self, checked: bool) -> None:
         self._theme_controller.on_follow_system_toggled(checked)
 
-    def _open_themes_folder(self) -> None:
-        self._theme_controller.open_themes_folder()
-
-    def _refresh_theme_watcher_paths(self) -> None:
-        self._theme_controller.refresh_theme_watcher_paths()
-
     def _on_theme_fs_event(self, _path: str) -> None:
         self._theme_controller.on_theme_fs_event(_path)
-
-    def _reload_themes_from_disk(self) -> None:
-        self._theme_controller.reload_themes()
 
     def _on_system_color_scheme_changed(self, *_args) -> None:
         self._theme_controller.on_system_color_scheme_changed(*_args)
@@ -526,9 +511,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.update_actions()
 
-    def insert_column(self):
-        return False
-
     def insert_row_before(self):
         tab = self._current_tab()
         if tab is None:
@@ -552,20 +534,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def insert_row(self):
         # Backward-compatible helper used by old call sites.
         self.insert_row_after()
-
-    def remove_column(self):
-        view = self._current_view()
-        if view is None:
-            return False
-
-        model = view.model()
-        column = view.selectionModel().currentIndex().column()
-        changed = model.removeColumn(column)
-
-        if changed:
-            self.update_actions()
-
-        return changed
 
     def remove_row(self):
         view = self._current_view()
@@ -639,16 +607,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def update_actions(self):
         update_main_window_actions(self)
-
-    def copy_action(self):
-        view = self._current_view()
-        if view is None:
-            return
-
-        if copy_selection(view):
-            self.statusBar.showMessage("Copied selection", 1500)
-        else:
-            self.statusBar.showMessage("Nothing to copy", 1500)
 
     def copy_current_file_path(self) -> None:
         """Put the absolute path of the current tab on the system clipboard."""
