@@ -1,31 +1,22 @@
 from __future__ import annotations
 
 import binascii
-import sys
 import zlib
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import (
-    QEvent,
-    QModelIndex,
-    QObject,
-    QPersistentModelIndex,
-    QSortFilterProxyModel,
-    Qt,
-)
-from PySide6.QtGui import QFont, QIcon, QFontMetrics
+from gmpy2 import mpq
+from PySide6.QtCore import QEvent, QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Qt
+from PySide6.QtGui import QFont, QFontMetrics, QIcon
 from PySide6.QtWidgets import (
+    QApplication,
     QColorDialog,
     QComboBox,
-    QLineEdit,
-    QMessageBox,
-    QPushButton,
-    QWidget,
     QHBoxLayout,
-    QApplication,
+    QLineEdit,
+    QPushButton,
     QStyleOptionViewItem,
+    QWidget,
 )
-from gmpy2 import mpq
 
 from datetime_editor.better_dt_editor import BetterDateTimeEditor
 from datetime_editor.enums import DateTimeCategory
@@ -44,10 +35,7 @@ from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
 from settings import SECRET_HIDE_ON_FOCUS_OUT
-from state.edit_limits import (
-    get_multiline_edit_warning_limit_chars,
-    get_string_edit_warning_limit_chars,
-)
+from state.edit_limits import get_multiline_edit_warning_limit_chars, get_string_edit_warning_limit_chars
 from tree.item import JsonTreeItem
 from tree.types import TEXT_LINE_FAMILY, TEXT_MULTI_FAMILY, JsonType
 
@@ -187,25 +175,6 @@ def _confirm_large_binary_edit(delegate: ValueDelegate, host, payload_size: int)
 def _confirm_large_text_edit(
     delegate: ValueDelegate, host, *, text_len: int, limit: int, title: str, kind: str
 ) -> bool:
-    # Keep test monkeypatch compatibility without importing delegates.value,
-    # which avoids a runtime circular dependency.
-    value_module = sys.modules.get("delegates.value")
-    module_warning = None
-    if value_module is not None:
-        module_qmessagebox = getattr(value_module, "QMessageBox", None)
-        module_warning = getattr(module_qmessagebox, "warning", None)
-
-    if callable(module_warning) and module_warning is not QMessageBox.warning:
-        from units import counts
-
-        answer = module_warning(
-            host,
-            title,
-            f"{kind} is {counts(text_len)} chars!\nLimit is {counts(limit)}.\nContinue editing?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        return answer == QMessageBox.StandardButton.Yes
     return delegate._context_for(host).confirm_large_text_edit(
         host, text_len=text_len, limit=limit, title=title, kind=kind
     )
@@ -248,7 +217,7 @@ def create_value_editor(
             editor.addItem("false", False)
         case _ if item.json_type in TEXT_LINE_FAMILY:
             text_len = len(str(item.value or ""))
-            limit = _string_edit_limit_chars()
+            limit = get_string_edit_warning_limit_chars()
             if not _confirm_large_text_edit(
                 delegate,
                 parent,
@@ -266,7 +235,7 @@ def create_value_editor(
             editor = BetterDateTimeEditor(parent)
         case _ if item.json_type in TEXT_MULTI_FAMILY:
             text_len = len(str(item.value or ""))
-            limit = _multiline_edit_limit_chars()
+            limit = get_multiline_edit_warning_limit_chars()
             if not _confirm_large_text_edit(
                 delegate,
                 parent,
@@ -287,7 +256,7 @@ def create_value_editor(
             return None
         case JsonType.SECRET_TEXT:
             text_len = len(str(item.value or ""))
-            limit = _multiline_edit_limit_chars()
+            limit = get_multiline_edit_warning_limit_chars()
             if not _confirm_large_text_edit(
                 delegate,
                 parent,
@@ -483,23 +452,3 @@ def _category_for_json_type(json_type: JsonType) -> DateTimeCategory | None:
             return DateTimeCategory.DateTimeUTC
         case _:
             return None
-
-
-def _string_edit_limit_chars() -> int:
-    value_module = sys.modules.get("delegates.value")
-    getter = getattr(value_module, "get_string_edit_warning_limit_chars", None) if value_module is not None else None
-    if callable(getter):
-        return int(getter())
-    return get_string_edit_warning_limit_chars()
-
-
-def _multiline_edit_limit_chars() -> int:
-    value_module = sys.modules.get("delegates.value")
-    getter = (
-        getattr(value_module, "get_multiline_edit_warning_limit_chars", None)
-        if value_module is not None
-        else None
-    )
-    if callable(getter):
-        return int(getter())
-    return get_multiline_edit_warning_limit_chars()
