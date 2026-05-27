@@ -90,6 +90,10 @@ def test_stale_issue_path_is_reported_without_changing_selection(qtbot):
     assert tab.view.currentIndex() == before
     assert window.statusBar.currentMessage() == "Validation issue path no longer exists"
 
+    # Restore tab state so teardown does not see this test-only edit as unsaved work.
+    tab.undo_stack.undo()
+    app.processEvents()
+
 
 def test_go_to_schema_rule_works_for_url_backed_in_memory_schema(qtbot, monkeypatch):
     app = _qapp()
