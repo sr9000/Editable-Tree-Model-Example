@@ -4,6 +4,7 @@ import base64
 import gzip
 import os
 import zlib
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
@@ -14,9 +15,11 @@ from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_services
+from documents.tab_history import TabHistoryController
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
+from documents.tab_io_controller import TabIOController
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
 from documents.tab_setup import (
     init_delegates_and_connections,
@@ -27,6 +30,7 @@ from documents.tab_setup import (
     init_validation_state,
 )
 from documents.tab_status import on_current_changed, size_hint_for_item
+from documents.tab_validation import TabValidationController
 from state.affix_mru import AffixMRU
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from themes.icon_provider import IconProvider
@@ -77,8 +81,112 @@ if TYPE_CHECKING:
     from delegates.type_delegate import JsonTypeDelegate
     from delegates.value import ValueDelegate
     from documents.json_tab_ui import Ui_JsonTab
+    from documents.tab_history import TabHistoryController
+    from documents.tab_io_controller import TabIOController
+    from documents.tab_validation import TabValidationController
     from tree.model import JsonTreeModel
     from tree_filter_proxy import TreeFilterProxy
+
+
+@dataclass
+class JsonTabData:
+    ui: Ui_JsonTab | None = None
+    view: JsonTreeView | None = None
+    search_edit: QLineEdit | None = None
+    model: JsonTreeModel = field(default=None)
+    proxy: TreeFilterProxy = field(default=None)
+    name_delegate: NameDelegate = field(default=None)
+    type_delegate: JsonTypeDelegate = field(default=None)
+    value_delegate: ValueDelegate = field(default=None)
+    _default_font_pt: int = 10
+    _font_pt: int = 10
+    _user_sized_columns: set[int] = field(default_factory=set)
+    _programmatic_column_resize: bool = False
+    _host: Any = None
+    _theme: ThemeSpec | None = None
+    _icon_provider: IconProvider | None = None
+    _read_only: bool = False
+    _monospace_fields_enabled: bool = False
+    _regular_font_family: str | None = None
+    _monospace_font_family: str | None = None
+    _last_move_placed: list[tuple[tuple, int]] = field(default_factory=list)
+    affix_mru: AffixMRU = field(default=None)
+    io: Any = field(default=None)
+    history: Any = field(default=None)
+    mutations: DocumentMutationGateway = field(default=None)
+    validation: Any = field(default=None)
+    _diff_applier: Any = field(default=None)
+    _editable_view_edit_triggers: Any = None
+    _editable_drag_enabled: Any = None
+    _editable_accept_drops: Any = None
+    _editable_drag_drop_mode: Any = None
+
+    def refresh_actions(self) -> None:
+        if self._host is not None:
+            self._host.refresh_actions()
+
+    def show_permanent_message(self, message: str) -> None:
+        if self._host is not None:
+            self._host.show_permanent_message(message)
+
+    def show_status(self, message: str, timeout_ms: int = 3000) -> None:
+        if self._host is not None:
+            self._host.show_status_message(message, timeout_ms)
+
+    @property
+    def file_path(self) -> str | None:
+        return self.io.file_path if self.io is not None else None
+
+    @file_path.setter
+    def file_path(self, value: str | None) -> None:
+        if self.io is not None:
+            self.io.file_path = value
+
+    @property
+    def save_format(self) -> str | None:
+        return self.io.save_format if self.io is not None else None
+
+    @save_format.setter
+    def save_format(self, value: str | None) -> None:
+        if self.io is not None:
+            self.io.save_format = value
+
+    @property
+    def is_dirty(self) -> bool:
+        return self.io.dirty if self.io is not None else False
+
+    @property
+    def schema(self) -> dict[str, Any] | None:
+        return self.validation.schema if self.validation is not None else None
+
+    @property
+    def schema_ref(self) -> SchemaRef:
+        return self.validation.schema_ref if self.validation is not None else None
+
+    @property
+    def schema_source(self) -> SchemaSource | None:
+        return self.validation.schema_source if self.validation is not None else None
+
+    @property
+    def undo_stack(self):
+        return self.history.undo_stack if self.history is not None else None
+
+    @property
+    def _move_view_state_by_cmd_id(self) -> dict:
+        return self.history._move_view_state_by_cmd_id if self.history is not None else None
+
+    @property
+    def _last_undo_index(self) -> int:
+        return self.history.last_undo_index if self.history is not None else 0
+
+    @_last_undo_index.setter
+    def _last_undo_index(self, value: int) -> None:
+        if self.history is not None:
+            self.history.last_undo_index = value
+
+    @property
+    def is_read_only(self) -> bool:
+        return self._read_only
 
 
 def _make_label(text: str, target_qname: str) -> str:
@@ -144,6 +252,246 @@ class JsonTab(QWidget):
     dirtyChanged = Signal(bool)
     schemaChanged = Signal(object)
     validationChanged = Signal(object)
+
+    @property
+    def ui(self) -> Ui_JsonTab | None:
+        return self.data_store.ui
+
+    @ui.setter
+    def ui(self, value) -> None:
+        self.data_store.ui = value
+
+    @property
+    def view(self) -> JsonTreeView | None:
+        return self.data_store.view
+
+    @view.setter
+    def view(self, value) -> None:
+        self.data_store.view = value
+
+    @property
+    def search_edit(self) -> QLineEdit | None:
+        return self.data_store.search_edit
+
+    @search_edit.setter
+    def search_edit(self, value) -> None:
+        self.data_store.search_edit = value
+
+    @property
+    def model(self) -> JsonTreeModel:
+        return self.data_store.model
+
+    @model.setter
+    def model(self, value) -> None:
+        self.data_store.model = value
+
+    @property
+    def proxy(self) -> TreeFilterProxy:
+        return self.data_store.proxy
+
+    @proxy.setter
+    def proxy(self, value) -> None:
+        self.data_store.proxy = value
+
+    @property
+    def name_delegate(self) -> NameDelegate:
+        return self.data_store.name_delegate
+
+    @name_delegate.setter
+    def name_delegate(self, value) -> None:
+        self.data_store.name_delegate = value
+
+    @property
+    def type_delegate(self) -> JsonTypeDelegate:
+        return self.data_store.type_delegate
+
+    @type_delegate.setter
+    def type_delegate(self, value) -> None:
+        self.data_store.type_delegate = value
+
+    @property
+    def value_delegate(self) -> ValueDelegate:
+        return self.data_store.value_delegate
+
+    @value_delegate.setter
+    def value_delegate(self, value) -> None:
+        self.data_store.value_delegate = value
+
+    @property
+    def _default_font_pt(self) -> int:
+        return self.data_store._default_font_pt
+
+    @_default_font_pt.setter
+    def _default_font_pt(self, value: int) -> None:
+        self.data_store._default_font_pt = value
+
+    @property
+    def _font_pt(self) -> int:
+        return self.data_store._font_pt
+
+    @_font_pt.setter
+    def _font_pt(self, value: int) -> None:
+        self.data_store._font_pt = value
+
+    @property
+    def _user_sized_columns(self) -> set[int]:
+        return self.data_store._user_sized_columns
+
+    @_user_sized_columns.setter
+    def _user_sized_columns(self, value: set[int]) -> None:
+        self.data_store._user_sized_columns = value
+
+    @property
+    def _programmatic_column_resize(self) -> bool:
+        return self.data_store._programmatic_column_resize
+
+    @_programmatic_column_resize.setter
+    def _programmatic_column_resize(self, value: bool) -> None:
+        self.data_store._programmatic_column_resize = value
+
+    @property
+    def _host(self):
+        return self.data_store._host
+
+    @_host.setter
+    def _host(self, value):
+        self.data_store._host = value
+
+    @property
+    def _theme(self):
+        return self.data_store._theme
+
+    @_theme.setter
+    def _theme(self, value):
+        self.data_store._theme = value
+
+    @property
+    def _icon_provider(self):
+        return self.data_store._icon_provider
+
+    @_icon_provider.setter
+    def _icon_provider(self, value):
+        self.data_store._icon_provider = value
+
+    @property
+    def _read_only(self) -> bool:
+        return self.data_store._read_only
+
+    @_read_only.setter
+    def _read_only(self, value: bool) -> None:
+        self.data_store._read_only = value
+
+    @property
+    def _monospace_fields_enabled(self) -> bool:
+        return self.data_store._monospace_fields_enabled
+
+    @_monospace_fields_enabled.setter
+    def _monospace_fields_enabled(self, value: bool) -> None:
+        self.data_store._monospace_fields_enabled = value
+
+    @property
+    def _regular_font_family(self) -> str | None:
+        return self.data_store._regular_font_family
+
+    @_regular_font_family.setter
+    def _regular_font_family(self, value: str | None) -> None:
+        self.data_store._regular_font_family = value
+
+    @property
+    def _monospace_font_family(self) -> str | None:
+        return self.data_store._monospace_font_family
+
+    @_monospace_font_family.setter
+    def _monospace_font_family(self, value: str | None) -> None:
+        self.data_store._monospace_font_family = value
+
+    @property
+    def _last_move_placed(self) -> list[tuple[tuple, int]]:
+        return self.data_store._last_move_placed
+
+    @_last_move_placed.setter
+    def _last_move_placed(self, value: list[tuple[tuple, int]]) -> None:
+        self.data_store._last_move_placed = value
+
+    @property
+    def affix_mru(self) -> AffixMRU:
+        return self.data_store.affix_mru
+
+    @affix_mru.setter
+    def affix_mru(self, value: AffixMRU) -> None:
+        self.data_store.affix_mru = value
+
+    @property
+    def io(self) -> TabIOController:
+        return self.data_store.io
+
+    @io.setter
+    def io(self, value: TabIOController) -> None:
+        self.data_store.io = value
+
+    @property
+    def history(self) -> TabHistoryController:
+        return self.data_store.history
+
+    @history.setter
+    def history(self, value: TabHistoryController) -> None:
+        self.data_store.history = value
+
+    @property
+    def mutations(self) -> DocumentMutationGateway:
+        return self.data_store.mutations
+
+    @mutations.setter
+    def mutations(self, value: DocumentMutationGateway) -> None:
+        self.data_store.mutations = value
+
+    @property
+    def validation(self) -> TabValidationController:
+        return self.data_store.validation
+
+    @validation.setter
+    def validation(self, value: TabValidationController) -> None:
+        self.data_store.validation = value
+
+    @property
+    def _diff_applier(self) -> DiffApplier:
+        return self.data_store._diff_applier
+
+    @_diff_applier.setter
+    def _diff_applier(self, value: DiffApplier) -> None:
+        self.data_store._diff_applier = value
+
+    @property
+    def _editable_view_edit_triggers(self):
+        return self.data_store._editable_view_edit_triggers
+
+    @_editable_view_edit_triggers.setter
+    def _editable_view_edit_triggers(self, value):
+        self.data_store._editable_view_edit_triggers = value
+
+    @property
+    def _editable_drag_enabled(self):
+        return self.data_store._editable_drag_enabled
+
+    @_editable_drag_enabled.setter
+    def _editable_drag_enabled(self, value):
+        self.data_store._editable_drag_enabled = value
+
+    @property
+    def _editable_accept_drops(self):
+        return self.data_store._editable_accept_drops
+
+    @_editable_accept_drops.setter
+    def _editable_accept_drops(self, value):
+        self.data_store._editable_accept_drops = value
+
+    @property
+    def _editable_drag_drop_mode(self):
+        return self.data_store._editable_drag_drop_mode
+
+    @_editable_drag_drop_mode.setter
+    def _editable_drag_drop_mode(self, value):
+        self.data_store._editable_drag_drop_mode = value
 
     def eventFilter(self, watched, event):  # type: ignore[override]
         view = self.view
@@ -214,21 +562,15 @@ class JsonTab(QWidget):
         services: JsonTabServices | None = None,
     ):
         super().__init__(parent)
+        self.data_store = JsonTabData()
 
-        # Predeclare attributes consumed by lifecycle hooks (eventFilter,
-        # view_state restore, etc.) so direct attribute access is safe even
-        # before init_layout / init_model wire them up.
-        self.ui: Ui_JsonTab | None = None
-        self.view: JsonTreeView | None = None
-        self.search_edit: QLineEdit | None = None
-        self.model: JsonTreeModel
-        self.proxy: TreeFilterProxy
-        self.name_delegate: NameDelegate
-        self.type_delegate: JsonTypeDelegate
-        self.value_delegate: ValueDelegate
+        # All parts stored inside self.data_store are populated here:
+        self.ui = None
+        self.view = None
+        self.search_edit = None
         self._default_font_pt = 10
         self._font_pt = 10
-        self._user_sized_columns: set[int] = set()
+        self._user_sized_columns = set()
         self._programmatic_column_resize = False
 
         resolved_services = services or build_legacy_json_tab_services(
@@ -250,11 +592,9 @@ class JsonTab(QWidget):
         self._icon_provider = resolved_services.icon_provider
         self._read_only = False
         self._monospace_fields_enabled = False
-        self._regular_font_family: str | None = None
-        self._monospace_font_family: str | None = None
-        # Initialized up front so callers can read ``last_move_placed`` even
-        # before the first move command has executed.
-        self._last_move_placed: list[tuple[tuple, int]] = []
+        self._regular_font_family = None
+        self._monospace_font_family = None
+        self._last_move_placed = []
 
         init_layout(self)
         self._editable_view_edit_triggers = self.view.editTriggers()
