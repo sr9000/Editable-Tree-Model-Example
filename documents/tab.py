@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_data import JsonTabData
 from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_services
+from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
@@ -131,6 +132,7 @@ def _demo_data() -> dict[str, Any]:
 
 class JsonTab(QWidget):
     _navigation: JsonTabNavigationController | None = None
+    _editability: JsonTabEditabilityController | None = None
 
     dirtyChanged = Signal(bool)
     schemaChanged = Signal(object)
@@ -169,6 +171,7 @@ class JsonTab(QWidget):
         super().__init__(parent)
         self.data_store = JsonTabData()
         self._navigation = JsonTabNavigationController(self.data_store, self.edit_name_or_value_from_enter)
+        self._editability = JsonTabEditabilityController(self.data_store)
 
         # All parts stored inside self.data_store are populated here:
         self.data_store.ui = None
@@ -203,10 +206,7 @@ class JsonTab(QWidget):
         self.data_store._last_move_placed = []
 
         init_layout(self)
-        self.data_store._editable_view_edit_triggers = self.data_store.view.editTriggers()
-        self.data_store._editable_drag_enabled = self.data_store.view.dragEnabled()
-        self.data_store._editable_accept_drops = self.data_store.view.acceptDrops()
-        self.data_store._editable_drag_drop_mode = self.data_store.view.dragDropMode()
+        self._editability.capture_editable_view_state()
         self._sync_icon_size_with_font()
 
         # option to edit headers is not needed
@@ -266,21 +266,9 @@ class JsonTab(QWidget):
         self._set_dirty(False)
 
     def set_read_only(self, enabled: bool) -> None:
-        enabled = bool(enabled)
-        if self.data_store._read_only == enabled:
-            return
-        self.data_store._read_only = enabled
-        self.data_store.model.set_read_only(enabled)
-        if enabled:
-            self.data_store.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-            self.data_store.view.setDragEnabled(False)
-            self.data_store.view.setAcceptDrops(False)
-            self.data_store.view.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
-        else:
-            self.data_store.view.setEditTriggers(self.data_store._editable_view_edit_triggers)
-            self.data_store.view.setDragEnabled(self.data_store._editable_drag_enabled)
-            self.data_store.view.setAcceptDrops(self.data_store._editable_accept_drops)
-            self.data_store.view.setDragDropMode(self.data_store._editable_drag_drop_mode)
+        editability = self._editability
+        if editability is not None:
+            editability.set_read_only(enabled)
 
     def set_schema_view_source(self, source: SchemaSource | None) -> None:
         self.data_store.validation.set_schema_view_source(source)
