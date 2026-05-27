@@ -219,15 +219,15 @@ def test_create_multiple_new_file_tabs(main_window):
 
 
 def test_view_monospace_toggle_action_and_shortcut(main_window):
-    assert hasattr(main_window, "viewMonospaceFieldsAction")
+    assert hasattr(main_window, "viewMonospaceFieldsAction")  # allow: asserts UI wiring
     action = main_window.viewMonospaceFieldsAction
     assert action.isCheckable()
     assert action.shortcut().toString() == "Ctrl+Shift+M"
 
 
 def test_view_font_selector_actions_exist(main_window):
-    assert hasattr(main_window, "viewSelectRegularFontAction")
-    assert hasattr(main_window, "viewSelectMonospaceFontAction")
+    assert hasattr(main_window, "viewSelectRegularFontAction")  # allow: asserts UI wiring
+    assert hasattr(main_window, "viewSelectMonospaceFontAction")  # allow: asserts UI wiring
     assert main_window.viewSelectRegularFontAction.text() == "Select Regular Font..."
     assert main_window.viewSelectMonospaceFontAction.text() == "Select Monospace Font..."
 

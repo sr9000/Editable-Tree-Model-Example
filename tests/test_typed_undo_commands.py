@@ -158,7 +158,7 @@ def test_large_leaf_edit_does_not_store_full_document(qtbot):
     assert cmd._new_value == "after"
     # Defensive: there is no attribute holding the full document on the cmd.
     for attr in ("_before", "_after"):
-        assert not hasattr(cmd, attr), f"_EditValueCmd unexpectedly stores {attr}"
+        assert not hasattr(cmd, attr), f"_EditValueCmd unexpectedly stores {attr}"  # allow: asserts typed cmd has no diff fields
 
 
 def test_delete_stores_removed_subset_only(qtbot):
@@ -184,8 +184,8 @@ def test_delete_stores_removed_subset_only(qtbot):
     # Stored subtree is the deleted subset only.
     assert rec["value"] == {"key": "value"}
     # Sanity: no full-document field on the command.
-    assert not hasattr(cmd, "_before")
-    assert not hasattr(cmd, "_after")
+    assert not hasattr(cmd, "_before")  # allow: asserts typed cmd has no diff field
+    assert not hasattr(cmd, "_after")  # allow: asserts typed cmd has no diff field
 
 
 def test_sort_stores_sorted_subtree_only(qtbot):
@@ -213,8 +213,8 @@ def test_sort_stores_sorted_subtree_only(qtbot):
     # Stored subtree is the OBJECT subset, not the whole document.
     assert set(cmd._old_subtree.keys()) == {"zzz", "key"}
     # Defensive: command does not store full document.
-    assert not hasattr(cmd, "_before")
-    assert not hasattr(cmd, "_after")
+    assert not hasattr(cmd, "_before")  # allow: asserts typed cmd has no diff field
+    assert not hasattr(cmd, "_after")  # allow: asserts typed cmd has no diff field
 
 
 def test_move_row_command_is_o1(qtbot):
@@ -233,8 +233,8 @@ def test_move_row_command_is_o1(qtbot):
 
     assert isinstance(cmd._anchor, MoveAnchor)
     assert isinstance(cmd._anchor.parent_path, tuple)
-    assert not hasattr(cmd, "_before")
-    assert not hasattr(cmd, "_after")
+    assert not hasattr(cmd, "_before")  # allow: asserts typed cmd has no diff field
+    assert not hasattr(cmd, "_after")  # allow: asserts typed cmd has no diff field
 
 
 def test_insert_child_on_empty_root_container(qtbot):

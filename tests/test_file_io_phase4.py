@@ -12,7 +12,7 @@ from tree.types import JsonType
 def _close_window_cleanly(win: MainWindow) -> None:
     for i in range(win.tabWidget.count()):
         tab = win.tabWidget.widget(i)
-        if hasattr(tab, "undo_stack"):
+        if hasattr(tab, "undo_stack"):  # allow: test fixture supports legacy and new tab shapes
             tab.undo_stack.setClean()
     win.close()
     win.deleteLater()

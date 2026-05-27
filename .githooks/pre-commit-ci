@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# CI mirror of .githooks/pre-commit: scan the entire tracked tree (not just
+# staged files) so PR builds reject regressions even when developers bypass
+# their local hook.
+#
+# Usage:
+#   bash .githooks/pre-commit-ci
+
+set -euo pipefail
+
+ALLOWLIST=(
+    "jsontream/__init__.py"
+    "validation/error_adapter.py"
+    "app/runtime_compat.py"
+)
+
+is_allowlisted() {
+    local path="$1"
+    for allowed in "${ALLOWLIST[@]}"; do
+        [[ "$path" == "$allowed" ]] && return 0
+    done
+    return 1
+}
+
+fail=0
+while IFS= read -r f; do
+    [[ -f "$f" ]] || continue
+    if [[ "$f" == tests/* ]]; then
+        # Tests: require # allow: justification on the same line.
+        bad=$(grep -nE '\b(get|has)attr\(' "$f" | grep -vE '# *allow:' || true)
+        if [[ -n "$bad" ]]; then
+            echo "ERROR: $f contains getattr/hasattr without '# allow: <reason>':"
+            echo "$bad"
+            fail=1
+        fi
+        continue
+    fi
+    if is_allowlisted "$f"; then
+        continue
+    fi
+    if grep -nE '\b(get|has)attr\(' "$f" >/dev/null; then
+        echo "ERROR: $f contains forbidden getattr/hasattr (outside allowlist):"
+        grep -nE '\b(get|has)attr\(' "$f"
+        fail=1
+    fi
+done < <(git ls-files '*.py')
+
+exit $fail

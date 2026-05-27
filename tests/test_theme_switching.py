@@ -21,7 +21,7 @@ def _restore_color_scheme():
     original = style_hints.colorScheme() if style_hints is not None else None
     yield
     if style_hints is not None and original is not None:
-        setter = getattr(style_hints, "setColorScheme", None)
+        setter = getattr(style_hints, "setColorScheme", None)  # allow: Qt 6.x compat probe in test
         if setter is not None:
             setter(original)
 
@@ -170,7 +170,7 @@ def test_color_scheme_follows_selected_theme(qtbot, tmp_path, monkeypatch, _rest
     app = QGuiApplication.instance()
     assert isinstance(app, QGuiApplication)
     style_hints = app.styleHints()
-    setter = getattr(style_hints, "setColorScheme", None)
+    setter = getattr(style_hints, "setColorScheme", None)  # allow: Qt 6.x compat probe in test
     if setter is None:
         pytest.skip("Qt version does not support setColorScheme")
 
