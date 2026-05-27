@@ -26,6 +26,7 @@ from app.main_window_actions import setup_connections as setup_main_window_conne
 from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, refresh_recent_menu
 from app.schema_tab_pool import SchemaTabPool
+from app.tab_lifecycle import TabLifecyclePresenter
 from app.theme_controller import ThemeController
 from app.validation_dock import ValidationDock
 from dialogs.attach_schema_dlg import AttachSchemaDialog
@@ -55,7 +56,6 @@ from validation.schema_registry import SchemaSource, open_in_browser, schema_reg
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
-    _MAX_CLOSED_TABS = 10
 
     @staticmethod
     def _coerce_bool(value, *, default: bool) -> bool:
@@ -96,7 +96,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._history_view: QUndoView | None = None
         self._bound_undo_tab: JsonTab | None = None
         self._startup_window_mode: str = "normal"
-        self._closed_tabs_stack: list[dict] = []
         self._settings = QSettings(APPLICATION_ID, "app")
         # All font preferences (regular family, monospace family, editor
         # point size, monospace-fields toggle) live in a single controller
@@ -108,6 +107,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._theme = self._theme_controller.theme
         self._icon_provider = self._theme_controller.icon_provider
         self._schema_tab_pool = SchemaTabPool(self)
+        self._tab_lifecycle = TabLifecyclePresenter(self.tabWidget, self)
         self._theme_follow_action = self._theme_controller.follow_action
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
@@ -692,70 +692,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         bind_undo_signals(self, tab)
 
     def _on_tab_changed(self, _index: int) -> None:
-        tab = self._current_tab()
-        self._bind_undo_signals(tab)
-        self._bind_validation_status(tab)
-        self.validation_dock.attach_tab(tab)
-        if tab is not None:
-            tab.resize_key_columns()
-        if self._history_dialog is not None and self._history_dialog.isVisible():
-            if tab is not None and self._history_view is not None:
-                self._history_view.setStack(tab.undo_stack)
-        self.update_actions()
+        self._tab_lifecycle.on_tab_changed(_index)
 
     def _refresh_tab_presentation(self, tab: JsonTab) -> None:
-        index = self.tabWidget.indexOf(tab)
-        if index < 0:
-            return
-        self.tabWidget.setTabText(index, tab.display_name())
-        self.tabWidget.setTabToolTip(index, tab.file_path or "Untitled")
+        self._tab_lifecycle.refresh_tab_presentation(tab)
 
     def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> JsonTab | None:
-        from state.validation_settings import auto_rescan_enabled
-
-        try:
-            tab = JsonTab(
-                self.update_actions,
-                self.statusBar.showMessage,
-                data=data,
-                file_path=file_path,
-                show_root=True,
-                parent=self,
-                permanent_message_callback=lambda msg: self.statusBar.showMessage(msg, 0),
-                theme=self._theme,
-                icon_provider=self._icon_provider,
-                save_format=save_format,
-            )
-        except Exception as exc:
-            QMessageBox.critical(self, "Error", f"Failed to create tab:\n{exc}")
-            return None
-
-        # Apply the global auto-rescan setting to the new tab.
-        tab.set_auto_rescan(auto_rescan_enabled())
-
-        tab_index = self.tabWidget.addTab(tab, tab.display_name())
-        self.tabWidget.setCurrentIndex(tab_index)
-        self._refresh_tab_presentation(tab)
-        self.fonts.subscribe(tab)
-        tab.dirtyChanged.connect(lambda _dirty, t=tab: self._on_tab_dirty(t))
-
-        tab.view.expandAll()
-        tab.resize_key_columns()
-        if tab.model.show_root:
-            source_index = tab.model.index(0, 0, QModelIndex())
-            tab.view.setCurrentIndex(tab.mutations.source_to_view(source_index))
-        view_state.restore(tab)
-        # Re-broadcast: ``view_state.restore`` may have rewritten ``_font_pt``
-        # from a previously-saved per-tab value; the global controller wins.
-        self.fonts.subscribe(tab)
-
-        self._bind_undo_signals(tab)
-        self.update_actions()
-        return tab
+        return self._tab_lifecycle.add_tab(data=data, file_path=file_path, save_format=save_format)
 
     def _on_tab_dirty(self, tab: JsonTab) -> None:
-        self._refresh_tab_presentation(tab)
-        self.update_actions()
+        self._tab_lifecycle.on_tab_dirty(tab)
+
+    @property
+    def _closed_tabs_stack(self) -> list[dict]:
+        # Deprecated: presenter now owns the stack. Kept for tests/back-compat.
+        return self._tab_lifecycle.closed_tabs_stack
+
+    @property
+    def _MAX_CLOSED_TABS(self) -> int:  # noqa: N802 — deprecated shim
+        return TabLifecyclePresenter.MAX_CLOSED_TABS
 
     def _open_path(self, path: str) -> bool:
         resolved = str(Path(path).resolve())
@@ -890,70 +845,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.statusBar.showMessage("New tab created from clipboard", 2000)
 
     def close_current_tab(self) -> None:
-        tab = self._current_tab()
-        if tab is None:
-            return
-        index = self.tabWidget.indexOf(tab)
-        if index >= 0:
-            self.close_tab(index)
+        self._tab_lifecycle.close_current_tab()
 
     def reopen_closed_tab(self) -> None:
-        if not self._closed_tabs_stack:
-            return
-        snapshot = self._closed_tabs_stack.pop()
-        data = snapshot.get("data")
-        file_path = snapshot.get("file_path")
-        save_format = snapshot.get("save_format")
-        if data is None:
-            # User had discarded dirty changes — reload clean from disk if possible.
-            if file_path:
-                self._open_path(file_path)
-            else:
-                self._add_tab(data={})
-        else:
-            self._add_tab(data=data, file_path=file_path, save_format=save_format)
-        self.statusBar.showMessage("Reopened closed tab", 2000)
-        self.update_actions()
+        self._tab_lifecycle.reopen_closed_tab()
 
     def close_tab(self, index: int) -> None:
-        widget = self.tabWidget.widget(index)
-
-        snapshot = None
-        if isinstance(widget, JsonTab):
-            was_dirty = widget.is_dirty
-            if not self._confirm_close(widget):
-                return
-            # Build reopen snapshot: if user discarded dirty edits, remember file path only.
-            if was_dirty and widget.is_dirty:
-                # Discard chosen — don't resurrect dirty state on reopen.
-                if widget.file_path:
-                    snapshot = {"data": None, "file_path": widget.file_path, "save_format": widget.save_format}
-            else:
-                try:
-                    src_idx = widget.model.index(0, 0, QModelIndex())
-                    snap_data = widget.model.get_item(src_idx).to_json() if src_idx.isValid() else {}
-                except Exception:
-                    snap_data = {}
-                snapshot = {"data": snap_data, "file_path": widget.file_path, "save_format": widget.save_format}
-            self._schema_tab_pool.unregister(widget)
-            view_state.save(widget)
-        if widget is self._bound_undo_tab:
-            self._bind_undo_signals(None)
-        self.tabWidget.removeTab(index)
-        if widget is not None:
-            widget.deleteLater()
-
-        if snapshot is not None:
-            self._closed_tabs_stack.append(snapshot)
-            if len(self._closed_tabs_stack) > self._MAX_CLOSED_TABS:
-                self._closed_tabs_stack.pop(0)
-
-        self.update_actions()
-        # Re-bind to whatever tab is now current (if any).
-        current = self._current_tab()
-        self._bind_undo_signals(current)
-        self._bind_validation_status(current)
-        self.validation_dock.attach_tab(current)
+        self._tab_lifecycle.close_tab(index)
 
     def insert_child(self):
         tab = self._current_tab()
