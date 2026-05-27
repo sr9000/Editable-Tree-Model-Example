@@ -27,7 +27,6 @@ def test_tab_exposes_validation_controller(_qapp):
     tab = _make_tab()
     try:
         assert isinstance(tab.validation, TabValidationController)
-        assert tab.validation.debounce_timer is tab._mutation_debounce_timer
     finally:
         tab.deleteLater()
 

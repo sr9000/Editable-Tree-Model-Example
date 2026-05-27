@@ -304,42 +304,6 @@ class JsonTab(QWidget):
     def _last_undo_index(self, value: int) -> None:
         self.history.last_undo_index = value
 
-    @property
-    def _schema(self):
-        return self.validation.schema
-
-    @property
-    def _schema_ref(self) -> SchemaRef:
-        return self.validation.schema_ref
-
-    @property
-    def _schema_source(self) -> SchemaSource | None:
-        return self.validation.schema_source
-
-    @_schema_source.setter
-    def _schema_source(self, value) -> None:
-        # Tests set this directly; keep the controller in sync.
-        self.validation._schema_source = value
-
-    @property
-    def _issue_index(self) -> IssueIndex:
-        return self.validation.issue_index
-
-    @property
-    def _mutation_debounce_timer(self) -> QTimer:
-        import warnings
-
-        warnings.warn(
-            "JsonTab._mutation_debounce_timer is deprecated; "
-            "use tab.validation.debounce_timer instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.validation.debounce_timer
-
-    @property
-    def _auto_rescan(self) -> bool:
-        return self.validation.auto_rescan
 
     @property
     def is_read_only(self) -> bool:
@@ -378,20 +342,12 @@ class JsonTab(QWidget):
     def set_schema_from_source(self, source: SchemaSource) -> None:
         self.validation.set_schema_from_source(source)
 
-    def _swap_source(self, source: SchemaSource | None, ref: SchemaRef) -> None:
-        # Kept for tests that monkey-patch the path; forward to controller.
-        self.validation._swap_source(source, ref)
-
     def clear_schema(self) -> None:
         self.validation.clear_schema()
 
     def closeEvent(self, event):  # type: ignore[override]
         self.validation.release()
         super().closeEvent(event)
-
-    def _on_registry_schema_reloaded(self, source: SchemaSource) -> None:
-        # Kept as a deprecated shim — the controller installs its own slot.
-        self.validation._on_registry_schema_reloaded(source)
 
     def revalidate(self) -> None:
         self.validation.revalidate()
@@ -413,13 +369,6 @@ class JsonTab(QWidget):
         """
         self.validation.set_auto_rescan(enabled)
 
-    def _on_data_changed_mutation(self, top_left, bottom_right, roles=None) -> None:  # noqa: ARG002
-        # Deprecated façade — the controller owns the slot now.
-        self.validation._on_data_changed_mutation(top_left, bottom_right, roles)
-
-    def _schedule_debounced_revalidation(self, *_args) -> None:
-        # Deprecated façade — the controller owns the slot now.
-        self.validation._schedule_debounced_revalidation(*_args)
 
     # ─────────────────────────────────────────────────────────────────────
 

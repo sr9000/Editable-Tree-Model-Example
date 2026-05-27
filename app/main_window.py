@@ -199,47 +199,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         event.ignore()
 
     def _setup_validation_dock(self) -> None:  # pragma: no cover - retained for back-compat
-        # Now handled by DockValidationPresenter during __init__; this shim
-        # is left as a no-op for any external caller that may have invoked it.
         return
-
-    # ── validation dock handlers (shims to DockValidationPresenter) ──────
-
-    def _on_rescan_requested(self) -> None:
-        self._dock_validation.on_rescan_requested()
-
-    def _on_auto_rescan_toggled(self, enabled: bool) -> None:
-        self._dock_validation.on_auto_rescan_toggled(enabled)
-
-    def _on_clear_schema_requested(self) -> None:
-        self._dock_validation.on_clear_schema_requested()
-
-    def _on_attach_schema_requested(self) -> None:
-        self._dock_validation.on_attach_schema_requested()
-
-    def _on_attach_recent_schema_requested(self, source: SchemaSource) -> None:
-        self._dock_validation.on_attach_recent_schema_requested(source)
-
-    def _attach_schema_source(self, source: SchemaSource) -> None:
-        self._dock_validation.attach_schema_source(source)
-
-    def _on_reload_schema_requested(self) -> None:
-        self._dock_validation.on_reload_schema_requested()
-
-    def _on_open_schema_file_requested(self) -> None:
-        self._dock_validation.on_open_schema_file_requested()
-
-    def _on_go_to_schema_rule_requested(self, issue) -> None:
-        self._dock_validation.on_go_to_schema_rule_requested(issue)
 
     def _setup_schemas_menu(self) -> None:  # pragma: no cover - retained for back-compat
         return
 
-    def _open_schema_source(self, source: SchemaSource | None) -> None:
-        self._dock_validation.open_schema_source(source)
-
-    def _copy_schema_source_key(self, source: SchemaSource | None) -> None:
-        self._dock_validation.copy_schema_source_key(source)
 
     def _rebuild_schemas_menu(self) -> None:
         self._dock_validation.rebuild_schemas_menu()

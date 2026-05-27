@@ -41,6 +41,13 @@ from delegates.number_affix_delegate import (
 )
 from delegates.validation_badge import draw_severity_badge
 from delegates.value_formatting import _apply_type_style, format_default, format_with_type
+from delegates.editor_factory import (
+    _SecretLineEdit,
+    _SecretEditorWatcher,
+    create_value_editor,
+    set_value_editor_data,
+    set_value_model_data,
+)
 from dialogs.qhexedit_dlg import QHexDialog
 from dialogs.qmultiline_dlg import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
@@ -58,86 +65,6 @@ from tree.model_roles import JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE
 from tree.types import TEXT_LINE_FAMILY, TEXT_MULTI_FAMILY, JsonType
 from units import counts, format_bytes
 
-
-class _SecretLineEdit(QWidget):
-    def __init__(self, parent: QWidget | None = None):
-        super().__init__(parent)
-        self._revealed = False
-        self.line_edit = _CapsLockSafeLineEdit(self)
-        self.line_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.toggle_button = QPushButton(self)
-        self.toggle_button.setCheckable(True)
-        self.toggle_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.toggle_button.setAutoDefault(False)
-        self.toggle_button.setDefault(False)
-        self.toggle_button.toggled.connect(self._set_revealed)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-        layout.addWidget(self.toggle_button)
-        layout.addWidget(self.line_edit)
-
-        self.setFocusProxy(self.line_edit)
-        self._sync_toggle_button()
-
-    def text(self) -> str:
-        return self.line_edit.text()
-
-    def setText(self, text: str) -> None:
-        self.line_edit.setText(text)
-
-    def _set_revealed(self, checked: bool) -> None:
-        self._revealed = bool(checked)
-        self.line_edit.setEchoMode(QLineEdit.EchoMode.Normal if self._revealed else QLineEdit.EchoMode.Password)
-        self._sync_toggle_button()
-
-    def _sync_toggle_button(self) -> None:
-        label = "Shown" if self._revealed else "Hidden"
-        self.toggle_button.setText(label)
-        self.toggle_button.setToolTip(label)
-        if self.toggle_button.isChecked() != self._revealed:
-            self.toggle_button.blockSignals(True)
-            self.toggle_button.setChecked(self._revealed)
-            self.toggle_button.blockSignals(False)
-        self._update_button_width()
-
-    def _update_button_width(self) -> None:
-        metrics = QFontMetrics(self.toggle_button.font())
-        width = max(metrics.horizontalAdvance("Hidden"), metrics.horizontalAdvance("Shown")) + 18
-        self.toggle_button.setFixedWidth(width)
-
-    def setFont(self, font: QFont) -> None:
-        super().setFont(font)
-        self._update_button_width()
-
-
-class _SecretEditorWatcher(QObject):
-    def __init__(self, delegate: "ValueDelegate", editor: QWidget, index: QPersistentModelIndex):
-        super().__init__(editor)
-        self._delegate = delegate
-        self._editor = editor
-        self._index = index
-        app = QApplication.instance()
-        if app is not None:
-            app.applicationStateChanged.connect(self._on_app_state_changed)
-
-    def cleanup(self) -> None:
-        app = QApplication.instance()
-        if app is not None:
-            try:
-                app.applicationStateChanged.disconnect(self._on_app_state_changed)
-            except (RuntimeError, TypeError):
-                pass
-
-    def eventFilter(self, watched, event):  # type: ignore[override]
-        if event.type() == QEvent.Type.FocusOut and SECRET_HIDE_ON_FOCUS_OUT:
-            self._delegate._finalize_secret_editor(self._editor, self._index)
-        return super().eventFilter(watched, event)
-
-    def _on_app_state_changed(self, state) -> None:
-        if SECRET_HIDE_ON_FOCUS_OUT and state != Qt.ApplicationState.ApplicationActive:
-            self._delegate._finalize_secret_editor(self._editor, self._index)
 
 
 def _tab_adapter_context(host) -> DelegateEditContext:
@@ -323,189 +250,8 @@ class ValueDelegate(_TextEditorDelegateBase):
             return QModelIndex(index)
         return index
 
-
-    def _commit(
-        self,
-        index: QModelIndex | QPersistentModelIndex,
-        value,
-        role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole,
-        host=None,
-    ) -> bool:
-        idx = ValueDelegate._to_index(index)
-        if idx.model() is None:
-            return False
-        ctx = self._context_for(host)
-        result = ctx.commit(idx, value, role)
-        return bool(result)
-
-    def _notify_status(self, host, message: str, timeout: int = 3000) -> None:
-        """Surface a transient status message via the injected edit context."""
-        self._context_for(host).notify_status(message, timeout)
-
-    def _confirm_large_binary_edit(self, host, payload_size: int) -> bool:
-        return self._context_for(host).confirm_large_binary_edit(host, payload_size)
-
-    def _confirm_large_text_edit(self, host, *, text_len: int, limit: int, title: str, kind: str) -> bool:
-        return self._context_for(host).confirm_large_text_edit(
-            host, text_len=text_len, limit=limit, title=title, kind=kind
-        )
-
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget | None:
-        source_index = self._source_index(index)
-        item: JsonTreeItem = source_index.internalPointer()
-
-        editor = None
-        match item.json_type:
-            case _ if is_affix_json_type(item.json_type):
-                ctx = self._context_for(parent)
-                mru = ctx.affix_mru()
-                kind = kind_for_json_type(item.json_type)
-                mru_items = mru.items(kind) if mru is not None and hasattr(mru, "items") else []
-                icon = QIcon()
-                provider = ctx.icon_provider()
-                if provider is not None and hasattr(provider, "for_key"):
-                    key = "affix_prefix" if kind.value == "prefix" else "affix_suffix"
-                    icon = provider.for_key(key)
-                editor = AffixCompositeEditor(parent, json_type=item.json_type, mru_items=mru_items)
-            case JsonType.INTEGER:
-                editor = QBigIntSpinBox(parent)
-            case JsonType.FLOAT:
-                editor = QMpqSpinBox(parent, item.value)
-            case JsonType.PERCENT:
-                editor = QMpqSpinBox(
-                    parent,
-                    suffix="%",
-                    minimum=mpq("0"),
-                    maximum=mpq("100"),
-                    single_step=mpq("0.1"),
-                )
-            case JsonType.BOOLEAN:
-                editor = QComboBox(parent)
-                editor.addItem("true", True)
-                editor.addItem("false", False)
-            case _ if item.json_type in TEXT_LINE_FAMILY:
-                text_len = len(str(item.value or ""))
-                limit = get_string_edit_warning_limit_chars()
-                if not self._confirm_large_text_edit(
-                    parent,
-                    text_len=text_len,
-                    limit=limit,
-                    title="Large string value",
-                    kind="String value",
-                ):
-                    self._notify_status(parent, "String edit cancelled", 2000)
-                    return None
-                editor = _CapsLockSafeLineEdit(parent)
-            case JsonType.SECRET_LINE:
-                editor = _SecretLineEdit(parent)
-            case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE | JsonType.DATETIMEUTC:
-                editor = BetterDateTimeEditor(parent)
-            case _ if item.json_type in TEXT_MULTI_FAMILY:
-                text_len = len(str(item.value or ""))
-                limit = get_multiline_edit_warning_limit_chars()
-                if not self._confirm_large_text_edit(
-                    parent,
-                    text_len=text_len,
-                    limit=limit,
-                    title="Large multiline text",
-                    kind="Multiline value",
-                ):
-                    self._notify_status(parent, "Multiline edit cancelled", 2000)
-                    return None
-                pidx = QPersistentModelIndex(index)
-
-                def _save_multiline(text: str) -> None:
-                    if pidx.isValid():
-                        self._commit(pidx, text, Qt.ItemDataRole.EditRole, host=parent)
-
-                QMultilineDialog(parent=parent, text=str(item.value or ""), callback=_save_multiline).open()
-                return None
-            case JsonType.SECRET_TEXT:
-                text_len = len(str(item.value or ""))
-                limit = get_multiline_edit_warning_limit_chars()
-                if not self._confirm_large_text_edit(
-                    parent,
-                    text_len=text_len,
-                    limit=limit,
-                    title="Large secret text",
-                    kind="Secret value",
-                ):
-                    self._notify_status(parent, "Secret text edit cancelled", 2000)
-                    return None
-
-                pidx = QPersistentModelIndex(index)
-
-                def _save_secret_text(text: str) -> None:
-                    if pidx.isValid():
-                        self._commit(pidx, text, Qt.ItemDataRole.EditRole, host=parent)
-
-                dlg = QMultilineDialog(
-                    parent=parent, text=str(item.value or ""), sensitive=True, callback=_save_secret_text
-                )
-                dlg.setWindowTitle("Edit Secret Text")
-                dlg.open()
-                return None
-            case JsonType.COLOR_RGB | JsonType.COLOR_RGBA:
-                pidx = QPersistentModelIndex(index)
-                initial = parse_color(item.value if isinstance(item.value, str) else "") or parse_color("#000000")
-
-                dialog = QColorDialog(parent, currentColor=initial)
-                if item.json_type is JsonType.COLOR_RGBA:
-                    dialog.setOption(QColorDialog.ColorDialogOption.ShowAlphaChannel, True)
-                dialog.setWindowTitle(
-                    "Pick color (RGBA)" if item.json_type is JsonType.COLOR_RGBA else "Pick color (RGB)"
-                )
-
-                target_type = item.json_type
-
-                def _on_color_selected(selected) -> None:
-                    if not pidx.isValid():
-                        return
-                    text = color_to_html(selected, target_type)
-                    self._commit(pidx, text, Qt.ItemDataRole.EditRole, host=parent)
-
-                dialog.colorSelected.connect(_on_color_selected)
-                dialog.open()
-                return None
-
-            case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
-                try:
-                    decoded = decode_bytes(item.value, item.json_type)
-                except (ValueError, OSError, zlib.error, binascii.Error) as exc:
-                    self._notify_status(parent, f"Decode failed: {exc}", 4000)
-                    return None
-
-                if not self._confirm_large_binary_edit(parent, len(decoded)):
-                    self._notify_status(parent, "Binary edit cancelled", 2000)
-                    return None
-
-                pidx = QPersistentModelIndex(index)
-
-                def _save_binary(data: bytes) -> None:
-                    if not pidx.isValid():
-                        return
-                    encoded = encode_bytes(data, item.json_type)
-                    self._commit(pidx, encoded, Qt.ItemDataRole.EditRole, host=parent)
-
-                QHexDialog(parent=parent, data=decoded, callback=_save_binary).open()
-                return None
-
-            case _:
-                raise ValueError(f"Inappropriate `JsonType` in `ValueDelegate.createEditor()`: {item.json_type=}")
-
-        if editor is not None:
-            editor.setFont(self._apply_monospace_font(editor.font()))
-            self._mark_editor_open(index)
-            if item.json_type in (JsonType.SECRET_LINE, JsonType.SECRET_TEXT):
-                self._install_secret_watcher(editor, index)
-        return editor
-
-    def _install_secret_watcher(self, editor: QWidget, index: QModelIndex) -> None:
-        watcher = _SecretEditorWatcher(self, editor, QPersistentModelIndex(index))
-        editor.installEventFilter(watcher)
-        for child in editor.findChildren(QWidget):
-            child.installEventFilter(watcher)
-        self._secret_watchers[editor] = watcher
+        return create_value_editor(self, parent, option, index)
 
     def _finalize_secret_editor(self, editor: QWidget, index: QPersistentModelIndex) -> None:
         if editor is None or not index.isValid():
@@ -520,98 +266,10 @@ class ValueDelegate(_TextEditorDelegateBase):
         super().destroyEditor(editor, index)
 
     def setEditorData(self, editor: QWidget, index: QModelIndex):
-        source_index = self._source_index(index)
-        item: JsonTreeItem = source_index.internalPointer()
-        value = item.value
-
-        if isinstance(editor, QBigIntSpinBox):
-            try:
-                editor.setValue(int(value))
-            except (TypeError, ValueError):
-                editor.setValue(0)
-            return
-
-        if isinstance(editor, AffixCompositeEditor):
-            normalized = normalize_affix_value(value, item.json_type)
-            if normalized is not None:
-                editor.set_value(normalized)
-            return
-
-        if isinstance(editor, QMpqSpinBox):
-            try:
-                v = mpq(str(value)) if not isinstance(value, mpq) else value
-            except (TypeError, ValueError):
-                v = mpq(0)
-            if item.json_type is JsonType.PERCENT:
-                v = v * 100
-            editor.setValue(v)
-            return
-
-        if isinstance(editor, QComboBox):
-            editor.setCurrentIndex(0 if bool(value) else 1)
-            return
-
-        if isinstance(editor, BetterDateTimeEditor):
-            category = self._category_for_json_type(item.json_type)
-            if category is not None:
-                editor.setCategory(category)
-            editor.setText(str(value or ""))
-            return
-
-        if isinstance(editor, _SecretLineEdit):
-            editor.setText("" if value is None else str(value))
-            return
-
-        if isinstance(editor, QLineEdit):
-            editor.setText("" if value is None else str(value))
-            return
-
-        super().setEditorData(editor, index)
+        set_value_editor_data(self, editor, index)
 
     def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
-        if isinstance(editor, QBigIntSpinBox):
-            self._commit(index, editor.value(), Qt.ItemDataRole.EditRole, host=editor)
-            return
-
-        if isinstance(editor, QMpqSpinBox):
-            source_index = self._source_index(index)
-            item: JsonTreeItem = source_index.internalPointer()
-            value = editor.value()
-            if item is not None and item.json_type is JsonType.PERCENT:
-                value = value / mpq("100")
-            self._commit(index, value, Qt.ItemDataRole.EditRole, host=editor)
-            return
-
-        if isinstance(editor, QComboBox):
-            self._commit(index, editor.currentData(), Qt.ItemDataRole.EditRole, host=editor)
-            return
-
-        if isinstance(editor, BetterDateTimeEditor):
-            self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
-            return
-
-        if isinstance(editor, _SecretLineEdit):
-            self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
-            return
-
-        if isinstance(editor, QLineEdit):
-            self._commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
-            return
-
-        if isinstance(editor, AffixCompositeEditor):
-            candidate = editor.build_value()
-            validated = validate_affix_value(candidate)
-            if validated is None:
-                editor.set_invalid(True)
-                return
-            editor.set_invalid(False)
-            if self._commit(index, validated, Qt.ItemDataRole.EditRole, host=editor):
-                mru = self._context_for(editor).affix_mru()
-                if mru is not None and hasattr(mru, "push"):
-                    mru.push(validated.kind, validated.affix)
-            return
-
-        super().setModelData(editor, model, index)
+        set_value_model_data(self, editor, model, index)
 
     @staticmethod
     def _category_for_json_type(json_type: JsonType) -> DateTimeCategory | None:

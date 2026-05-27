@@ -130,12 +130,12 @@ def test_auto_rescan_toggle_on_off_cancels_pending_debounce(qtbot):
     tab.set_auto_rescan(True)
 
     # Arm the debounce by simulating a rowsInserted signal.
-    tab._schedule_debounced_revalidation()
-    assert tab._mutation_debounce_timer.isActive(), "timer should be active"
+    tab.validation._schedule_debounced_revalidation()
+    assert tab.validation.debounce_timer.isActive(), "timer should be active"
 
     # Disable auto-rescan — timer must be stopped.
     tab.set_auto_rescan(False)
-    assert not tab._mutation_debounce_timer.isActive(), "timer should be cancelled"
+    assert not tab.validation.debounce_timer.isActive(), "timer should be cancelled"
 
 
 def test_auto_rescan_property_reflects_set(qtbot):
