@@ -4,53 +4,32 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
 from PySide6.QtWidgets import QWidget
 
-from documents import tab_commands, tab_editing, tab_move_view_state, tab_tree_actions
-from documents.mutation_gateway import DocumentMutationGateway
+from documents import tab_commands, tab_editing, tab_init, tab_move_view_state, tab_tree_actions
 from documents.tab_appearance import JsonTabAppearanceController
-from documents.tab_data import JsonTabData
-from documents.tab_demo_data import build_demo_data
-from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_services
+from documents.tab_dependencies import JsonTabServices
 from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
 from documents.tab_navigation import JsonTabNavigationController
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
-from documents.tab_setup import (
-    init_delegates_and_connections,
-    init_layout,
-    init_model,
-    init_search_filter,
-    init_shortcuts,
-    init_validation_state,
-)
 from documents.tab_status import on_current_changed, size_hint_for_item
 from documents.tab_validation_view import JsonTabValidationViewController
-from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from undo.commands import (
-    _ChangeTypeCmd,
-    _EditValueCmd,
-    _InsertRowsCmd,
     _MoveRowsCmd,
-    _RemoveRowsCmd,
-    _RenameCmd,
-    _SortKeysCmd,
-    _SwitchFieldCaseCmd,
 )
-from undo.diff import DiffApplier
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef
 
-
-_DEFAULT_DATA = object()
+_DEFAULT_DATA = tab_init._DEFAULT_DATA
 
 # QUndoCommand.id() values for typed commands that support mergeWith().
 # Qt requires id() to fit in a signed 32-bit int (anything larger overflows
@@ -61,7 +40,6 @@ _CMD_ID_EDIT_VALUE = 0x0E71_0002
 # Time window in seconds during which two consecutive same-path edits
 # collapse into one undo entry. Tuned for keystroke-level typing.
 _MERGE_WINDOW_SECONDS = 0.5
-
 
 
 class JsonTab(QWidget):
@@ -96,91 +74,19 @@ class JsonTab(QWidget):
         services: JsonTabServices | None = None,
     ):
         super().__init__(parent)
-        self.data_store = JsonTabData()
-        self._appearance = JsonTabAppearanceController(self.data_store)
-        self.data_store.appearance = self._appearance
-        self._navigation = JsonTabNavigationController(self.data_store, self.edit_name_or_value_from_enter)
-        self._editability = JsonTabEditabilityController(self.data_store)
-        self.data_store.editability = self._editability
-        self._validation_view = JsonTabValidationViewController(self)
-
-        # All parts stored inside self.data_store are populated here:
-        resolved_services = services or build_legacy_json_tab_services(
+        tab_init.bootstrap(
+            self,
             update_actions_callback=update_actions_callback,
             status_message_callback=status_message_callback,
             permanent_message_callback=permanent_message_callback,
+            data=data,
+            file_path=file_path,
+            show_root=show_root,
             theme=theme,
             icon_provider=icon_provider,
+            save_format=save_format,
+            services=services,
         )
-        if services is not None and (theme is not None or icon_provider is not None):
-            resolved_services = JsonTabServices(
-                host=services.host,
-                theme=theme if theme is not None else services.theme,
-                icon_provider=icon_provider if icon_provider is not None else services.icon_provider,
-            )
-
-        self.data_store._host = resolved_services.host
-        self._appearance.initialize(resolved_services.theme, resolved_services.icon_provider)
-
-        init_layout(self)
-        self._editability.capture_editable_view_state()
-        self._sync_icon_size_with_font()
-
-        # option to edit headers is not needed
-        # self.header_editor = HeaderViewEditorMixin(self.data_store.view.header())
-
-        if data is _DEFAULT_DATA:
-            model_data = build_demo_data()
-        else:
-            model_data = data if data is not None else {}
-
-        self.data_store.affix_mru = AffixMRU()
-
-        # Phase-2.3: file path / save format / dirty flag move to a
-        # QObject controller owned by the tab.
-        from documents.tab_io_controller import TabIOController
-
-        self.data_store.io = TabIOController(self, file_path=file_path, save_format=save_format)
-        self.data_store.io.dirtyChanged.connect(self.dirtyChanged.emit)
-
-        init_model(self, model_data, show_root=show_root)
-        # Phase-2.2: undo stack and view-state map move to a dedicated
-        # QObject controller owned by the tab.
-        from documents.tab_history import TabHistoryController
-
-        self.data_store.history = TabHistoryController(self)
-        self.data_store.affix_mru.bootstrap_from_tree(self.data_store.model.root_item)
-        # Phase-0 façade: publishes a stable mutation seam over the current
-        # in-tab implementation; later commits move the implementation out.
-        self.data_store.mutations = DocumentMutationGateway(self)
-
-        # Phase-2.1: schema / validation / debounce timer / registry binding
-        # are owned by an explicit QObject controller parented to the tab.
-        from documents.tab_validation import TabValidationController
-
-        self.data_store.validation = TabValidationController(
-            self,
-            self.data_store.model,
-            on_schema_changed=lambda ref: self.schemaChanged.emit(ref),
-            on_validation_changed=lambda idx: self.validationChanged.emit(idx),
-            initial_data=model_data,
-        )
-
-        init_delegates_and_connections(self)
-        self.set_monospace_fields_enabled(self.data_store._monospace_fields_enabled)
-        init_shortcuts(self)
-        init_search_filter(self)
-        # Plug the severity provider before init_validation_state so the first
-        # revalidate() → dataChanged repaint already has the provider ready.
-        self.data_store.model.set_issue_index_provider(self._severity_provider)
-        self.validationChanged.connect(self._on_validation_changed)
-        init_validation_state(self, model_data)
-        self.data_store._diff_applier = DiffApplier(self)
-
-        self.data_store.undo_stack.cleanChanged.connect(self._on_clean_changed)
-        self.data_store.undo_stack.indexChanged.connect(self._on_undo_index_changed)
-        self.data_store.undo_stack.setClean()
-        self._set_dirty(False)
 
     def set_read_only(self, enabled: bool) -> None:
         editability = self._editability
