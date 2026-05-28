@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from . import _engine
 from validation.error_adapter import (
     err_context,
     err_instance_path,
@@ -14,6 +13,8 @@ from validation.error_adapter import (
     err_validator,
 )
 from validation.issue import ValidationIssue
+
+from . import _engine
 
 
 def _decode_json_pointer(pointer: str) -> tuple[str | int, ...]:

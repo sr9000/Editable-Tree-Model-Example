@@ -31,7 +31,9 @@ class SchemaPoolWindowProtocol(Protocol):
 
     def _current_tab(self) -> JsonTab | None: ...
 
-    def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> JsonTab | None: ...
+    def _add_tab(
+        self, *, data=None, file_path: str | None = None, save_format: str | None = None
+    ) -> JsonTab | None: ...
 
 
 class _RegistryBorrower:

@@ -6,16 +6,6 @@ from PySide6.QtCore import QFileSystemWatcher, QObject, Qt, QTimer, QUrl, Slot
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
-try:
-    from PySide6.QtCore import Shiboken as _qt_shiboken
-except (ImportError, AttributeError):
-    try:
-        import shiboken6 as _qt_shiboken
-    except ImportError:
-        _qt_shiboken = None
-
-_is_valid = _qt_shiboken.isValid if _qt_shiboken is not None else None
-
 from app.runtime_compat import (
     accent_color_role,
     color_scheme_setter,
@@ -353,8 +343,6 @@ class ThemeController:
     def on_system_color_scheme_changed(self, *_args) -> None:
         if self._suppress_scheme_signal:
             return
-        if _is_valid is not None and not _is_valid(self._parent):
-            return  # parent widget already deleted — ignore stale signal
         if not get_follow_system():
             return
         app = QGuiApplication.instance()

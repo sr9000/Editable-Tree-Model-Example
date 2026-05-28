@@ -8,7 +8,6 @@ from settings import APPLICATION_ID
 from state.validation_settings import _RECENT_SCHEMAS_KEY
 from validation.schema_types import SchemaSource
 
-
 RECENT_SCHEMAS_CAP = 12
 
 

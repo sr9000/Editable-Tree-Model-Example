@@ -23,7 +23,6 @@ def open_in_browser(source: "SchemaSource") -> bool:
     return bool(QDesktopServices.openUrl(QUrl(source.key)))
 
 
-
 @dataclass(slots=True)
 class SchemaEntry:
     source: SchemaSource
