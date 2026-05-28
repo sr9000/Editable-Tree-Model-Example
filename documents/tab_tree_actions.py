@@ -7,8 +7,9 @@ Keeps the kwarg-driven dispatcher and the small ``insert_sibling_*`` /
 from __future__ import annotations
 
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Callable
+from typing import Callable
 
+from documents.tab_protocols import TabTreeActionsProtocol
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
 from tree_actions.structure import (
@@ -24,9 +25,6 @@ from tree_actions.structure import (
     move_selection_up,
     sort_selection_keys,
 )
-
-if TYPE_CHECKING:
-    from documents.tab import JsonTab
 
 
 class TreeAction(Enum):
@@ -61,7 +59,7 @@ _ACTIONS: tuple[tuple[TreeAction, Callable[..., bool]], ...] = (
 )
 
 
-def run_tree_action(tab: JsonTab, success_message: str, actions: set[TreeAction]) -> None:
+def run_tree_action(tab: TabTreeActionsProtocol, success_message: str, actions: set[TreeAction]) -> None:
     if tab.data_store.is_read_only:
         return
     view = tab.data_store.view
@@ -72,19 +70,19 @@ def run_tree_action(tab: JsonTab, success_message: str, actions: set[TreeAction]
             return
 
 
-def do_insert_sibling_before(tab: JsonTab) -> bool:
+def do_insert_sibling_before(tab: TabTreeActionsProtocol) -> bool:
     if tab.data_store.is_read_only:
         return False
     return insert_sibling_before(tab.data_store.view)
 
 
-def do_insert_sibling_after(tab: JsonTab) -> bool:
+def do_insert_sibling_after(tab: TabTreeActionsProtocol) -> bool:
     if tab.data_store.is_read_only:
         return False
     return insert_sibling_after(tab.data_store.view)
 
 
-def do_insert_child(tab: JsonTab) -> bool:
+def do_insert_child(tab: TabTreeActionsProtocol) -> bool:
     if tab.data_store.is_read_only:
         return False
     return insert_child_current(tab.data_store.view)

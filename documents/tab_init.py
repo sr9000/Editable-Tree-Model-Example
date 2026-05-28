@@ -7,7 +7,7 @@ class itself stays narrative.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable
 
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
@@ -18,6 +18,7 @@ from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_history import TabHistoryController
 from documents.tab_io_controller import TabIOController
 from documents.tab_navigation import JsonTabNavigationController
+from documents.tab_protocols import TabBootstrapProtocol
 from documents.tab_setup import (
     init_delegates_and_connections,
     init_layout,
@@ -29,19 +30,15 @@ from documents.tab_setup import (
 from documents.tab_validation import TabValidationController
 from documents.tab_validation_view import JsonTabValidationViewController
 from state.affix_mru import AffixMRU
+from themes.icon_provider import IconProvider
+from themes.spec import ThemeSpec
 from undo.diff import DiffApplier
-
-if TYPE_CHECKING:
-    from documents.tab import JsonTab
-    from themes.icon_provider import IconProvider
-    from themes.spec import ThemeSpec
-
 
 _DEFAULT_DATA = object()
 
 
 def bootstrap(
-    tab: JsonTab,
+    tab: TabBootstrapProtocol,
     *,
     update_actions_callback: Callable[[], None] | None,
     status_message_callback: Callable[[str, int], None] | None,

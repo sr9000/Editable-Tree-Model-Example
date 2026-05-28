@@ -15,6 +15,7 @@ from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
 from documents.tab_navigation import JsonTabNavigationController
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
+from documents.tab_protocols import JsonTabWidgetMarker
 from documents.tab_status import on_current_changed, size_hint_for_item
 from documents.tab_validation_view import JsonTabValidationViewController
 from themes.icon_provider import IconProvider
@@ -44,7 +45,7 @@ _CMD_ID_EDIT_VALUE = 0x0E71_0002
 _MERGE_WINDOW_SECONDS = 0.5
 
 
-class JsonTab(QWidget):
+class JsonTab(QWidget, JsonTabWidgetMarker):
     _appearance: JsonTabAppearanceController | None = None
     _navigation: JsonTabNavigationController | None = None
     _editability: JsonTabEditabilityController | None = None

@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
 from PySide6.QtWidgets import QAbstractItemView
 
+from documents.tab_protocols import TabValidationViewProtocol
 from tree.model_roles import VALIDATION_SEVERITY_ROLE
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
-
-if TYPE_CHECKING:
-    from documents.tab import JsonTab
-
 
 _SELECT_ROW_FLAGS = QItemSelectionModel.SelectionFlag(
     QItemSelectionModel.SelectionFlag.ClearAndSelect.value | QItemSelectionModel.SelectionFlag.Rows.value
@@ -23,7 +18,7 @@ _EDITABLE_ITEM_FLAG = Qt.ItemFlag.ItemIsEditable.value
 class JsonTabValidationViewController:
     """Own validation issue navigation and validation repaint behavior."""
 
-    def __init__(self, tab: JsonTab) -> None:
+    def __init__(self, tab: TabValidationViewProtocol) -> None:
         self._tab = tab
 
     def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:

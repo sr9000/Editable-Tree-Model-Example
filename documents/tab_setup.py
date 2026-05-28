@@ -1,6 +1,6 @@
 import functools
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
@@ -11,14 +11,12 @@ from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from documents.json_tab_ui import Ui_JsonTab
+from documents.tab_protocols import TabSetupProtocol
 from documents.tab_tree_actions import TreeAction
 from tree.model import JsonTreeModel
 from tree_actions.context_menu import show_context_menu
 from tree_filter_proxy import TreeFilterProxy
 from units import counts, format_bytes
-
-if TYPE_CHECKING:
-    from documents.tab import JsonTab
 
 
 class JsonTabEditContext(DefaultEditContext):
@@ -93,7 +91,7 @@ class JsonTabEditContext(DefaultEditContext):
         return answer == QMessageBox.StandardButton.Yes
 
 
-def init_layout(tab: "JsonTab") -> None:
+def init_layout(tab: TabSetupProtocol) -> None:
     tab.data_store.ui = Ui_JsonTab()
     tab.data_store.ui.setupUi(tab)
     tab.data_store.search_edit = tab.data_store.ui.searchEdit
@@ -117,7 +115,7 @@ def init_layout(tab: "JsonTab") -> None:
     tab._appearance.adopt_view_font_defaults(initial_pt)
 
 
-def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
+def init_model(tab: TabSetupProtocol, model_data: Any, show_root: bool) -> None:
     # ``undo_stack`` is owned by ``TabHistoryController`` (Phase 2.2); the
     # tab exposes it via a delegating property.
 
@@ -132,12 +130,12 @@ def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
     tab.data_store.model.modelReset.connect(tab._on_model_reset)
 
 
-def init_validation_state(tab: "JsonTab", model_data: Any) -> None:
+def init_validation_state(tab: TabSetupProtocol, model_data: Any) -> None:
     doc_path = Path(tab.data_store.file_path).expanduser().resolve() if tab.data_store.file_path else None
     tab.data_store.validation.init_state(model_data, doc_path=doc_path)
 
 
-def init_delegates_and_connections(tab: "JsonTab") -> None:
+def init_delegates_and_connections(tab: TabSetupProtocol) -> None:
     edit_context = JsonTabEditContext(tab)
     tab._edit_context = edit_context  # kept for tests / debugging
 
@@ -170,7 +168,7 @@ def init_delegates_and_connections(tab: "JsonTab") -> None:
     tab.data_store.view.header().sectionResized.connect(_on_section_resized)
 
 
-def init_shortcuts(tab: "JsonTab") -> None:
+def init_shortcuts(tab: TabSetupProtocol) -> None:
     tab._copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, tab.data_store.view)
     tab._copy_shortcut.activated.connect(lambda: tab._run_tree_action("Copied selection", {TreeAction.COPY_ONLY}))
 
@@ -225,7 +223,7 @@ def init_shortcuts(tab: "JsonTab") -> None:
     # Keeping a second per-tab QShortcut copy causes ambiguous shortcut warnings.
 
 
-def init_search_filter(tab: "JsonTab") -> None:
+def init_search_filter(tab: TabSetupProtocol) -> None:
     tab._filter_timer = QTimer(tab)
     tab._filter_timer.setSingleShot(True)
     tab._filter_timer.setInterval(300)

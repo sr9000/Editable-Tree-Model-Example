@@ -6,16 +6,13 @@ wiring.  All entry points take the owning ``JsonTab`` as their first argument.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QComboBox
 
-if TYPE_CHECKING:
-    from documents.tab import JsonTab
+from documents.tab_protocols import TabEditingProtocol
 
 
-def on_type_changed(tab: JsonTab, item_index, lossy: bool) -> None:
+def on_type_changed(tab: TabEditingProtocol, item_index, lossy: bool) -> None:
     # ``change_type`` already emitted ``dataChanged`` for the row, which closes
     # any persistent inline editor that might have been open on the value cell.
     # We additionally close it explicitly so the row is in a clean state before
@@ -42,7 +39,7 @@ def on_type_changed(tab: JsonTab, item_index, lossy: bool) -> None:
     QTimer.singleShot(0, lambda: reopen_value_editor(tab, pidx))
 
 
-def reopen_value_editor(tab: JsonTab, value_pindex: QPersistentModelIndex) -> None:
+def reopen_value_editor(tab: TabEditingProtocol, value_pindex: QPersistentModelIndex) -> None:
     if not value_pindex.isValid():
         return
     value_index = QModelIndex(value_pindex) if isinstance(value_pindex, QPersistentModelIndex) else value_pindex
@@ -58,7 +55,7 @@ def reopen_value_editor(tab: JsonTab, value_pindex: QPersistentModelIndex) -> No
     tab.data_store.view.edit(view_index)
 
 
-def edit_name_or_value_from_enter(tab: JsonTab) -> None:
+def edit_name_or_value_from_enter(tab: TabEditingProtocol) -> None:
     """Start editing from Enter with type-column support.
 
     - Name/Value columns: edit the current editable cell.
@@ -92,7 +89,7 @@ def edit_name_or_value_from_enter(tab: JsonTab) -> None:
         return
 
 
-def open_active_type_combo_popup(tab: JsonTab) -> None:
+def open_active_type_combo_popup(tab: TabEditingProtocol) -> None:
     for combo in tab.data_store.view.findChildren(QComboBox):
         if combo.parent() is tab.data_store.view.viewport() and combo.isVisible():
             combo.showPopup()

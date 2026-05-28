@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 from PySide6.QtGui import QUndoStack
 
@@ -9,15 +9,48 @@ from documents.tab_dependencies import JsonTabHost
 from documents.tab_history import TabHistoryController
 from documents.tab_io_controller import TabIOController
 from documents.tab_validation import TabValidationController
+from themes.icon_provider import IconProvider
+from themes.spec import ThemeSpec
 from validation.index import IssueIndex
 from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef
 
-if TYPE_CHECKING:
-    from documents.tab_appearance import JsonTabAppearanceController
-    from documents.tab_editability import JsonTabEditabilityController
-    from themes.icon_provider import IconProvider
-    from themes.spec import ThemeSpec
+
+class EditabilityFacadeProtocol(Protocol):
+    @property
+    def is_read_only(self) -> bool: ...
+
+
+class AppearanceFacadeProtocol(Protocol):
+    @property
+    def theme(self) -> ThemeSpec | None: ...
+
+    @property
+    def icon_provider(self) -> IconProvider | None: ...
+
+    @property
+    def default_font_pt(self) -> int: ...
+
+    @property
+    def font_pt(self) -> int: ...
+
+    @property
+    def user_sized_columns(self) -> set[int]: ...
+
+    @property
+    def programmatic_column_resize(self) -> bool: ...
+
+    @programmatic_column_resize.setter
+    def programmatic_column_resize(self, value: bool) -> None: ...
+
+    @property
+    def monospace_fields_enabled(self) -> bool: ...
+
+    @property
+    def regular_font_family(self) -> str | None: ...
+
+    @property
+    def monospace_font_family(self) -> str | None: ...
 
 
 @dataclass
@@ -34,8 +67,8 @@ class JsonTabDataFacade:
     io: TabIOController | None = None
     history: TabHistoryController | None = None
     validation: TabValidationController | None = None
-    editability: "JsonTabEditabilityController | None" = None
-    appearance: "JsonTabAppearanceController | None" = None
+    editability: EditabilityFacadeProtocol | None = None
+    appearance: AppearanceFacadeProtocol | None = None
     _last_move_placed: list[tuple[tuple[int, ...], int]] = field(default_factory=list)
 
     def refresh_actions(self) -> None:
@@ -106,11 +139,11 @@ class JsonTabDataFacade:
         return self.editability.is_read_only if self.editability is not None else False
 
     @property
-    def theme(self) -> "ThemeSpec | None":
+    def theme(self) -> ThemeSpec | None:
         return self.appearance.theme if self.appearance is not None else None
 
     @property
-    def icon_provider(self) -> "IconProvider | None":
+    def icon_provider(self) -> IconProvider | None:
         return self.appearance.icon_provider if self.appearance is not None else None
 
     @property

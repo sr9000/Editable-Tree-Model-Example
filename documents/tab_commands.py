@@ -11,11 +11,12 @@ reach back through it for tree-model / view / undo-stack access.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from PySide6.QtCore import QModelIndex
 
 from documents.tab_number_types import would_drop_fraction_on_type_change
+from documents.tab_protocols import TabCommandsProtocol
 from tree.types import JsonType
 from undo.commands import (
     _ChangeTypeCmd,
@@ -28,10 +29,6 @@ from undo.commands import (
     _SwitchFieldCaseCmd,
 )
 
-if TYPE_CHECKING:
-    from documents.tab import JsonTab
-    from tree_actions.anchors import MoveAnchor
-
 
 def make_label(text: str, target_qname: str) -> str:
     timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
@@ -39,7 +36,7 @@ def make_label(text: str, target_qname: str) -> str:
 
 
 def push_move_row(
-    tab: JsonTab,
+    tab: TabCommandsProtocol,
     parent_index: QModelIndex,
     src: int,
     dst: int,
@@ -64,9 +61,9 @@ def push_move_row(
 
 
 def push_move_rows_anchor(
-    tab: JsonTab,
+    tab: TabCommandsProtocol,
     sources: list,
-    anchor: MoveAnchor,
+    anchor: Any,
     *,
     label: str = "move rows",
 ) -> bool:
@@ -128,7 +125,7 @@ def push_move_rows_anchor(
 
 
 def push_move_rows(
-    tab: JsonTab,
+    tab: TabCommandsProtocol,
     sources: list,
     target_parent: QModelIndex,
     target_row: int,
@@ -147,7 +144,7 @@ def push_move_rows(
     return push_move_rows_anchor(tab, sources, anchor, label=label)
 
 
-def push_rename(tab: JsonTab, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
+def push_rename(tab: TabCommandsProtocol, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
     if tab.data_store.is_read_only:
         return False
     if not name_index.isValid() or name_index.column() != 0:
@@ -170,7 +167,9 @@ def push_rename(tab: JsonTab, name_index: QModelIndex, new_name: Any, *, label: 
     return True
 
 
-def push_edit_value(tab: JsonTab, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
+def push_edit_value(
+    tab: TabCommandsProtocol, value_index: QModelIndex, new_value: Any, *, label: str = "edit value"
+) -> bool:
     if tab.data_store.is_read_only:
         return False
     if not value_index.isValid() or value_index.column() != 2:
@@ -195,7 +194,9 @@ def push_edit_value(tab: JsonTab, value_index: QModelIndex, new_value: Any, *, l
     return True
 
 
-def push_change_type(tab: JsonTab, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
+def push_change_type(
+    tab: TabCommandsProtocol, type_index: QModelIndex, new_type: Any, *, label: str = "change type"
+) -> bool:
     if tab.data_store.is_read_only:
         return False
     if not type_index.isValid() or type_index.column() != 1:
@@ -229,7 +230,7 @@ def push_change_type(tab: JsonTab, type_index: QModelIndex, new_type: Any, *, la
 
 
 def push_insert_rows(
-    tab: JsonTab,
+    tab: TabCommandsProtocol,
     inserts: list,
     *,
     label: str = "insert",
@@ -250,7 +251,7 @@ def push_insert_rows(
     return True
 
 
-def push_remove_rows(tab: JsonTab, indexes: list, *, label: str = "delete") -> bool:
+def push_remove_rows(tab: TabCommandsProtocol, indexes: list, *, label: str = "delete") -> bool:
     if tab.data_store.is_read_only:
         return False
     if not indexes:
@@ -274,7 +275,13 @@ def push_remove_rows(tab: JsonTab, indexes: list, *, label: str = "delete") -> b
     return True
 
 
-def push_sort_keys(tab: JsonTab, index: QModelIndex, *, recursive: bool = False, label: str | None = None) -> bool:
+def push_sort_keys(
+    tab: TabCommandsProtocol,
+    index: QModelIndex,
+    *,
+    recursive: bool = False,
+    label: str | None = None,
+) -> bool:
     if tab.data_store.is_read_only:
         return False
     if not index.isValid():
@@ -293,7 +300,7 @@ def push_sort_keys(tab: JsonTab, index: QModelIndex, *, recursive: bool = False,
 
 
 def push_switch_field_case(
-    tab: JsonTab,
+    tab: TabCommandsProtocol,
     renames: list[dict[str, Any]],
     *,
     label: str = "switch field case",
