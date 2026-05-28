@@ -5,7 +5,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-import gmpy2
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
@@ -19,6 +18,11 @@ from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
 from documents.tab_navigation import JsonTabNavigationController
+from documents.tab_number_types import (
+    is_float_number_type,
+    is_integer_number_type,
+    would_drop_fraction_on_type_change,
+)
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
 from documents.tab_setup import (
     init_delegates_and_connections,
@@ -63,7 +67,6 @@ from undo.commands import (
     _SwitchFieldCaseCmd,
 )
 from undo.diff import DiffApplier
-from units.number_affix import NumberAffix
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.schema_registry import SchemaSource
@@ -874,7 +877,7 @@ class JsonTab(QWidget):
         item = self.data_store.model.get_item(name_idx)
         if item.json_type is target_type:
             return False
-        warn_fraction_loss = self._would_drop_fraction_on_type_change(item, target_type)
+        warn_fraction_loss = would_drop_fraction_on_type_change(item, target_type)
         old_subtree = item.to_json()
         old_explicit = item.explicit_type
         old_type = item.json_type
@@ -895,22 +898,15 @@ class JsonTab(QWidget):
 
     @staticmethod
     def _is_integer_number_type(json_type: JsonType) -> bool:
-        return json_type in (JsonType.INTEGER, JsonType.INTEGER_CURRENCY, JsonType.INTEGER_UNITS)
+        return is_integer_number_type(json_type)
 
     @staticmethod
     def _is_float_number_type(json_type: JsonType) -> bool:
-        return json_type in (JsonType.FLOAT, JsonType.PERCENT, JsonType.FLOAT_CURRENCY, JsonType.FLOAT_UNITS)
+        return is_float_number_type(json_type)
 
-    @classmethod
-    def _would_drop_fraction_on_type_change(cls, item: JsonTreeItem, target_type: JsonType) -> bool:
-        if not cls._is_integer_number_type(target_type) or not cls._is_float_number_type(item.json_type):
-            return False
-        source_value = item.value.number if isinstance(item.value, NumberAffix) else item.value
-        try:
-            q = gmpy2.mpq(str(source_value))
-        except (TypeError, ValueError):
-            return False
-        return q.denominator != 1
+    @staticmethod
+    def _would_drop_fraction_on_type_change(item: JsonTreeItem, target_type: JsonType) -> bool:
+        return would_drop_fraction_on_type_change(item, target_type)
 
     def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
         """``inserts`` is a list of ``{parent_path, row, value, name}``."""
