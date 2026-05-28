@@ -7,6 +7,7 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
 from PySide6.QtWidgets import QWidget
 
 from documents import tab_commands, tab_editing, tab_init, tab_move_view_state, tab_tree_actions
+from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
 from documents.tab_dependencies import JsonTabServices
@@ -107,6 +108,15 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     @property
     def is_read_only(self) -> bool:
         return self.data_store.is_read_only
+
+    @property
+    def mutations(self) -> DocumentMutationGateway:
+        """Typed accessor for the document mutation gateway.
+
+        Replaces ``tab.data_store.mutations`` for external callers; see
+        ``plans/20-decouple-jsontab.md`` Phase B.
+        """
+        return self.data_store.mutations
 
     @property
     def undo_stack(self):
