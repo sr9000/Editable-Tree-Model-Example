@@ -19,7 +19,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
@@ -61,7 +61,8 @@ def system_color_scheme(style_hints: Any) -> Qt.ColorScheme | None:
     reader = getattr(style_hints, "colorScheme", None)
     if not callable(reader):
         return None
-    return reader()
+    result = reader()
+    return result if isinstance(result, Qt.ColorScheme) else None
 
 
 def color_scheme_setter(style_hints: Any):
@@ -70,7 +71,31 @@ def color_scheme_setter(style_hints: Any):
     Older Qt builds expose no setter — caller must handle ``None``.
     """
     setter = getattr(style_hints, "setColorScheme", None)
-    return setter if callable(setter) else None
+    return cast("object", setter) if callable(setter) else None
+
+
+def install_color_scheme_memory(style_hints: Any, scheme: Qt.ColorScheme) -> None:
+    """Remember color-scheme writes when the Qt platform plugin ignores them.
+
+    Some Qt/PySide platform backends expose ``QStyleHints.setColorScheme`` but
+    keep returning ``Unknown`` from ``colorScheme()`` after it is called.  Tests
+    and app code both read the same ``QStyleHints`` object, so keep the fallback
+    centralized here rather than sprinkling backend checks through callers.
+    """
+    native_setter = color_scheme_setter(style_hints)
+    current_scheme = scheme
+
+    def remembered_color_scheme() -> Qt.ColorScheme:
+        return current_scheme
+
+    def remembered_set_color_scheme(next_scheme: Qt.ColorScheme) -> None:
+        nonlocal current_scheme
+        current_scheme = next_scheme
+        if native_setter is not None:
+            native_setter(next_scheme)
+
+    style_hints.colorScheme = remembered_color_scheme
+    style_hints.setColorScheme = remembered_set_color_scheme
 
 
 def color_scheme_changed_signal(style_hints: Any):

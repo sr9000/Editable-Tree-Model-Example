@@ -7,18 +7,21 @@ from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplicati
 from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
 try:
-    from PySide6.QtCore import Shiboken as _shiboken
-
-    _is_valid = _shiboken.isValid
+    from PySide6.QtCore import Shiboken as _qt_shiboken
 except (ImportError, AttributeError):
     try:
-        import shiboken6 as _shiboken
-
-        _is_valid = _shiboken.isValid
+        import shiboken6 as _qt_shiboken
     except ImportError:
-        _is_valid = None
+        _qt_shiboken = None
 
-from app.runtime_compat import accent_color_role, color_scheme_setter, has_color_scheme_changed_signal
+_is_valid = _qt_shiboken.isValid if _qt_shiboken is not None else None
+
+from app.runtime_compat import (
+    accent_color_role,
+    color_scheme_setter,
+    has_color_scheme_changed_signal,
+    install_color_scheme_memory,
+)
 from state.theme_settings import (
     get_follow_system,
     get_watch_user_dir,
@@ -190,6 +193,8 @@ class ThemeController:
             self._suppress_scheme_signal = True
             try:
                 setter(target)
+                if style_hints.colorScheme() != target:
+                    install_color_scheme_memory(style_hints, target)
             finally:
                 self._suppress_scheme_signal = False
 
