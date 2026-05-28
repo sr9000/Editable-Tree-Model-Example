@@ -8,8 +8,7 @@ QMainWindow.statusBar() method that broke "Create new file").
 from time import sleep
 
 import pytest
-from PySide6.QtCore import (QByteArray, QMimeData, QModelIndex, QSettings, Qt,
-                            QUrl, qInstallMessageHandler)
+from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, Qt, QUrl, qInstallMessageHandler
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QStatusBar
 from pytestqt.plugin import qtbot
