@@ -18,11 +18,7 @@ from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
 from documents.tab_navigation import JsonTabNavigationController
-from documents.tab_number_types import (
-    is_float_number_type,
-    is_integer_number_type,
-    would_drop_fraction_on_type_change,
-)
+from documents.tab_number_types import would_drop_fraction_on_type_change
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
 from documents.tab_setup import (
     init_delegates_and_connections,
@@ -896,17 +892,6 @@ class JsonTab(QWidget):
             self.show_status("Fractional part discarded during float-to-integer conversion", 3000)
         return True
 
-    @staticmethod
-    def _is_integer_number_type(json_type: JsonType) -> bool:
-        return is_integer_number_type(json_type)
-
-    @staticmethod
-    def _is_float_number_type(json_type: JsonType) -> bool:
-        return is_float_number_type(json_type)
-
-    @staticmethod
-    def _would_drop_fraction_on_type_change(item: JsonTreeItem, target_type: JsonType) -> bool:
-        return would_drop_fraction_on_type_change(item, target_type)
 
     def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
         """``inserts`` is a list of ``{parent_path, row, value, name}``."""
