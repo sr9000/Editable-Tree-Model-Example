@@ -123,15 +123,18 @@ Each step has: **goal**, **scope**, **DoD-specific notes**, **rollback**.
   *DoD:* lint + tests green; new file is imported by nothing.
   *Rollback:* `git revert` the single commit; nothing else to undo.
 
-* **A2. Add a deprecation shim recorder.**
-  *Goal:* introduce `documents/_data_store_audit.py` — a `__getattr__`
-  hook on `JsonTabData` that, when the env var
-  `DOCUMENTS_AUDIT_DATA_STORE=1` is set, logs every external read of
-  `data_store.<attr>` (caller file:line). Off by default → zero
-  behaviour change.
-  *DoD:* run the suite once with the audit on, commit the produced
-  `reports/data_store_access.txt` as the baseline.
-  *Rollback:* revert; report is informational only.
+* **A2. ~~Add a deprecation shim recorder.~~ — DEFERRED.**
+  Original plan was a `__getattr__` hook on `JsonTabData` logging
+  external reads. Two reasons to skip:
+  1. The reflection ban (`.githooks/pre-commit`) matches `__getattr__(`
+     against its `\b(get|has)attr\(` regex, so the hook would need
+     allowlisting purely for instrumentation — wrong trade-off.
+  2. The §1 access matrix already enumerates every leaked attribute
+     (`mutations` 64, `model` 54, `file_path` 27, …) which is the
+     only data the audit was meant to produce. No additional
+     information is needed to drive Phases B–F.
+  Re-open A2 only if Phase B uncovers callers not captured by the
+  static grep.
 
 * **A3. Pin the test gate.**
   *Goal:* add a `make test` target wrapping
