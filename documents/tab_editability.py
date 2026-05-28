@@ -12,10 +12,15 @@ class JsonTabEditabilityController:
 
     def __init__(self, data_store: JsonTabData) -> None:
         self._data_store = data_store
+        self._read_only: bool = False
         self._captured_edit_triggers: QAbstractItemView.EditTrigger | None = None
         self._captured_drag_enabled: bool = True
         self._captured_accept_drops: bool = True
         self._captured_drag_drop_mode: QAbstractItemView.DragDropMode | None = None
+
+    @property
+    def is_read_only(self) -> bool:
+        return self._read_only
 
     def capture_editable_view_state(self) -> None:
         view = self._require_view()
@@ -26,10 +31,10 @@ class JsonTabEditabilityController:
 
     def set_read_only(self, enabled: bool) -> None:
         enabled = bool(enabled)
-        if self._data_store._read_only == enabled:
+        if self._read_only == enabled:
             return
 
-        self._data_store._read_only = enabled
+        self._read_only = enabled
         self._require_model().set_read_only(enabled)
 
         view = self._require_view()

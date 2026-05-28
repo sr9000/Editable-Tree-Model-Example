@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtGui import QUndoStack
 
@@ -12,6 +12,9 @@ from documents.tab_validation import TabValidationController
 from validation.index import IssueIndex
 from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef
+
+if TYPE_CHECKING:
+    from documents.tab_editability import JsonTabEditabilityController
 
 
 @dataclass
@@ -28,7 +31,7 @@ class JsonTabDataFacade:
     io: TabIOController | None = None
     history: TabHistoryController | None = None
     validation: TabValidationController | None = None
-    _read_only: bool = False
+    editability: "JsonTabEditabilityController | None" = None
     _last_move_placed: list[tuple[tuple[int, ...], int]] = field(default_factory=list)
 
     def refresh_actions(self) -> None:
@@ -96,7 +99,7 @@ class JsonTabDataFacade:
 
     @property
     def is_read_only(self) -> bool:
-        return self._read_only
+        return self.editability.is_read_only if self.editability is not None else False
 
     @property
     def issue_index(self) -> IssueIndex | None:

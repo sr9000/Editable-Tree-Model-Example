@@ -176,6 +176,7 @@ class JsonTab(QWidget):
         self._appearance = JsonTabAppearanceController(self.data_store)
         self._navigation = JsonTabNavigationController(self.data_store, self.edit_name_or_value_from_enter)
         self._editability = JsonTabEditabilityController(self.data_store)
+        self.data_store.editability = self._editability
         self._validation_view = JsonTabValidationViewController(self)
 
         # All parts stored inside self.data_store are populated here:
@@ -730,7 +731,7 @@ class JsonTab(QWidget):
     # ------------------------------------------------------------------
 
     def push_move_row(self, parent_index: QModelIndex, src: int, dst: int, *, label: str = "move row") -> bool:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         if src == dst:
             return False
@@ -769,7 +770,7 @@ class JsonTab(QWidget):
         """
         from tree_actions.anchors import anchor_is_cycle, anchor_is_no_op, resolve_anchor_insert_row
 
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         if not sources:
             return False
@@ -827,7 +828,7 @@ class JsonTab(QWidget):
         (pre-pop convention) into a ``MoveAnchor`` and delegates."""
         from tree_actions.anchors import pre_pop_target_row_to_anchor
 
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         if not sources:
             return False
@@ -866,7 +867,7 @@ class JsonTab(QWidget):
             sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         if not name_index.isValid() or name_index.column() != 0:
             return False
@@ -888,7 +889,7 @@ class JsonTab(QWidget):
         return True
 
     def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         if not value_index.isValid() or value_index.column() != 2:
             return False
@@ -912,7 +913,7 @@ class JsonTab(QWidget):
         return True
 
     def push_change_type(self, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         if not type_index.isValid() or type_index.column() != 1:
             return False
@@ -964,7 +965,7 @@ class JsonTab(QWidget):
 
     def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
         """``inserts`` is a list of ``{parent_path, row, value, name}``."""
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         if not inserts:
             return False
@@ -978,7 +979,7 @@ class JsonTab(QWidget):
         return True
 
     def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         if not indexes:
             return False
@@ -1001,7 +1002,7 @@ class JsonTab(QWidget):
         return True
 
     def push_sort_keys(self, index: QModelIndex, *, recursive: bool = False, label: str | None = None) -> bool:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         if not index.isValid():
             return False
@@ -1024,7 +1025,7 @@ class JsonTab(QWidget):
         label: str = "switch field case",
         target_qname: str | None = None,
     ) -> bool:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         if not renames:
             return False
@@ -1090,7 +1091,7 @@ class JsonTab(QWidget):
         move_out_down: bool = False,
         sort_keys: bool = False,
     ) -> None:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return
         changed = False
         if copy_only:
@@ -1122,16 +1123,16 @@ class JsonTab(QWidget):
             self.show_status(success_message, 1500)
 
     def insert_sibling_before(self) -> bool:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         return insert_sibling_before(self.data_store.view)
 
     def insert_sibling_after(self) -> bool:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         return insert_sibling_after(self.data_store.view)
 
     def insert_child(self) -> bool:
-        if self.data_store._read_only:
+        if self.data_store.is_read_only:
             return False
         return insert_child_current(self.data_store.view)
