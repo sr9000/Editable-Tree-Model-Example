@@ -39,10 +39,10 @@ for f in $staged_py; do
         bad=$(git diff --cached -- "$f" \
                 | grep -E '^\+' \
                 | grep -vE '^\+\+\+' \
-                | grep -E '\b(get|has)attr\(' \
+                | grep -E '\b(get|has)attr\(|TYPE_CHECKING|AttributeError' \
                 | grep -vE '# *allow:' || true)
         if [[ -n "$bad" ]]; then
-            echo "ERROR: new getattr/hasattr in $f must end with '# allow: <reason>':"
+            echo "ERROR: new getattr/hasattr/TYPE_CHECKING/AttributeError in $f must end with '# allow: <reason>':"
             echo "$bad"
             fail=1
         fi
@@ -55,9 +55,9 @@ for f in $staged_py; do
 
     # Match the bare call; strings/docstrings should not contain a literal
     # 'getattr(' / 'hasattr(' — if they do, rephrase the prose.
-    if grep -nE '\b(get|has)attr\(' "$f" >/dev/null; then
-        echo "ERROR: $f contains forbidden getattr/hasattr (outside allowlist):"
-        grep -nE '\b(get|has)attr\(' "$f"
+    if grep -nE '\b(get|has)attr\(|TYPE_CHECKING|AttributeError' "$f" >/dev/null; then
+        echo "ERROR: $f contains forbidden getattr/hasattr/TYPE_CHECKING/AttributeError (outside allowlist):"
+        grep -nE '\b(get|has)attr\(|TYPE_CHECKING|AttributeError' "$f"
         fail=1
     fi
 done

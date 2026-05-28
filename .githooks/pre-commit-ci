@@ -27,9 +27,9 @@ while IFS= read -r f; do
     [[ -f "$f" ]] || continue
     if [[ "$f" == tests/* ]]; then
         # Tests: require # allow: justification on the same line.
-        bad=$(grep -nE '\b(get|has)attr\(' "$f" | grep -vE '# *allow:' || true)
+        bad=$(grep -nE '\b(get|has)attr\(|TYPE_CHECKING|AttributeError' "$f" | grep -vE '# *allow:' || true)
         if [[ -n "$bad" ]]; then
-            echo "ERROR: $f contains getattr/hasattr without '# allow: <reason>':"
+            echo "ERROR: $f contains getattr/hasattr/TYPE_CHECKING/AttributeError without '# allow: <reason>':"
             echo "$bad"
             fail=1
         fi
@@ -38,9 +38,9 @@ while IFS= read -r f; do
     if is_allowlisted "$f"; then
         continue
     fi
-    if grep -nE '\b(get|has)attr\(' "$f" >/dev/null; then
-        echo "ERROR: $f contains forbidden getattr/hasattr (outside allowlist):"
-        grep -nE '\b(get|has)attr\(' "$f"
+    if grep -nE '\b(get|has)attr\(|TYPE_CHECKING|AttributeError' "$f" >/dev/null; then
+        echo "ERROR: $f contains forbidden getattr/hasattr/TYPE_CHECKING/AttributeError (outside allowlist):"
+        grep -nE '\b(get|has)attr\(|TYPE_CHECKING|AttributeError' "$f"
         fail=1
     fi
 done < <(git ls-files '*.py')
