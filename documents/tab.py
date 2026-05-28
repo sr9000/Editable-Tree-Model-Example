@@ -4,10 +4,10 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import QItemSelectionModel, QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
-from documents import tab_commands
+from documents import tab_commands, tab_move_view_state
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
@@ -30,13 +30,11 @@ from documents.tab_setup import (
 from documents.tab_status import on_current_changed, size_hint_for_item
 from documents.tab_validation_view import JsonTabValidationViewController
 from state.affix_mru import AffixMRU
-from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
-from tree_actions.selection import selected_source_rows
 from tree_actions.structure import (
     cut_selection,
     delete_selection,
@@ -491,135 +489,16 @@ class JsonTab(QWidget):
         on_current_changed(self, current, _previous)
 
     def _collect_expanded_paths(self) -> list[tuple[int, ...]]:
-        """Return paths of every currently expanded row.
-
-        Kept as a standalone helper because a few tests (and any future
-        view-state save/restore) want to enumerate expansion. It is no
-        longer part of any undo/redo path.
-        """
-        paths: list[tuple[int, ...]] = []
-
-        def visit(parent_index: QModelIndex) -> None:
-            for r in range(self.data_store.model.rowCount(parent_index)):
-                child = self.data_store.model.index(r, 0, parent_index)
-                if not child.isValid():
-                    continue
-                view_child = self._source_to_view(child)
-                if self.data_store.view.isExpanded(view_child):
-                    paths.append(self._index_path(child))
-                    visit(child)
-
-        visit(QModelIndex())
-        return paths
+        return tab_move_view_state.collect_expanded_paths(self)
 
     def _capture_move_view_state(self, sources: list) -> dict[str, Any]:
-        roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]] = {}
-        for idx in sources:
-            row0 = self.data_store.model.index(idx.row(), 0, idx.parent())
-            if not row0.isValid():
-                continue
-            key = (self._index_path(row0.parent()), row0.row())
-            view_idx = self._source_to_view(row0)
-            roots_state[key] = {
-                "expanded_root": bool(view_idx.isValid() and self.data_store.view.isExpanded(view_idx)),
-                "expanded_rel": list(iter_expanded_relative_paths(self.data_store.view, row0)),
-            }
-
-        selected_paths = [self._index_path(idx) for idx in selected_source_rows(self.data_store.view) if idx.isValid()]
-        current_src = self._proxy_to_source(self.data_store.view.currentIndex())
-        if current_src.isValid():
-            current_src = self.data_store.model.index(current_src.row(), 0, current_src.parent())
-        current_path = self._index_path(current_src) if current_src.isValid() else None
-        return {
-            "roots": roots_state,
-            "selection_before": selected_paths,
-            "current_before": current_path,
-        }
-
-    @staticmethod
-    def _sort_move_paths(paths: list[tuple[tuple[int, ...], int]]) -> list[tuple[tuple[int, ...], int]]:
-        return sorted(paths, key=lambda p: (p[0], p[1]))
-
-    def _apply_relative_expansion_mapping(
-        self,
-        source_roots: list[tuple[tuple[int, ...], int]],
-        target_roots: list[tuple[tuple[int, ...], int]],
-        roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]],
-    ) -> None:
-        ordered_sources = self._sort_move_paths(source_roots)
-        for source_root, target_root in zip(ordered_sources, target_roots):
-            state = roots_state.get(source_root)
-            if state is None:
-                continue
-            target_parent_path, target_row = target_root
-            target_parent = self._index_from_path(target_parent_path)
-            target_index = self.data_store.model.index(target_row, 0, target_parent)
-            if not target_index.isValid():
-                continue
-            target_view = self._source_to_view(target_index)
-            if target_view.isValid():
-                self.data_store.view.setExpanded(target_view, bool(state.get("expanded_root", False)))
-            apply_expanded_relative_paths(self.data_store.view, target_index, state.get("expanded_rel", []))
-
-    def _restore_selection_paths(self, paths: list[tuple[int, ...]], current_path: tuple[int, ...] | None) -> None:
-        from PySide6.QtCore import QItemSelection, QItemSelectionModel
-
-        sm = self.data_store.view.selectionModel()
-        if sm is None:
-            return
-        selection = QItemSelection()
-        first_view_idx = None
-        for path in paths:
-            src_idx = self._index_from_path(path)
-            view_idx = self._source_to_view(src_idx)
-            if not view_idx.isValid():
-                continue
-            selection.select(view_idx, view_idx)
-            if first_view_idx is None:
-                first_view_idx = view_idx
-        sm.select(
-            selection,
-            QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
-        )
-        if current_path is not None:
-            src_current = self._index_from_path(current_path)
-            view_current = self._source_to_view(src_current)
-            if view_current.isValid():
-                sm.setCurrentIndex(view_current, QItemSelectionModel.SelectionFlag.NoUpdate)
-                return
-        if first_view_idx is not None:
-            sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
+        return tab_move_view_state.capture_move_view_state(self, sources)
 
     def _apply_move_view_state(self, cmd: _MoveRowsCmd, *, undo: bool) -> None:
-        state = self.data_store._move_view_state_by_cmd_id.get(id(cmd))
-        if state is None:
-            return
-        roots_state = state.get("roots", {})
-        if undo:
-            self._apply_relative_expansion_mapping(
-                cmd.source_paths, self._sort_move_paths(cmd.source_paths), roots_state
-            )
-            self._restore_selection_paths(state.get("selection_before", []), state.get("current_before"))
-            return
-        self._apply_relative_expansion_mapping(cmd.source_paths, cmd.placed_paths, roots_state)
-        self._restore_selection_at_paths(cmd.placed_paths)
+        tab_move_view_state.apply_move_view_state(self, cmd, undo=undo)
 
     def _on_undo_index_changed(self, new_index: int) -> None:
-        old_index = self.data_store._last_undo_index
-        if new_index == old_index:
-            return
-
-        if new_index > old_index:
-            for i in range(old_index, new_index):
-                cmd = self.data_store.undo_stack.command(i)
-                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in self.data_store._move_view_state_by_cmd_id:
-                    self._apply_move_view_state(cmd, undo=False)
-        else:
-            for i in range(old_index - 1, new_index - 1, -1):
-                cmd = self.data_store.undo_stack.command(i)
-                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in self.data_store._move_view_state_by_cmd_id:
-                    self._apply_move_view_state(cmd, undo=True)
-        self.data_store._last_undo_index = new_index
+        tab_move_view_state.on_undo_index_changed(self, new_index)
 
     # ------------------------------------------------------------------
     # Smart-restore diff helpers
@@ -673,35 +552,7 @@ class JsonTab(QWidget):
         return tab_commands.push_move_rows(self, sources, target_parent, target_row, label=label)
 
     def _restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
-        """Drive the view's selectionModel so the rows at the given
-        ``(parent_path, row)`` tuples are all selected after a move.
-
-        Lifted out of ``_MoveRowsCmd`` so that the undo command stays
-        decoupled from the view.
-        """
-        if not placed:
-            return
-        from PySide6.QtCore import QItemSelection, QItemSelectionModel
-
-        sm = self.data_store.view.selectionModel()
-        if sm is None:
-            return
-        selection = QItemSelection()
-        first_view_idx = None
-        for parent_path, row in placed:
-            p = self._index_from_path(parent_path)
-            src_idx = self.data_store.model.index(row, 0, p)
-            view_idx = self._source_to_view(src_idx)
-            if view_idx.isValid():
-                selection.select(view_idx, view_idx)
-                if first_view_idx is None:
-                    first_view_idx = view_idx
-        sm.select(
-            selection,
-            QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
-        )
-        if first_view_idx is not None:
-            sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
+        tab_move_view_state.restore_selection_at_paths(self, placed)
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
         return tab_commands.push_rename(self, name_index, new_name, label=label)
