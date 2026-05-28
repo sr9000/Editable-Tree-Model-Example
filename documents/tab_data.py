@@ -43,7 +43,3 @@ class JsonTabData(JsonTabDataFacade):
     affix_mru: AffixMRU = field(default=None)
     mutations: DocumentMutationGateway = field(default=None)
     _diff_applier: Any = field(default=None)
-    _editable_view_edit_triggers: Any = None
-    _editable_drag_enabled: Any = None
-    _editable_accept_drops: Any = None
-    _editable_drag_drop_mode: Any = None

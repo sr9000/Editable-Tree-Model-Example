@@ -12,13 +12,17 @@ class JsonTabEditabilityController:
 
     def __init__(self, data_store: JsonTabData) -> None:
         self._data_store = data_store
+        self._captured_edit_triggers: QAbstractItemView.EditTrigger | None = None
+        self._captured_drag_enabled: bool = True
+        self._captured_accept_drops: bool = True
+        self._captured_drag_drop_mode: QAbstractItemView.DragDropMode | None = None
 
     def capture_editable_view_state(self) -> None:
         view = self._require_view()
-        self._data_store._editable_view_edit_triggers = view.editTriggers()
-        self._data_store._editable_drag_enabled = view.dragEnabled()
-        self._data_store._editable_accept_drops = view.acceptDrops()
-        self._data_store._editable_drag_drop_mode = view.dragDropMode()
+        self._captured_edit_triggers = view.editTriggers()
+        self._captured_drag_enabled = view.dragEnabled()
+        self._captured_accept_drops = view.acceptDrops()
+        self._captured_drag_drop_mode = view.dragDropMode()
 
     def set_read_only(self, enabled: bool) -> None:
         enabled = bool(enabled)
@@ -36,10 +40,12 @@ class JsonTabEditabilityController:
             view.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
             return
 
-        view.setEditTriggers(self._data_store._editable_view_edit_triggers)
-        view.setDragEnabled(self._data_store._editable_drag_enabled)
-        view.setAcceptDrops(self._data_store._editable_accept_drops)
-        view.setDragDropMode(self._data_store._editable_drag_drop_mode)
+        if self._captured_edit_triggers is not None:
+            view.setEditTriggers(self._captured_edit_triggers)
+        view.setDragEnabled(self._captured_drag_enabled)
+        view.setAcceptDrops(self._captured_accept_drops)
+        if self._captured_drag_drop_mode is not None:
+            view.setDragDropMode(self._captured_drag_drop_mode)
 
     def _require_view(self) -> JsonTreeView:
         view = self._data_store.view
