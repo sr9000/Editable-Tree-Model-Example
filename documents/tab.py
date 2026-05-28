@@ -71,6 +71,7 @@ from validation.issue import ValidationIssue
 from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef
 
+
 def _make_label(text: str, target_qname: str) -> str:
     timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
     return f"[{timestamp}] {text} @ {target_qname}"
