@@ -7,7 +7,6 @@ from validation.schema_registry import SchemaRegistry, SchemaSource
 from validation.schema_source import SchemaRef
 
 schema_registry_module = importlib.import_module("validation.schema_registry")
-tab_module = importlib.import_module("documents.tab")
 
 
 class _Tab:
@@ -16,7 +15,7 @@ class _Tab:
 
 def test_file_change_reloads_in_place_and_revalidates_tab(qtbot, tmp_path, monkeypatch):
     registry = SchemaRegistry()
-    monkeypatch.setattr(tab_module, "schema_registry", registry)
+    monkeypatch.setattr(schema_registry_module, "schema_registry", registry, raising=False)
 
     schema_path = tmp_path / "live.schema.json"
     schema_path.write_text(
@@ -28,11 +27,11 @@ def test_file_change_reloads_in_place_and_revalidates_tab(qtbot, tmp_path, monke
 
     tab = JsonTab(lambda *_: None, data={"v": 1}, show_root=True)
     qtbot.addWidget(tab)
-    tab.set_schema(SchemaRef(path=schema_path, inline=None, origin="manual"))
+    tab.data_store.validation.set_schema(SchemaRef(path=schema_path, inline=None, origin="manual"))
 
     entry = registry.lookup(source)
     assert entry is not None
-    assert len(tab.issue_index.all_issues()) == 0
+    assert len(tab.data_store.issue_index.all_issues()) == 0
 
     seen: list[SchemaSource] = []
     registry.schemaReloaded.connect(lambda reloaded: seen.append(reloaded))
@@ -50,7 +49,7 @@ def test_file_change_reloads_in_place_and_revalidates_tab(qtbot, tmp_path, monke
 
     assert seen == [source]
     assert entry.inline["properties"]["v"]["type"] == "string"
-    assert len(tab.issue_index.all_issues()) == 1
+    assert len(tab.data_store.issue_index.all_issues()) == 1
 
 
 def test_url_sources_are_not_watched(monkeypatch):

@@ -49,8 +49,8 @@ def _proxy_root(tab) -> QModelIndex:
     directly under the invalid index. With show_root=True they appear
     one level deeper, under the single synthetic root row.
     """
-    if tab.model.show_root:
-        return tab.proxy.index(0, 0, QModelIndex())
+    if tab.data_store.model.show_root:
+        return tab.data_store.proxy.index(0, 0, QModelIndex())
     return QModelIndex()
 
 
@@ -58,12 +58,12 @@ def _pidx(tab, *path):
     """Walk a path of rows through the proxy, relative to the visible root."""
     idx = _proxy_root(tab)
     for r in path:
-        idx = tab.proxy.index(r, 0, idx)
+        idx = tab.data_store.proxy.index(r, 0, idx)
     return idx
 
 
 def _select(tab, proxy_indexes):
-    sm = tab.view.selectionModel()
+    sm = tab.data_store.view.selectionModel()
     sel = QItemSelection()
     for pidx in proxy_indexes:
         sel.select(pidx, pidx)
@@ -73,9 +73,9 @@ def _select(tab, proxy_indexes):
 def _drop(tab, sel_paths, row, col, parent_path=None):
     sel = [_pidx(tab, *p) for p in sel_paths]
     _select(tab, sel)
-    mime = tab.proxy.mimeData(sel)
+    mime = tab.data_store.proxy.mimeData(sel)
     parent_pidx = _proxy_root(tab) if parent_path is None else _pidx(tab, *parent_path)
-    return tab.proxy.dropMimeData(mime, Qt.DropAction.MoveAction, row, col, parent_pidx)
+    return tab.data_store.proxy.dropMimeData(mime, Qt.DropAction.MoveAction, row, col, parent_pidx)
 
 
 # Convenience: 4 indicator helpers ------------------------------------------------
@@ -101,7 +101,7 @@ def on_viewport(tab, sel_paths):
 
 
 def snap(tab):
-    return tab.model.root_item.to_json()
+    return tab.data_store.model.root_item.to_json()
 
 
 # ===========================================================================
@@ -257,7 +257,7 @@ def test_drag_first_root_child_flag_is_drag_enabled(qtbot, show_root):
     """Bug-3 sanity: the 1st child must report ``ItemIsDragEnabled``."""
     tab = _make_tab(qtbot, [{"a": 1}, {"b": 2}], show_root)
     pidx = _pidx(tab, 0)
-    flags = tab.proxy.flags(pidx)
+    flags = tab.data_store.proxy.flags(pidx)
     assert bool(flags & Qt.ItemFlag.ItemIsDragEnabled)
 
 
@@ -272,8 +272,8 @@ def test_undo_reverses_drop_into_container(qtbot, show_root):
     before = snap(tab)
     assert on_item(tab, [(3,)], (4,))  # d INTO e
     assert snap(tab) != before
-    assert tab.undo_stack.count() == 1
-    tab.undo_stack.undo()
+    assert tab.data_store.undo_stack.count() == 1
+    tab.data_store.undo_stack.undo()
     assert snap(tab) == before
 
 
@@ -282,7 +282,7 @@ def test_undo_reverses_drop_after_sibling(qtbot, show_root):
     before = snap(tab)
     assert below_of(tab, [(0,)], 4)
     assert snap(tab) != before
-    tab.undo_stack.undo()
+    tab.data_store.undo_stack.undo()
     assert snap(tab) == before
 
 
@@ -290,7 +290,7 @@ def test_undo_reverses_multi_source_drop(qtbot, show_root):
     tab = _make_tab(qtbot, [{"a": 1}, {"b": 2}, {"c": 3}, {"d": 4}, {"e": 5}, {"f": 6}], show_root)
     before = snap(tab)
     assert on_item(tab, [(0,), (1,), (2,)], (4,))
-    tab.undo_stack.undo()
+    tab.data_store.undo_stack.undo()
     assert snap(tab) == before
 
 
@@ -331,7 +331,7 @@ def test_drag_container_with_subtree(qtbot, show_root):
     x_slot = result[0]
     nested_val = next(v for k, v in x_slot.items() if k != "x")
     assert nested_val == {"nested": {"deep": [1, 2, 3]}}
-    tab.undo_stack.undo()
+    tab.data_store.undo_stack.undo()
     assert snap(tab) == before
 
 
@@ -415,7 +415,7 @@ def test_repeated_container_drops_remain_consistent(qtbot, show_root):
     tab = _make_tab(qtbot, [{"a": 1}, {"b": 2}, {"c": 3}], show_root)
     # 12 alternating drops INTO the last container.
     for _ in range(12):
-        n = tab.model.root_item.child_count()
+        n = tab.data_store.model.root_item.child_count()
         if n < 2:
             break
         # Drop element 0 into element 1.
@@ -435,19 +435,19 @@ def test_full_redo_undo_cycle_round_trips(qtbot, show_root):
     on_item(tab, [(0,)], (2,))
     below_of(tab, [(0,)], 1)
     # Undo all three.
-    while tab.undo_stack.canUndo():
-        tab.undo_stack.undo()
+    while tab.data_store.undo_stack.canUndo():
+        tab.data_store.undo_stack.undo()
     assert snap(tab) == before
     # Redo all three back to the final state.
-    while tab.undo_stack.canRedo():
-        tab.undo_stack.redo()
+    while tab.data_store.undo_stack.canRedo():
+        tab.data_store.undo_stack.redo()
     after_redo = snap(tab)
     # Repeat undo to verify the chain stays correct.
-    while tab.undo_stack.canUndo():
-        tab.undo_stack.undo()
+    while tab.data_store.undo_stack.canUndo():
+        tab.data_store.undo_stack.undo()
     assert snap(tab) == before
-    while tab.undo_stack.canRedo():
-        tab.undo_stack.redo()
+    while tab.data_store.undo_stack.canRedo():
+        tab.data_store.undo_stack.redo()
     assert snap(tab) == after_redo
 
 

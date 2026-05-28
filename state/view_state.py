@@ -69,19 +69,19 @@ def state_key(path: str) -> str:
 
 
 def save(tab) -> None:
-    if not getattr(tab, "file_path", None):
+    if not tab.data_store.file_path:
         return
 
     settings = QSettings(APPLICATION_ID, "view_state")
-    settings.beginGroup(state_key(tab.file_path))
+    settings.beginGroup(state_key(tab.data_store.file_path))
 
-    widths = [int(tab.view.columnWidth(column)) for column in range(tab.model.columnCount())]
+    widths = [int(tab.data_store.view.columnWidth(column)) for column in range(tab.data_store.model.columnCount())]
     expanded_paths = [list(path) for path in tab._collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
 
-    current_index = tab.view.currentIndex()
+    current_index = tab.data_store.view.currentIndex()
     current_path = list(tab._index_path(current_index)) if current_index.isValid() else []
 
-    font_pt = int(getattr(tab, "_font_pt", tab.view.font().pointSize() or 10))
+    font_pt = int(tab.data_store._font_pt or tab.data_store.view.font().pointSize() or 10)
 
     settings.setValue("col_widths", widths)
     settings.setValue("expanded", expanded_paths)
@@ -91,11 +91,11 @@ def save(tab) -> None:
 
 
 def restore(tab) -> bool:
-    if not getattr(tab, "file_path", None):
+    if not tab.data_store.file_path:
         return False
 
     settings = QSettings(APPLICATION_ID, "view_state")
-    settings.beginGroup(state_key(tab.file_path))
+    settings.beginGroup(state_key(tab.data_store.file_path))
 
     raw_widths = settings.value("col_widths")
     raw_expanded = settings.value("expanded")
@@ -113,26 +113,25 @@ def restore(tab) -> bool:
     if not has_state:
         return False
 
-    if font_pt is not None and hasattr(tab, "_set_font_pt"):
+    if font_pt is not None:
         tab._set_font_pt(font_pt)
 
     if widths is not None:
-        for column, width in enumerate(widths[: tab.model.columnCount()]):
+        for column, width in enumerate(widths[: tab.data_store.model.columnCount()]):
             if width > 0:
-                tab.view.setColumnWidth(column, width)
+                tab.data_store.view.setColumnWidth(column, width)
         # The persisted widths represent the user's last explicit preference;
         # treat name (0) and type (1) columns as user-sized so zoom helpers
         # won't snap them back to content width.
-        if hasattr(tab, "_user_sized_columns"):
-            tab._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
+        tab.data_store._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
 
     if expanded is not None:
-        tab.view.collapseAll()
+        tab.data_store.view.collapseAll()
         for path in expanded:
             source_index = tab._index_from_path(path)
             view_index = tab._source_to_view(source_index)
             if view_index.isValid():
-                tab.view.expand(view_index)
+                tab.data_store.view.expand(view_index)
 
     if current_path is not None:
         source_index = tab._index_from_path(current_path)
@@ -140,7 +139,7 @@ def restore(tab) -> bool:
         if current_index.isValid():
             # Always select column 0 when restoring row focus.
             row_index = current_index.siblingAtColumn(0)
-            tab.view.setCurrentIndex(row_index)
+            tab.data_store.view.setCurrentIndex(row_index)
 
     return True
 

@@ -3,38 +3,39 @@ from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QLineEdit, QStyleOptionViewItem, QWidget
 
 from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase, paint_editor_underlay
+from delegates.edit_context import DefaultEditContext, DelegateEditContext
 from delegates.validation_badge import draw_severity_badge
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.model_roles import VALIDATION_SEVERITY_ROLE
 
 
-def _find_tab(host) -> object | None:
-    cursor = host
-    while cursor is not None:
-        if hasattr(cursor, "commit_set_data"):
-            return cursor
-        cursor = cursor.parent() if hasattr(cursor, "parent") else None
-    return None
-
-
-def _commit(index: QModelIndex, value, role: Qt.ItemDataRole, host=None) -> bool:
-    model = index.model()
-    if model is None:
-        return False
-
-    tab = _find_tab(host)
-    if tab is not None:
-        return bool(tab.commit_set_data(index, value, role))
-    return bool(model.setData(index, value, role))
+def _tab_adapter_context(host) -> DelegateEditContext:
+    """Fallback when no edit context was injected; performs no parent walk."""
+    return DefaultEditContext()
 
 
 class NameDelegate(_TextEditorDelegateBase):
-    def __init__(self, parent=None, *, theme: ThemeSpec | None = None):
+    def __init__(
+        self,
+        parent=None,
+        *,
+        theme: ThemeSpec | None = None,
+        edit_context: DelegateEditContext | None = None,
+    ):
         super().__init__(parent)
         self._theme = theme or LIGHT_DEFAULT
         self._monospace_fields_enabled = False
         self._mono_family = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
+        self._edit_context: DelegateEditContext | None = edit_context
+
+    def set_edit_context(self, context: DelegateEditContext | None) -> None:
+        self._edit_context = context
+
+    def _context_for(self, host) -> DelegateEditContext:
+        if self._edit_context is not None:
+            return self._edit_context
+        return _tab_adapter_context(host)
 
     def set_theme(self, theme: ThemeSpec) -> None:
         self._theme = theme
@@ -83,4 +84,4 @@ class NameDelegate(_TextEditorDelegateBase):
         editor.setText(str(index.data(Qt.ItemDataRole.EditRole) or ""))
 
     def setModelData(self, editor: QLineEdit, model: QAbstractItemModel, index: QModelIndex):
-        _commit(index, editor.text(), Qt.ItemDataRole.EditRole, host=editor)
+        self._context_for(editor).commit(index, editor.text(), Qt.ItemDataRole.EditRole)

@@ -12,14 +12,14 @@ def test_view_menu_expand_collapse_toggles_expansion(qtbot):
     tab = win._add_tab(data={"foo": {"bar": 1}}, file_path=None)
     assert tab is not None
 
-    root = tab.model.index(0, 0, QModelIndex())
+    root = tab.data_store.model.index(0, 0, QModelIndex())
     root_view = tab._source_to_view(root)
 
     win.viewCollapseAllAction.trigger()
-    assert not tab.view.isExpanded(root_view)
+    assert not tab.data_store.view.isExpanded(root_view)
 
     win.viewExpandAllAction.trigger()
-    assert tab.view.isExpanded(root_view)
+    assert tab.data_store.view.isExpanded(root_view)
 
 
 def test_model_reset_calls_resize_key_columns(qtbot):
@@ -35,8 +35,8 @@ def test_model_reset_calls_resize_key_columns(qtbot):
 
     tab.resize_key_columns = _spy
 
-    tab.model.beginResetModel()
-    tab.model.endResetModel()
+    tab.data_store.model.beginResetModel()
+    tab.data_store.model.endResetModel()
 
     assert calls, "expected modelReset to trigger key-column resize"
 
@@ -48,14 +48,14 @@ def test_view_zoom_actions_call_tab_zoom_and_resize(qtbot):
     tab = win._add_tab(data={"foo": 1}, file_path=None)
     assert tab is not None
 
-    before = tab.view.font().pointSize()
+    before = tab.data_store.view.font().pointSize()
     win.viewZoomInAction.trigger()
-    after_in = tab.view.font().pointSize()
+    after_in = tab.data_store.view.font().pointSize()
     win.viewResetZoomAction.trigger()
-    after_reset = tab.view.font().pointSize()
+    after_reset = tab.data_store.view.font().pointSize()
 
     assert after_in >= before
-    assert after_reset == tab._default_font_pt
+    assert after_reset == tab.data_store._default_font_pt
 
 
 def test_zoom_preserves_user_column_widths(qtbot):
@@ -65,8 +65,8 @@ def test_zoom_preserves_user_column_widths(qtbot):
 
     # Simulate the user dragging col 0 to a custom width.
     custom_width = 200
-    tab.view.setColumnWidth(0, custom_width)
-    tab._user_sized_columns.add(0)  # mark as user-sized (normally done by sectionResized handler)
+    tab.data_store.view.setColumnWidth(0, custom_width)
+    tab.data_store._user_sized_columns.add(0)  # mark as user-sized (normally done by sectionResized handler)
 
     # Zoom in three times.
     for _ in range(3):
@@ -74,22 +74,22 @@ def test_zoom_preserves_user_column_widths(qtbot):
 
     # Col 0 must remain unchanged because it is user-sized.
     assert (
-        tab.view.columnWidth(0) == custom_width
-    ), f"Expected col 0 to stay at {custom_width}, got {tab.view.columnWidth(0)}"
+        tab.data_store.view.columnWidth(0) == custom_width
+    ), f"Expected col 0 to stay at {custom_width}, got {tab.data_store.view.columnWidth(0)}"
 
     # Col 1 (not hand-resized) should have been scaled up.
-    assert tab.view.columnWidth(1) > 0
+    assert tab.data_store.view.columnWidth(1) > 0
 
 
 def test_zoom_updates_tree_icon_size(qtbot):
     tab = JsonTab(lambda *_: None, data={"foo": 1}, show_root=True)
     qtbot.addWidget(tab)
 
-    before = tab.view.iconSize().height()
+    before = tab.data_store.view.iconSize().height()
     tab.zoom_in()
-    after_in = tab.view.iconSize().height()
+    after_in = tab.data_store.view.iconSize().height()
     tab.zoom_out()
-    after_out = tab.view.iconSize().height()
+    after_out = tab.data_store.view.iconSize().height()
 
     assert after_in >= before
     assert after_out <= after_in
@@ -104,7 +104,7 @@ def test_float_to_integer_type_change_shows_fraction_loss_warning(qtbot):
     tab = JsonTab(lambda *_: None, data={"v": 3.5}, show_root=True, status_message_callback=_status)
     qtbot.addWidget(tab)
 
-    root_idx = tab.model.index(0, 0, QModelIndex())
-    type_idx = tab.model.index(0, 1, root_idx)
+    root_idx = tab.data_store.model.index(0, 0, QModelIndex())
+    type_idx = tab.data_store.model.index(0, 1, root_idx)
     assert tab.push_change_type(type_idx, JsonType.INTEGER)
     assert any("Fractional part discarded" in text for text, _ in messages)

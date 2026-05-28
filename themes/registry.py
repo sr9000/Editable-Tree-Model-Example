@@ -10,6 +10,7 @@ from typing import Literal
 
 from PySide6.QtCore import QStandardPaths
 
+from app.runtime_compat import meipass_root, traversable_to_path
 from themes._defaults import DARK_DEFAULT, LIGHT_DEFAULT
 from themes.icon_provider import FileIconProvider, IconProvider, StubIconProvider
 from themes.loader import ThemeLoadError, load_theme_yaml
@@ -49,9 +50,9 @@ def _find_builtins_dir() -> Path | None:
        its sibling icon sub-directories and breaking the relative
        ``./mingcute-light`` icon search paths declared inside each YAML.
     """
-    meipass = getattr(sys, "_MEIPASS", None)
-    if isinstance(meipass, str) and meipass:
-        cand = Path(meipass) / "themes" / "builtin"
+    meipass = meipass_root()
+    if meipass is not None:
+        cand = meipass / "themes" / "builtin"
         if cand.is_dir():
             return cand
 
@@ -61,13 +62,9 @@ def _find_builtins_dir() -> Path | None:
 
     try:
         traversable = resources.files("themes.builtin")
-        fspath = getattr(traversable, "__fspath__", None)
-        if callable(fspath):
-            raw = fspath()
-            if isinstance(raw, (str, bytes)):
-                cand = Path(os.fsdecode(raw))
-                if cand.is_dir():
-                    return cand
+        cand = traversable_to_path(traversable)
+        if cand is not None and cand.is_dir():
+            return cand
     except (ModuleNotFoundError, TypeError, OSError):
         pass
 

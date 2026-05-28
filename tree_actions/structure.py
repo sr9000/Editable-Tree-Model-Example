@@ -12,6 +12,7 @@ from model_actions import (
     action_sort_keys,
 )
 from tree.types import JsonType
+from tree_actions._tab_lookup import find_owning_tab
 from tree_actions.anchors import MoveAnchor, anchor_after_index, anchor_before_index
 from tree_actions.clipboard import copy_selection
 from tree_actions.field_case import FieldCase, convert_field_name
@@ -21,10 +22,7 @@ from tree_actions.selection import top_level_source_rows as _top_level_selected_
 
 
 def _tab_of(tree_view: QTreeView):
-    parent = tree_view.parent()
-    if parent is not None and hasattr(parent, "push_insert_rows"):
-        return parent
-    return None
+    return find_owning_tab(tree_view)
 
 
 def insert_sibling_before(tree_view: QTreeView) -> bool:
@@ -46,10 +44,10 @@ def insert_sibling_before(tree_view: QTreeView) -> bool:
             row = row0.row()
         parent_item = model.get_item(parent_index)
         name = parent_item._unique_child_name() if parent_item.json_type is JsonType.OBJECT else None
-        return tab.push_insert_rows(
+        return tab.data_store.mutations.push_insert_rows(
             [
                 {
-                    "parent_path": tab._index_path(parent_index),
+                    "parent_path": tab.data_store.mutations.index_path(parent_index),
                     "row": row,
                     "value": None,
                     "name": name,
@@ -80,10 +78,10 @@ def insert_sibling_after(tree_view: QTreeView) -> bool:
             row = row0.row() + 1
         parent_item = model.get_item(parent_index)
         name = parent_item._unique_child_name() if parent_item.json_type is JsonType.OBJECT else None
-        return tab.push_insert_rows(
+        return tab.data_store.mutations.push_insert_rows(
             [
                 {
-                    "parent_path": tab._index_path(parent_index),
+                    "parent_path": tab.data_store.mutations.index_path(parent_index),
                     "row": row,
                     "value": None,
                     "name": name,
@@ -118,10 +116,10 @@ def insert_child_current(tree_view: QTreeView) -> bool:
     tab = _tab_of(tree_view)
     if tab is not None:
         name = parent_item._unique_child_name() if parent_item.json_type is JsonType.OBJECT else None
-        ok = tab.push_insert_rows(
+        ok = tab.data_store.mutations.push_insert_rows(
             [
                 {
-                    "parent_path": tab._index_path(parent_row0),
+                    "parent_path": tab.data_store.mutations.index_path(parent_row0),
                     "row": 0,
                     "value": None,
                     "name": name,
@@ -147,7 +145,7 @@ def delete_selection(tree_view: QTreeView) -> bool:
 
     tab = _tab_of(tree_view)
     if tab is not None:
-        return tab.push_remove_rows(rows, label="delete")
+        return tab.data_store.mutations.push_remove_rows(rows, label="delete")
 
     rows = sorted(rows, key=lambda idx: (_index_path(idx.parent()), idx.row()), reverse=True)
     changed = False
@@ -189,7 +187,7 @@ def duplicate_selection(tree_view: QTreeView) -> bool:
                 name = _copy_name(item.name, used)
             inserts.append(
                 {
-                    "parent_path": tab._index_path(parent_index),
+                    "parent_path": tab.data_store.mutations.index_path(parent_index),
                     "row": insert_row,
                     "value": item.to_json(),
                     "name": name,
@@ -197,7 +195,7 @@ def duplicate_selection(tree_view: QTreeView) -> bool:
             )
             if first_source_qname is None:
                 first_source_qname = tab._qualified_name(row0)
-        return tab.push_insert_rows(inserts, label="duplicate", target_qname=first_source_qname)
+        return tab.data_store.mutations.push_insert_rows(inserts, label="duplicate", target_qname=first_source_qname)
 
     changed = False
     for idx in ordered:
@@ -214,15 +212,11 @@ def _ordered_non_root_rows(tree_view: QTreeView):
 
 
 def _status_partial_move(tab) -> None:
-    callback = getattr(tab, "_status_message_callback", None)
-    if callback is not None:
-        callback("Moved part of the selection", 2000)
+    tab.show_status("Moved part of the selection", 2000)
 
 
 def _status_cannot_move_out_of_root(tab) -> None:
-    callback = getattr(tab, "_status_message_callback", None)
-    if callback is not None:
-        callback("Cannot move root-level rows out of parent", 2000)
+    tab.show_status("Cannot move root-level rows out of parent", 2000)
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +250,7 @@ def _anchor_for_block(
     the grandparent. Returns ``None`` when the block is already at the
     top-level edge of the document (no place to bubble to).
     """
-    parent_index = tab._index_from_path(parent_path)
+    parent_index = tab.data_store.mutations.index_from_path(parent_path)
     parent_count = model.rowCount(parent_index)
     first_row = block_rows[0].row()
     last_row = block_rows[-1].row()
@@ -319,25 +313,25 @@ def _move_selection_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
     # Single-block fast path — no macro overhead.
     if len(planned) == 1:
         _parent_path, anchor, block_rows = planned[0]
-        return tab.push_move_rows_anchor(block_rows, anchor, label=label)
+        return tab.data_store.mutations.push_move_rows_anchor(block_rows, anchor, label=label)
 
     # Multi-parent: macro of per-parent moves. Each child push captures source
     # paths AT push time, so earlier moves never leave later sources stale.
     placed_total: list[tuple[tuple, int]] = []
     moved = 0
-    tab.undo_stack.beginMacro(label)
+    tab.data_store.mutations.begin_macro(label)
     try:
         for parent_path, anchor, block_rows in planned:
             # Re-resolve indexes from paths so any prior mutation is reflected.
-            live_rows = [tab._index_from_path(parent_path + (idx.row(),)) for idx in block_rows]
+            live_rows = [tab.data_store.mutations.index_from_path(parent_path + (idx.row(),)) for idx in block_rows]
             live_rows = [r for r in live_rows if r.isValid()]
             if not live_rows:
                 continue
-            if tab.push_move_rows_anchor(live_rows, anchor, label=label):
-                placed_total.extend(getattr(tab, "_last_move_placed", []))
+            if tab.data_store.mutations.push_move_rows_anchor(live_rows, anchor, label=label):
+                placed_total.extend(tab.data_store.last_move_placed)
                 moved += 1
     finally:
-        tab.undo_stack.endMacro()
+        tab.data_store.mutations.end_macro()
 
     if 0 < moved < len(planned):
         _status_partial_move(tab)
@@ -393,7 +387,7 @@ def _move_selection_out_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
     planned: list[tuple[tuple, MoveAnchor, list]] = []
     skipped_root = False
     for parent_path, block_rows in groups.items():
-        parent_index = tab._index_from_path(parent_path)
+        parent_index = tab.data_store.mutations.index_from_path(parent_path)
         parent_row0 = _row0(model, parent_index)
         if not parent_row0.isValid() or _is_root_index(model, parent_row0):
             skipped_root = True
@@ -409,22 +403,22 @@ def _move_selection_out_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
     label = "move out up" if up else "move out down"
     if len(planned) == 1:
         _parent_path, anchor, block_rows = planned[0]
-        return tab.push_move_rows_anchor(block_rows, anchor, label=label)
+        return tab.data_store.mutations.push_move_rows_anchor(block_rows, anchor, label=label)
 
     placed_total: list[tuple[tuple, int]] = []
     moved = 0
-    tab.undo_stack.beginMacro(label)
+    tab.data_store.mutations.begin_macro(label)
     try:
         for parent_path, anchor, block_rows in planned:
-            live_rows = [tab._index_from_path(parent_path + (idx.row(),)) for idx in block_rows]
+            live_rows = [tab.data_store.mutations.index_from_path(parent_path + (idx.row(),)) for idx in block_rows]
             live_rows = [r for r in live_rows if r.isValid()]
             if not live_rows:
                 continue
-            if tab.push_move_rows_anchor(live_rows, anchor, label=label):
-                placed_total.extend(getattr(tab, "_last_move_placed", []))
+            if tab.data_store.mutations.push_move_rows_anchor(live_rows, anchor, label=label):
+                placed_total.extend(tab.data_store.last_move_placed)
                 moved += 1
     finally:
-        tab.undo_stack.endMacro()
+        tab.data_store.mutations.end_macro()
 
     if skipped_root or 0 < moved < len(planned):
         _status_partial_move(tab)
@@ -456,7 +450,7 @@ def sort_selection_keys(tree_view: QTreeView, recursive: bool = False) -> bool:
 
     tab = _tab_of(tree_view)
     if tab is not None:
-        return tab.push_sort_keys(row0, recursive=recursive)
+        return tab.data_store.mutations.push_sort_keys(row0, recursive=recursive)
 
     return action_sort_keys(current, model, recursive=recursive)
 
@@ -551,7 +545,7 @@ def switch_selection_case(tree_view: QTreeView, case_style: FieldCase, *, recurs
     tab = _tab_of(tree_view)
     label = "switch case recursive" if recursive else "switch case"
     if tab is not None:
-        return tab.push_switch_field_case(renames, label=label)
+        return tab.data_store.mutations.push_switch_field_case(renames, label=label)
     return _apply_case_renames_direct(model, renames)
 
 
@@ -575,7 +569,7 @@ def switch_document_case(tree_view: QTreeView, case_style: FieldCase) -> bool:
 
     tab = _tab_of(tree_view)
     if tab is not None:
-        return tab.push_switch_field_case(renames, label="switch case document", target_qname="$")
+        return tab.data_store.mutations.push_switch_field_case(renames, label="switch case document", target_qname="$")
     return _apply_case_renames_direct(model, renames)
 
 

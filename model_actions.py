@@ -3,18 +3,17 @@ from __future__ import annotations
 from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QTreeView
 
+from tree.model_protocol import TreeModelLike
 from tree.types import JsonType
 
 
-def _row0_index(index: QModelIndex, model) -> QModelIndex:
+def _row0_index(index: QModelIndex, model: TreeModelLike) -> QModelIndex:
     return model.index(index.row(), 0, index.parent()) if index.isValid() else QModelIndex()
 
 
 def _move_row_between_parents(
-    model, src_parent: QModelIndex, src_row: int, dst_parent: QModelIndex, dst_row: int
+    model: TreeModelLike, src_parent: QModelIndex, src_row: int, dst_parent: QModelIndex, dst_row: int
 ) -> bool:
-    if not hasattr(model, "get_item"):
-        return False
     src_item = model.get_item(src_parent)
     dst_item = model.get_item(dst_parent)
     if not (0 <= src_row < src_item.child_count()):
@@ -32,14 +31,14 @@ def _move_row_between_parents(
     return True
 
 
-def action_insert_row_before(index: QModelIndex, model) -> bool:
+def action_insert_row_before(index: QModelIndex, model: TreeModelLike) -> bool:
     if not index.isValid():
         return model.insertRow(0, QModelIndex())
     row0 = _row0_index(index, model)
     return model.insertRow(row0.row(), row0.parent())
 
 
-def action_insert_row_after(index: QModelIndex, model) -> bool:
+def action_insert_row_after(index: QModelIndex, model: TreeModelLike) -> bool:
     if not index.isValid():
         return model.insertRow(0, QModelIndex())
     row0 = _row0_index(index, model)
@@ -51,22 +50,17 @@ def action_insert_row(index, model):
     return action_insert_row_after(index, model)
 
 
-def action_insert_child(view: QTreeView, index: QModelIndex, model):
+def action_insert_child(view: QTreeView, index: QModelIndex, model: TreeModelLike):
     index = model.index(index.row(), 0, index.parent())
     if not index.isValid():
         return False
-
-    if hasattr(model, "get_item"):
-        parent_item = model.get_item(index)
-        if parent_item.json_type not in (JsonType.OBJECT, JsonType.ARRAY):
-            return False
-
+    parent_item = model.get_item(index)
+    if parent_item.json_type not in (JsonType.OBJECT, JsonType.ARRAY):
+        return False
     if not model.insertRow(0, index):
         return False
-
     view.selectionModel().setCurrentIndex(model.index(0, 0, index), QItemSelectionModel.SelectionFlag.ClearAndSelect)
     view.expand(model.index(0, 0, index))
-
     return True
 
 
@@ -80,29 +74,24 @@ def _copy_name(base: str, used: set[str]) -> str:
     return f"{candidate}_{i}"
 
 
-def action_duplicate(view: QTreeView, index: QModelIndex, model) -> bool:
+def action_duplicate(view: QTreeView, index: QModelIndex, model: TreeModelLike) -> bool:
     row0 = _row0_index(index, model)
-    if not row0.isValid() or not hasattr(model, "get_item"):
+    if not row0.isValid():
         return False
-
     item = model.get_item(row0)
     parent_index = row0.parent()
     insert_row = row0.row() + 1
     if not model.insertRow(insert_row, parent_index):
         return False
-
-    # Copy key name only under OBJECT parents and resolve collisions.
     parent_item = model.get_item(parent_index)
     if parent_item.json_type is JsonType.OBJECT and isinstance(item.name, str):
         used = {c.name for i, c in enumerate(parent_item.child_items) if i != insert_row and isinstance(c.name, str)}
         new_name = item.name if item.name not in used else _copy_name(item.name, used)
         model.setData(model.index(insert_row, 0, parent_index), new_name)
-
     value_index = model.index(insert_row, 2, parent_index)
     if not model.setData(value_index, item.to_json()):
         model.removeRow(insert_row, parent_index)
         return False
-
     view.selectionModel().setCurrentIndex(
         model.index(insert_row, 0, parent_index),
         QItemSelectionModel.SelectionFlag.ClearAndSelect,
@@ -110,11 +99,10 @@ def action_duplicate(view: QTreeView, index: QModelIndex, model) -> bool:
     return True
 
 
-def action_move_up(view: QTreeView, index: QModelIndex, model) -> bool:
+def action_move_up(view: QTreeView, index: QModelIndex, model: TreeModelLike) -> bool:
     row0 = _row0_index(index, model)
-    if not row0.isValid() or not hasattr(model, "move_row"):
+    if not row0.isValid():
         return False
-
     parent = row0.parent()
     dst_parent = parent
     if row0.row() > 0:
@@ -125,13 +113,12 @@ def action_move_up(view: QTreeView, index: QModelIndex, model) -> bool:
         parent_row0 = _row0_index(parent, model)
         if not parent_row0.isValid():
             return False
-        if hasattr(model, "root_item") and model.get_item(parent_row0) is model.root_item:
+        if model.get_item(parent_row0) is model.root_item:
             return False
         dst_parent = parent_row0.parent()
         dst = parent_row0.row()
         if not _move_row_between_parents(model, parent, row0.row(), dst_parent, dst):
             return False
-
     view.selectionModel().setCurrentIndex(
         model.index(dst, 0, dst_parent),
         QItemSelectionModel.SelectionFlag.ClearAndSelect,
@@ -139,11 +126,10 @@ def action_move_up(view: QTreeView, index: QModelIndex, model) -> bool:
     return True
 
 
-def action_move_down(view: QTreeView, index: QModelIndex, model) -> bool:
+def action_move_down(view: QTreeView, index: QModelIndex, model: TreeModelLike) -> bool:
     row0 = _row0_index(index, model)
-    if not row0.isValid() or not hasattr(model, "move_row"):
+    if not row0.isValid():
         return False
-
     parent = row0.parent()
     if row0.row() < model.rowCount(parent) - 1:
         dst = row0.row() + 1
@@ -154,13 +140,12 @@ def action_move_down(view: QTreeView, index: QModelIndex, model) -> bool:
         parent_row0 = _row0_index(parent, model)
         if not parent_row0.isValid():
             return False
-        if hasattr(model, "root_item") and model.get_item(parent_row0) is model.root_item:
+        if model.get_item(parent_row0) is model.root_item:
             return False
         dst_parent = parent_row0.parent()
         dst = parent_row0.row() + 1
         if not _move_row_between_parents(model, parent, row0.row(), dst_parent, dst):
             return False
-
     view.selectionModel().setCurrentIndex(
         model.index(dst, 0, dst_parent),
         QItemSelectionModel.SelectionFlag.ClearAndSelect,
@@ -168,11 +153,9 @@ def action_move_down(view: QTreeView, index: QModelIndex, model) -> bool:
     return True
 
 
-def action_sort_keys(index: QModelIndex, model, recursive: bool = False) -> bool:
+def action_sort_keys(index: QModelIndex, model: TreeModelLike, recursive: bool = False) -> bool:
     row0 = _row0_index(index, model)
-    if not hasattr(model, "sort_keys"):
-        return False
-    if not row0.isValid() and getattr(model, "show_root", False):
+    if not row0.isValid() and model.show_root:
         row0 = model.index(0, 0, QModelIndex())
     if not row0.isValid():
         return False

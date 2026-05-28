@@ -23,6 +23,7 @@ from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QApplication
 
 from documents.tab import JsonTab
+from documents.tab_tree_actions import TreeAction
 from tree_actions.clipboard import MIME_JSON_TREE, copy_selection
 from tree_actions.paste import paste_auto, paste_clones_at_targets, paste_insert_after_zip, paste_replace_zip
 from tree_actions.selection import deepest_selected_rows, selection_shape
@@ -39,7 +40,7 @@ def _idx(tab: JsonTab, *path: int) -> QModelIndex:
 
 
 def _select_items(tab: JsonTab, *source_indexes) -> None:
-    sm = tab.view.selectionModel()
+    sm = tab.data_store.view.selectionModel()
     first, *rest = source_indexes
     first_view = tab._source_to_view(first)
     sm.select(first_view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
@@ -49,7 +50,7 @@ def _select_items(tab: JsonTab, *source_indexes) -> None:
 
 
 def _root_values(tab: JsonTab) -> list:
-    return [item.to_json() for item in tab.model.root_item.child_items]
+    return [item.to_json() for item in tab.data_store.model.root_item.child_items]
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +81,7 @@ def test_deepest_selected_rows_drops_ancestors_when_descendants_present(qtbot):
     ax = _idx(tab, 0, 0)
     b = _idx(tab, 1)
     _select_items(tab, a, ax, b)
-    deepest = deepest_selected_rows(tab.view)
+    deepest = deepest_selected_rows(tab.data_store.view)
     # "a" is dropped because "a.x" is selected; "b" stays (no descendants in selection).
     paths = {tab._index_path(idx) for idx in deepest}
     assert paths == {(0, 0), (1,)}
@@ -101,7 +102,7 @@ def test_multi_copy_filter_projects_ancestor_subtree(qtbot):
     ax = _idx(tab, 0, 0)
     _select_items(tab, a, ax)
 
-    assert copy_selection(tab.view)
+    assert copy_selection(tab.data_store.view)
     mime = QApplication.clipboard().mimeData()
     assert mime.hasFormat(MIME_JSON_TREE)
     raw = mime.data(MIME_JSON_TREE).data().decode("utf-8")
@@ -119,7 +120,7 @@ def test_multi_copy_disjoint_copies_full_subtrees(qtbot):
     b = _idx(tab, 1)
     _select_items(tab, a, b)
 
-    assert copy_selection(tab.view)
+    assert copy_selection(tab.data_store.view)
     raw = QApplication.clipboard().mimeData().data(MIME_JSON_TREE).data().decode("utf-8")
     entries = json.loads(raw)["entries"]
     names_values = {e["name"]: e["value"] for e in entries}
@@ -130,7 +131,7 @@ def test_multi_copy_filter_keeps_multiple_descendants(qtbot):
     """Select 'a' AND 'a.x' AND 'a.z' → projection keeps both descendants."""
     tab = _make_tab(qtbot, {"a": {"x": 1, "y": 2, "z": 3}})
     _select_items(tab, _idx(tab, 0), _idx(tab, 0, 0), _idx(tab, 0, 2))
-    assert copy_selection(tab.view)
+    assert copy_selection(tab.data_store.view)
     entries = json.loads(QApplication.clipboard().mimeData().data(MIME_JSON_TREE).data().decode("utf-8"))["entries"]
     assert len(entries) == 1
     assert entries[0]["value"] == {"x": 1, "z": 3}
@@ -150,14 +151,14 @@ def test_multi_paste_clones_at_every_selected_leaf(qtbot):
     _select_items(tab, a, c)
 
     QApplication.clipboard().setText("99")
-    before_count = tab.undo_stack.count()
-    assert paste_clones_at_targets(tab.view)
+    before_count = tab.data_store.undo_stack.count()
+    assert paste_clones_at_targets(tab.data_store.view)
 
     assert _root_values(tab) == [1, 99, 2, 3, 99]
     # Single undo step.
-    assert tab.undo_stack.count() == before_count + 1
-    tab.undo_stack.undo()
-    assert list(tab.model.root_item.to_json().keys()) == ["a", "b", "c"]
+    assert tab.data_store.undo_stack.count() == before_count + 1
+    tab.data_store.undo_stack.undo()
+    assert list(tab.data_store.model.root_item.to_json().keys()) == ["a", "b", "c"]
 
 
 def test_multi_paste_clones_into_containers(qtbot):
@@ -169,9 +170,9 @@ def test_multi_paste_clones_into_containers(qtbot):
     _select_items(tab, obj, arr)
 
     QApplication.clipboard().setText('{"y": 2}')
-    assert paste_clones_at_targets(tab.view)
+    assert paste_clones_at_targets(tab.data_store.view)
 
-    after = tab.model.root_item.to_json()
+    after = tab.data_store.model.root_item.to_json()
     assert after["obj"] == {"x": 1, "y": 2}
     assert after["arr"] == [10, 2]
 
@@ -181,11 +182,11 @@ def test_ctrl_v_dispatches_to_multi_paste_when_multiple_rows_selected(qtbot):
     _select_items(tab, _idx(tab, 0), _idx(tab, 2))
 
     QApplication.clipboard().setText("99")
-    before_count = tab.undo_stack.count()
-    tab._run_tree_action("Pasted JSON", paste=True)
+    before_count = tab.data_store.undo_stack.count()
+    tab._run_tree_action("Pasted JSON", {TreeAction.PASTE})
 
     assert _root_values(tab) == [1, 99, 2, 3, 99]
-    assert tab.undo_stack.count() == before_count + 1
+    assert tab.data_store.undo_stack.count() == before_count + 1
 
 
 def test_paste_auto_single_selection_keeps_single_target_semantics(qtbot):
@@ -193,7 +194,7 @@ def test_paste_auto_single_selection_keeps_single_target_semantics(qtbot):
     _select_items(tab, _idx(tab, 0))
 
     QApplication.clipboard().setText("99")
-    assert paste_auto(tab.view)
+    assert paste_auto(tab.data_store.view)
 
     assert _root_values(tab) == [1, 99, 2]
 
@@ -212,11 +213,11 @@ def test_multi_insert_zip_inserts_after_each_paired_target(qtbot):
     _select_items(tab, a, c)
 
     QApplication.clipboard().setText("[100, 200]")
-    before_count = tab.undo_stack.count()
-    assert paste_insert_after_zip(tab.view)
+    before_count = tab.data_store.undo_stack.count()
+    assert paste_insert_after_zip(tab.data_store.view)
 
     assert _root_values(tab) == [1, 100, 2, 3, 200]
-    assert tab.undo_stack.count() == before_count + 1
+    assert tab.data_store.undo_stack.count() == before_count + 1
 
 
 def test_multi_insert_zip_to_shortest_when_counts_mismatch(qtbot):
@@ -225,7 +226,7 @@ def test_multi_insert_zip_to_shortest_when_counts_mismatch(qtbot):
     _select_items(tab, _idx(tab, 0), _idx(tab, 1), _idx(tab, 2))
 
     QApplication.clipboard().setText("[100, 200]")
-    assert paste_insert_after_zip(tab.view)
+    assert paste_insert_after_zip(tab.data_store.view)
 
     assert _root_values(tab) == [1, 100, 2, 200, 3]
 
@@ -240,9 +241,9 @@ def test_multi_insert_zip_no_deep_scan(qtbot):
     _select_items(tab, a, ax)
 
     QApplication.clipboard().setText("[42]")
-    assert paste_insert_after_zip(tab.view)
+    assert paste_insert_after_zip(tab.data_store.view)
     # Only "a" was used as target — "a.x" was pruned (descendant of selected ancestor).
-    after = tab.model.root_item.to_json()
+    after = tab.data_store.model.root_item.to_json()
     assert after["a"] == {"x": 1}
     assert list(after.values()) == [{"x": 1}, 42, 2]
 
@@ -252,9 +253,9 @@ def test_multi_replace_zip_replaces_each_target_with_paired_entry(qtbot):
     _select_items(tab, _idx(tab, 0), _idx(tab, 2))
 
     QApplication.clipboard().setText("[100, 200]")
-    before_count = tab.undo_stack.count()
-    assert paste_replace_zip(tab.view)
+    before_count = tab.data_store.undo_stack.count()
+    assert paste_replace_zip(tab.data_store.view)
 
-    after = tab.model.root_item.to_json()
+    after = tab.data_store.model.root_item.to_json()
     assert after == {"a": 100, "b": 2, "c": 200}
-    assert tab.undo_stack.count() == before_count + 1
+    assert tab.data_store.undo_stack.count() == before_count + 1

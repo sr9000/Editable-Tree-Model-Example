@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QMessageBox
 
 
 def _has_meaningful_data(tab) -> bool:
-    data = tab.model.root_item.to_json()
+    data = tab.data_store.model.root_item.to_json()
     if isinstance(data, dict):
         return bool(data)
     if isinstance(data, list):
@@ -13,7 +13,7 @@ def _has_meaningful_data(tab) -> bool:
 
 
 def confirm_close(window, tab, *, prompt_for_untitled_nonempty: bool = True) -> bool:
-    if prompt_for_untitled_nonempty and not tab.file_path and _has_meaningful_data(tab):
+    if prompt_for_untitled_nonempty and not tab.data_store.file_path and _has_meaningful_data(tab):
         choice = QMessageBox.question(
             window,
             "Unsaved untitled tab",
@@ -27,7 +27,7 @@ def confirm_close(window, tab, *, prompt_for_untitled_nonempty: bool = True) -> 
             return window._save_tab(tab, save_as=True)
         return True
 
-    if not tab.is_dirty:
+    if not tab.data_store.is_dirty:
         return True
     choice = QMessageBox.question(
         window,

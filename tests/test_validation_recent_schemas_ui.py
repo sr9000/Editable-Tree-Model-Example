@@ -66,5 +66,5 @@ def test_clicking_recent_menu_entry_attaches_schema_on_current_tab(qtbot, monkey
     assert len(actions) == 1
     actions[0].trigger()
 
-    assert tab.schema_source == url_source
-    assert tab.schema is not None
+    assert tab.data_store.schema_source == url_source
+    assert tab.data_store.schema is not None

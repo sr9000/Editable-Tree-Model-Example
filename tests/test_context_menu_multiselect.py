@@ -16,7 +16,7 @@ def _make_tab(qtbot, data) -> JsonTab:
 
 
 def _select_value_cells(tab: JsonTab, *paths: tuple[int, ...]) -> None:
-    sm = tab.view.selectionModel()
+    sm = tab.data_store.view.selectionModel()
     first, *rest = paths
     first_src = tab._index_from_path(first).siblingAtColumn(2)
     first_view = tab._source_to_view(first_src)
@@ -28,11 +28,11 @@ def _select_value_cells(tab: JsonTab, *paths: tuple[int, ...]) -> None:
 
 
 def _selected_paths(tab: JsonTab) -> set[tuple[int, ...]]:
-    return {tab._index_path(idx) for idx in selected_source_rows(tab.view)}
+    return {tab._index_path(idx) for idx in selected_source_rows(tab.data_store.view)}
 
 
 def _root_values(tab: JsonTab) -> list:
-    return [item.to_json() for item in tab.model.root_item.child_items]
+    return [item.to_json() for item in tab.data_store.model.root_item.child_items]
 
 
 def test_context_menu_prepare_preserves_selection_when_clicking_selected_value_cell(qtbot):
@@ -40,7 +40,7 @@ def test_context_menu_prepare_preserves_selection_when_clicking_selected_value_c
     _select_value_cells(tab, (0,), (2,))
 
     clicked = tab._source_to_view(tab._index_from_path((0,)).siblingAtColumn(2))
-    _prepare_context_selection(tab.view, clicked)
+    _prepare_context_selection(tab.data_store.view, clicked)
 
     assert _selected_paths(tab) == {(0,), (2,)}
 
@@ -50,7 +50,7 @@ def test_context_menu_prepare_resets_selection_when_clicking_unselected_row(qtbo
     _select_value_cells(tab, (0,), (1,))
 
     clicked = tab._source_to_view(tab._index_from_path((2,)).siblingAtColumn(2))
-    _prepare_context_selection(tab.view, clicked)
+    _prepare_context_selection(tab.data_store.view, clicked)
 
     assert _selected_paths(tab) == {(2,)}
 
@@ -60,8 +60,8 @@ def test_context_paste_action_uses_preserved_multiselect(qtbot):
     _select_value_cells(tab, (0,), (2,))
 
     clicked = tab._source_to_view(tab._index_from_path((0,)).siblingAtColumn(2))
-    _prepare_context_selection(tab.view, clicked)
+    _prepare_context_selection(tab.data_store.view, clicked)
 
     QApplication.clipboard().setText("99")
-    assert paste_auto(tab.view)
+    assert paste_auto(tab.data_store.view)
     assert _root_values(tab) == [1, 99, 2, 3, 99]

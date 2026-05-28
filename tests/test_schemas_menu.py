@@ -62,8 +62,8 @@ def test_schemas_menu_recent_url_opens_read_only_tab_and_disables_edit_actions(q
 
     tab = window._current_tab()
     assert tab is not None
-    assert tab.schema_source == url_source
-    assert tab.is_read_only
+    assert tab.data_store.schema_source == url_source
+    assert tab.data_store.is_read_only
     assert window.tabWidget.count() == before_count + 1
 
     window.update_actions()

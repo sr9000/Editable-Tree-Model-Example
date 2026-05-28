@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QComboBox, QFileDialog, QMenu, QMessageBox, QTreeV
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from state.edit_limits import get_attach_file_warning_limit_bytes
 from tree.types import JsonType
+from tree_actions._tab_lookup import find_owning_tab
 from tree_actions.clipboard import copy_selection, copy_selection_value_only, copy_selection_with_name
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER
 from tree_actions.paste import (
@@ -53,12 +54,7 @@ def _add(menu: QMenu, text: str, slot, *, enabled: bool = True, shortcut: str | 
 
 
 def _find_enter_edit_target(host) -> object | None:
-    cursor = host
-    while cursor is not None:
-        if hasattr(cursor, "edit_name_or_value_from_enter"):
-            return cursor
-        cursor = cursor.parent() if hasattr(cursor, "parent") else None
-    return None
+    return find_owning_tab(host)
 
 
 def _open_active_type_combo_popup(tree_view: QTreeView) -> bool:
@@ -85,10 +81,8 @@ def _trigger_type_combo_from_context_menu(tree_view: QTreeView, index) -> bool:
 
     tab = _find_enter_edit_target(tree_view)
     if tab is not None:
-        trigger = getattr(tab, "edit_name_or_value_from_enter", None)
-        if callable(trigger):
-            trigger()
-            return True
+        tab.edit_name_or_value_from_enter()
+        return True
 
     tree_view.edit(type_index)
     QTimer.singleShot(0, lambda: _open_active_type_combo_popup(tree_view))
@@ -131,19 +125,15 @@ def _prepare_context_selection(tree_view: QTreeView, index) -> None:
 
 def _status_message(tree_view: QTreeView, text: str, timeout_ms: int = 3000) -> None:
     tab = _find_enter_edit_target(tree_view)
-    cb = getattr(tab, "_status_message_callback", None) if tab is not None else None
-    if cb is not None:
-        cb(text, timeout_ms)
+    if tab is not None:
+        tab.show_status(text, timeout_ms)
 
 
 def _search_is_active(tree_view: QTreeView) -> bool:
     tab = _find_enter_edit_target(tree_view)
     if tab is None:
         return False
-    search_edit = getattr(tab, "search_edit", None)
-    if search_edit is None:
-        return False
-    return bool(search_edit.text().strip())
+    return bool(tab.data_store.search_edit.text().strip())
 
 
 def _goto_row_and_clear_search(tree_view: QTreeView, clicked_index) -> bool:
@@ -164,23 +154,19 @@ def _goto_row_and_clear_search(tree_view: QTreeView, clicked_index) -> bool:
     if tab is None:
         return False
 
-    search_edit = getattr(tab, "search_edit", None)
-    if search_edit is None:
-        return False
+    search_edit = tab.data_store.search_edit
 
     if search_edit.text():
         search_edit.clear()
-        apply_filter = getattr(tab, "_apply_filter", None)
-        if callable(apply_filter):
-            apply_filter()
+        tab.apply_filter()
 
-    idx = tab._index_from_path(source_path)
+    idx = tab.data_store.mutations.index_from_path(source_path)
     if not idx.isValid():
         return False
     source_target = idx.siblingAtColumn(target_col)
     if not source_target.isValid():
         source_target = idx.siblingAtColumn(0)
-    view_target = tab._source_to_view(source_target)
+    view_target = tab.data_store.mutations.source_to_view(source_target)
     if not view_target.isValid():
         return False
 
@@ -256,8 +242,8 @@ def _set_value_from_context(tree_view: QTreeView, value_index, value: str) -> bo
     if not value_index.isValid():
         return False
     tab = _find_enter_edit_target(tree_view)
-    if tab is not None and hasattr(tab, "commit_set_data"):
-        return bool(tab.commit_set_data(value_index, value, Qt.ItemDataRole.EditRole))
+    if tab is not None:
+        return bool(tab.data_store.mutations.commit_set_data(value_index, value, Qt.ItemDataRole.EditRole))
     model = value_index.model()
     if model is None:
         return False

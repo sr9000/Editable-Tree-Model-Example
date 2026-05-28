@@ -29,16 +29,16 @@ def test_validation_role_after_revalidate(qtbot):
     data = {"name": "not-an-integer"}
 
     tab = _make_tab(qtbot, data)
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
 
     # The issue index should now contain at least one error for /name
-    assert len(tab.issue_index) > 0
+    assert len(tab.data_store.issue_index) > 0
 
     # Resolve "name" → model path (0,) because it's the first (and only) key
-    idx = tab.model.index(0, 0, QModelIndex())
+    idx = tab.data_store.model.index(0, 0, QModelIndex())
     assert idx.isValid()
 
-    severity = tab.model.data(idx, VALIDATION_SEVERITY_ROLE)
+    severity = tab.data_store.model.data(idx, VALIDATION_SEVERITY_ROLE)
     assert severity == "error"
 
 
@@ -46,10 +46,10 @@ def test_no_issues_role_returns_none(qtbot):
     """When no schema is set the role always returns None."""
     data = {"a": 1}
     tab = _make_tab(qtbot, data)
-    tab.clear_schema()
+    tab.data_store.validation.clear_schema()
 
-    idx = tab.model.index(0, 0, QModelIndex())
-    assert tab.model.data(idx, VALIDATION_SEVERITY_ROLE) is None
+    idx = tab.data_store.model.index(0, 0, QModelIndex())
+    assert tab.data_store.model.data(idx, VALIDATION_SEVERITY_ROLE) is None
 
 
 def test_clear_schema_removes_badges(qtbot):
@@ -58,14 +58,14 @@ def test_clear_schema_removes_badges(qtbot):
     data = {"x": "bad"}
 
     tab = _make_tab(qtbot, data)
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
-    assert len(tab.issue_index) > 0  # has errors
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+    assert len(tab.data_store.issue_index) > 0  # has errors
 
-    tab.clear_schema()
-    assert len(tab.issue_index) == 0
+    tab.data_store.validation.clear_schema()
+    assert len(tab.data_store.issue_index) == 0
 
-    idx = tab.model.index(0, 0, QModelIndex())
-    assert tab.model.data(idx, VALIDATION_SEVERITY_ROLE) is None
+    idx = tab.data_store.model.index(0, 0, QModelIndex())
+    assert tab.data_store.model.data(idx, VALIDATION_SEVERITY_ROLE) is None
 
 
 # ---------------------------------------------------------------------------
@@ -83,10 +83,10 @@ def test_validation_changed_emits_data_changed(qtbot):
     def _on_changed(top, bottom, roles):
         emitted_roles.append(list(roles))
 
-    tab.model.dataChanged.connect(_on_changed)
+    tab.data_store.model.dataChanged.connect(_on_changed)
 
     schema = {"type": "object", "properties": {"a": {"type": "string"}}}
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
 
     # At least one dataChanged emission should include VALIDATION_SEVERITY_ROLE
     assert any(VALIDATION_SEVERITY_ROLE in roles for roles in emitted_roles)
@@ -111,13 +111,13 @@ def test_ancestor_gets_severity(qtbot):
     data = {"parent": {"child": "bad"}}
 
     tab = _make_tab(qtbot, data)
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
 
     # "parent" is at model path (0,)
-    parent_idx = tab.model.index(0, 0, QModelIndex())
+    parent_idx = tab.data_store.model.index(0, 0, QModelIndex())
     assert parent_idx.isValid()
 
-    severity = tab.model.data(parent_idx, VALIDATION_SEVERITY_ROLE)
+    severity = tab.data_store.model.data(parent_idx, VALIDATION_SEVERITY_ROLE)
     assert severity == "error"
 
 
@@ -139,18 +139,18 @@ def test_severity_with_show_root(qtbot):
     data = {"firstName": "Indra", "lastName": "Sen", "age": 17}
 
     tab = _make_tab(qtbot, data, show_root=True)
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
 
-    assert len(tab.issue_index) == 1, "expected one minimum-violation issue"
+    assert len(tab.data_store.issue_index) == 1, "expected one minimum-violation issue"
 
     # With show_root=True the visible tree is: root(0) → firstName(0), lastName(1), age(2)
-    root_idx = tab.model.index(0, 0, QModelIndex())
-    age_idx = tab.model.index(2, 0, root_idx)
+    root_idx = tab.data_store.model.index(0, 0, QModelIndex())
+    age_idx = tab.data_store.model.index(2, 0, root_idx)
     assert age_idx.isValid()
 
     # _index_path must return (2,) — the data-relative path — not (0, 2)
-    assert tab.model._index_path(age_idx) == (2,)
+    assert tab.data_store.model._index_path(age_idx) == (2,)
 
     # Both the exact row and its ancestor (the root) must carry severity
-    assert tab.model.data(age_idx, VALIDATION_SEVERITY_ROLE) == "error"
-    assert tab.model.data(root_idx, VALIDATION_SEVERITY_ROLE) == "error"
+    assert tab.data_store.model.data(age_idx, VALIDATION_SEVERITY_ROLE) == "error"
+    assert tab.data_store.model.data(root_idx, VALIDATION_SEVERITY_ROLE) == "error"

@@ -6,18 +6,12 @@ from PySide6.QtCore import QFileSystemWatcher, QObject, Qt, QTimer, QUrl, Slot
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
-try:
-    from PySide6.QtCore import Shiboken as _shiboken
-
-    _is_valid = _shiboken.isValid
-except (ImportError, AttributeError):
-    try:
-        import shiboken6 as _shiboken
-
-        _is_valid = _shiboken.isValid
-    except ImportError:
-        _is_valid = None
-
+from app.runtime_compat import (
+    accent_color_role,
+    color_scheme_setter,
+    has_color_scheme_changed_signal,
+    install_color_scheme_memory,
+)
 from state.theme_settings import (
     get_follow_system,
     get_watch_user_dir,
@@ -83,7 +77,7 @@ class ThemeController:
         if isinstance(app, QGuiApplication):
             self._theme = resolve_active_theme(self._theme_registry, app)
             style_hints = app.styleHints()
-            if hasattr(style_hints, "colorSchemeChanged"):
+            if has_color_scheme_changed_signal(style_hints):
                 self._scheme_proxy = _ColorSchemeProxy(parent, self)
                 style_hints.colorSchemeChanged.connect(self._scheme_proxy.on_changed)
         else:
@@ -171,8 +165,9 @@ class ThemeController:
         pal.setColor(QPalette.ColorRole.WindowText, palette.base_fg)
         pal.setColor(QPalette.ColorRole.Highlight, palette.selection_bg)
         pal.setColor(QPalette.ColorRole.HighlightedText, palette.selection_fg)
-        if hasattr(QPalette.ColorRole, "Accent"):
-            pal.setColor(QPalette.ColorRole.Accent, palette.accent)
+        accent_role = accent_color_role()
+        if accent_role is not None:
+            pal.setColor(accent_role, palette.accent)
         app.setPalette(pal)
 
     def _sync_app_color_scheme(self, theme: ThemeSpec) -> None:
@@ -180,7 +175,7 @@ class ThemeController:
         if not isinstance(app, QGuiApplication):
             return
         style_hints = app.styleHints()
-        setter = getattr(style_hints, "setColorScheme", None)
+        setter = color_scheme_setter(style_hints)
         if setter is None:
             return  # older Qt — nothing to do, leave system default
         target = Qt.ColorScheme.Dark if theme.mode == "dark" else Qt.ColorScheme.Light
@@ -188,6 +183,8 @@ class ThemeController:
             self._suppress_scheme_signal = True
             try:
                 setter(target)
+                if style_hints.colorScheme() != target:
+                    install_color_scheme_memory(style_hints, target)
             finally:
                 self._suppress_scheme_signal = False
 
@@ -346,8 +343,6 @@ class ThemeController:
     def on_system_color_scheme_changed(self, *_args) -> None:
         if self._suppress_scheme_signal:
             return
-        if _is_valid is not None and not _is_valid(self._parent):
-            return  # parent widget already deleted — ignore stale signal
         if not get_follow_system():
             return
         app = QGuiApplication.instance()
@@ -369,7 +364,7 @@ class ThemeController:
         app = QGuiApplication.instance()
         if isinstance(app, QGuiApplication):
             style_hints = app.styleHints()
-            if hasattr(style_hints, "colorSchemeChanged"):
+            if has_color_scheme_changed_signal(style_hints):
                 try:
                     style_hints.colorSchemeChanged.disconnect(self._scheme_proxy.on_changed)
                 except (RuntimeError, TypeError):

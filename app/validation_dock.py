@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any, Protocol
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (
@@ -18,12 +18,15 @@ from PySide6.QtWidgets import (
 
 from app.validation_panel_model import IssueListModel
 from state.recent_schemas import recent_schemas
-from validation.schema_registry import SchemaSource, schema_registry
+from validation.index import IssueIndex
+from validation.schema_registry import get_schema_registry
+from validation.schema_types import SchemaRef
 
-if TYPE_CHECKING:
-    from documents.tab import JsonTab
-    from validation.index import IssueIndex
-    from validation.schema_source import SchemaRef
+
+class ValidationDockTabProtocol(Protocol):
+    data_store: Any
+    validationChanged: Any
+    schemaChanged: Any
 
 
 class ValidationDock(QDockWidget):
@@ -117,7 +120,7 @@ class ValidationDock(QDockWidget):
         layout.addWidget(self.list_view)
         self.setWidget(container)
 
-        self._tab: JsonTab | None = None
+        self._tab: ValidationDockTabProtocol | None = None
 
     # ── public API ────────────────────────────────────────────────────────
 
@@ -127,7 +130,7 @@ class ValidationDock(QDockWidget):
         self._chk_auto.setChecked(enabled)
         self._chk_auto.blockSignals(False)
 
-    def update_status(self, issue_index: "IssueIndex") -> None:
+    def update_status(self, issue_index: IssueIndex) -> None:
         """Refresh the status label from *issue_index*."""
         issues = issue_index.all_issues()
         count = len(issues)
@@ -136,20 +139,22 @@ class ValidationDock(QDockWidget):
         else:
             self._lbl_status.setText(f"{count} issue{'s' if count != 1 else ''}")
 
-    def attach_tab(self, tab: "JsonTab | None") -> None:
+    def attach_tab(self, tab: ValidationDockTabProtocol | None) -> None:
         if self._tab is tab:
             return
         if self._tab is not None:
-            for sig_name in ("validationChanged", "schemaChanged"):
+            # Disconnect (signal, slot) pairs explicitly — no name-based reflection.
+            for signal, slot in (
+                (self._tab.validationChanged, self._on_validation_changed),
+                (self._tab.schemaChanged, self._on_schema_changed),
+            ):
                 try:
-                    getattr(self._tab, sig_name).disconnect(
-                        getattr(self, f"_on_{sig_name.replace('Changed', '_changed')}")
-                    )
+                    signal.disconnect(slot)
                 except (RuntimeError, TypeError):
                     pass
             # Disconnect tree selection sync
             try:
-                sm = self._tab.view.selectionModel()
+                sm = self._tab.data_store.view.selectionModel()
                 if sm is not None:
                     sm.currentChanged.disconnect(self._on_tree_selection_changed)
             except (RuntimeError, TypeError):
@@ -169,24 +174,24 @@ class ValidationDock(QDockWidget):
 
         tab.validationChanged.connect(self._on_validation_changed)
         tab.schemaChanged.connect(self._on_schema_changed)
-        self._on_schema_changed(tab.schema_ref)
-        self._on_validation_changed(tab.issue_index)
+        self._on_schema_changed(tab.data_store.schema_ref)
+        self._on_validation_changed(tab.data_store.issue_index)
 
         # Sync tree selection → dock highlight
-        sm = tab.view.selectionModel()
+        sm = tab.data_store.view.selectionModel()
         if sm is not None:
             sm.currentChanged.connect(self._on_tree_selection_changed)
 
     # ── private slots ─────────────────────────────────────────────────────
 
-    def _on_validation_changed(self, issue_index: "IssueIndex") -> None:
+    def _on_validation_changed(self, issue_index: IssueIndex) -> None:
         self.model.set_issues(issue_index.all_issues())
         self.update_status(issue_index)
 
-    def _on_schema_changed(self, ref: "SchemaRef") -> None:
+    def _on_schema_changed(self, ref: SchemaRef) -> None:
         has_schema = ref.origin != "none"
         has_path = ref.path is not None
-        has_url = getattr(ref, "url", None) is not None
+        has_url = ref.url is not None
         self._btn_rescan.setEnabled(has_schema)
         self._btn_clear_schema.setVisible(ref.origin in ("inline", "sibling", "manual"))
         self._act_reload.setEnabled(has_path or has_url)
@@ -223,7 +228,7 @@ class ValidationDock(QDockWidget):
         menu = QMenu(self)
         act_schema = menu.addAction(self.tr("Go to schema rule"))
         has_schema = self._tab is not None and (
-            self._tab.schema_ref.path is not None or getattr(self._tab.schema_ref, "url", None) is not None
+            self._tab.data_store.schema_ref.path is not None or self._tab.data_store.schema_ref.url is not None
         )
         act_schema.setEnabled(has_schema and bool(issue.schema_path))
         chosen = menu.exec(self.list_view.viewport().mapToGlobal(QPoint(pos)))
@@ -241,7 +246,7 @@ class ValidationDock(QDockWidget):
         for source in recents:
             if source.kind == "file":
                 text = self.tr("📂 {name}").format(name=source.display)
-                enabled = schema_registry.exists(source)
+                enabled = get_schema_registry().exists(source)
             else:
                 text = self.tr("🌐 {name}").format(name=source.display)
                 enabled = True

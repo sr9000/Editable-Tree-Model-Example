@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Block new getattr/hasattr in production code outside an explicit allowlist.
+#
+# Background: see reports/getattr-usage-analysis.md and
+# plans/00-overview.md ... plans/10-allowlist-and-precommit-hook.md.
+# Install once per clone with:
+#   git config core.hooksPath .githooks
+
+set -euo pipefail
+
+# Production files where reflection is allowed:
+#  * jsontream/__init__.py        — generic streaming-encoder probing arbitrary user data
+#  * validation/error_adapter.py  — jsonschema-error attribute adapter
+#  * app/runtime_compat.py        — Qt / PyInstaller / tzinfo runtime probes
+ALLOWLIST=(
+    "jsontream/__init__.py"
+    "validation/error_adapter.py"
+    "app/runtime_compat.py"
+)
+
+is_allowlisted() {
+    local path="$1"
+    for allowed in "${ALLOWLIST[@]}"; do
+        [[ "$path" == "$allowed" ]] && return 0
+    done
+    return 1
+}
+
+# Files to scan: every staged python file (added/copied/modified/renamed).
+staged_py=$(git diff --cached --name-only --diff-filter=ACMR -- '*.py')
+fail=0
+
+for f in $staged_py; do
+    [[ -f "$f" ]] || continue
+
+    # Tests can use reflection for fixtures, but new test additions must
+    # carry an inline "# allow: <reason>" justification on the same line.
+    if [[ "$f" == tests/* ]]; then
+        bad=$(git diff --cached -- "$f" \
+                | grep -E '^\+' \
+                | grep -vE '^\+\+\+' \
+                | grep -E '\b(get|has)attr\(|TYPE_CHECKING|AttributeError' \
+                | grep -vE '# *allow:' || true)
+        if [[ -n "$bad" ]]; then
+            echo "ERROR: new getattr/hasattr/TYPE_CHECKING/AttributeError in $f must end with '# allow: <reason>':"
+            echo "$bad"
+            fail=1
+        fi
+        continue
+    fi
+
+    if is_allowlisted "$f"; then
+        continue
+    fi
+
+    # Match the bare call; strings/docstrings should not contain a literal
+    # 'getattr(' / 'hasattr(' — if they do, rephrase the prose.
+    if grep -nE '\b(get|has)attr\(|TYPE_CHECKING|AttributeError' "$f" >/dev/null; then
+        echo "ERROR: $f contains forbidden getattr/hasattr/TYPE_CHECKING/AttributeError (outside allowlist):"
+        grep -nE '\b(get|has)attr\(|TYPE_CHECKING|AttributeError' "$f"
+        fail=1
+    fi
+done
+
+exit $fail

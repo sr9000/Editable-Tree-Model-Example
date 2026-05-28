@@ -271,3 +271,14 @@ configuration.
 - `ai-memory/todo-n-fixme.md` — active open work only.
 - `ai-memory/history.md` — archived resolved phase/feature history.
 - `plans/` — feature plans and definitions of done for larger changes.
+## Dev setup
+Activate the repo-local git hooks (run once after cloning):
+```bash
+make dev-setup
+```
+This installs `.githooks/pre-commit`, which rejects new `getattr` /
+`hasattr` calls outside the small allowlist documented in
+`plans/10-allowlist-and-precommit-hook.md` (`jsontream/__init__.py`,
+`validation/error_adapter.py`, `app/runtime_compat.py`). Tests may use
+reflection but must justify each call with an inline `# allow: <reason>`
+comment. CI runs the same check via `make check-no-reflection`.

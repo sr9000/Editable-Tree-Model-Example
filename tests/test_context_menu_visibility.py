@@ -10,7 +10,7 @@ from tree_actions.structure import collapse_selection_recursive, expand_selectio
 
 def _set_current_source_row(tab: JsonTab, source_index: QModelIndex) -> None:
     view_index = tab._source_to_view(source_index)
-    sm = tab.view.selectionModel()
+    sm = tab.data_store.view.selectionModel()
     sm.select(
         view_index,
         QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
@@ -35,7 +35,7 @@ def test_context_menu_hides_inactive_actions_without_selection(qtbot):
     tab.show()
     QApplication.processEvents()
 
-    menu = show_context_menu(tab.view, QPoint(-100, -100), execute=False)
+    menu = show_context_menu(tab.data_store.view, QPoint(-100, -100), execute=False)
     assert menu is not None
     labels = _collect_labels(menu)
 
@@ -49,15 +49,15 @@ def test_context_menu_uses_recursive_expand_collapse_labels(qtbot):
     tab = JsonTab(lambda *_: None, data={"obj": {"x": 1}, "tail": 2}, show_root=True)
     qtbot.addWidget(tab)
     tab.show()
-    tab.view.expandAll()
+    tab.data_store.view.expandAll()
     QApplication.processEvents()
 
-    root = tab.model.index(0, 0, QModelIndex())
-    obj_row = tab.model.index(0, 0, root)
+    root = tab.data_store.model.index(0, 0, QModelIndex())
+    obj_row = tab.data_store.model.index(0, 0, root)
     _set_current_source_row(tab, obj_row)
-    position = tab.view.visualRect(tab._source_to_view(obj_row)).center()
+    position = tab.data_store.view.visualRect(tab._source_to_view(obj_row)).center()
 
-    menu = show_context_menu(tab.view, position, execute=False)
+    menu = show_context_menu(tab.data_store.view, position, execute=False)
     assert menu is not None
     labels = _collect_labels(menu)
 
@@ -71,26 +71,26 @@ def test_recursive_expand_collapse_scope_to_selected_subtree(qtbot):
     tab = JsonTab(lambda *_: None, data={"a": {"x": {"k": 1}}, "b": {"y": 2}}, show_root=True)
     qtbot.addWidget(tab)
     tab.show()
-    tab.view.expandAll()
+    tab.data_store.view.expandAll()
     QApplication.processEvents()
 
-    root = tab.model.index(0, 0, QModelIndex())
-    a_row = tab.model.index(0, 0, root)
-    b_row = tab.model.index(1, 0, root)
-    a_child = tab.model.index(0, 0, a_row)
+    root = tab.data_store.model.index(0, 0, QModelIndex())
+    a_row = tab.data_store.model.index(0, 0, root)
+    b_row = tab.data_store.model.index(1, 0, root)
+    a_child = tab.data_store.model.index(0, 0, a_row)
 
-    tab.view.collapseAll()
+    tab.data_store.view.collapseAll()
     _set_current_source_row(tab, a_row)
-    assert expand_selection_recursive(tab.view)
+    assert expand_selection_recursive(tab.data_store.view)
 
-    assert tab.view.isExpanded(tab._source_to_view(a_row))
-    assert tab.view.isExpanded(tab._source_to_view(a_child))
-    assert not tab.view.isExpanded(tab._source_to_view(b_row))
+    assert tab.data_store.view.isExpanded(tab._source_to_view(a_row))
+    assert tab.data_store.view.isExpanded(tab._source_to_view(a_child))
+    assert not tab.data_store.view.isExpanded(tab._source_to_view(b_row))
 
-    tab.view.expandAll()
-    assert tab.view.isExpanded(tab._source_to_view(b_row))
+    tab.data_store.view.expandAll()
+    assert tab.data_store.view.isExpanded(tab._source_to_view(b_row))
     _set_current_source_row(tab, a_row)
-    assert collapse_selection_recursive(tab.view)
+    assert collapse_selection_recursive(tab.data_store.view)
 
-    assert not tab.view.isExpanded(tab._source_to_view(a_row))
-    assert tab.view.isExpanded(tab._source_to_view(b_row))
+    assert not tab.data_store.view.isExpanded(tab._source_to_view(a_row))
+    assert tab.data_store.view.isExpanded(tab._source_to_view(b_row))

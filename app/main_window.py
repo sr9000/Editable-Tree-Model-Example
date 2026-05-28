@@ -2,15 +2,13 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, Qt, QTimer
+from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, QTimer
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QFileDialog,
     QFontDialog,
-    QInputDialog,
-    QLabel,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -19,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 import state.view_state as view_state
+from app.app_settings import AppSettingsPresenter
 from app.close_confirm import confirm_close
 from app.font_controller import FontController
 from app.history import bind_undo_signals, setup_history_menu
@@ -26,36 +25,20 @@ from app.main_window_actions import setup_connections as setup_main_window_conne
 from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, refresh_recent_menu
 from app.schema_tab_pool import SchemaTabPool
+from app.tab_lifecycle import TabLifecyclePresenter
 from app.theme_controller import ThemeController
-from app.validation_dock import ValidationDock
-from dialogs.attach_schema_dlg import AttachSchemaDialog
-from dialogs.secret_prefixes_dlg import SecretPrefixesDialog
+from app.validation_presenter import DockValidationPresenter
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
-from state.edit_limits import (
-    get_attach_file_warning_limit_bytes,
-    get_binary_edit_warning_limit_bytes,
-    get_multiline_edit_warning_limit_chars,
-    get_string_edit_warning_limit_chars,
-    set_attach_file_warning_limit_bytes,
-    set_binary_edit_warning_limit_bytes,
-    set_multiline_edit_warning_limit_chars,
-    set_string_edit_warning_limit_chars,
-)
-from state.recent_schemas import recent_schemas
-from state.secret_settings import get_secret_word_prefixes, set_secret_word_prefixes
-from tree_actions.clipboard import clipboard_text_is_valid_data, clipboard_to_tab_data, copy_selection
+from tree_actions.clipboard import clipboard_to_tab_data
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 from tree_actions.structure import switch_document_case as switch_case_document
-from units import counts, format_bytes
-from validation.schema_registry import SchemaSource, open_in_browser, schema_registry
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
-    _MAX_CLOSED_TABS = 10
 
     @staticmethod
     def _coerce_bool(value, *, default: bool) -> bool:
@@ -96,7 +79,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._history_view: QUndoView | None = None
         self._bound_undo_tab: JsonTab | None = None
         self._startup_window_mode: str = "normal"
-        self._closed_tabs_stack: list[dict] = []
         self._settings = QSettings(APPLICATION_ID, "app")
         # All font preferences (regular family, monospace family, editor
         # point size, monospace-fields toggle) live in a single controller
@@ -108,6 +90,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._theme = self._theme_controller.theme
         self._icon_provider = self._theme_controller.icon_provider
         self._schema_tab_pool = SchemaTabPool(self)
+        self._tab_lifecycle = TabLifecyclePresenter(self.tabWidget, self)
         self._theme_follow_action = self._theme_controller.follow_action
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
@@ -134,11 +117,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.fileReopenTabAction.setShortcut(QKeySequence("Ctrl+Shift+T"))
         self.fileMenu.insertAction(self.appExitAction, self.fileCloseTabAction)
         self.fileMenu.insertAction(self.appExitAction, self.fileReopenTabAction)
-        self._setup_secret_prefixes_action()
-        self._setup_edit_limits_menu()
+        self._app_settings = AppSettingsPresenter(self)
         refresh_recent_menu(self)
-        self._setup_schemas_menu()
-        self._setup_validation_dock()
+        self._dock_validation = DockValidationPresenter(self)
         self._setup_switch_case_actions_menu()
         self._setup_font_actions()
         self._setup_monospace_action()
@@ -215,375 +196,57 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         event.ignore()
 
-    def _setup_validation_dock(self) -> None:
-        from state.validation_settings import auto_rescan_enabled
+    def _setup_validation_dock(self) -> None:  # pragma: no cover - retained for back-compat
+        return
 
-        self.validation_dock = ValidationDock(self)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.validation_dock)
-        self.validation_dock.issueActivated.connect(
-            lambda issue, edit: self._on_validation_issue_activated(issue, edit=edit)
-        )
-        self.validation_dock.rescanRequested.connect(self._on_rescan_requested)
-        self.validation_dock.autoRescanToggled.connect(self._on_auto_rescan_toggled)
-        self.validation_dock.clearSchemaRequested.connect(self._on_clear_schema_requested)
-        self.validation_dock.attachSchemaRequested.connect(self._on_attach_schema_requested)
-        self.validation_dock.attachRecentSchemaRequested.connect(self._on_attach_recent_schema_requested)
-        self.validation_dock.reloadSchemaRequested.connect(self._on_reload_schema_requested)
-        self.validation_dock.openSchemaFileRequested.connect(self._on_open_schema_file_requested)
-        self.validation_dock.goToSchemaRuleRequested.connect(self._on_go_to_schema_rule_requested)
-
-        # Initialise checkbox from the persisted global setting.
-        self.validation_dock.set_auto_rescan_checked(auto_rescan_enabled())
-
-        # Permanent right-aligned label on the status bar for validation summary.
-        self._validation_status_label = QLabel("", self)
-        self._validation_status_label.setVisible(False)
-        self.statusBar.addPermanentWidget(self._validation_status_label)
-        self._bound_validation_tab = None
-
-        self.viewValidationPanelAction = QAction(self.tr("Validation Panel"), self)
-        self.viewValidationPanelAction.setCheckable(True)
-        self.viewMenu.addSeparator()
-        self.viewMenu.addAction(self.viewValidationPanelAction)
-
-        dock_state = self._settings.value("validation/dock_state")
-        if isinstance(dock_state, QByteArray):
-            self.restoreState(dock_state)
-        elif isinstance(dock_state, (bytes, bytearray)):
-            self.restoreState(QByteArray(dock_state))
-
-        visible = self._coerce_bool(self._settings.value("validation/dock_visible", True), default=True)
-        self.validation_dock.setVisible(visible)
-        self.viewValidationPanelAction.setChecked(visible)
-
-    # ── validation dock handlers ──────────────────────────────────────────
-
-    def _on_rescan_requested(self) -> None:
-        tab = self._current_tab()
-        if tab is not None:
-            tab.revalidate()
-
-    def _on_auto_rescan_toggled(self, enabled: bool) -> None:
-        from state.validation_settings import set_auto_rescan_enabled
-
-        set_auto_rescan_enabled(enabled)
-        for tab in self._theme_tabs():
-            tab.set_auto_rescan(enabled)
-
-    def _on_clear_schema_requested(self) -> None:
-        from state.validation_settings import clear_schema_path
-
-        tab = self._current_tab()
-        if tab is None:
-            return
-        if tab.file_path:
-            clear_schema_path(Path(tab.file_path))
-        tab.clear_schema()
-
-    def _on_attach_schema_requested(self) -> None:
-        tab = self._current_tab()
-        if tab is None:
-            return
-        source = AttachSchemaDialog.ask(self, start_dir=tab.file_path or "")
-        if source is None:
-            return
-
-        self._attach_schema_source(source)
-
-    def _on_attach_recent_schema_requested(self, source: SchemaSource) -> None:
-        self._attach_schema_source(source)
-
-    def _attach_schema_source(self, source: SchemaSource) -> None:
-        from state.validation_settings import write_schema_ref_str
-
-        tab = self._current_tab()
-        if tab is None:
-            return
-
-        entry = schema_registry.acquire(source, tab)
-        if entry is None:
-            self.statusBar.showMessage(self.tr("Could not load schema: {name}").format(name=source.display), 3000)
-            return
-
-        tab.set_schema_from_source(source)
-        if tab.file_path:
-            write_schema_ref_str(Path(tab.file_path), source.key)
-        self.statusBar.showMessage(self.tr("Schema attached: {name}").format(name=source.display), 2000)
-
-    def _on_reload_schema_requested(self) -> None:
-        tab = self._current_tab()
-        if tab is None or tab.schema_source is None:
-            return
-        if schema_registry.reload(tab.schema_source) is None:
-            self.statusBar.showMessage(self.tr("Reload failed"), 3000)
-            return
-        tab.revalidate()
-        self.statusBar.showMessage(self.tr("Schema reloaded"), 2000)
-
-    def _on_open_schema_file_requested(self) -> None:
-        tab = self._current_tab()
-        if tab is None or tab.schema_source is None:
-            return
-
-        source = tab.schema_source
-        if source is None:
-            return
-        if source.kind == "url":
-            if not open_in_browser(source):
-                self.statusBar.showMessage(self.tr("Could not open schema URL"), 3000)
-            return
-
-        path = source.key
-        import os
-
-        if not os.path.exists(path):
-            self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
-            return
-        self._open_path(path)
-
-    def _on_go_to_schema_rule_requested(self, issue) -> None:
-        """Open the schema and navigate to the rule that triggered *issue*."""
-        tab = self._current_tab()
-        if tab is None:
-            return
-
-        from validation.issue import ValidationIssue
-
-        def _navigate(schema_tab):
-            if schema_tab is None or not issue.schema_path:
-                return
-            fake_issue = ValidationIssue(
-                message="",
-                instance_path=issue.schema_path,
-                schema_path=(),
-                kind="",
-            )
-            schema_tab.goto_validation_issue(fake_issue)
-
-        source = tab.schema_source
-        if source is None:
-            return
-        schema_tab = self._schema_tab_pool.open_or_focus(self, source)
-        if schema_tab is None:
-            if source.kind == "file":
-                self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
-            else:
-                self.statusBar.showMessage(self.tr("Could not fetch schema for navigation"), 3000)
-            return
-        _navigate(schema_tab)
-
-    def _setup_schemas_menu(self) -> None:
-        self.schemasMenu = QMenu(self.tr("Schemas"), self)
-        self.menuBar.insertMenu(self.viewMenu.menuAction(), self.schemasMenu)
-
-        self._schemas_attach_action = QAction(self.tr("Attach schema…"), self)
-        self._schemas_attach_action.triggered.connect(self._on_attach_schema_requested)
-        self._schemas_recent_menu = QMenu(self.tr("Recent"), self)
-        self._schemas_open_current_action = QAction(self.tr("Open current schema"), self)
-        self._schemas_open_current_action.triggered.connect(
-            lambda: (
-                self._open_schema_source(self._current_tab().schema_source) if self._current_tab() is not None else None
-            )
-        )
-        self._schemas_copy_path_action = QAction(self.tr("Copy full path"), self)
-        self._schemas_copy_path_action.triggered.connect(
-            lambda: (
-                self._copy_schema_source_key(self._current_tab().schema_source)
-                if self._current_tab() is not None
-                else None
-            )
-        )
-
-        self.schemasMenu.aboutToShow.connect(self._rebuild_schemas_menu)
-
-    def _open_schema_source(self, source: SchemaSource | None) -> None:
-        if source is None:
-            return
-        tab = self._schema_tab_pool.open_or_focus(self, source)
-        if tab is None:
-            if source.kind == "file":
-                self.statusBar.showMessage(self.tr("Schema file not found"), 3000)
-            else:
-                self.statusBar.showMessage(self.tr("Could not open schema URL"), 3000)
-
-    def _copy_schema_source_key(self, source: SchemaSource | None) -> None:
-        if source is None:
-            return
-        QApplication.clipboard().setText(source.key)
-        self.statusBar.showMessage(self.tr("Copied schema path"), 1500)
+    def _setup_schemas_menu(self) -> None:  # pragma: no cover - retained for back-compat
+        return
 
     def _rebuild_schemas_menu(self) -> None:
-        self.schemasMenu.clear()
-        self.schemasMenu.addAction(self._schemas_attach_action)
-        self.schemasMenu.addMenu(self._schemas_recent_menu)
-        self.schemasMenu.addSeparator()
-        self.schemasMenu.addAction(self._schemas_open_current_action)
-        self.schemasMenu.addAction(self._schemas_copy_path_action)
+        self._dock_validation.rebuild_schemas_menu()
 
-        self._schemas_recent_menu.clear()
-        for source in recent_schemas()[:8]:
-            label = (
-                self.tr("📂 {name}").format(name=source.display)
-                if source.kind == "file"
-                else self.tr("🌐 {name}").format(name=source.display)
-            )
-            action = self._schemas_recent_menu.addAction(label)
-            if source.kind == "file":
-                action.setEnabled(Path(source.key).exists())
-            action.triggered.connect(lambda _checked=False, s=source: self._open_schema_source(s))
+    def _on_go_to_schema_rule_requested(self, issue) -> None:
+        self._dock_validation.on_go_to_schema_rule_requested(issue)
 
-        if not self._schemas_recent_menu.actions():
-            empty = self._schemas_recent_menu.addAction(self.tr("<empty>"))
-            empty.setEnabled(False)
+    # ── Edit-warning-limits + secret-prefixes presenter shims (Phase 3.2) ─
 
-        tab = self._current_tab()
-        source = tab.schema_source if tab is not None else None
-        has_source = source is not None
-        self._schemas_open_current_action.setEnabled(has_source)
-        self._schemas_copy_path_action.setEnabled(has_source)
+    @property
+    def _limits_menu(self):
+        return self._app_settings.limits_menu
 
-    def _setup_edit_limits_menu(self) -> None:
-        self._limits_menu = QMenu(self.tr("Edit Warning Limits"), self)
-        self._limit_string_action = QAction(self)
-        self._limit_multiline_action = QAction(self)
-        self._limit_binary_action = QAction(self)
-        self._limit_attach_action = QAction(self)
+    @property
+    def _limit_string_action(self):
+        return self._app_settings.limit_string_action
 
-        self._limit_string_action.triggered.connect(self._set_string_warning_limit)
-        self._limit_multiline_action.triggered.connect(self._set_multiline_warning_limit)
-        self._limit_binary_action.triggered.connect(self._set_binary_warning_limit)
-        self._limit_attach_action.triggered.connect(self._set_attach_warning_limit)
+    @property
+    def _limit_multiline_action(self):
+        return self._app_settings.limit_multiline_action
 
-        self._limits_menu.addAction(self._limit_string_action)
-        self._limits_menu.addAction(self._limit_multiline_action)
-        self._limits_menu.addAction(self._limit_binary_action)
-        self._limits_menu.addAction(self._limit_attach_action)
-        self._limits_menu.aboutToShow.connect(self._refresh_edit_limits_menu_entries)
-        self._refresh_edit_limits_menu_entries()
+    @property
+    def _limit_binary_action(self):
+        return self._app_settings.limit_binary_action
 
-        self.fileMenu.insertMenu(self.appExitAction, self._limits_menu)
-        self.fileMenu.insertSeparator(self.appExitAction)
+    @property
+    def _limit_attach_action(self):
+        return self._app_settings.limit_attach_action
 
-    def _setup_secret_prefixes_action(self) -> None:
-        self._secret_prefixes_action = QAction(self.tr("Secret word prefixes..."), self)
-        self._secret_prefixes_action.triggered.connect(self._edit_secret_prefixes)
-        self.fileMenu.insertAction(self.appExitAction, self._secret_prefixes_action)
-
-    def _edit_secret_prefixes(self) -> None:
-        dlg = SecretPrefixesDialog(get_secret_word_prefixes(), self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
-        prefixes = set_secret_word_prefixes(dlg.prefixes())
-        self.statusBar.showMessage(self.tr("Updated {n} secret prefixes").format(n=len(prefixes)), 2000)
+    @property
+    def _secret_prefixes_action(self):
+        return self._app_settings.secret_prefixes_action
 
     def _refresh_edit_limits_menu_entries(self) -> None:
-        string_limit = get_string_edit_warning_limit_chars()
-        multiline_limit = get_multiline_edit_warning_limit_chars()
-        binary_limit = get_binary_edit_warning_limit_bytes()
-        attach_limit = get_attach_file_warning_limit_bytes()
-
-        self._limit_string_action.setText(
-            self.tr("String edit limit... ({value} chars)").format(value=counts(string_limit))
-        )
-        self._limit_multiline_action.setText(
-            self.tr("Multiline text limit... ({value} chars)").format(value=counts(multiline_limit))
-        )
-        self._limit_binary_action.setText(
-            self.tr("Bytes edit limit... ({value})").format(value=format_bytes(binary_limit))
-        )
-        self._limit_attach_action.setText(
-            self.tr("Attach file size limit... ({value})").format(value=format_bytes(attach_limit))
-        )
-
-    def _prompt_limit_value(self, *, title: str, label: str, current: int) -> int | None:
-        value, ok = QInputDialog.getInt(self, title, label, current, 1, 2_147_483_647, 1)
-        if not ok:
-            return None
-        return int(value)
-
-    def _set_string_warning_limit(self) -> None:
-        current = get_string_edit_warning_limit_chars()
-        value = self._prompt_limit_value(
-            title=self.tr("String Edit Warning Limit"),
-            label=self.tr("Warn when string length exceeds (chars):"),
-            current=current,
-        )
-        if value is None:
-            return
-        set_string_edit_warning_limit_chars(value)
-        self._refresh_edit_limits_menu_entries()
-        self.statusBar.showMessage(self.tr("Updated string edit warning limit"), 2000)
-
-    def _set_multiline_warning_limit(self) -> None:
-        current = get_multiline_edit_warning_limit_chars()
-        value = self._prompt_limit_value(
-            title=self.tr("Multiline Edit Warning Limit"),
-            label=self.tr("Warn when multiline length exceeds (chars):"),
-            current=current,
-        )
-        if value is None:
-            return
-        set_multiline_edit_warning_limit_chars(value)
-        self._refresh_edit_limits_menu_entries()
-        self.statusBar.showMessage(self.tr("Updated multiline edit warning limit"), 2000)
-
-    def _set_binary_warning_limit(self) -> None:
-        current = get_binary_edit_warning_limit_bytes()
-        value = self._prompt_limit_value(
-            title=self.tr("Bytes Edit Warning Limit"),
-            label=self.tr("Warn when binary size exceeds (bytes):"),
-            current=current,
-        )
-        if value is None:
-            return
-        set_binary_edit_warning_limit_bytes(value)
-        self._refresh_edit_limits_menu_entries()
-        self.statusBar.showMessage(self.tr("Updated bytes edit warning limit"), 2000)
-
-    def _set_attach_warning_limit(self) -> None:
-        current = get_attach_file_warning_limit_bytes()
-        value = self._prompt_limit_value(
-            title=self.tr("Attach File Warning Limit"),
-            label=self.tr("Warn when attaching file larger than (bytes):"),
-            current=current,
-        )
-        if value is None:
-            return
-        set_attach_file_warning_limit_bytes(value)
-        self._refresh_edit_limits_menu_entries()
-        self.statusBar.showMessage(self.tr("Updated attach file warning limit"), 2000)
+        self._app_settings.refresh_edit_limits_menu_entries()
 
     def _bind_validation_status(self, tab) -> None:
-        """Connect/disconnect the permanent validation status label to *tab*."""
-        if self._bound_validation_tab is not None:
-            try:
-                self._bound_validation_tab.validationChanged.disconnect(self._on_tab_validation_changed)
-            except (RuntimeError, TypeError):
-                pass
-        self._bound_validation_tab = tab
-        if tab is not None:
-            tab.validationChanged.connect(self._on_tab_validation_changed)
-            self._on_tab_validation_changed(tab.issue_index)
-        else:
-            self._validation_status_label.setVisible(False)
+        self._dock_validation.bind_validation_status(tab)
 
     def _on_tab_validation_changed(self, issue_index) -> None:
-        from documents.tab_status import format_validation_status
-
-        text = format_validation_status(issue_index)
-        if text:
-            self._validation_status_label.setText(text)
-            self._validation_status_label.setVisible(True)
-        else:
-            self._validation_status_label.setVisible(False)
+        self._dock_validation.on_tab_validation_changed(issue_index)
 
     # ─────────────────────────────────────────────────────────────────────
 
     def _on_validation_issue_activated(self, issue, *, edit: bool = False) -> None:
-        tab = self._current_tab()
-        if tab is None:
-            return
-        tab.goto_validation_issue(issue, edit=edit)
+        self._dock_validation.on_validation_issue_activated(issue, edit=edit)
 
     def _setup_monospace_action(self) -> None:
         self.viewMonospaceFieldsAction = QAction("Monospace Names && Values", self)
@@ -635,7 +298,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _current_view(self) -> QTreeView | None:
         tab = self._current_tab()
-        return tab.view if tab is not None else None
+        return tab.data_store.view if tab is not None else None
 
     def setup_connections(self):
         setup_main_window_connections(self)
@@ -661,29 +324,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._theme_controller.setup_theme_menu(self.viewMenu)
         self._theme_follow_action = self._theme_controller.follow_action
 
-    def _rebuild_theme_menu_entries(self) -> None:
-        self._theme_controller.rebuild_theme_menu_entries()
-
-    def _refresh_theme_menu_checks(self) -> None:
-        self._theme_controller.refresh_theme_menu_checks()
-
     def _on_theme_selected(self, name: str) -> None:
         self._theme_controller.on_theme_selected(name)
 
     def _on_follow_system_toggled(self, checked: bool) -> None:
         self._theme_controller.on_follow_system_toggled(checked)
 
-    def _open_themes_folder(self) -> None:
-        self._theme_controller.open_themes_folder()
-
-    def _refresh_theme_watcher_paths(self) -> None:
-        self._theme_controller.refresh_theme_watcher_paths()
-
     def _on_theme_fs_event(self, _path: str) -> None:
         self._theme_controller.on_theme_fs_event(_path)
-
-    def _reload_themes_from_disk(self) -> None:
-        self._theme_controller.reload_themes()
 
     def _on_system_color_scheme_changed(self, *_args) -> None:
         self._theme_controller.on_system_color_scheme_changed(*_args)
@@ -692,70 +340,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         bind_undo_signals(self, tab)
 
     def _on_tab_changed(self, _index: int) -> None:
-        tab = self._current_tab()
-        self._bind_undo_signals(tab)
-        self._bind_validation_status(tab)
-        self.validation_dock.attach_tab(tab)
-        if tab is not None:
-            tab.resize_key_columns()
-        if self._history_dialog is not None and self._history_dialog.isVisible():
-            if tab is not None and self._history_view is not None:
-                self._history_view.setStack(tab.undo_stack)
-        self.update_actions()
+        self._tab_lifecycle.on_tab_changed(_index)
 
     def _refresh_tab_presentation(self, tab: JsonTab) -> None:
-        index = self.tabWidget.indexOf(tab)
-        if index < 0:
-            return
-        self.tabWidget.setTabText(index, tab.display_name())
-        self.tabWidget.setTabToolTip(index, tab.file_path or "Untitled")
+        self._tab_lifecycle.refresh_tab_presentation(tab)
 
     def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> JsonTab | None:
-        from state.validation_settings import auto_rescan_enabled
-
-        try:
-            tab = JsonTab(
-                self.update_actions,
-                self.statusBar.showMessage,
-                data=data,
-                file_path=file_path,
-                show_root=True,
-                parent=self,
-                permanent_message_callback=lambda msg: self.statusBar.showMessage(msg, 0),
-                theme=self._theme,
-                icon_provider=self._icon_provider,
-                save_format=save_format,
-            )
-        except Exception as exc:
-            QMessageBox.critical(self, "Error", f"Failed to create tab:\n{exc}")
-            return None
-
-        # Apply the global auto-rescan setting to the new tab.
-        tab.set_auto_rescan(auto_rescan_enabled())
-
-        tab_index = self.tabWidget.addTab(tab, tab.display_name())
-        self.tabWidget.setCurrentIndex(tab_index)
-        self._refresh_tab_presentation(tab)
-        self.fonts.subscribe(tab)
-        tab.dirtyChanged.connect(lambda _dirty, t=tab: self._on_tab_dirty(t))
-
-        tab.view.expandAll()
-        tab.resize_key_columns()
-        if tab.model.show_root:
-            source_index = tab.model.index(0, 0, QModelIndex())
-            tab.view.setCurrentIndex(tab._source_to_view(source_index))
-        view_state.restore(tab)
-        # Re-broadcast: ``view_state.restore`` may have rewritten ``_font_pt``
-        # from a previously-saved per-tab value; the global controller wins.
-        self.fonts.subscribe(tab)
-
-        self._bind_undo_signals(tab)
-        self.update_actions()
-        return tab
+        return self._tab_lifecycle.add_tab(data=data, file_path=file_path, save_format=save_format)
 
     def _on_tab_dirty(self, tab: JsonTab) -> None:
-        self._refresh_tab_presentation(tab)
-        self.update_actions()
+        self._tab_lifecycle.on_tab_dirty(tab)
+
+    @property
+    def _closed_tabs_stack(self) -> list[dict]:
+        # Deprecated: presenter now owns the stack. Kept for tests/back-compat.
+        return self._tab_lifecycle.closed_tabs_stack
+
+    @property
+    def _MAX_CLOSED_TABS(self) -> int:  # noqa: N802 — deprecated shim
+        return TabLifecyclePresenter.MAX_CLOSED_TABS
 
     def _open_path(self, path: str) -> bool:
         resolved = str(Path(path).resolve())
@@ -777,23 +380,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _save_tab(self, tab: JsonTab, *, save_as: bool = False) -> bool:
         from state.validation_settings import clear_schema_path
 
-        if tab.is_read_only:
+        if tab.data_store.is_read_only:
             return False
-        old_path = tab.file_path
+        old_path = tab.data_store.file_path
         ok = tab.save_as() if save_as else tab.save()
         if not ok:
             return False
-        if save_as and isinstance(old_path, str) and tab.file_path and old_path != tab.file_path:
+        if save_as and isinstance(old_path, str) and tab.data_store.file_path and old_path != tab.data_store.file_path:
             view_state.discard(old_path)
             clear_schema_path(Path(old_path))
         view_state.save(tab)
-        if tab.file_path:
-            push_recent(self, tab.file_path)
+        if tab.data_store.file_path:
+            push_recent(self, tab.data_store.file_path)
         self._on_tab_dirty(tab)
         return True
 
     def _confirm_reload_dirty_tab(self, tab: JsonTab) -> str:
-        if not tab.is_dirty:
+        if not tab.data_store.is_dirty:
             return "reload"
 
         name = tab.display_name().replace(" *", "")
@@ -826,15 +429,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QMessageBox.critical(self, "Reload failed", f"Could not reload {resolved}:\n{exc}")
             return False
 
-        root_index = tab.model.index(0, 0, QModelIndex()) if tab.model.show_root else QModelIndex()
-        root_item = tab.model.get_item(root_index)
+        root_index = (
+            tab.data_store.model.index(0, 0, QModelIndex()) if tab.data_store.model.show_root else QModelIndex()
+        )
+        root_item = tab.data_store.model.get_item(root_index)
         changed = tab._diff_apply(root_item, data, root_index)
         if changed:
-            tab.undo_stack.clear()
-        tab.undo_stack.setClean()
-        tab.save_format = source_format
-        tab.file_path = resolved
-        tab.revalidate()
+            tab.data_store.undo_stack.clear()
+        tab.data_store.undo_stack.setClean()
+        tab.data_store.save_format = source_format
+        tab.data_store.file_path = resolved
+        tab.data_store.validation.revalidate()
         self._refresh_tab_presentation(tab)
         self.update_actions()
         self.statusBar.showMessage(f"Reloaded: {resolved}", 2000)
@@ -868,14 +473,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def reload_from_disk(self) -> None:
         tab = self._current_tab()
-        if tab is None or tab.is_read_only or not tab.file_path:
+        if tab is None or tab.data_store.is_read_only or not tab.data_store.file_path:
             return
         decision = self._confirm_reload_dirty_tab(tab)
         if decision == "cancel":
             return
         if decision == "overwrite" and not self._save_tab(tab, save_as=False):
             return
-        self._reload_tab_from_path(tab, tab.file_path)
+        self._reload_tab_from_path(tab, tab.data_store.file_path)
 
     def create_new_file(self):
         self._add_tab(data={}, file_path=None)
@@ -890,70 +495,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.statusBar.showMessage("New tab created from clipboard", 2000)
 
     def close_current_tab(self) -> None:
-        tab = self._current_tab()
-        if tab is None:
-            return
-        index = self.tabWidget.indexOf(tab)
-        if index >= 0:
-            self.close_tab(index)
+        self._tab_lifecycle.close_current_tab()
 
     def reopen_closed_tab(self) -> None:
-        if not self._closed_tabs_stack:
-            return
-        snapshot = self._closed_tabs_stack.pop()
-        data = snapshot.get("data")
-        file_path = snapshot.get("file_path")
-        save_format = snapshot.get("save_format")
-        if data is None:
-            # User had discarded dirty changes — reload clean from disk if possible.
-            if file_path:
-                self._open_path(file_path)
-            else:
-                self._add_tab(data={})
-        else:
-            self._add_tab(data=data, file_path=file_path, save_format=save_format)
-        self.statusBar.showMessage("Reopened closed tab", 2000)
-        self.update_actions()
+        self._tab_lifecycle.reopen_closed_tab()
 
     def close_tab(self, index: int) -> None:
-        widget = self.tabWidget.widget(index)
-
-        snapshot = None
-        if isinstance(widget, JsonTab):
-            was_dirty = widget.is_dirty
-            if not self._confirm_close(widget):
-                return
-            # Build reopen snapshot: if user discarded dirty edits, remember file path only.
-            if was_dirty and widget.is_dirty:
-                # Discard chosen — don't resurrect dirty state on reopen.
-                if widget.file_path:
-                    snapshot = {"data": None, "file_path": widget.file_path, "save_format": widget.save_format}
-            else:
-                try:
-                    src_idx = widget.model.index(0, 0, QModelIndex())
-                    snap_data = widget.model.get_item(src_idx).to_json() if src_idx.isValid() else {}
-                except Exception:
-                    snap_data = {}
-                snapshot = {"data": snap_data, "file_path": widget.file_path, "save_format": widget.save_format}
-            self._schema_tab_pool.unregister(widget)
-            view_state.save(widget)
-        if widget is self._bound_undo_tab:
-            self._bind_undo_signals(None)
-        self.tabWidget.removeTab(index)
-        if widget is not None:
-            widget.deleteLater()
-
-        if snapshot is not None:
-            self._closed_tabs_stack.append(snapshot)
-            if len(self._closed_tabs_stack) > self._MAX_CLOSED_TABS:
-                self._closed_tabs_stack.pop(0)
-
-        self.update_actions()
-        # Re-bind to whatever tab is now current (if any).
-        current = self._current_tab()
-        self._bind_undo_signals(current)
-        self._bind_validation_status(current)
-        self.validation_dock.attach_tab(current)
+        self._tab_lifecycle.close_tab(index)
 
     def insert_child(self):
         tab = self._current_tab()
@@ -964,9 +512,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
 
         self.update_actions()
-
-    def insert_column(self):
-        return False
 
     def insert_row_before(self):
         tab = self._current_tab()
@@ -991,20 +536,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def insert_row(self):
         # Backward-compatible helper used by old call sites.
         self.insert_row_after()
-
-    def remove_column(self):
-        view = self._current_view()
-        if view is None:
-            return False
-
-        model = view.model()
-        column = view.selectionModel().currentIndex().column()
-        changed = model.removeColumn(column)
-
-        if changed:
-            self.update_actions()
-
-        return changed
 
     def remove_row(self):
         view = self._current_view()
@@ -1057,7 +588,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def select_regular_font(self) -> None:
         tab = self._current_tab()
-        seed = QFont(tab.view.font()) if tab is not None else QFont(self.font())
+        seed = QFont(tab.data_store.view.font()) if tab is not None else QFont(self.font())
         if self.fonts.profile.regular_family:
             seed.setFamily(self.fonts.profile.regular_family)
         seed = self._normalize_font_for_dialog(seed)
@@ -1079,24 +610,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def update_actions(self):
         update_main_window_actions(self)
 
-    def copy_action(self):
-        view = self._current_view()
-        if view is None:
-            return
-
-        if copy_selection(view):
-            self.statusBar.showMessage("Copied selection", 1500)
-        else:
-            self.statusBar.showMessage("Nothing to copy", 1500)
-
     def copy_current_file_path(self) -> None:
         """Put the absolute path of the current tab on the system clipboard."""
         tab = self._current_tab()
-        if tab is None or not tab.file_path:
+        if tab is None or not tab.data_store.file_path:
             self.statusBar.showMessage(self.tr("No file path to copy"), 2000)
             return
-        QApplication.clipboard().setText(tab.file_path)
-        self.statusBar.showMessage(self.tr("Copied: {path}").format(path=tab.file_path), 2000)
+        QApplication.clipboard().setText(tab.data_store.file_path)
+        self.statusBar.showMessage(self.tr("Copied: {path}").format(path=tab.data_store.file_path), 2000)
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._theme_controller.shutdown()

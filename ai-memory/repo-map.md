@@ -1217,6 +1217,46 @@ search-aware Go To, hide-inactive context menu, and dirty-aware Save.
 
 ---
 
+## 15.7) kill-gods Phase 3 — `MainWindow` presenters (2026-05-27)
+
+`MainWindow` was reduced from a god object to a thin shell that:
+
+- owns the Designer-generated `Ui_MainWindow` widgets (`tabWidget`,
+  `fileMenu`, `viewMenu`, `statusBar`, `menuBar`, …),
+- holds window geometry / DnD / file-dialog entry points / closeEvent
+  persistence,
+- wires the action layer (`app/main_window_actions.py`),
+- delegates all other behaviour to the controllers and presenters below.
+
+The **authoritative** controllers/presenters under `app/` are:
+
+| File                          | Class                     | Responsibility                                                     |
+|-------------------------------|---------------------------|--------------------------------------------------------------------|
+| `app/theme_controller.py`     | `ThemeController`         | theme registry + view menu + per-tab broadcast                     |
+| `app/font_controller.py`      | `FontController`          | regular/monospace family, point size, monospace-fields toggle      |
+| `app/recent_files.py`         | (module)                  | recent-files menu state                                            |
+| `app/history.py`              | (module)                  | undo/redo menu wiring + history dialog                             |
+| `app/main_window_actions.py`  | (module)                  | menu/action connections + `update_actions`                         |
+| `app/schema_tab_pool.py`      | `SchemaTabPool`           | open-or-focus for schema source tabs                               |
+| `app/close_confirm.py`        | (module)                  | dirty-close prompt helpers                                         |
+| `app/tab_lifecycle.py`        | `TabLifecyclePresenter`   | `_closed_tabs_stack`, add/close/reopen flows                       |
+| `app/app_settings.py`         | `AppSettingsPresenter`    | edit-warning-limits submenu, secret-prefixes action                |
+| `app/validation_presenter.py` | `DockValidationPresenter` | validation-dock wiring, Schemas top-level menu, attach-schema flow |
+| `app/validation_dock.py`      | `ValidationDock`          | dock widget visuals only                                           |
+
+`MainWindow` retains a small set of **deprecated forwarding shims** (e.g.
+`_closed_tabs_stack`, `_MAX_CLOSED_TABS`, `_limit_*_action`,
+`_secret_prefixes_action`, `_rebuild_schemas_menu`,
+`_on_go_to_schema_rule_requested`, `_refresh_tab_presentation`,
+`_attach_schema_source`, `_on_*_schema_*`) that delegate into the
+presenters; these are kept until the test suite is swept off them in a
+follow-up plan.
+
+No new theme/font/recent-files controllers were introduced — the existing
+ones remain authoritative.
+
+---
+
 ## 16) Tests
 
 `tests/` collects **1023 tests** as of 2026-05-23 (post `new-kinds`

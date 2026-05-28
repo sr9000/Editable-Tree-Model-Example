@@ -24,11 +24,11 @@ def _idx(tab: JsonTab, *path):
 
 
 def _keys(tab: JsonTab) -> list:
-    return list(tab.model.root_item.to_json().keys())
+    return list(tab.data_store.model.root_item.to_json().keys())
 
 
 def _values(tab: JsonTab) -> list:
-    return list(tab.model.root_item.to_json().values())
+    return list(tab.data_store.model.root_item.to_json().values())
 
 
 # ---------------------------------------------------------------------------
@@ -41,8 +41,8 @@ def test_same_parent_forward_block_move_and_undo(qtbot):
     # keys: a=0, b=1, c=2, d=3, e=4, f=5
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6})
 
-    c = tab.model.index(2, 0, QModelIndex())  # row 2 = "c"
-    d = tab.model.index(3, 0, QModelIndex())  # row 3 = "d"
+    c = tab.data_store.model.index(2, 0, QModelIndex())  # row 2 = "c"
+    d = tab.data_store.model.index(3, 0, QModelIndex())  # row 3 = "d"
 
     # Move c,d after e → target_row = 5
     assert tab.push_move_rows([c, d], QModelIndex(), 5)
@@ -55,8 +55,8 @@ def test_same_parent_forward_block_move_and_undo(qtbot):
     assert result_before_undo.index("d") < result_before_undo.index("f")
 
     # Single undo step
-    assert tab.undo_stack.count() == 1
-    tab.undo_stack.undo()
+    assert tab.data_store.undo_stack.count() == 1
+    tab.data_store.undo_stack.undo()
     assert _keys(tab) == ["a", "b", "c", "d", "e", "f"]
 
 
@@ -70,8 +70,8 @@ def test_same_parent_backward_block_move_and_undo(qtbot):
     # keys: a=0, b=1, c=2, d=3, e=4, f=5, g=6, h=7
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6, "g": 7, "h": 8})
 
-    f = tab.model.index(5, 0, QModelIndex())  # row 5 = "f"
-    h = tab.model.index(7, 0, QModelIndex())  # row 7 = "h"
+    f = tab.data_store.model.index(5, 0, QModelIndex())  # row 5 = "f"
+    h = tab.data_store.model.index(7, 0, QModelIndex())  # row 7 = "h"
 
     assert tab.push_move_rows([f, h], QModelIndex(), 2)
 
@@ -84,8 +84,8 @@ def test_same_parent_backward_block_move_and_undo(qtbot):
     # a, b still at front
     assert result[:2] == ["a", "b"]
 
-    assert tab.undo_stack.count() == 1
-    tab.undo_stack.undo()
+    assert tab.data_store.undo_stack.count() == 1
+    tab.data_store.undo_stack.undo()
     assert _keys(tab) == ["a", "b", "c", "d", "e", "f", "g", "h"]
 
 
@@ -108,28 +108,28 @@ def test_cross_parent_multimove_and_undo(qtbot):
     a_idx = _idx(tab, 0)  # "a" object
     b_idx = _idx(tab, 1)  # "b" object
     c_idx = _idx(tab, 2)  # "c" array
-    ax = tab.model.index(0, 0, a_idx)  # a.x
-    by = tab.model.index(0, 0, b_idx)  # b.y
+    ax = tab.data_store.model.index(0, 0, a_idx)  # a.x
+    by = tab.data_store.model.index(0, 0, b_idx)  # b.y
 
     assert tab.push_move_rows([ax, by], c_idx, 0)
 
     # c should now contain 2 items
-    c_after = tab.model.get_item(c_idx).to_json()
+    c_after = tab.data_store.model.get_item(c_idx).to_json()
     assert len(c_after) == 2
     assert 10 in c_after and 30 in c_after
 
     # a should have lost "x"
-    a_after = tab.model.get_item(a_idx).to_json()
+    a_after = tab.data_store.model.get_item(a_idx).to_json()
     assert "x" not in a_after
     assert "a2" in a_after
 
     # Single undo step
-    assert tab.undo_stack.count() == 1
-    tab.undo_stack.undo()
+    assert tab.data_store.undo_stack.count() == 1
+    tab.data_store.undo_stack.undo()
 
-    assert tab.model.get_item(a_idx).to_json() == {"x": 10, "a2": 20}
-    assert tab.model.get_item(b_idx).to_json() == {"y": 30, "b2": 40}
-    assert tab.model.get_item(c_idx).to_json() == []
+    assert tab.data_store.model.get_item(a_idx).to_json() == {"x": 10, "a2": 20}
+    assert tab.data_store.model.get_item(b_idx).to_json() == {"y": 30, "b2": 40}
+    assert tab.data_store.model.get_item(c_idx).to_json() == []
 
 
 def test_cross_parent_move_undo_restores_original_name_after_collision_rename(qtbot):
@@ -144,22 +144,22 @@ def test_cross_parent_move_undo_restores_original_name_after_collision_rename(qt
 
     foo_idx = _idx(tab, 0)
     bar_idx = _idx(tab, 1)
-    bar_x = tab.model.index(0, 0, bar_idx)
+    bar_x = tab.data_store.model.index(0, 0, bar_idx)
 
     assert tab.push_move_rows([bar_x], foo_idx, 1)
-    assert tab.model.root_item.to_json() == {
+    assert tab.data_store.model.root_item.to_json() == {
         "foo": {"x": 1, "x_2": 2},
         "bar": {},
     }
 
-    tab.undo_stack.undo()
-    assert tab.model.root_item.to_json() == {
+    tab.data_store.undo_stack.undo()
+    assert tab.data_store.model.root_item.to_json() == {
         "foo": {"x": 1},
         "bar": {"x": 2},
     }
 
-    tab.undo_stack.redo()
-    assert tab.model.root_item.to_json() == {
+    tab.data_store.undo_stack.redo()
+    assert tab.data_store.model.root_item.to_json() == {
         "foo": {"x": 1, "x_2": 2},
         "bar": {},
     }
@@ -178,18 +178,18 @@ def test_cycle_guard_returns_false_no_command_pushed(qtbot):
     nest_idx = _idx(tab, 0, 0)  # "top.nest"
     deep_idx = _idx(tab, 0, 0, 0)  # "top.nest.deep"
 
-    original_count = tab.undo_stack.count()
+    original_count = tab.data_store.undo_stack.count()
 
     # Try to move "top" into "deep"
     assert tab.push_move_rows([top_idx], deep_idx, 0) is False
-    assert tab.undo_stack.count() == original_count
+    assert tab.data_store.undo_stack.count() == original_count
 
     # Try to move "nest" into itself (same path as target parent)
     assert tab.push_move_rows([nest_idx], nest_idx, 0) is False
-    assert tab.undo_stack.count() == original_count
+    assert tab.data_store.undo_stack.count() == original_count
 
     # Model must be unchanged
-    assert tab.model.root_item.to_json() == {"top": {"nest": {"deep": 1}}}
+    assert tab.data_store.model.root_item.to_json() == {"top": {"nest": {"deep": 1}}}
 
 
 # ---------------------------------------------------------------------------
@@ -200,20 +200,20 @@ def test_cycle_guard_returns_false_no_command_pushed(qtbot):
 def test_merge_with_returns_false(qtbot):
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3})
 
-    a = tab.model.index(0, 0, QModelIndex())
+    a = tab.data_store.model.index(0, 0, QModelIndex())
 
     # Move a → end of root: [b, c, a]
     tab.push_move_rows([a], QModelIndex(), 3)
     # After first move: [b, c, a]  →  a is now at index 2
     # Move a → row 0: [a, b, c]
-    a2 = tab.model.index(2, 0, QModelIndex())
+    a2 = tab.data_store.model.index(2, 0, QModelIndex())
     tab.push_move_rows([a2], QModelIndex(), 0)
 
     # Two separate undo steps
-    assert tab.undo_stack.count() == 2
+    assert tab.data_store.undo_stack.count() == 2
 
-    tab.undo_stack.undo()
-    tab.undo_stack.undo()
+    tab.data_store.undo_stack.undo()
+    tab.data_store.undo_stack.undo()
     assert _keys(tab) == ["a", "b", "c"]
 
 
@@ -228,8 +228,8 @@ def test_push_move_row_still_works(qtbot):
     assert tab.push_move_row(QModelIndex(), 0, 2)  # move row 0 ("a") to row 2
     assert _keys(tab) == ["b", "c", "a"]
 
-    assert tab.undo_stack.count() == 1
-    tab.undo_stack.undo()
+    assert tab.data_store.undo_stack.count() == 1
+    tab.data_store.undo_stack.undo()
     assert _keys(tab) == ["a", "b", "c"]
 
 
@@ -244,13 +244,13 @@ def test_forward_block_move_index_adjustment(qtbot):
     # a=0, b=1, c=2, d=3, e=4, f=5
     tab = _make_tab(qtbot, {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5})
 
-    c = tab.model.index(2, 0, QModelIndex())
-    d = tab.model.index(3, 0, QModelIndex())
+    c = tab.data_store.model.index(2, 0, QModelIndex())
+    d = tab.data_store.model.index(3, 0, QModelIndex())
     assert tab.push_move_rows([c, d], QModelIndex(), 5)
 
     # Expected: a, b, e, c, d, f
     assert _keys(tab) == ["a", "b", "e", "c", "d", "f"]
-    tab.undo_stack.undo()
+    tab.data_store.undo_stack.undo()
     assert _keys(tab) == ["a", "b", "c", "d", "e", "f"]
 
 
@@ -264,8 +264,8 @@ def test_backward_block_move_index_invariant(qtbot):
     # a=0, b=1, c=2, d=3, e=4, f=5, g=6, h=7
     tab = _make_tab(qtbot, {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5, "g": 6, "h": 7})
 
-    f = tab.model.index(5, 0, QModelIndex())
-    h = tab.model.index(7, 0, QModelIndex())
+    f = tab.data_store.model.index(5, 0, QModelIndex())
+    h = tab.data_store.model.index(7, 0, QModelIndex())
     assert tab.push_move_rows([f, h], QModelIndex(), 2)
 
     # f lands at 2, h at 3; c,d,e,g shift right
@@ -274,5 +274,5 @@ def test_backward_block_move_index_invariant(qtbot):
     assert keys[2] == "f"
     assert keys[3] == "h"
     assert "g" in keys
-    tab.undo_stack.undo()
+    tab.data_store.undo_stack.undo()
     assert _keys(tab) == ["a", "b", "c", "d", "e", "f", "g", "h"]

@@ -1,0 +1,13 @@
+name: lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  no-reflection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid getattr/hasattr outside allowlist
+        run: bash .githooks/pre-commit-ci

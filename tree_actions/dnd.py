@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtCore import QMimeData, QModelIndex, Qt
 
 from tree.types import JsonType
+from tree.view import JsonTreeView
+from tree_actions._tab_lookup import find_owning_tab
 from tree_actions.clipboard import MIME_JSON_TREE, entries_from_mime, source_paths_from_mime
 from tree_actions.paste import paste_entries_at
 
 
 def _tab_of(view):
-    parent = view.parent() if view is not None else None
-    if parent is not None and hasattr(parent, "push_move_rows"):
-        return parent
-    return None
+    return find_owning_tab(view)
 
 
 def _row0(model, index: QModelIndex) -> QModelIndex:
@@ -62,7 +61,7 @@ def can_drop(model, mime, action: Qt.DropAction, row: int, column: int, parent: 
         return False
     if mime is None:
         return False
-    if not mime.hasFormat(MIME_JSON_TREE) and not (hasattr(mime, "text") and mime.text().strip()):
+    if not mime.hasFormat(MIME_JSON_TREE) and not (isinstance(mime, QMimeData) and mime.text().strip()):
         return False
     if not entries_from_mime(mime):
         return False
@@ -86,12 +85,12 @@ def can_drop(model, mime, action: Qt.DropAction, row: int, column: int, parent: 
 
 
 def _notify_drop(tab, action: Qt.DropAction, count: int, target_parent: QModelIndex) -> None:
-    if tab is None or getattr(tab, "_status_message_callback", None) is None:
+    if tab is None:
         return
     noun = "row" if count == 1 else "rows"
     verb = "Copied" if action == Qt.DropAction.CopyAction else "Moved"
     target_name = tab._qualified_name(target_parent)
-    tab._status_message_callback(f"{verb} {count} {noun} under {target_name}", 2000)
+    tab.show_status(f"{verb} {count} {noun} under {target_name}", 2000)
 
 
 def handle_drop(view, model, mime, action: Qt.DropAction, row: int, column: int, parent: QModelIndex) -> bool:
@@ -115,8 +114,8 @@ def handle_drop(view, model, mime, action: Qt.DropAction, row: int, column: int,
             # overridden ``startDrag`` skips Qt's default post-drag
             # ``clearOrRemove`` (which would otherwise delete the freshly
             # placed destination rows — the "disappearing item" bug).
-            moved = tab.push_move_rows(source_rows, target_parent, target_row, label="drag move")
-            if moved and view is not None and hasattr(view, "mark_drag_handled_internally"):
+            moved = tab.data_store.mutations.push_move_rows(source_rows, target_parent, target_row, label="drag move")
+            if moved and isinstance(view, JsonTreeView):
                 view.mark_drag_handled_internally()
             if moved:
                 _notify_drop(tab, action, len(source_rows), target_parent)

@@ -27,7 +27,7 @@ def _make_tab(qtbot, data: dict, schema: dict | None = None) -> JsonTab:
     tab = JsonTab(lambda *_: None, data=data, show_root=True)
     qtbot.addWidget(tab)
     if schema is not None:
-        tab.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
+        tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
     return tab
 
 
@@ -37,13 +37,13 @@ def test_validation_dock_attach_tab_updates_list_rows(qtbot):
     qtbot.addWidget(dock)
 
     bad_tab = _make_tab(qtbot, {"value": "oops"}, _failing_schema())
-    assert len(bad_tab.issue_index) == 1
+    assert len(bad_tab.data_store.issue_index) == 1
 
     dock.attach_tab(bad_tab)
     assert dock.model.rowCount() == 1
 
     clean_tab = _make_tab(qtbot, {"value": 5}, _failing_schema())
-    assert len(clean_tab.issue_index) == 0
+    assert len(clean_tab.data_store.issue_index) == 0
 
     dock.attach_tab(clean_tab)
     assert dock.model.rowCount() == 0

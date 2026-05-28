@@ -1,8 +1,9 @@
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSize, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
 from delegates.base import paint_editor_underlay
+from delegates.edit_context import DefaultEditContext, DelegateEditContext, EditResult
 from delegates.value_formatting import _apply_type_style
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
@@ -21,37 +22,6 @@ class JsonTypeDelegate(QStyledItemDelegate):
         return idx
 
     @staticmethod
-    def _find_tab(host) -> object | None:
-        cursor = host
-        while cursor is not None:
-            if hasattr(cursor, "commit_set_data"):
-                return cursor
-            cursor = cursor.parent() if hasattr(cursor, "parent") else None
-        return None
-
-    def __init__(
-        self,
-        parent=None,
-        *,
-        theme: ThemeSpec | None = None,
-        icon_provider: IconProvider | None = None,
-    ):
-        super().__init__(parent)
-        self._theme = theme or LIGHT_DEFAULT
-        self._icon_provider: IconProvider = icon_provider or StubIconProvider()
-        # ``_interactive`` is set to ``True`` for the duration of an
-        # interactive (user-driven) commit out of the type combo. The
-        # ``JsonTab._on_type_changed`` slot reads it to decide whether to
-        # auto-reopen the value editor on the row whose type just changed.
-        # Programmatic ``model.setData(...)`` calls bypass this delegate
-        # entirely, so the flag stays ``False`` and no editor is reopened —
-        # this is what keeps the smoke tests in
-        # ``tests/test_smoke_mainwindow.py`` from logging
-        # ``edit: editing failed``.
-        self._interactive: bool = False
-        self._active_type_edit_index: QPersistentModelIndex | None = None
-
-    @staticmethod
     def _emit_icon_changed(index: QModelIndex | QPersistentModelIndex | None) -> None:
         if index is None:
             return
@@ -65,6 +35,57 @@ class JsonTypeDelegate(QStyledItemDelegate):
         if not type_idx.isValid():
             return
         model.dataChanged.emit(type_idx, type_idx, [Qt.ItemDataRole.DecorationRole])
+
+    def __init__(
+        self,
+        parent=None,
+        *,
+        theme: ThemeSpec | None = None,
+        icon_provider: IconProvider | None = None,
+        edit_context: DelegateEditContext | None = None,
+    ):
+        super().__init__(parent)
+        self._theme = theme or LIGHT_DEFAULT
+        self._icon_provider: IconProvider = icon_provider or StubIconProvider()
+        self._edit_context: DelegateEditContext | None = edit_context
+        # ``_interactive`` is set to ``True`` for the duration of an
+        # interactive (user-driven) commit out of the type combo. The
+        # ``JsonTab._on_type_changed`` slot reads it to decide whether to
+        # auto-reopen the value editor on the row whose type just changed.
+        # Programmatic ``model.setData(...)`` calls bypass this delegate
+        # entirely, so the flag stays ``False`` and no editor is reopened —
+        # this is what keeps the smoke tests in
+        # ``tests/test_smoke_mainwindow.py`` from logging
+        # ``edit: editing failed``.
+        self._interactive: bool = False
+        # ``last_edit_result`` carries the post-commit decision (notably the
+        # ``reopen_value_editor`` flag set by the host context) so callers can
+        # consult an explicit ``EditResult`` instead of the private
+        # ``_interactive`` backchannel.
+        self.last_edit_result: EditResult | None = None
+        self._active_type_edit_index: QPersistentModelIndex | None = None
+
+    def set_edit_context(self, context: DelegateEditContext | None) -> None:
+        self._edit_context = context
+
+    @property
+    def interactive(self) -> bool:
+        """True while a user-driven type-combo commit is in flight.
+
+        Stable, typed read of the otherwise-private ``_interactive``
+        backchannel that ``JsonTab._on_type_changed`` consults to decide
+        whether to auto-reopen the value editor.
+        """
+        return self._interactive
+
+    def _context_for(self, host) -> DelegateEditContext:
+        if self._edit_context is not None:
+            return self._edit_context
+        # No injected context — use the standalone fallback.  Parent crawling
+        # was removed in Phase 1.2.
+        ctx = DefaultEditContext()
+        self._edit_context = ctx
+        return ctx
 
     def _set_active_type_edit_index(self, source_index: QModelIndex) -> None:
         next_index = QPersistentModelIndex(source_index) if source_index.isValid() else None
@@ -117,7 +138,7 @@ class JsonTypeDelegate(QStyledItemDelegate):
         editor = QComboBox(parent)
         icon_size = QSize(max(12, option.fontMetrics.height()), max(12, option.fontMetrics.height()))
         host_view = option.widget
-        if host_view is not None and hasattr(host_view, "iconSize"):
+        if isinstance(host_view, QAbstractItemView):
             host_size = host_view.iconSize()
             if host_size.isValid():
                 icon_size = host_size
@@ -150,11 +171,8 @@ class JsonTypeDelegate(QStyledItemDelegate):
 
         self._interactive = True
         try:
-            tab = self._find_tab(editor)
-            if tab is not None:
-                tab.commit_set_data(index, selected_type, Qt.ItemDataRole.EditRole)
-                return
-
-            model.setData(index, selected_type, Qt.ItemDataRole.EditRole)
+            ctx = self._context_for(editor)
+            result = ctx.commit(index, selected_type, Qt.ItemDataRole.EditRole)
+            self.last_edit_result = result
         finally:
             self._interactive = False

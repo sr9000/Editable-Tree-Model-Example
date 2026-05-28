@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QSettings
 
 from settings import APPLICATION_ID
 from state.validation_settings import _RECENT_SCHEMAS_KEY
-
-if TYPE_CHECKING:
-    from validation.schema_registry import SchemaSource
-
+from validation.schema_types import SchemaSource
 
 RECENT_SCHEMAS_CAP = 12
 
@@ -19,19 +15,17 @@ def _settings() -> QSettings:
     return QSettings(APPLICATION_ID, "validation")
 
 
-def _serialize(source: "SchemaSource") -> str:
+def _serialize(source: SchemaSource) -> str:
     return f"{source.kind}:{source.key}"
 
 
-def _deserialize(raw: object) -> "SchemaSource | None":
+def _deserialize(raw: object) -> SchemaSource | None:
     if not isinstance(raw, str):
         return None
     kind, sep, payload = raw.partition(":")
     payload = payload.strip()
     if not sep or not payload:
         return None
-
-    from validation.schema_registry import SchemaSource
 
     if kind == "file":
         return SchemaSource.for_file(Path(payload))
@@ -40,7 +34,7 @@ def _deserialize(raw: object) -> "SchemaSource | None":
     return None
 
 
-def push_recent_schema(source: "SchemaSource") -> None:
+def push_recent_schema(source: SchemaSource) -> None:
     """Move *source* to the front of the recents list (cap 12)."""
     serialized = _serialize(source)
     current = [_serialize(item) for item in recent_schemas()]
@@ -48,7 +42,7 @@ def push_recent_schema(source: "SchemaSource") -> None:
     _settings().setValue(_RECENT_SCHEMAS_KEY, updated[:RECENT_SCHEMAS_CAP])
 
 
-def recent_schemas() -> list["SchemaSource"]:
+def recent_schemas() -> list[SchemaSource]:
     """Return most-recent-first persisted schema sources.
 
     Malformed entries are silently dropped.

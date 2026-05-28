@@ -1,10 +1,23 @@
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import Protocol
 
 from PySide6.QtGui import QUndoCommand, QUndoStack
 
-if TYPE_CHECKING:
-    from .chunks import Chunks
+
+class ChunksProtocol(Protocol):
+    def removeAt(self, pos: int) -> None: ...
+
+    def overwrite(self, pos: int, value: int) -> None: ...
+
+    def setDataChanged(self, pos: int, changed: bool) -> None: ...
+
+    def insert(self, pos: int, value: int) -> None: ...
+
+    def __getitem__(self, pos: int) -> int: ...
+
+    def dataChanged(self, pos: int) -> bool: ...
+
+    def size(self) -> int: ...
 
 
 class CommandType(Enum):
@@ -18,7 +31,7 @@ class CommandType(Enum):
 class ChunksUndoCommand(QUndoCommand):
     """Undo command for single character operations"""
 
-    def __init__(self, chunks: "Chunks", cmd: CommandType, charPos: int, newChar: int, parent=None):
+    def __init__(self, chunks: ChunksProtocol, cmd: CommandType, charPos: int, newChar: int, parent=None):
         super().__init__(parent)
         self._chunks = chunks
         self._charPos = charPos
@@ -74,7 +87,7 @@ class ChunksUndoCommand(QUndoCommand):
 class ChunksUndoStack(QUndoStack):
     """Undo stack for hex editor operations"""
 
-    def __init__(self, chunks: "Chunks", parent=None):
+    def __init__(self, chunks: ChunksProtocol, parent=None):
         super().__init__(parent)
         self._chunks = chunks
         self.setUndoLimit(1000)

@@ -2,6 +2,8 @@ from typing import Optional
 
 from PySide6.QtCore import QBuffer, QIODevice, QObject
 
+from app.runtime_compat import qba_to_bytes
+
 NORMAL = 0
 HIGHLIGHTED = 1
 
@@ -106,7 +108,7 @@ class Chunks(QObject):
                 self._ioDevice.seek(pos + ioDelta)
                 # Ensure we extend with Python bytes to match QByteArray semantics
                 _qba = self._ioDevice.read(byteCount)
-                readBuffer = _qba.data() if hasattr(_qba, "data") else bytes(_qba)
+                readBuffer = qba_to_bytes(_qba)
                 buffer.extend(readBuffer)
                 if highlighted is not None:
                     highlighted.extend(bytearray([NORMAL] * len(readBuffer)))
@@ -272,7 +274,7 @@ class Chunks(QObject):
             self._ioDevice.open(QIODevice.OpenModeFlag.ReadOnly)
             self._ioDevice.seek(readPos)
             _qba = self._ioDevice.read(CHUNK_SIZE)
-            newChunk.data = bytearray(_qba.data() if hasattr(_qba, "data") else bytes(_qba))
+            newChunk.data = bytearray(qba_to_bytes(_qba))
             self._ioDevice.close()
 
             # Ensure non-negative absolute position when creating first chunk

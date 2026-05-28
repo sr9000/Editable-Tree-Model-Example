@@ -3,8 +3,18 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from validation import _engine
+from validation.error_adapter import (
+    err_context,
+    err_instance_path,
+    err_kind,
+    err_message,
+    err_path,
+    err_schema_path,
+    err_validator,
+)
 from validation.issue import ValidationIssue
+
+from . import _engine
 
 
 def _decode_json_pointer(pointer: str) -> tuple[str | int, ...]:
@@ -115,23 +125,11 @@ def _schema_path_resolving_refs(root_schema: Mapping[str, Any], path: Any) -> tu
 
 
 def _error_kind(err: Any) -> str:
-    for attr in ("kind", "validator", "keyword", "rule"):
-        value = getattr(err, attr, None)
-        if value:
-            if isinstance(value, str):
-                return value
-
-            # jsonschema exposes rich enum objects for .kind;
-            # use the class suffix for a stable machine-friendly key.
-            class_name = value.__class__.__name__
-            if "_" in class_name:
-                class_name = class_name.rsplit("_", 1)[-1]
-            return class_name.lower()
-    return "validation_error"
+    return err_kind(err)
 
 
 def _is_combinator(err: Any) -> bool:
-    return getattr(err, "validator", None) in ("oneOf", "anyOf") and bool(getattr(err, "context", None))
+    return err_validator(err) in ("oneOf", "anyOf") and bool(err_context(err))
 
 
 def _branch_index(err: Any) -> int:
@@ -141,7 +139,7 @@ def _branch_index(err: Any) -> int:
     ``schema_path`` is the integer branch index in the parent ``oneOf``/``anyOf``
     array.
     """
-    sp = list(getattr(err, "schema_path", ()) or ())
+    sp = list(err_schema_path(err))
     if sp and isinstance(sp[0], int):
         return sp[0]
     return -1
@@ -189,8 +187,8 @@ def _most_specific(errors: Sequence[Any]) -> Any | None:
 
     def score(err: Any) -> tuple[int, int, int]:
         concrete = 0 if _is_combinator(err) else 1
-        instance_depth = len(list(getattr(err, "path", ()) or ()))
-        schema_depth = len(list(getattr(err, "schema_path", ()) or ()))
+        instance_depth = len(list(err_path(err)))
+        schema_depth = len(list(err_schema_path(err)))
         return (concrete, instance_depth, schema_depth)
 
     return max(errors, key=score)
@@ -228,8 +226,8 @@ def _unwrap_best(err: Any) -> Any:
         return err
 
     # Re-attach absolute coordinates: child paths in .context are relative.
-    parent_path = list(getattr(err, "path", ()) or ())
-    parent_schema_path = list(getattr(err, "schema_path", ()) or ())
+    parent_path = list(err_path(err))
+    parent_schema_path = list(err_schema_path(err))
     from collections import deque  # noqa: PLC0415
 
     chosen.path = deque(parent_path + list(chosen.path))
@@ -239,13 +237,13 @@ def _unwrap_best(err: Any) -> Any:
 
 def _to_issue(err: Any, root_schema: Mapping[str, Any]) -> ValidationIssue:
     # jsonschema uses .path (deque); legacy jsonschema-rs used .instance_path
-    raw_instance_path = getattr(err, "instance_path", None)
+    raw_instance_path = err_instance_path(err)
     if raw_instance_path is None:
-        raw_instance_path = getattr(err, "path", ())
+        raw_instance_path = err_path(err)
     return ValidationIssue(
-        message=str(getattr(err, "message", err)),
+        message=err_message(err),
         instance_path=_normalize_path(list(raw_instance_path)),
-        schema_path=_schema_path_resolving_refs(root_schema, getattr(err, "schema_path", ())),
+        schema_path=_schema_path_resolving_refs(root_schema, err_schema_path(err)),
         kind=_error_kind(err),
     )
 

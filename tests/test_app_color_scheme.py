@@ -26,7 +26,7 @@ def _restore_color_scheme():
     original_palette = app_widget.palette() if isinstance(app_widget, QApplication) else None
     yield
     if style_hints is not None and original is not None:
-        setter = getattr(style_hints, "setColorScheme", None)
+        setter = getattr(style_hints, "setColorScheme", None)  # allow: Qt 6.x compat probe in test
         if setter is not None:
             setter(original)
     if isinstance(app_widget, QApplication) and original_palette is not None:
@@ -48,7 +48,7 @@ def test_light_theme_sets_light_color_scheme(qtbot, tmp_path, monkeypatch):
     app = QGuiApplication.instance()
     assert isinstance(app, QGuiApplication)
     style_hints = app.styleHints()
-    setter = getattr(style_hints, "setColorScheme", None)
+    setter = getattr(style_hints, "setColorScheme", None)  # allow: Qt 6.x compat probe in test
     if setter is None:
         pytest.skip("Qt version does not support setColorScheme")
     assert style_hints.colorScheme() == Qt.ColorScheme.Light
@@ -73,7 +73,7 @@ def test_dark_theme_sets_dark_color_scheme(qtbot, tmp_path, monkeypatch):
     app = QGuiApplication.instance()
     assert isinstance(app, QGuiApplication)
     style_hints = app.styleHints()
-    setter = getattr(style_hints, "setColorScheme", None)
+    setter = getattr(style_hints, "setColorScheme", None)  # allow: Qt 6.x compat probe in test
     if setter is None:
         pytest.skip("Qt version does not support setColorScheme")
     assert style_hints.colorScheme() == Qt.ColorScheme.Dark
@@ -96,7 +96,7 @@ def test_startup_applies_saved_theme_to_qt_scheme_and_palette(qtbot, tmp_path, m
     app = QGuiApplication.instance()
     assert isinstance(app, QGuiApplication)
     style_hints = app.styleHints()
-    setter = getattr(style_hints, "setColorScheme", None)
+    setter = getattr(style_hints, "setColorScheme", None)  # allow: Qt 6.x compat probe in test
     if setter is None:
         pytest.skip("Qt version does not support setColorScheme")
 
@@ -131,7 +131,7 @@ def test_no_feedback_loop_on_scheme_change(qtbot, tmp_path, monkeypatch):
     app = QGuiApplication.instance()
     assert isinstance(app, QGuiApplication)
     style_hints = app.styleHints()
-    setter = getattr(style_hints, "setColorScheme", None)
+    setter = getattr(style_hints, "setColorScheme", None)  # allow: Qt 6.x compat probe in test
     if setter is None:
         pytest.skip("Qt version does not support setColorScheme")
 

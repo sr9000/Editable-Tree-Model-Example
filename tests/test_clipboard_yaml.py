@@ -272,12 +272,12 @@ def test_new_from_clipboard_creates_tab_with_json_data(qtbot):
         win.new_from_clipboard()
         assert win.tabWidget.count() == initial_count + 1
         tab = _current_tab(win)
-        assert tab.model.root_item.to_json() == {"greeting": "hello"}
+        assert tab.data_store.model.root_item.to_json() == {"greeting": "hello"}
     finally:
         for i in range(win.tabWidget.count()):
             w = win.tabWidget.widget(i)
             if isinstance(w, JsonTab):
-                w.undo_stack.setClean()
+                w.data_store.undo_stack.setClean()
         win.close()
         win.deleteLater()
         QApplication.processEvents()
@@ -292,12 +292,12 @@ def test_new_from_clipboard_creates_tab_with_yaml_data(qtbot):
         win.new_from_clipboard()
         assert win.tabWidget.count() == initial_count + 1
         tab = _current_tab(win)
-        assert tab.model.root_item.to_json() == {"name": "Alice", "age": 30}
+        assert tab.data_store.model.root_item.to_json() == {"name": "Alice", "age": 30}
     finally:
         for i in range(win.tabWidget.count()):
             w = win.tabWidget.widget(i)
             if isinstance(w, JsonTab):
-                w.undo_stack.setClean()
+                w.data_store.undo_stack.setClean()
         win.close()
         win.deleteLater()
         QApplication.processEvents()

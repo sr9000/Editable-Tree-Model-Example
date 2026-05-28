@@ -4,6 +4,7 @@ from typing import Any
 from PySide6.QtCore import QItemSelection, QItemSelectionModel, Qt
 from PySide6.QtGui import QUndoCommand
 
+from tree.item import JsonTreeItem
 from tree.item_names import unique_child_name
 from tree.types import JsonType
 from units.number_affix import AffixKind, NumberAffix
@@ -17,14 +18,14 @@ def _select_placed_rows(tab, placed: list[tuple[tuple, int]]) -> None:
     """Select every (parent_path, row) entry in the view after a move."""
     if not placed:
         return
-    model = tab.model
-    sm = tab.view.selectionModel()
+    model = tab.data_store.model
+    sm = tab.data_store.view.selectionModel()
     selection = QItemSelection()
     first_view_idx = None
     for parent_path, row in placed:
-        p = tab._index_from_path(parent_path)
+        p = tab.data_store.mutations.index_from_path(parent_path)
         src_idx = model.index(row, 0, p)
-        view_idx = tab._source_to_view(src_idx)
+        view_idx = tab.data_store.mutations.source_to_view(src_idx)
         if view_idx.isValid():
             selection.select(view_idx, view_idx)
             if first_view_idx is None:
@@ -46,16 +47,16 @@ class _MoveRowCmd(QUndoCommand):
         self._dst = dst
 
     def redo(self):
-        p = self._tab._index_from_path(self._parent_path)
-        if self._tab.model.move_row(p, self._src, self._dst):
-            source_index = self._tab.model.index(self._dst, 0, p)
-            self._tab.view.setCurrentIndex(self._tab._source_to_view(source_index))
+        p = self._tab.data_store.mutations.index_from_path(self._parent_path)
+        if self._tab.data_store.model.move_row(p, self._src, self._dst):
+            source_index = self._tab.data_store.model.index(self._dst, 0, p)
+            self._tab.data_store.view.setCurrentIndex(self._tab.data_store.mutations.source_to_view(source_index))
 
     def undo(self):
-        p = self._tab._index_from_path(self._parent_path)
-        if self._tab.model.move_row(p, self._dst, self._src):
-            source_index = self._tab.model.index(self._src, 0, p)
-            self._tab.view.setCurrentIndex(self._tab._source_to_view(source_index))
+        p = self._tab.data_store.mutations.index_from_path(self._parent_path)
+        if self._tab.data_store.model.move_row(p, self._dst, self._src):
+            source_index = self._tab.data_store.model.index(self._src, 0, p)
+            self._tab.data_store.view.setCurrentIndex(self._tab.data_store.mutations.source_to_view(source_index))
 
 
 class _RenameCmd(QUndoCommand):
@@ -90,10 +91,10 @@ class _RenameCmd(QUndoCommand):
         self._apply(self._old)
 
     def _apply(self, name: Any) -> None:
-        idx = self._tab._index_from_path(self._path)
+        idx = self._tab.data_store.mutations.index_from_path(self._path)
         if not idx.isValid():
             return
-        item = self._tab.model.get_item(idx)
+        item = self._tab.data_store.model.get_item(idx)
         item.name = name
         if item.parent_item is not None:
             item.parent_item.mark_children_dirty()
@@ -126,14 +127,14 @@ class _EditValueCmd(QUndoCommand):
         return True
 
     def redo(self):
-        idx = self._tab._index_from_path(self._path)
+        idx = self._tab.data_store.mutations.index_from_path(self._path)
         if idx.isValid():
-            self._tab._diff_apply(self._tab.model.get_item(idx), self._new_value, idx)
+            self._tab._diff_apply(self._tab.data_store.model.get_item(idx), self._new_value, idx)
 
     def undo(self):
-        idx = self._tab._index_from_path(self._path)
+        idx = self._tab.data_store.mutations.index_from_path(self._path)
         if idx.isValid():
-            self._tab._diff_apply(self._tab.model.get_item(idx), self._old_subtree, idx)
+            self._tab._diff_apply(self._tab.data_store.model.get_item(idx), self._old_subtree, idx)
 
 
 class _ChangeTypeCmd(QUndoCommand):
@@ -158,14 +159,14 @@ class _ChangeTypeCmd(QUndoCommand):
         self._new_type = new_type
 
     def redo(self):
-        idx = self._tab._index_from_path(self._path)
+        idx = self._tab.data_store.mutations.index_from_path(self._path)
         if not idx.isValid():
             return
-        type_idx = self._tab.model.index(idx.row(), 1, idx.parent())
-        if not self._tab.model.setData(type_idx, self._new_type, Qt.ItemDataRole.EditRole):
+        type_idx = self._tab.data_store.model.index(idx.row(), 1, idx.parent())
+        if not self._tab.data_store.model.setData(type_idx, self._new_type, Qt.ItemDataRole.EditRole):
             return
 
-        item = self._tab.model.get_item(idx)
+        item = self._tab.data_store.model.get_item(idx)
         if not isinstance(item.value, NumberAffix) or item.value.affix:
             return
         if item.json_type in (JsonType.INTEGER_CURRENCY, JsonType.FLOAT_CURRENCY):
@@ -175,8 +176,8 @@ class _ChangeTypeCmd(QUndoCommand):
         else:
             return
 
-        mru = getattr(self._tab, "affix_mru", None)
-        if mru is None or not hasattr(mru, "items"):
+        mru = self._tab.data_store.affix_mru
+        if mru is None:
             return
         mru_items = mru.items(kind)
         if not mru_items:
@@ -188,18 +189,18 @@ class _ChangeTypeCmd(QUndoCommand):
             space=item.value.space,
             number=item.value.number,
         )
-        value_idx = self._tab.model.index(idx.row(), 2, idx.parent())
-        self._tab.model.setData(value_idx, replacement, Qt.ItemDataRole.EditRole)
+        value_idx = self._tab.data_store.model.index(idx.row(), 2, idx.parent())
+        self._tab.data_store.model.setData(value_idx, replacement, Qt.ItemDataRole.EditRole)
 
     def undo(self):
-        idx = self._tab._index_from_path(self._path)
+        idx = self._tab.data_store.mutations.index_from_path(self._path)
         if not idx.isValid():
             return
-        type_idx = self._tab.model.index(idx.row(), 1, idx.parent())
-        value_idx = self._tab.model.index(idx.row(), 2, idx.parent())
-        self._tab.model.setData(type_idx, self._old_type, Qt.ItemDataRole.EditRole)
-        self._tab.model.setData(value_idx, self._old_subtree, Qt.ItemDataRole.EditRole)
-        item = self._tab.model.get_item(idx)
+        type_idx = self._tab.data_store.model.index(idx.row(), 1, idx.parent())
+        value_idx = self._tab.data_store.model.index(idx.row(), 2, idx.parent())
+        self._tab.data_store.model.setData(type_idx, self._old_type, Qt.ItemDataRole.EditRole)
+        self._tab.data_store.model.setData(value_idx, self._old_subtree, Qt.ItemDataRole.EditRole)
+        item = self._tab.data_store.model.get_item(idx)
         item.explicit_type = self._old_explicit
 
 
@@ -215,18 +216,18 @@ class _InsertRowsCmd(QUndoCommand):
     def redo(self):
         first_idx = None
         for rec in self._inserts:
-            p = self._tab._index_from_path(rec["parent_path"])
-            parent_item = self._tab.model.get_item(p)
+            p = self._tab.data_store.mutations.index_from_path(rec["parent_path"])
+            parent_item = self._tab.data_store.model.get_item(p)
             self._tab._insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec.get("name"))
             if first_idx is None:
-                first_idx = self._tab.model.index(rec["row"], 0, p)
+                first_idx = self._tab.data_store.model.index(rec["row"], 0, p)
         if self._set_current and first_idx is not None and first_idx.isValid():
-            self._tab.view.setCurrentIndex(self._tab._source_to_view(first_idx))
+            self._tab.data_store.view.setCurrentIndex(self._tab.data_store.mutations.source_to_view(first_idx))
 
     def undo(self):
         for rec in reversed(self._inserts):
-            p = self._tab._index_from_path(rec["parent_path"])
-            self._tab.model.removeRow(rec["row"], p)
+            p = self._tab.data_store.mutations.index_from_path(rec["parent_path"])
+            self._tab.data_store.model.removeRow(rec["row"], p)
 
 
 class _RemoveRowsCmd(QUndoCommand):
@@ -239,13 +240,13 @@ class _RemoveRowsCmd(QUndoCommand):
 
     def redo(self):
         for rec in self._removals:
-            p = self._tab._index_from_path(rec["parent_path"])
-            self._tab.model.removeRow(rec["row"], p)
+            p = self._tab.data_store.mutations.index_from_path(rec["parent_path"])
+            self._tab.data_store.model.removeRow(rec["row"], p)
 
     def undo(self):
         for rec in reversed(self._removals):
-            p = self._tab._index_from_path(rec["parent_path"])
-            parent_item = self._tab.model.get_item(p)
+            p = self._tab.data_store.mutations.index_from_path(rec["parent_path"])
+            parent_item = self._tab.data_store.model.get_item(p)
             self._tab._insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec["name"])
 
 
@@ -290,7 +291,11 @@ class _MoveRowsCmd(QUndoCommand):
         self._placed: list[tuple[tuple, int]] = []
 
     def _original_name_for(self, source: tuple[tuple, int], item: object) -> Any:
-        return self._source_names.get(source, getattr(item, "name", None))
+        # item is a JsonTreeItem when called from the command lifecycle; the
+        # ``object`` annotation is kept loose for forward-compat with redo
+        # callbacks that may pass a placeholder before the model resolves it.
+        fallback = item.name if isinstance(item, JsonTreeItem) else None
+        return self._source_names.get(source, fallback)
 
     # ------------------------------------------------------------------
     # Public accessors — used by the action layer for post-redo hooks
@@ -319,14 +324,14 @@ class _MoveRowsCmd(QUndoCommand):
         from tree_actions.anchors import resolve_anchor_target
 
         tab = self._tab
-        model = tab.model
+        model = tab.data_store.model
 
         # 1. Descending source order: removals don't invalidate remaining sources.
         sorted_sources = sorted(self._sources, key=lambda p: (p[0], p[1]), reverse=True)
 
         detached: list[tuple[tuple, int, object]] = []
         for parent_path, row in sorted_sources:
-            p = tab._index_from_path(parent_path)
+            p = tab.data_store.mutations.index_from_path(parent_path)
             parent_item = model.get_item(p)
             item = parent_item.child_items[row]
             with model.rows_removal(p, row, 1):
@@ -342,7 +347,7 @@ class _MoveRowsCmd(QUndoCommand):
         # adjustment a drop onto a sibling that lives after the dragged
         # source(s) would land in the WRONG container.
         adjusted_parent_path, insert_row = resolve_anchor_target(model, tab, self._anchor, self._sources)
-        t_parent = tab._index_from_path(adjusted_parent_path)
+        t_parent = tab.data_store.mutations.index_from_path(adjusted_parent_path)
         t_parent_item = model.get_item(t_parent)
         used_names = {c.name for c in t_parent_item.child_items if isinstance(c.name, str)}
 
@@ -368,7 +373,7 @@ class _MoveRowsCmd(QUndoCommand):
 
     def undo(self) -> None:
         tab = self._tab
-        model = tab.model
+        model = tab.data_store.model
 
         if not self._placed:
             return
@@ -376,7 +381,7 @@ class _MoveRowsCmd(QUndoCommand):
         sorted_placed = sorted(self._placed, key=lambda p: (p[0], p[1]), reverse=True)
         detached: list[object] = []
         for parent_path, row in sorted_placed:
-            p = tab._index_from_path(parent_path)
+            p = tab.data_store.mutations.index_from_path(parent_path)
             parent_item = model.get_item(p)
             item = parent_item.child_items[row]
             with model.rows_removal(p, row, 1):
@@ -389,7 +394,7 @@ class _MoveRowsCmd(QUndoCommand):
         sorted_sources_asc = sorted(self._sources, key=lambda p: (p[0], p[1]))
         used_by_parent: dict[tuple, set[str]] = {}
         for (parent_path, row), item in zip(sorted_sources_asc, detached):
-            p = tab._index_from_path(parent_path)
+            p = tab.data_store.mutations.index_from_path(parent_path)
             parent_item = model.get_item(p)
             item.parent_item = parent_item
             original_name = self._original_name_for((parent_path, row), item)
@@ -424,14 +429,14 @@ class _SortKeysCmd(QUndoCommand):
         self._recursive = recursive
 
     def redo(self):
-        idx = self._tab._index_from_path(self._path)
+        idx = self._tab.data_store.mutations.index_from_path(self._path)
         if idx.isValid():
-            self._tab.model.sort_keys(idx, recursive=self._recursive)
+            self._tab.data_store.model.sort_keys(idx, recursive=self._recursive)
 
     def undo(self):
-        idx = self._tab._index_from_path(self._path)
+        idx = self._tab.data_store.mutations.index_from_path(self._path)
         if idx.isValid():
-            self._tab._diff_apply(self._tab.model.get_item(idx), self._old_subtree, idx)
+            self._tab._diff_apply(self._tab.data_store.model.get_item(idx), self._old_subtree, idx)
 
 
 class _SwitchFieldCaseCmd(QUndoCommand):
@@ -450,10 +455,10 @@ class _SwitchFieldCaseCmd(QUndoCommand):
 
     def _apply(self, key: str) -> None:
         for rec in self._renames:
-            idx = self._tab._index_from_path(rec["path"])
+            idx = self._tab.data_store.mutations.index_from_path(rec["path"])
             if not idx.isValid():
                 continue
-            item = self._tab.model.get_item(idx)
+            item = self._tab.data_store.model.get_item(idx)
             item.name = rec[key]
             if item.parent_item is not None:
                 item.parent_item.mark_children_dirty()

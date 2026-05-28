@@ -36,21 +36,19 @@ def size_hint_for_item(item: JsonTreeItem) -> str | None:
 
 
 def on_current_changed(tab, current: QModelIndex, _previous: QModelIndex) -> None:
-    if tab._permanent_message_callback is None:
-        return
     if not current.isValid():
-        tab._permanent_message_callback("")
+        tab.show_permanent_message("")
         return
 
     current = tab._proxy_to_source(current)
     row0 = current.siblingAtColumn(0)
     if not row0.isValid():
-        tab._permanent_message_callback("")
+        tab.show_permanent_message("")
         return
 
-    item = tab.model.get_item(row0)
+    item = tab.data_store.model.get_item(row0)
     breadcrumb = tab._qualified_name(row0)
     item_type = item.json_type.value
     size_hint = size_hint_for_item(item)
     extra = f", {size_hint}" if size_hint else ""
-    tab._permanent_message_callback(f"{breadcrumb}  ({item_type}{extra})")
+    tab.show_permanent_message(f"{breadcrumb}  ({item_type}{extra})")
