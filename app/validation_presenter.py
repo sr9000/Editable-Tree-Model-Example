@@ -115,14 +115,14 @@ class DockValidationPresenter(QObject):
     def on_rescan_requested(self) -> None:
         tab = self._win._current_tab()
         if tab is not None:
-            tab.revalidate()
+            tab.data_store.validation.revalidate()
 
     def on_auto_rescan_toggled(self, enabled: bool) -> None:
         from state.validation_settings import set_auto_rescan_enabled
 
         set_auto_rescan_enabled(enabled)
         for tab in self._win._theme_tabs():
-            tab.set_auto_rescan(enabled)
+            tab.data_store.validation.set_auto_rescan(enabled)
 
     def on_clear_schema_requested(self) -> None:
         from state.validation_settings import clear_schema_path
@@ -132,7 +132,7 @@ class DockValidationPresenter(QObject):
             return
         if tab.data_store.file_path:
             clear_schema_path(Path(tab.data_store.file_path))
-        tab.clear_schema()
+        tab.data_store.validation.clear_schema()
 
     def on_attach_schema_requested(self) -> None:
         win = self._win
@@ -160,7 +160,7 @@ class DockValidationPresenter(QObject):
             win.statusBar.showMessage(win.tr("Could not load schema: {name}").format(name=source.display), 3000)
             return
 
-        tab.set_schema_from_source(source)
+        tab.data_store.validation.set_schema_from_source(source)
         if tab.data_store.file_path:
             write_schema_ref_str(Path(tab.data_store.file_path), source.key)
         win.statusBar.showMessage(win.tr("Schema attached: {name}").format(name=source.display), 2000)
@@ -173,7 +173,7 @@ class DockValidationPresenter(QObject):
         if get_schema_registry().reload(tab.data_store.schema_source) is None:
             win.statusBar.showMessage(win.tr("Reload failed"), 3000)
             return
-        tab.revalidate()
+        tab.data_store.validation.revalidate()
         win.statusBar.showMessage(win.tr("Schema reloaded"), 2000)
 
     def on_open_schema_file_requested(self) -> None:

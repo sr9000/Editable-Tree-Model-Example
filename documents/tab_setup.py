@@ -133,7 +133,7 @@ def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
 
 def init_validation_state(tab: "JsonTab", model_data: Any) -> None:
     doc_path = Path(tab.data_store.file_path).expanduser().resolve() if tab.data_store.file_path else None
-    tab._init_validation_state(model_data, doc_path=doc_path)
+    tab.data_store.validation.init_state(model_data, doc_path=doc_path)
 
 
 def init_delegates_and_connections(tab: "JsonTab") -> None:

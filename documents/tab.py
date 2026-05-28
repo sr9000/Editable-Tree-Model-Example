@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Any, Callable
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
@@ -22,12 +21,17 @@ from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from undo.commands import (
+    _ChangeTypeCmd,  # noqa: F401 — re-exported for test imports
+    _EditValueCmd,  # noqa: F401 — re-exported for test imports
+    _InsertRowsCmd,  # noqa: F401 — re-exported for test imports
     _MoveRowsCmd,
+    _RemoveRowsCmd,  # noqa: F401 — re-exported for test imports
+    _RenameCmd,  # noqa: F401 — re-exported for test imports
+    _SortKeysCmd,  # noqa: F401 — re-exported for test imports
+    _SwitchFieldCaseCmd,  # noqa: F401 — re-exported for test imports
 )
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
-from validation.schema_registry import SchemaSource
-from validation.schema_source import SchemaRef
 
 _DEFAULT_DATA = tab_init._DEFAULT_DATA
 
@@ -93,41 +97,10 @@ class JsonTab(QWidget):
         if editability is not None:
             editability.set_read_only(enabled)
 
-    def set_schema_view_source(self, source: SchemaSource | None) -> None:
-        self.data_store.validation.set_schema_view_source(source)
-
-    def _init_validation_state(self, model_data: Any, *, doc_path: Path | None = None) -> None:
-        self.data_store.validation.init_state(model_data, doc_path=doc_path)
-
-    def set_schema(self, ref: SchemaRef) -> None:
-        self.data_store.validation.set_schema(ref)
-
-    def set_schema_from_source(self, source: SchemaSource) -> None:
-        self.data_store.validation.set_schema_from_source(source)
-
-    def clear_schema(self) -> None:
-        self.data_store.validation.clear_schema()
-
     def closeEvent(self, event):  # type: ignore[override]
         self.data_store.validation.release()
         super().closeEvent(event)
 
-    def revalidate(self) -> None:
-        self.data_store.validation.revalidate()
-
-    # ── auto-rescan API ───────────────────────────────────────────────────
-
-    def set_auto_rescan(self, enabled: bool) -> None:
-        """Enable or disable automatic revalidation on model mutations.
-
-        When *enabled*, any ``dataChanged``, ``rowsInserted``, ``rowsRemoved``,
-        ``rowsMoved``, or ``modelReset`` signal from the tree model arms a
-        250 ms trailing debounce timer that calls ``revalidate()``.
-        Disabling cancels any pending debounce.
-        """
-        self.data_store.validation.set_auto_rescan(enabled)
-
-    # ─────────────────────────────────────────────────────────────────────
 
     def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
         validation_view = self._validation_view

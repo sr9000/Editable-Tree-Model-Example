@@ -29,7 +29,7 @@ def test_validation_role_after_revalidate(qtbot):
     data = {"name": "not-an-integer"}
 
     tab = _make_tab(qtbot, data)
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
 
     # The issue index should now contain at least one error for /name
     assert len(tab.data_store.issue_index) > 0
@@ -46,7 +46,7 @@ def test_no_issues_role_returns_none(qtbot):
     """When no schema is set the role always returns None."""
     data = {"a": 1}
     tab = _make_tab(qtbot, data)
-    tab.clear_schema()
+    tab.data_store.validation.clear_schema()
 
     idx = tab.data_store.model.index(0, 0, QModelIndex())
     assert tab.data_store.model.data(idx, VALIDATION_SEVERITY_ROLE) is None
@@ -58,10 +58,10 @@ def test_clear_schema_removes_badges(qtbot):
     data = {"x": "bad"}
 
     tab = _make_tab(qtbot, data)
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
     assert len(tab.data_store.issue_index) > 0  # has errors
 
-    tab.clear_schema()
+    tab.data_store.validation.clear_schema()
     assert len(tab.data_store.issue_index) == 0
 
     idx = tab.data_store.model.index(0, 0, QModelIndex())
@@ -86,7 +86,7 @@ def test_validation_changed_emits_data_changed(qtbot):
     tab.data_store.model.dataChanged.connect(_on_changed)
 
     schema = {"type": "object", "properties": {"a": {"type": "string"}}}
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
 
     # At least one dataChanged emission should include VALIDATION_SEVERITY_ROLE
     assert any(VALIDATION_SEVERITY_ROLE in roles for roles in emitted_roles)
@@ -111,7 +111,7 @@ def test_ancestor_gets_severity(qtbot):
     data = {"parent": {"child": "bad"}}
 
     tab = _make_tab(qtbot, data)
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
 
     # "parent" is at model path (0,)
     parent_idx = tab.data_store.model.index(0, 0, QModelIndex())
@@ -139,7 +139,7 @@ def test_severity_with_show_root(qtbot):
     data = {"firstName": "Indra", "lastName": "Sen", "age": 17}
 
     tab = _make_tab(qtbot, data, show_root=True)
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="inline"))
 
     assert len(tab.data_store.issue_index) == 1, "expected one minimum-violation issue"
 

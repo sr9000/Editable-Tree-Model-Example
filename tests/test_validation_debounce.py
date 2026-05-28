@@ -91,9 +91,9 @@ def test_rapid_mutations_collapse_to_one_revalidation(qtbot):
     }
     tab = JsonTab(lambda *_: None, data={"x": 1}, show_root=True)
     qtbot.addWidget(tab)
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
 
-    tab.set_auto_rescan(True)
+    tab.data_store.validation.set_auto_rescan(True)
 
     emission_count = [0]
     tab.validationChanged.connect(lambda _: emission_count.__setitem__(0, emission_count[0] + 1))

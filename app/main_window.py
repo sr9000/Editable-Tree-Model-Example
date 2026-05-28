@@ -439,7 +439,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tab.data_store.undo_stack.setClean()
         tab.data_store.save_format = source_format
         tab.data_store.file_path = resolved
-        tab.revalidate()
+        tab.data_store.validation.revalidate()
         self._refresh_tab_presentation(tab)
         self.update_actions()
         self.statusBar.showMessage(f"Reloaded: {resolved}", 2000)

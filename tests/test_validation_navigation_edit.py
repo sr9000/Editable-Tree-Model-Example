@@ -16,7 +16,7 @@ def test_goto_validation_issue_edit_targets_value_column_for_leaf(qtbot):
     tab = JsonTab(lambda *_: None, data={"a": {"b": "oops"}}, show_root=True)
     qtbot.addWidget(tab)
 
-    tab.set_schema(
+    tab.data_store.validation.set_schema(
         SchemaRef(
             path=None,
             inline={
@@ -46,7 +46,7 @@ def test_goto_validation_issue_edit_ignores_container_value_cell(qtbot):
     tab = JsonTab(lambda *_: None, data={"a": {"b": 1}}, show_root=True)
     qtbot.addWidget(tab)
 
-    tab.set_schema(
+    tab.data_store.validation.set_schema(
         SchemaRef(
             path=None,
             inline={

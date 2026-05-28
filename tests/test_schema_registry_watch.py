@@ -27,7 +27,7 @@ def test_file_change_reloads_in_place_and_revalidates_tab(qtbot, tmp_path, monke
 
     tab = JsonTab(lambda *_: None, data={"v": 1}, show_root=True)
     qtbot.addWidget(tab)
-    tab.set_schema(SchemaRef(path=schema_path, inline=None, origin="manual"))
+    tab.data_store.validation.set_schema(SchemaRef(path=schema_path, inline=None, origin="manual"))
 
     entry = registry.lookup(source)
     assert entry is not None

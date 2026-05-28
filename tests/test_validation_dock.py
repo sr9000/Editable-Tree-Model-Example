@@ -27,7 +27,7 @@ def _make_tab(qtbot, data: dict, schema: dict | None = None) -> JsonTab:
     tab = JsonTab(lambda *_: None, data=data, show_root=True)
     qtbot.addWidget(tab)
     if schema is not None:
-        tab.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
+        tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
     return tab
 
 

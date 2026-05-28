@@ -47,7 +47,7 @@ class SchemaTabPool(QObject):
         self._tabs_by_source[source] = tab
         self._source_by_tab[tab] = source
         tab.set_read_only(read_only)
-        tab.set_schema_view_source(source)
+        tab.data_store.validation.set_schema_view_source(source)
 
         tab.destroyed.connect(lambda *_args, t=tab: self.unregister(t))
 

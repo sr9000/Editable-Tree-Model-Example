@@ -28,8 +28,8 @@ def test_tabs_share_single_registry_entry_and_release_on_close(qtbot, tmp_path, 
     qtbot.addWidget(tab_a)
     qtbot.addWidget(tab_b)
 
-    tab_a.set_schema(ref)
-    tab_b.set_schema(ref)
+    tab_a.data_store.validation.set_schema(ref)
+    tab_b.data_store.validation.set_schema(ref)
 
     source = SchemaSource.for_file(schema_path)
     entry = get_schema_registry().lookup(source)

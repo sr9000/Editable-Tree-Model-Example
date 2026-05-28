@@ -37,7 +37,7 @@ def _make_tab(qtbot, data: dict, schema: dict | None = None) -> JsonTab:
     tab = JsonTab(lambda *_: None, data=data, show_root=True)
     qtbot.addWidget(tab)
     if schema is not None:
-        tab.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
+        tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
     return tab
 
 
@@ -63,7 +63,7 @@ def test_auto_rescan_on_value_edit_triggers_revalidation(qtbot):
 
     assert len(tab.data_store.issue_index) == 0, "should start valid"
 
-    tab.set_auto_rescan(True)
+    tab.data_store.validation.set_auto_rescan(True)
 
     # Change the type of 'val' from INTEGER to STRING so the schema rejects it.
     val_name_idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0))
@@ -85,7 +85,7 @@ def test_auto_rescan_off_mutation_does_not_trigger_revalidation(qtbot):
 
     assert len(tab.data_store.issue_index) == 0
 
-    tab.set_auto_rescan(False)
+    tab.data_store.validation.set_auto_rescan(False)
 
     val_name_idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0))
     type_idx = val_name_idx.siblingAtColumn(1)
@@ -106,7 +106,7 @@ def test_rescan_now_updates_issues_when_auto_rescan_off(qtbot):
     qtbot.addWidget(dock)
     dock.attach_tab(tab)
 
-    tab.set_auto_rescan(False)
+    tab.data_store.validation.set_auto_rescan(False)
 
     val_name_idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0))
     type_idx = val_name_idx.siblingAtColumn(1)
@@ -115,7 +115,7 @@ def test_rescan_now_updates_issues_when_auto_rescan_off(qtbot):
     assert len(tab.data_store.issue_index) == 0, "pre-condition: stale"
 
     with qtbot.waitSignal(tab.validationChanged, timeout=500):
-        tab.revalidate()
+        tab.data_store.validation.revalidate()
 
     assert len(tab.data_store.issue_index) > 0
     assert dock.model.rowCount() > 0
@@ -127,14 +127,14 @@ def test_auto_rescan_toggle_on_off_cancels_pending_debounce(qtbot):
     tab = _make_tab(qtbot, {"val": 5}, _int_schema())
     qtbot.addWidget(tab)
 
-    tab.set_auto_rescan(True)
+    tab.data_store.validation.set_auto_rescan(True)
 
     # Arm the debounce by simulating a rowsInserted signal.
     tab.data_store.validation._schedule_debounced_revalidation()
     assert tab.data_store.validation.debounce_timer.isActive(), "timer should be active"
 
     # Disable auto-rescan — timer must be stopped.
-    tab.set_auto_rescan(False)
+    tab.data_store.validation.set_auto_rescan(False)
     assert not tab.data_store.validation.debounce_timer.isActive(), "timer should be cancelled"
 
 
@@ -145,7 +145,7 @@ def test_auto_rescan_property_reflects_set(qtbot):
     qtbot.addWidget(tab)
 
     assert tab.data_store.auto_rescan is False
-    tab.set_auto_rescan(True)
+    tab.data_store.validation.set_auto_rescan(True)
     assert tab.data_store.auto_rescan is True
-    tab.set_auto_rescan(False)
+    tab.data_store.validation.set_auto_rescan(False)
     assert tab.data_store.auto_rescan is False

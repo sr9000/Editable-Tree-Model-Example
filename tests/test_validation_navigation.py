@@ -22,7 +22,7 @@ def test_issue_activation_selects_and_centers_offending_row(qtbot):
     tab = window._add_tab(data={"a": {"b": "oops"}}, file_path=None)
     assert tab is not None
 
-    tab.set_schema(
+    tab.data_store.validation.set_schema(
         SchemaRef(
             path=None,
             inline={
@@ -57,7 +57,7 @@ def test_stale_issue_path_is_reported_without_changing_selection(qtbot):
     tab = window._add_tab(data={"a": {"b": "oops"}}, file_path=None)
     assert tab is not None
 
-    tab.set_schema(
+    tab.data_store.validation.set_schema(
         SchemaRef(
             path=None,
             inline={
@@ -121,7 +121,7 @@ def test_go_to_schema_rule_works_for_url_backed_in_memory_schema(qtbot, monkeypa
 
     tab = window._add_tab(data={"age": 15}, file_path=None)
     assert tab is not None
-    tab.set_schema(SchemaRef(path=None, inline=schema, origin="manual", url=schema_url))
+    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual", url=schema_url))
 
     issue = tab.data_store.issue_index.all_issues()[0]
     assert issue.schema_path == ("properties", "age", "minimum")
@@ -163,7 +163,7 @@ def test_go_to_schema_rule_focuses_existing_file_backed_schema_tab(qtbot, tmp_pa
 
     tab = window._add_tab(data={"age": 15}, file_path=None)
     assert tab is not None
-    tab.set_schema(SchemaRef(path=schema_path, inline=None, origin="manual"))
+    tab.data_store.validation.set_schema(SchemaRef(path=schema_path, inline=None, origin="manual"))
 
     issue = tab.data_store.issue_index.all_issues()[0]
     assert issue.schema_path == ("properties", "age", "minimum")
