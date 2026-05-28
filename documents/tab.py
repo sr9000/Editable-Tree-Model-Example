@@ -7,7 +7,7 @@ from typing import Any, Callable
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
 from PySide6.QtWidgets import QWidget
 
-from documents import tab_commands, tab_editing, tab_move_view_state
+from documents import tab_commands, tab_editing, tab_move_view_state, tab_tree_actions
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
@@ -33,21 +33,6 @@ from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
-from tree_actions.clipboard import copy_selection
-from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
-from tree_actions.structure import (
-    cut_selection,
-    delete_selection,
-    duplicate_selection,
-    insert_child_current,
-    insert_sibling_after,
-    insert_sibling_before,
-    move_selection_down,
-    move_selection_out_down,
-    move_selection_out_up,
-    move_selection_up,
-    sort_selection_keys,
-)
 from undo.commands import (
     _ChangeTypeCmd,
     _EditValueCmd,
@@ -529,48 +514,28 @@ class JsonTab(QWidget):
         move_out_down: bool = False,
         sort_keys: bool = False,
     ) -> None:
-        if self.data_store.is_read_only:
-            return
-        changed = False
-        if copy_only:
-            changed = copy_selection(self.data_store.view)
-        elif cut:
-            changed = cut_selection(self.data_store.view)
-        elif paste:
-            changed = paste_auto(self.data_store.view)
-        elif paste_zip:
-            changed = paste_insert_after_zip(self.data_store.view)
-        elif replace_zip:
-            changed = paste_replace_zip(self.data_store.view)
-        elif delete:
-            changed = delete_selection(self.data_store.view)
-        elif duplicate:
-            changed = duplicate_selection(self.data_store.view)
-        elif move_up:
-            changed = move_selection_up(self.data_store.view)
-        elif move_down:
-            changed = move_selection_down(self.data_store.view)
-        elif move_out_up:
-            changed = move_selection_out_up(self.data_store.view)
-        elif move_out_down:
-            changed = move_selection_out_down(self.data_store.view)
-        elif sort_keys:
-            changed = sort_selection_keys(self.data_store.view, recursive=False)
-
-        if changed:
-            self.show_status(success_message, 1500)
+        tab_tree_actions.run_tree_action(
+            self,
+            success_message,
+            copy_only=copy_only,
+            cut=cut,
+            paste=paste,
+            paste_zip=paste_zip,
+            replace_zip=replace_zip,
+            delete=delete,
+            duplicate=duplicate,
+            move_up=move_up,
+            move_down=move_down,
+            move_out_up=move_out_up,
+            move_out_down=move_out_down,
+            sort_keys=sort_keys,
+        )
 
     def insert_sibling_before(self) -> bool:
-        if self.data_store.is_read_only:
-            return False
-        return insert_sibling_before(self.data_store.view)
+        return tab_tree_actions.do_insert_sibling_before(self)
 
     def insert_sibling_after(self) -> bool:
-        if self.data_store.is_read_only:
-            return False
-        return insert_sibling_after(self.data_store.view)
+        return tab_tree_actions.do_insert_sibling_after(self)
 
     def insert_child(self) -> bool:
-        if self.data_store.is_read_only:
-            return False
-        return insert_child_current(self.data_store.view)
+        return tab_tree_actions.do_insert_child(self)
