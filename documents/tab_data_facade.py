@@ -114,6 +114,39 @@ class JsonTabDataFacade:
         return self.appearance.icon_provider if self.appearance is not None else None
 
     @property
+    def _default_font_pt(self) -> int:
+        return self.appearance.default_font_pt if self.appearance is not None else 10
+
+    @property
+    def _font_pt(self) -> int:
+        return self.appearance.font_pt if self.appearance is not None else 10
+
+    @property
+    def _user_sized_columns(self) -> set[int]:
+        return self.appearance.user_sized_columns if self.appearance is not None else set()
+
+    @property
+    def _programmatic_column_resize(self) -> bool:
+        return self.appearance.programmatic_column_resize if self.appearance is not None else False
+
+    @_programmatic_column_resize.setter
+    def _programmatic_column_resize(self, value: bool) -> None:
+        if self.appearance is not None:
+            self.appearance.programmatic_column_resize = value
+
+    @property
+    def _monospace_fields_enabled(self) -> bool:
+        return self.appearance.monospace_fields_enabled if self.appearance is not None else False
+
+    @property
+    def _regular_font_family(self) -> str | None:
+        return self.appearance.regular_font_family if self.appearance is not None else None
+
+    @property
+    def _monospace_font_family(self) -> str | None:
+        return self.appearance.monospace_font_family if self.appearance is not None else None
+
+    @property
     def issue_index(self) -> IssueIndex | None:
         return self.validation.issue_index if self.validation is not None else None
 

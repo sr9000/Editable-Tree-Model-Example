@@ -28,6 +28,13 @@ class JsonTabAppearanceController:
         self._data_store = data_store
         self._theme: ThemeSpec | None = None
         self._icon_provider: IconProvider | None = None
+        self._default_font_pt: int = 10
+        self._font_pt: int = 10
+        self._user_sized_columns: set[int] = set()
+        self._programmatic_column_resize: bool = False
+        self._monospace_fields_enabled: bool = False
+        self._regular_font_family: str | None = None
+        self._monospace_font_family: str | None = None
 
     @property
     def theme(self) -> ThemeSpec | None:
@@ -37,9 +44,48 @@ class JsonTabAppearanceController:
     def icon_provider(self) -> IconProvider | None:
         return self._icon_provider
 
+    @property
+    def default_font_pt(self) -> int:
+        return self._default_font_pt
+
+    @property
+    def font_pt(self) -> int:
+        return self._font_pt
+
+    @property
+    def user_sized_columns(self) -> set[int]:
+        return self._user_sized_columns
+
+    @property
+    def programmatic_column_resize(self) -> bool:
+        return self._programmatic_column_resize
+
+    @programmatic_column_resize.setter
+    def programmatic_column_resize(self, value: bool) -> None:
+        self._programmatic_column_resize = bool(value)
+
+    @property
+    def monospace_fields_enabled(self) -> bool:
+        return self._monospace_fields_enabled
+
+    @property
+    def regular_font_family(self) -> str | None:
+        return self._regular_font_family
+
+    @property
+    def monospace_font_family(self) -> str | None:
+        return self._monospace_font_family
+
     def initialize(self, theme: ThemeSpec | None, icon_provider: IconProvider | None) -> None:
         self._theme = theme
         self._icon_provider = icon_provider
+
+    def adopt_view_font_defaults(self, initial_pt: int) -> None:
+        """Capture the view's intrinsic font size as the zoom-reset baseline."""
+        self._default_font_pt = initial_pt if initial_pt > 0 else 10
+        self._font_pt = self._default_font_pt
+        self._user_sized_columns = set()
+        self._programmatic_column_resize = False
 
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
         self._theme = theme
@@ -76,9 +122,9 @@ class JsonTabAppearanceController:
 
     def set_monospace_fields_enabled(self, enabled: bool) -> None:
         enabled = bool(enabled)
-        if self._data_store._monospace_fields_enabled == enabled:
+        if self._monospace_fields_enabled == enabled:
             return
-        self._data_store._monospace_fields_enabled = enabled
+        self._monospace_fields_enabled = enabled
         self._require_name_delegate().set_monospace_fields_enabled(enabled)
         self._require_value_delegate().set_monospace_fields_enabled(enabled)
         self._require_view().viewport().update()
@@ -87,14 +133,14 @@ class JsonTabAppearanceController:
         if not family:
             return
         family = str(family)
-        if self._data_store._regular_font_family == family:
+        if self._regular_font_family == family:
             return
-        self._data_store._regular_font_family = family
+        self._regular_font_family = family
         view = self._require_view()
         font = view.font()
         font.setFamily(family)
         if font.pointSizeF() <= 0:
-            font.setPointSize(max(6, int(self._data_store._font_pt or 10)))
+            font.setPointSize(max(6, int(self._font_pt or 10)))
         view.setFont(font)
         self.sync_icon_size_with_font()
 
@@ -102,17 +148,17 @@ class JsonTabAppearanceController:
         if not family:
             return
         family = str(family)
-        if self._data_store._monospace_font_family == family:
+        if self._monospace_font_family == family:
             return
-        self._data_store._monospace_font_family = family
+        self._monospace_font_family = family
         self._require_name_delegate().set_monospace_font_family(family)
         self._require_value_delegate().set_monospace_font_family(family)
         self._require_view().viewport().update()
 
     def set_editor_font_point_size(self, point_size: int) -> None:
-        old_pt = self._data_store._font_pt
+        old_pt = self._font_pt
         self.set_font_pt(point_size)
-        self.scale_columns_for_font(old_pt, self._data_store._font_pt)
+        self.scale_columns_for_font(old_pt, self._font_pt)
 
     def apply_font_profile(self, profile: FontProfileLike) -> None:
         """Apply a complete font profile in dependency order."""
@@ -124,34 +170,34 @@ class JsonTabAppearanceController:
         self.set_monospace_fields_enabled(profile.monospace_fields_enabled)
 
     def resize_key_columns(self, force: bool = False) -> None:
-        self._data_store._programmatic_column_resize = True
+        self._programmatic_column_resize = True
         try:
             view = self._require_view()
             for col in (0, 1):
-                if force or col not in self._data_store._user_sized_columns:
+                if force or col not in self._user_sized_columns:
                     view.resizeColumnToContents(col)
         finally:
-            self._data_store._programmatic_column_resize = False
+            self._programmatic_column_resize = False
 
     def scale_columns_for_font(self, old_pt: int, new_pt: int) -> None:
         if old_pt <= 0 or new_pt <= 0 or old_pt == new_pt:
             return
         scale = new_pt / old_pt
-        self._data_store._programmatic_column_resize = True
+        self._programmatic_column_resize = True
         try:
             view = self._require_view()
             for col in (0, 1):
-                if col in self._data_store._user_sized_columns:
+                if col in self._user_sized_columns:
                     continue
                 current = view.columnWidth(col)
                 new_w = max(20, min(2000, int(current * scale)))
                 view.setColumnWidth(col, new_w)
         finally:
-            self._data_store._programmatic_column_resize = False
+            self._programmatic_column_resize = False
 
     def set_font_pt(self, pt: int) -> None:
         clamped = max(6, min(48, int(pt)))
-        self._data_store._font_pt = clamped
+        self._font_pt = clamped
         view = self._require_view()
         font = view.font()
         font.setPointSize(clamped)
@@ -164,19 +210,19 @@ class JsonTabAppearanceController:
         view.setIconSize(QSize(px, px))
 
     def zoom_in(self) -> None:
-        old_pt = self._data_store._font_pt
-        self.set_font_pt(self._data_store._font_pt + 1)
-        self.scale_columns_for_font(old_pt, self._data_store._font_pt)
+        old_pt = self._font_pt
+        self.set_font_pt(self._font_pt + 1)
+        self.scale_columns_for_font(old_pt, self._font_pt)
 
     def zoom_out(self) -> None:
-        old_pt = self._data_store._font_pt
-        self.set_font_pt(self._data_store._font_pt - 1)
-        self.scale_columns_for_font(old_pt, self._data_store._font_pt)
+        old_pt = self._font_pt
+        self.set_font_pt(self._font_pt - 1)
+        self.scale_columns_for_font(old_pt, self._font_pt)
 
     def zoom_reset(self) -> None:
-        old_pt = self._data_store._font_pt
-        self.set_font_pt(self._data_store._default_font_pt)
-        self.scale_columns_for_font(old_pt, self._data_store._font_pt)
+        old_pt = self._font_pt
+        self.set_font_pt(self._default_font_pt)
+        self.scale_columns_for_font(old_pt, self._font_pt)
 
     def _require_view(self) -> JsonTreeView:
         view = self._data_store.view

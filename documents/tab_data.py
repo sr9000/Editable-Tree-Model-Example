@@ -29,13 +29,6 @@ class JsonTabData(JsonTabDataFacade):
     name_delegate: NameDelegate = field(default=None)
     type_delegate: JsonTypeDelegate = field(default=None)
     value_delegate: ValueDelegate = field(default=None)
-    _default_font_pt: int = 10
-    _font_pt: int = 10
-    _user_sized_columns: set[int] = field(default_factory=set)
-    _programmatic_column_resize: bool = False
-    _monospace_fields_enabled: bool = False
-    _regular_font_family: str | None = None
-    _monospace_font_family: str | None = None
     affix_mru: AffixMRU = field(default=None)
     mutations: DocumentMutationGateway = field(default=None)
     _diff_applier: Any = field(default=None)

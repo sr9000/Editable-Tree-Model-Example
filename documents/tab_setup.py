@@ -113,14 +113,7 @@ def init_layout(tab: "JsonTab") -> None:
     tab.data_store.view.installEventFilter(tab)
     tab.data_store.view.viewport().installEventFilter(tab)
     initial_pt = tab.data_store.view.font().pointSize()
-    tab.data_store._default_font_pt = initial_pt if initial_pt > 0 else 10
-    tab.data_store._font_pt = tab.data_store._default_font_pt
-
-    # Tracks which columns the user has manually resized (drag or persisted state).
-    tab.data_store._user_sized_columns = set()  # set[int]
-    # Guard: True while code is programmatically resizing columns so the
-    # sectionResized handler does not mis-classify that as a user action.
-    tab.data_store._programmatic_column_resize = False
+    tab._appearance.adopt_view_font_defaults(initial_pt)
 
 
 def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
