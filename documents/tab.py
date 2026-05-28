@@ -640,21 +640,6 @@ class JsonTab(QWidget):
     def _emit_row_changed(self, item_index: QModelIndex) -> None:
         self.data_store._diff_applier.emit_row_changed(item_index)
 
-    def _clear_children(self, item: JsonTreeItem, item_index: QModelIndex) -> None:
-        self.data_store._diff_applier.clear_children(item, item_index)
-
-    def _convert_container(
-        self,
-        item: JsonTreeItem,
-        item_index: QModelIndex,
-        new_type: JsonType,
-        value: Any,
-    ) -> None:
-        self.data_store._diff_applier.convert_container(item, item_index, new_type, value)
-
-    def _convert_to_leaf(self, item: JsonTreeItem, item_index: QModelIndex, target: Any) -> None:
-        self.data_store._diff_applier.convert_to_leaf(item, item_index, target)
-
     def _insert_typed_item(
         self,
         parent_item: JsonTreeItem,
@@ -664,12 +649,6 @@ class JsonTab(QWidget):
         name: str | int | None = None,
     ) -> bool:
         return self.data_store._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
-
-    def _diff_object(self, item: JsonTreeItem, target_dict: dict, item_index: QModelIndex) -> bool:
-        return self.data_store._diff_applier.diff_object(item, target_dict, item_index)
-
-    def _diff_array(self, item: JsonTreeItem, target_list: list, item_index: QModelIndex) -> bool:
-        return self.data_store._diff_applier.diff_array(item, target_list, item_index)
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
         return self.data_store.mutations.commit_set_data(index, value, role)
