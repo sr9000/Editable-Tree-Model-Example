@@ -32,7 +32,6 @@ from documents.tab_validation_view import JsonTabValidationViewController
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
-from undo.diff import DiffApplier
 
 _DEFAULT_DATA = object()
 
