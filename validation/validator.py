@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from validation import _engine
+from . import _engine
 from validation.error_adapter import (
     err_context,
     err_instance_path,

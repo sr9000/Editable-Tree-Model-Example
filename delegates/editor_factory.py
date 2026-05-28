@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import binascii
 import zlib
-from typing import TYPE_CHECKING
+from typing import Protocol
 
 from gmpy2 import mpq
 from PySide6.QtCore import QEvent, QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Qt
@@ -39,8 +39,39 @@ from state.edit_limits import get_multiline_edit_warning_limit_chars, get_string
 from tree.item import JsonTreeItem
 from tree.types import TEXT_LINE_FAMILY, TEXT_MULTI_FAMILY, JsonType
 
-if TYPE_CHECKING:
-    from delegates.value import ValueDelegate
+
+class ValueDelegateProtocol(Protocol):
+    _secret_watchers: dict[QWidget, "_SecretEditorWatcher"]
+
+    def _context_for(self, host) -> "EditorContextProtocol": ...
+
+    def _finalize_secret_editor(self, editor: QWidget, index: QPersistentModelIndex) -> None: ...
+
+    def _apply_monospace_font(self, font: QFont) -> QFont: ...
+
+    def _mark_editor_open(self, index: QModelIndex | QPersistentModelIndex) -> None: ...
+
+
+class EditorContextProtocol(Protocol):
+    def commit(self, index: QModelIndex, value, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole): ...
+
+    def notify_status(self, message: str, timeout_ms: int = 0) -> None: ...
+
+    def confirm_large_binary_edit(self, parent, payload_size: int) -> bool: ...
+
+    def confirm_large_text_edit(
+        self,
+        parent,
+        *,
+        text_len: int,
+        limit: int,
+        title: str,
+        kind: str,
+    ) -> bool: ...
+
+    def affix_mru(self): ...
+
+    def icon_provider(self): ...
 
 
 class _SecretLineEdit(QWidget):
@@ -106,7 +137,7 @@ class _SecretLineEdit(QWidget):
 
 
 class _SecretEditorWatcher(QObject):
-    def __init__(self, delegate: ValueDelegate, editor: QWidget, index: QPersistentModelIndex):
+    def __init__(self, delegate: ValueDelegateProtocol, editor: QWidget, index: QPersistentModelIndex):
         super().__init__(editor)
         self._delegate = delegate
         self._editor = editor
@@ -150,7 +181,7 @@ def _source_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
 
 
 def _commit(
-    delegate: ValueDelegate,
+    delegate: ValueDelegateProtocol,
     index: QModelIndex | QPersistentModelIndex,
     value,
     role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole,
@@ -164,16 +195,16 @@ def _commit(
     return bool(result)
 
 
-def _notify_status(delegate: ValueDelegate, host, message: str, timeout: int = 3000) -> None:
+def _notify_status(delegate: ValueDelegateProtocol, host, message: str, timeout: int = 3000) -> None:
     delegate._context_for(host).notify_status(message, timeout)
 
 
-def _confirm_large_binary_edit(delegate: ValueDelegate, host, payload_size: int) -> bool:
+def _confirm_large_binary_edit(delegate: ValueDelegateProtocol, host, payload_size: int) -> bool:
     return delegate._context_for(host).confirm_large_binary_edit(host, payload_size)
 
 
 def _confirm_large_text_edit(
-    delegate: ValueDelegate, host, *, text_len: int, limit: int, title: str, kind: str
+    delegate: ValueDelegateProtocol, host, *, text_len: int, limit: int, title: str, kind: str
 ) -> bool:
     return delegate._context_for(host).confirm_large_text_edit(
         host, text_len=text_len, limit=limit, title=title, kind=kind
@@ -181,7 +212,7 @@ def _confirm_large_text_edit(
 
 
 def create_value_editor(
-    delegate: ValueDelegate, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex
+    delegate: ValueDelegateProtocol, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex
 ) -> QWidget | None:
     src_idx = _source_index(index)
     item: JsonTreeItem = src_idx.internalPointer()
@@ -334,7 +365,7 @@ def create_value_editor(
     return editor
 
 
-def _install_secret_watcher(delegate: ValueDelegate, editor: QWidget, index: QModelIndex) -> None:
+def _install_secret_watcher(delegate: ValueDelegateProtocol, editor: QWidget, index: QModelIndex) -> None:
     watcher = _SecretEditorWatcher(delegate, editor, QPersistentModelIndex(index))
     editor.installEventFilter(watcher)
     for child in editor.findChildren(QWidget):
@@ -342,7 +373,7 @@ def _install_secret_watcher(delegate: ValueDelegate, editor: QWidget, index: QMo
     delegate._secret_watchers[editor] = watcher
 
 
-def set_value_editor_data(delegate: ValueDelegate, editor: QWidget, index: QModelIndex):
+def set_value_editor_data(delegate: ValueDelegateProtocol, editor: QWidget, index: QModelIndex):
     src_idx = _source_index(index)
     item: JsonTreeItem = src_idx.internalPointer()
     value = item.value
@@ -392,7 +423,7 @@ def set_value_editor_data(delegate: ValueDelegate, editor: QWidget, index: QMode
     super(type(delegate), delegate).setEditorData(editor, index)
 
 
-def set_value_model_data(delegate: ValueDelegate, editor: QWidget, model, index: QModelIndex):
+def set_value_model_data(delegate: ValueDelegateProtocol, editor: QWidget, model, index: QModelIndex):
     if isinstance(editor, QBigIntSpinBox):
         _commit(delegate, index, editor.value(), Qt.ItemDataRole.EditRole, host=editor)
         return

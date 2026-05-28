@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any, Protocol
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (
@@ -18,12 +18,15 @@ from PySide6.QtWidgets import (
 
 from app.validation_panel_model import IssueListModel
 from state.recent_schemas import recent_schemas
-from validation.schema_registry import SchemaSource, get_schema_registry
+from validation.index import IssueIndex
+from validation.schema_registry import get_schema_registry
+from validation.schema_types import SchemaRef
 
-if TYPE_CHECKING:
-    from documents.tab import JsonTab
-    from validation.index import IssueIndex
-    from validation.schema_source import SchemaRef
+
+class ValidationDockTabProtocol(Protocol):
+    data_store: Any
+    validationChanged: Any
+    schemaChanged: Any
 
 
 class ValidationDock(QDockWidget):
@@ -117,7 +120,7 @@ class ValidationDock(QDockWidget):
         layout.addWidget(self.list_view)
         self.setWidget(container)
 
-        self._tab: JsonTab | None = None
+        self._tab: ValidationDockTabProtocol | None = None
 
     # ── public API ────────────────────────────────────────────────────────
 
@@ -127,7 +130,7 @@ class ValidationDock(QDockWidget):
         self._chk_auto.setChecked(enabled)
         self._chk_auto.blockSignals(False)
 
-    def update_status(self, issue_index: "IssueIndex") -> None:
+    def update_status(self, issue_index: IssueIndex) -> None:
         """Refresh the status label from *issue_index*."""
         issues = issue_index.all_issues()
         count = len(issues)
@@ -136,7 +139,7 @@ class ValidationDock(QDockWidget):
         else:
             self._lbl_status.setText(f"{count} issue{'s' if count != 1 else ''}")
 
-    def attach_tab(self, tab: "JsonTab | None") -> None:
+    def attach_tab(self, tab: ValidationDockTabProtocol | None) -> None:
         if self._tab is tab:
             return
         if self._tab is not None:
@@ -181,11 +184,11 @@ class ValidationDock(QDockWidget):
 
     # ── private slots ─────────────────────────────────────────────────────
 
-    def _on_validation_changed(self, issue_index: "IssueIndex") -> None:
+    def _on_validation_changed(self, issue_index: IssueIndex) -> None:
         self.model.set_issues(issue_index.all_issues())
         self.update_status(issue_index)
 
-    def _on_schema_changed(self, ref: "SchemaRef") -> None:
+    def _on_schema_changed(self, ref: SchemaRef) -> None:
         has_schema = ref.origin != "none"
         has_path = ref.path is not None
         has_url = ref.url is not None

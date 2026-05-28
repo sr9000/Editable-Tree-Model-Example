@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt
 
@@ -9,8 +9,9 @@ from documents.tab_paths import index_from_path, proxy_to_source, qualified_name
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
 
-if TYPE_CHECKING:
-    from documents.tab import JsonTab
+
+class ValidationPanelTabProtocol(Protocol):
+    data_store: Any
 
 
 def _instance_path_to_json_path(instance_path: tuple[str | int, ...]) -> str:
@@ -34,10 +35,10 @@ class IssueListModel(QAbstractListModel):
         super().__init__(parent)
         self._issues: list[ValidationIssue] = []
         self._display: list[str] = []
-        self._tab: JsonTab | None = None
+        self._tab: ValidationPanelTabProtocol | None = None
         self._root_data: Any = None
 
-    def set_tab(self, tab: JsonTab | None) -> None:
+    def set_tab(self, tab: ValidationPanelTabProtocol | None) -> None:
         self._tab = tab
         self._root_data = tab.data_store.model.root_item.to_json() if tab is not None else None
         self._rebuild_display_cache()

@@ -2,24 +2,15 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from io_formats.load import load_file_with_format
-
-
-@dataclass(frozen=True, slots=True)
-class SchemaRef:
-    path: Path | None
-    inline: Mapping[str, Any] | None
-    origin: Literal["inline", "sibling", "manual", "none"]
-    url: str | None = field(default=None)
+from validation.schema_types import SchemaRef, SchemaSource
 
 
 def schema_source_from_ref(ref: SchemaRef):
     """Convert a SchemaRef into a SchemaSource when possible."""
-    from validation.schema_registry import SchemaSource
 
     return SchemaSource.from_ref(ref)
 
