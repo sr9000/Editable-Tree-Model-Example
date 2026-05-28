@@ -179,14 +179,6 @@ class JsonTab(QWidget):
         self._validation_view = JsonTabValidationViewController(self)
 
         # All parts stored inside self.data_store are populated here:
-        self.data_store.ui = None
-        self.data_store.view = None
-        self.data_store.search_edit = None
-        self.data_store._default_font_pt = 10
-        self.data_store._font_pt = 10
-        self.data_store._user_sized_columns = set()
-        self.data_store._programmatic_column_resize = False
-
         resolved_services = services or build_legacy_json_tab_services(
             update_actions_callback=update_actions_callback,
             status_message_callback=status_message_callback,
@@ -204,11 +196,6 @@ class JsonTab(QWidget):
         self.data_store._host = resolved_services.host
         self.data_store._theme = resolved_services.theme
         self.data_store._icon_provider = resolved_services.icon_provider
-        self.data_store._read_only = False
-        self.data_store._monospace_fields_enabled = False
-        self.data_store._regular_font_family = None
-        self.data_store._monospace_font_family = None
-        self.data_store._last_move_placed = []
 
         init_layout(self)
         self._editability.capture_editable_view_state()
