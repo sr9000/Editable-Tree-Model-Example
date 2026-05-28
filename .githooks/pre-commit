@@ -62,4 +62,11 @@ for f in $staged_py; do
     fi
 done
 
+# Plan 20: forbid new data_store.<retired-attr> leaks (Phase B+).
+if [[ -n "$staged_py" ]]; then
+    if ! bash "$(dirname "$0")/_check_data_store_leaks.sh" $staged_py; then
+        fail=1
+    fi
+fi
+
 exit $fail
