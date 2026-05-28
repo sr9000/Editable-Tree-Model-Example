@@ -51,6 +51,13 @@ At over 400 lines, `tab.py`'s `JsonTab` remains a quintessential God Object. It 
 
 The boundaries between UI presentation, application tracking, and the core domain are practically non-existent.
 
+### The Testing Layer Nightmare: `data_store` Mocking and Patching
+A review of the test suite (via grep over `tests/`) highlights exactly how tightly coupled testing is to the `JsonTab` internal `data_store` implementation. Tests do not evaluate outputs purely; they mimic end-user interactions by scripting deep UI properties.
+
+1. **Direct UI Manipulation in Tests:** Tests routinely simulate keyboard shortcuts by manually forcing `tab.data_store.view.setCurrentIndex()`, picking editor widgets (`tab.data_store.view.findChild(QLineEdit)`), and sending clicks via `qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Right)`. This means any UI view change immediately breaks domain tests limitlessly.
+2. **Brittle Validations:** State tests check internal states via `tab.data_store.undo_stack.count()` or directly inspecting `tab.data_store.issue_index.all_issues()`, creating false constraints against refactoring internal stack mechanics.
+3. **No Domain Layer Testing:** Tests do not instantiate models or controllers directly; they *always* instantiate a full UI `JsonTab` with styling options (`initStyleOption`) and then peer inside it via `data_store`. Test coverage acts primarily as an integration suite rather than a fast domain-layer unit suite.
+
 ### The Omnipresent Data Store Leaking Throughout the App
 Grep analysis across the entire application boundary (ignoring tests) reveals that `tab.data_store` is pervasively leaked and mutated by files far removed from the `documents` internal logic, creating an incredibly tight coupling between application layers.
 *   **Window Management (`app/main_window.py`, `app/main_window_actions.py`)** explicitly checks and mutates things like `tab.data_store.is_read_only`, `tab.data_store.is_dirty`, and `tab.data_store.undo_stack.clear()`.
@@ -84,3 +91,6 @@ The `documents` module structure is the resulting side-effect of fracturing a ma
 1. **Remove `tab_protocols.py`:** Stop masking the cyclical design. Instead, utilize actual Dependency Injection where a command is given explicit data structures (not the UI elements) rather than passing the `tab` backward.
 2. **Untangle Domain from UI:** Decouple commands from `QModelIndex`. Move logic onto pure Python structures and use Qt's signals/slots to react and update the views accordingly.
 3. **Decompose `JsonTabData`:** Break the payload into distinct conceptual data structures: a purely textual/tree mutation pipeline, a separate viewport controller, and an I/O payload controller.
+4. **Command Independence:** Ensure `undo/commands.py` does not reference UI instances like `tab.data_store.view`. Selection restoration should be handled via a Signal returning the mutation metrics, handled purely by the View Controller.
+5. **Isolate Feature Layers:** The `main_window` should talk to an abstract `Document` interface exposing signals and events, entirely ignorant of underlying `search_edit` inputs or specific validation dictionaries inside `data_store`.
+6. **Test Boundary Decoupling:** Re-structure tests so UI validation is separated from Domain validation. Provide factory methods for testing domain mutations (like row moves/edits) directly on the TreeModel without spinning up `JsonTab` and `data_store.view` toolkits.
