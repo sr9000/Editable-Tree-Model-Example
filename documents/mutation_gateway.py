@@ -18,6 +18,8 @@ from typing import Any
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt
 
+from documents.tab_protocols import TabMutationGatewayProtocol
+
 
 class DocumentMutationGateway:
     """Thin forwarding façade for document mutations.
@@ -27,7 +29,7 @@ class DocumentMutationGateway:
     on the model, view, and history controller.
     """
 
-    def __init__(self, tab: Any) -> None:
+    def __init__(self, tab: TabMutationGatewayProtocol) -> None:
         self._tab = tab
 
     # ----- value mutation -------------------------------------------------
@@ -44,7 +46,7 @@ class DocumentMutationGateway:
         tab method becomes a one-line delegation.
         """
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.is_read_only:
             return False
         if role != Qt.ItemDataRole.EditRole or not index.isValid():
             return False
@@ -83,10 +85,14 @@ class DocumentMutationGateway:
 
     # ----- macro framing --------------------------------------------------
     def begin_macro(self, label: str) -> None:
-        self._tab.data_store.undo_stack.beginMacro(label)
+        undo_stack = self._tab.undo_stack
+        if undo_stack is not None:
+            undo_stack.beginMacro(label)
 
     def end_macro(self) -> None:
-        self._tab.data_store.undo_stack.endMacro()
+        undo_stack = self._tab.undo_stack
+        if undo_stack is not None:
+            undo_stack.endMacro()
 
     # ----- path / view helpers (read-only) -------------------------------
     def index_path(self, index: QModelIndex) -> tuple[int, ...]:

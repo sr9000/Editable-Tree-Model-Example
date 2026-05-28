@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from PySide6.QtWidgets import QLineEdit
 
@@ -28,4 +27,4 @@ class JsonTabData(JsonTabDataFacade):
     type_delegate: JsonTypeDelegate = None
     value_delegate: ValueDelegate = None
     affix_mru: AffixMRU = None
-    mutations: DocumentMutationGateway = None
+    mutations: DocumentMutationGateway | None = None

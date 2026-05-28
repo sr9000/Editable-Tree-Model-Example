@@ -104,6 +104,14 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         if editability is not None:
             editability.set_read_only(enabled)
 
+    @property
+    def is_read_only(self) -> bool:
+        return self.data_store.is_read_only
+
+    @property
+    def undo_stack(self):
+        return self.data_store.undo_stack
+
     def closeEvent(self, event):  # type: ignore[override]
         self.data_store.validation.release()
         super().closeEvent(event)

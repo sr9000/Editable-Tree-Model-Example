@@ -7,7 +7,7 @@ class itself stays narrative.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
@@ -18,7 +18,7 @@ from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_history import TabHistoryController
 from documents.tab_io_controller import TabIOController
 from documents.tab_navigation import JsonTabNavigationController
-from documents.tab_protocols import TabBootstrapProtocol
+from documents.tab_protocols import TabBootstrapProtocol, TabMutationGatewayProtocol
 from documents.tab_setup import (
     init_delegates_and_connections,
     init_layout,
