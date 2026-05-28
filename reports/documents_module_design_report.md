@@ -51,12 +51,31 @@ At over 400 lines, `tab.py`'s `JsonTab` remains a quintessential God Object. It 
 
 The boundaries between UI presentation, application tracking, and the core domain are practically non-existent.
 
-### The Testing Layer Nightmare: `data_store` Mocking and Patching
+### The Testing Layer: Orchestrating the Matrix of Tests
 A review of the test suite (via grep over `tests/`) highlights exactly how tightly coupled testing is to the `JsonTab` internal `data_store` implementation. Tests do not evaluate outputs purely; they mimic end-user interactions by scripting deep UI properties.
 
-1. **Direct UI Manipulation in Tests:** Tests routinely simulate keyboard shortcuts by manually forcing `tab.data_store.view.setCurrentIndex()`, picking editor widgets (`tab.data_store.view.findChild(QLineEdit)`), and sending clicks via `qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Right)`. This means any UI view change immediately breaks domain tests limitlessly.
-2. **Brittle Validations:** State tests check internal states via `tab.data_store.undo_stack.count()` or directly inspecting `tab.data_store.issue_index.all_issues()`, creating false constraints against refactoring internal stack mechanics.
-3. **No Domain Layer Testing:** Tests do not instantiate models or controllers directly; they *always* instantiate a full UI `JsonTab` with styling options (`initStyleOption`) and then peer inside it via `data_store`. Test coverage acts primarily as an integration suite rather than a fast domain-layer unit suite.
+While tests *are allowed* to break architectural boundaries to establish thorough regression checks, their deep hooks into the `tab.data_store` object mean that a naive ground-up redesign would result in a terrifying cascade of 1000+ broken tests simultaneously.
+
+To make refactoring achievable, the test paths must be acknowledged. Tests generally fall into the following logical clusters based on their core dependencies:
+
+1. **Core Data Structure & I/O Tests**
+   (*e.g., `test_tree_correctness.py`, `test_io_*.py`, `test_jsontream.py`, `test_file_io_phase4.py`*)
+   These tests validate serialization, chunking, and JSON compliance. They are the closest to the domain.
+2. **Undo/Redo History & Macro Tests**
+   (*e.g., `test_undo_*.py`, `test_typed_undo_commands.py`, `test_tab_history_controller.py`, `test_phase_5_1_carryover.py`*)
+   These rely precisely on `tab.data_store.undo_stack` command counts, boundary pushes, and macro collapsing logic.
+3. **Structural Mutations & Actions**
+   (*e.g., `test_drag_drop_*.py`, `test_keyboard_multimove*.py`, `test_context_menu_*.py`, `test_anchor_move.py`*)
+   These tests simulate end-user tree reorganization, often calling manual Qt keyboard events to test sorting, case-switching, and node moves.
+4. **Validation Logic & Presentation**
+   (*e.g., `test_validation_*.py`, `test_schema_*.py`*)
+   These inspect UI state for severity roles, tooltip metadata, and the `tab.data_store.issue_index` state logic upon model changes.
+5. **Delegates, Editors, & Embellishments**
+   (*e.g., `test_type_editing.py`, `test_number_affix*.py`, `test_secret_*.py`, `test_datetime_*.py`*)
+   These strictly evaluate visual styling, `QLineEdit`/`QComboBox` popups, and formatting logic.
+6. **Application Lifecycle & Persistence**
+   (*e.g., `test_tab_lifecycle.py`, `test_phase_5_4_persisted_view_state.py`, `test_smoke_mainwindow.py`*)
+   High-level behaviors managing window operations, settings persistence, and tab pools.
 
 ### The Omnipresent Data Store Leaking Throughout the App
 Grep analysis across the entire application boundary (ignoring tests) reveals that `tab.data_store` is pervasively leaked and mutated by files far removed from the `documents` internal logic, creating an incredibly tight coupling between application layers.
@@ -91,6 +110,10 @@ The `documents` module structure is the resulting side-effect of fracturing a ma
 1. **Remove `tab_protocols.py`:** Stop masking the cyclical design. Instead, utilize actual Dependency Injection where a command is given explicit data structures (not the UI elements) rather than passing the `tab` backward.
 2. **Untangle Domain from UI:** Decouple commands from `QModelIndex`. Move logic onto pure Python structures and use Qt's signals/slots to react and update the views accordingly.
 3. **Decompose `JsonTabData`:** Break the payload into distinct conceptual data structures: a purely textual/tree mutation pipeline, a separate viewport controller, and an I/O payload controller.
-4. **Command Independence:** Ensure `undo/commands.py` does not reference UI instances like `tab.data_store.view`. Selection restoration should be handled via a Signal returning the mutation metrics, handled purely by the View Controller.
-5. **Isolate Feature Layers:** The `main_window` should talk to an abstract `Document` interface exposing signals and events, entirely ignorant of underlying `search_edit` inputs or specific validation dictionaries inside `data_store`.
-6. **Test Boundary Decoupling:** Re-structure tests so UI validation is separated from Domain validation. Provide factory methods for testing domain mutations (like row moves/edits) directly on the TreeModel without spinning up `JsonTab` and `data_store.view` toolkits.
+4. **Discrete Test-Driven Refactoring Path:** Refactor sequentially matching the test clusters outlined above to maintain isolated test stability:
+   * **Phase 1:** Decouple **Core Data & I/O**. Ensure JSON parsing and tree assertions only apply against isolated model structures, not tab UI views.
+   * **Phase 2:** Refactor the **Undo/Redo** boundary. Redesign commands to emit logical Signals rather than explicitly forcing UI viewport cursor updates (`setCurrentIndex`), satisfying history tests before addressing UI dependencies.
+   * **Phase 3:** Extract **Tree Mutations** (Drag/Drop/Move). Reroute the `tree_actions` commands through the unified pure domain model, leaving tests untouched except for adapting the caller signatures.
+   * **Phase 4:** Stabilize **UI/Validation Views**. Connect view layers and validation docks purely via Signals propagating from the new detached tab controllers.
+5. **Command Independence:** Ensure `undo/commands.py` does not reference UI instances like `tab.data_store.view`. Selection restoration should be handled via a Signal returning the mutation metrics, handled purely by the View Controller.
+6. **Isolate Feature Layers:** The `main_window` should talk to an abstract `Document` interface exposing signals and events, entirely ignorant of underlying `search_edit` inputs or specific validation dictionaries inside `data_store`.
