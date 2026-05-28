@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import base64
-import gzip
 import os
-import zlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -15,6 +12,7 @@ from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
+from documents.tab_demo_data import build_demo_data
 from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_services
 from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_io import save as tab_save
@@ -90,46 +88,6 @@ _CMD_ID_EDIT_VALUE = 0x0E71_0002
 _MERGE_WINDOW_SECONDS = 0.5
 
 
-def _demo_data() -> dict[str, Any]:
-    return {
-        "question": "The Ultimate Question of Life, the Universe, and Everything.",
-        "answer": 42,
-        "integer": 9223372036854775808,
-        "int units": "10 m/s",
-        "float units": "3.45s",
-        "int currency": "$10",
-        "float currency": "lvl 2.5",
-        "float": gmpy2.mpq("3.14"),
-        "percent": gmpy2.mpq("50/100"),
-        "single-line": "Hello, world!" * 100,
-        "utf8-line": "caf\u00e9",
-        "multi-line": "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6",
-        "utf8-text": "Line 1\nLine 2\n\u03a9",
-        "password": "plainsecret",
-        "private_key": "-----BEGIN KEY-----\nabc\n-----END KEY-----",
-        "bytes": base64.b64encode(b"hello " * 10).decode(),
-        "zlib": base64.b64encode(zlib.compress(b"hello " * 10)).decode(),
-        "gzip": base64.b64encode(gzip.compress(b"hello " * 10)).decode(),
-        "date": "2024-06-01",
-        "time": "12:34",
-        "datetime": "2024-06-01 12:34:56",
-        "datetime-utc": "2024-06-01T12:34:56Z",
-        "dt+timezone": "2024-06-01T12:34:56.9999+00:00",
-        "boolean": True,
-        "object": {"key": "value"},
-        "array": [1, 2, 3],
-        "null": None,
-        "color rgb": "#3498db",
-        "color rgba": "#3498db80",
-        # Pseudo text types — content-derived labels that appear automatically
-        # when a string value is empty or whitespace-only.
-        "empty string": "",  # → EMPTY_STRING
-        "ws ascii": "   ",  # → WS_STRING (ASCII spaces only)
-        "ws unicode": " \u00a0 ",  # → WS_UNICODE (includes NBSP)
-        "ws multiline": "  \n  ",  # → WS_MULTILINE (whitespace + newline)
-        "ws text": " \u00a0\n ",  # → WS_TEXT  (non-ASCII WS + newline)
-    }
-
 
 class JsonTab(QWidget):
     _appearance: JsonTabAppearanceController | None = None
@@ -197,7 +155,7 @@ class JsonTab(QWidget):
         # self.header_editor = HeaderViewEditorMixin(self.data_store.view.header())
 
         if data is _DEFAULT_DATA:
-            model_data = _demo_data()
+            model_data = build_demo_data()
         else:
             model_data = data if data is not None else {}
 
