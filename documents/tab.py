@@ -147,15 +147,6 @@ class JsonTab(QWidget):
             return True
         return super().eventFilter(watched, event)
 
-    def _toggle_current_row_expansion_with_space(self) -> None:
-        navigation = self._navigation
-        if navigation is not None:
-            navigation.toggle_current_row_expansion_with_space()
-
-    def _handle_arrow_navigation(self, key: int | Qt.Key, modifiers: Qt.KeyboardModifier) -> bool:
-        navigation = self._navigation
-        return navigation is not None and navigation.handle_arrow_navigation(key, modifiers)
-
     def __init__(
         self,
         update_actions_callback: Callable[[], None] | None = None,
