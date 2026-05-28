@@ -325,14 +325,14 @@ def test_type_change_does_not_log_edit_failed(main_window, qt_messages, json_typ
 def test_cycling_inline_types_does_not_log_edit_failed(main_window, qt_messages, qapp):
     """Regression: cycling a value's type through inline-editor types
     (INTEGER / FLOAT / STRING / BOOLEAN / PERCENT / DATE) must not log
-    ``edit: editing failed`` nor raise ``AttributeError`` from
+    ``edit: editing failed`` nor raise Attribute Error from
     ``ValueDelegate.setEditorData``.
 
     Previously ``setEditorData`` / ``setModelData`` dispatched on
     ``item.json_type``; if Qt reused a value editor created for a previous
     type, the dispatch called methods that didn't exist on the old widget
     (``setText`` on a ``QMpqSpinBox`` etc.), producing
-    ``edit: editing failed`` warnings and ``AttributeError``s.
+    ``edit: editing failed`` warnings and Attribute Errors.
     """
     main_window.show()
     qapp.processEvents()
