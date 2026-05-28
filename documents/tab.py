@@ -20,16 +20,14 @@ from documents.tab_validation_view import JsonTabValidationViewController
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
-from undo.commands import (
-    _ChangeTypeCmd,  # noqa: F401 — re-exported for test imports
-    _EditValueCmd,  # noqa: F401 — re-exported for test imports
-    _InsertRowsCmd,  # noqa: F401 — re-exported for test imports
-    _MoveRowsCmd,
-    _RemoveRowsCmd,  # noqa: F401 — re-exported for test imports
-    _RenameCmd,  # noqa: F401 — re-exported for test imports
-    _SortKeysCmd,  # noqa: F401 — re-exported for test imports
-    _SwitchFieldCaseCmd,  # noqa: F401 — re-exported for test imports
-)
+from undo.commands import _ChangeTypeCmd  # noqa: F401 — re-exported for test imports
+from undo.commands import _EditValueCmd  # noqa: F401 — re-exported for test imports
+from undo.commands import _InsertRowsCmd  # noqa: F401 — re-exported for test imports
+from undo.commands import _RemoveRowsCmd  # noqa: F401 — re-exported for test imports
+from undo.commands import _RenameCmd  # noqa: F401 — re-exported for test imports
+from undo.commands import _SortKeysCmd  # noqa: F401 — re-exported for test imports
+from undo.commands import _SwitchFieldCaseCmd  # noqa: F401 — re-exported for test imports
+from undo.commands import _MoveRowsCmd
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 
@@ -100,7 +98,6 @@ class JsonTab(QWidget):
     def closeEvent(self, event):  # type: ignore[override]
         self.data_store.validation.release()
         super().closeEvent(event)
-
 
     def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
         validation_view = self._validation_view
@@ -379,36 +376,9 @@ class JsonTab(QWidget):
     def _run_tree_action(
         self,
         success_message: str,
-        *,
-        copy_only: bool = False,
-        cut: bool = False,
-        paste: bool = False,
-        paste_zip: bool = False,
-        replace_zip: bool = False,
-        delete: bool = False,
-        duplicate: bool = False,
-        move_up: bool = False,
-        move_down: bool = False,
-        move_out_up: bool = False,
-        move_out_down: bool = False,
-        sort_keys: bool = False,
+        actions: set[tab_tree_actions.TreeAction],
     ) -> None:
-        tab_tree_actions.run_tree_action(
-            self,
-            success_message,
-            copy_only=copy_only,
-            cut=cut,
-            paste=paste,
-            paste_zip=paste_zip,
-            replace_zip=replace_zip,
-            delete=delete,
-            duplicate=duplicate,
-            move_up=move_up,
-            move_down=move_down,
-            move_out_up=move_out_up,
-            move_out_down=move_out_down,
-            sort_keys=sort_keys,
-        )
+        tab_tree_actions.run_tree_action(self, success_message, actions)
 
     def insert_sibling_before(self) -> bool:
         return tab_tree_actions.do_insert_sibling_before(self)

@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication, QMenu
 
 from app.main_window import MainWindow
 from documents.tab import JsonTab
+from documents.tab_tree_actions import TreeAction
 from tree_actions.context_menu import show_context_menu
 
 
@@ -30,10 +31,10 @@ def test_shortcuts_canary_triggers_every_tab_shortcut(qtbot):
     first = tab.data_store.model.index(0, 0, root_parent)
     _set_current_source_row(tab, first)
 
-    calls: list[set[str]] = []
+    calls: list[set[TreeAction]] = []
 
-    def _record(_message: str, **flags) -> None:
-        calls.append({k for k, v in flags.items() if v})
+    def _record(_message: str, actions: set[TreeAction]) -> None:
+        calls.append(actions)
 
     tab._run_tree_action = _record  # type: ignore[method-assign]
     find_triggered: list[bool] = []
@@ -60,17 +61,17 @@ def test_shortcuts_canary_triggers_every_tab_shortcut(qtbot):
 
     seen = {next(iter(entry)) for entry in calls}
     assert seen == {
-        "copy_only",
-        "cut",
-        "paste",
-        "paste_zip",
-        "replace_zip",
-        "duplicate",
-        "move_up",
-        "move_down",
-        "move_out_up",
-        "move_out_down",
-        "sort_keys",
+        TreeAction.COPY_ONLY,
+        TreeAction.CUT,
+        TreeAction.PASTE,
+        TreeAction.PASTE_ZIP,
+        TreeAction.REPLACE_ZIP,
+        TreeAction.DUPLICATE,
+        TreeAction.MOVE_UP,
+        TreeAction.MOVE_DOWN,
+        TreeAction.MOVE_OUT_UP,
+        TreeAction.MOVE_OUT_DOWN,
+        TreeAction.SORT_KEYS,
     }
 
 

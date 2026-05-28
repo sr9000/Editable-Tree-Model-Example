@@ -6,7 +6,6 @@ from tree.item import JsonTreeItem
 from tree.types import JsonType
 from units.number_affix import NumberAffix
 
-
 _INTEGER_TYPES = frozenset({JsonType.INTEGER, JsonType.INTEGER_CURRENCY, JsonType.INTEGER_UNITS})
 _FLOAT_TYPES = frozenset({JsonType.FLOAT, JsonType.PERCENT, JsonType.FLOAT_CURRENCY, JsonType.FLOAT_UNITS})
 

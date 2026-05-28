@@ -11,6 +11,7 @@ from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from documents.json_tab_ui import Ui_JsonTab
+from documents.tab_tree_actions import TreeAction
 from tree.model import JsonTreeModel
 from tree_actions.context_menu import show_context_menu
 from tree_filter_proxy import TreeFilterProxy
@@ -171,45 +172,51 @@ def init_delegates_and_connections(tab: "JsonTab") -> None:
 
 def init_shortcuts(tab: "JsonTab") -> None:
     tab._copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, tab.data_store.view)
-    tab._copy_shortcut.activated.connect(lambda: tab._run_tree_action("Copied selection", copy_only=True))
+    tab._copy_shortcut.activated.connect(lambda: tab._run_tree_action("Copied selection", {TreeAction.COPY_ONLY}))
 
     tab._cut_shortcut = QShortcut(QKeySequence.StandardKey.Cut, tab.data_store.view)
-    tab._cut_shortcut.activated.connect(lambda: tab._run_tree_action("Cut selection", cut=True))
+    tab._cut_shortcut.activated.connect(lambda: tab._run_tree_action("Cut selection", {TreeAction.CUT}))
 
     tab._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, tab.data_store.view)
-    tab._paste_shortcut.activated.connect(lambda: tab._run_tree_action("Pasted JSON", paste=True))
+    tab._paste_shortcut.activated.connect(lambda: tab._run_tree_action("Pasted JSON", {TreeAction.PASTE}))
 
     # Step 10: Ctrl+Shift+V = multi-insert after each paired selected target.
     tab._paste_zip_shortcut = QShortcut(QKeySequence("Ctrl+Shift+V"), tab.data_store.view)
-    tab._paste_zip_shortcut.activated.connect(lambda: tab._run_tree_action("Inserted at selection", paste_zip=True))
+    tab._paste_zip_shortcut.activated.connect(
+        lambda: tab._run_tree_action("Inserted at selection", {TreeAction.PASTE_ZIP})
+    )
 
     tab._replace_zip_shortcut = QShortcut(QKeySequence("Ctrl+Alt+V"), tab.data_store.view)
     tab._replace_zip_shortcut.activated.connect(
-        lambda: tab._run_tree_action("Replaced values at selection", replace_zip=True)
+        lambda: tab._run_tree_action("Replaced values at selection", {TreeAction.REPLACE_ZIP})
     )
 
     # Delete is owned by MainWindow's rowRemoveAction (Del). Keeping a second
     # per-tab Delete shortcut causes ambiguous shortcut warnings.
 
     tab._duplicate_shortcut = QShortcut(QKeySequence("Ctrl+D"), tab.data_store.view)
-    tab._duplicate_shortcut.activated.connect(lambda: tab._run_tree_action("Duplicated selection", duplicate=True))
+    tab._duplicate_shortcut.activated.connect(
+        lambda: tab._run_tree_action("Duplicated selection", {TreeAction.DUPLICATE})
+    )
 
     tab._move_up_shortcut = QShortcut(QKeySequence("Alt+Up"), tab.data_store.view)
-    tab._move_up_shortcut.activated.connect(lambda: tab._run_tree_action("Moved up", move_up=True))
+    tab._move_up_shortcut.activated.connect(lambda: tab._run_tree_action("Moved up", {TreeAction.MOVE_UP}))
 
     tab._move_down_shortcut = QShortcut(QKeySequence("Alt+Down"), tab.data_store.view)
-    tab._move_down_shortcut.activated.connect(lambda: tab._run_tree_action("Moved down", move_down=True))
+    tab._move_down_shortcut.activated.connect(lambda: tab._run_tree_action("Moved down", {TreeAction.MOVE_DOWN}))
 
     tab._move_out_up_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Up"), tab.data_store.view)
-    tab._move_out_up_shortcut.activated.connect(lambda: tab._run_tree_action("Moved out of parent", move_out_up=True))
+    tab._move_out_up_shortcut.activated.connect(
+        lambda: tab._run_tree_action("Moved out of parent", {TreeAction.MOVE_OUT_UP})
+    )
 
     tab._move_out_down_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Down"), tab.data_store.view)
     tab._move_out_down_shortcut.activated.connect(
-        lambda: tab._run_tree_action("Moved out of parent", move_out_down=True)
+        lambda: tab._run_tree_action("Moved out of parent", {TreeAction.MOVE_OUT_DOWN})
     )
 
     tab._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), tab.data_store.view)
-    tab._sort_shortcut.activated.connect(lambda: tab._run_tree_action("Sorted keys", sort_keys=True))
+    tab._sort_shortcut.activated.connect(lambda: tab._run_tree_action("Sorted keys", {TreeAction.SORT_KEYS}))
 
     tab._find_shortcut = QShortcut(QKeySequence.StandardKey.Find, tab.data_store.view)
     tab._find_shortcut.activated.connect(tab.data_store.search_edit.setFocus)

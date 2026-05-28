@@ -161,9 +161,7 @@ def apply_move_view_state(tab: JsonTab, cmd: _MoveRowsCmd, *, undo: bool) -> Non
         return
     roots_state = state.get("roots", {})
     if undo:
-        _apply_relative_expansion_mapping(
-            tab, cmd.source_paths, sort_move_paths(cmd.source_paths), roots_state
-        )
+        _apply_relative_expansion_mapping(tab, cmd.source_paths, sort_move_paths(cmd.source_paths), roots_state)
         _restore_selection_paths(tab, state.get("selection_before", []), state.get("current_before"))
         return
     _apply_relative_expansion_mapping(tab, cmd.source_paths, cmd.placed_paths, roots_state)

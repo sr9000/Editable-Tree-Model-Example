@@ -23,6 +23,7 @@ from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QApplication
 
 from documents.tab import JsonTab
+from documents.tab_tree_actions import TreeAction
 from tree_actions.clipboard import MIME_JSON_TREE, copy_selection
 from tree_actions.paste import paste_auto, paste_clones_at_targets, paste_insert_after_zip, paste_replace_zip
 from tree_actions.selection import deepest_selected_rows, selection_shape
@@ -182,7 +183,7 @@ def test_ctrl_v_dispatches_to_multi_paste_when_multiple_rows_selected(qtbot):
 
     QApplication.clipboard().setText("99")
     before_count = tab.data_store.undo_stack.count()
-    tab._run_tree_action("Pasted JSON", paste=True)
+    tab._run_tree_action("Pasted JSON", {TreeAction.PASTE})
 
     assert _root_values(tab) == [1, 99, 2, 3, 99]
     assert tab.data_store.undo_stack.count() == before_count + 1
