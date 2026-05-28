@@ -14,8 +14,6 @@ if TYPE_CHECKING:
     from documents.json_tab_ui import Ui_JsonTab
     from documents.mutation_gateway import DocumentMutationGateway
     from state.affix_mru import AffixMRU
-    from themes.icon_provider import IconProvider
-    from themes.spec import ThemeSpec
     from tree.model import JsonTreeModel
     from tree.view import JsonTreeView
     from tree_filter_proxy import TreeFilterProxy
@@ -35,8 +33,6 @@ class JsonTabData(JsonTabDataFacade):
     _font_pt: int = 10
     _user_sized_columns: set[int] = field(default_factory=set)
     _programmatic_column_resize: bool = False
-    _theme: ThemeSpec | None = None
-    _icon_provider: IconProvider | None = None
     _monospace_fields_enabled: bool = False
     _regular_font_family: str | None = None
     _monospace_font_family: str | None = None

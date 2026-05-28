@@ -26,10 +26,24 @@ class JsonTabAppearanceController:
 
     def __init__(self, data_store: JsonTabData) -> None:
         self._data_store = data_store
+        self._theme: ThemeSpec | None = None
+        self._icon_provider: IconProvider | None = None
+
+    @property
+    def theme(self) -> ThemeSpec | None:
+        return self._theme
+
+    @property
+    def icon_provider(self) -> IconProvider | None:
+        return self._icon_provider
+
+    def initialize(self, theme: ThemeSpec | None, icon_provider: IconProvider | None) -> None:
+        self._theme = theme
+        self._icon_provider = icon_provider
 
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
-        self._data_store._theme = theme
-        self._data_store._icon_provider = icon_provider or self._data_store._icon_provider
+        self._theme = theme
+        self._icon_provider = icon_provider or self._icon_provider
         self._require_name_delegate().set_theme(theme)
         self._require_value_delegate().set_theme(theme)
         type_delegate = self._require_type_delegate()
@@ -195,7 +209,7 @@ class JsonTabAppearanceController:
         return delegate
 
     def _require_icon_provider(self) -> IconProvider:
-        icon_provider = self._data_store._icon_provider
+        icon_provider = self._icon_provider
         if icon_provider is None:
             raise RuntimeError("JsonTab icon provider is not initialized")
         return icon_provider

@@ -50,7 +50,7 @@ class JsonTabEditContext(DefaultEditContext):
             pass
 
     def icon_provider(self):  # type: ignore[override]
-        return self._tab.data_store._icon_provider
+        return self._tab.data_store.icon_provider
 
     def affix_mru(self):  # type: ignore[override]
         return self._tab.data_store.affix_mru
@@ -128,7 +128,7 @@ def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
     # tab exposes it via a delegating property.
 
     tab.data_store.model = JsonTreeModel(
-        model_data, tab.data_store.view, show_root=show_root, icon_provider=tab.data_store._icon_provider
+        model_data, tab.data_store.view, show_root=show_root, icon_provider=tab.data_store.icon_provider
     )
     tab.data_store.model.attach_view(tab.data_store.view)
     tab.data_store.proxy = TreeFilterProxy(tab)
@@ -147,11 +147,11 @@ def init_delegates_and_connections(tab: "JsonTab") -> None:
     edit_context = JsonTabEditContext(tab)
     tab._edit_context = edit_context  # kept for tests / debugging
 
-    tab.data_store.name_delegate = NameDelegate(tab, theme=tab.data_store._theme, edit_context=edit_context)
+    tab.data_store.name_delegate = NameDelegate(tab, theme=tab.data_store.theme, edit_context=edit_context)
     tab.data_store.type_delegate = JsonTypeDelegate(
-        tab, theme=tab.data_store._theme, icon_provider=tab.data_store._icon_provider, edit_context=edit_context
+        tab, theme=tab.data_store.theme, icon_provider=tab.data_store.icon_provider, edit_context=edit_context
     )
-    tab.data_store.value_delegate = ValueDelegate(tab, theme=tab.data_store._theme, edit_context=edit_context)
+    tab.data_store.value_delegate = ValueDelegate(tab, theme=tab.data_store.theme, edit_context=edit_context)
 
     tab.data_store.view.setItemDelegateForColumn(0, tab.data_store.name_delegate)
     tab.data_store.view.setItemDelegateForColumn(1, tab.data_store.type_delegate)

@@ -14,7 +14,10 @@ from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef
 
 if TYPE_CHECKING:
+    from documents.tab_appearance import JsonTabAppearanceController
     from documents.tab_editability import JsonTabEditabilityController
+    from themes.icon_provider import IconProvider
+    from themes.spec import ThemeSpec
 
 
 @dataclass
@@ -32,6 +35,7 @@ class JsonTabDataFacade:
     history: TabHistoryController | None = None
     validation: TabValidationController | None = None
     editability: "JsonTabEditabilityController | None" = None
+    appearance: "JsonTabAppearanceController | None" = None
     _last_move_placed: list[tuple[tuple[int, ...], int]] = field(default_factory=list)
 
     def refresh_actions(self) -> None:
@@ -100,6 +104,14 @@ class JsonTabDataFacade:
     @property
     def is_read_only(self) -> bool:
         return self.editability.is_read_only if self.editability is not None else False
+
+    @property
+    def theme(self) -> "ThemeSpec | None":
+        return self.appearance.theme if self.appearance is not None else None
+
+    @property
+    def icon_provider(self) -> "IconProvider | None":
+        return self.appearance.icon_provider if self.appearance is not None else None
 
     @property
     def issue_index(self) -> IssueIndex | None:

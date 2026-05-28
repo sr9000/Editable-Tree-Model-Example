@@ -174,6 +174,7 @@ class JsonTab(QWidget):
         super().__init__(parent)
         self.data_store = JsonTabData()
         self._appearance = JsonTabAppearanceController(self.data_store)
+        self.data_store.appearance = self._appearance
         self._navigation = JsonTabNavigationController(self.data_store, self.edit_name_or_value_from_enter)
         self._editability = JsonTabEditabilityController(self.data_store)
         self.data_store.editability = self._editability
@@ -195,8 +196,7 @@ class JsonTab(QWidget):
             )
 
         self.data_store._host = resolved_services.host
-        self.data_store._theme = resolved_services.theme
-        self.data_store._icon_provider = resolved_services.icon_provider
+        self._appearance.initialize(resolved_services.theme, resolved_services.icon_provider)
 
         init_layout(self)
         self._editability.capture_editable_view_state()
