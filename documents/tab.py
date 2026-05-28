@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
-from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
+from PySide6.QtWidgets import QWidget
 
-from documents import tab_commands, tab_move_view_state
+from documents import tab_commands, tab_editing, tab_move_view_state
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
@@ -368,85 +368,16 @@ class JsonTab(QWidget):
             appearance.zoom_reset()
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
-        # ``change_type`` already emitted ``dataChanged`` for the row, which
-        # closes any persistent inline editor that might have been open on
-        # the value cell. We additionally close it explicitly so the row is
-        # in a clean state before any auto-reopen below.
-        value_index = self.data_store.model.index(item_index.row(), 2, item_index.parent())
-        self.data_store.view.closePersistentEditor(self._source_to_view(value_index))
-
-        if lossy:
-            self.show_status("Type change dropped existing child nodes", 3000)
-
-        # Auto-reopen the value editor only when the type change came from
-        # a user-driven combo commit (Phase 5.1). Programmatic
-        # ``model.setData`` paths (tests, scripted edits) bypass the
-        # delegate entirely so ``_interactive`` stays ``False`` and we
-        # avoid the spurious "edit: editing failed" warning that
-        # ``tests/test_smoke_mainwindow.py`` regression-tests.
-        if not self.data_store.type_delegate.interactive:
-            return
-        if not value_index.isValid():
-            return
-        # Defer via single-shot timer so Qt finishes the current commit
-        # cycle (combo close + setModelData unwind) before we open a new
-        # editor on the same row.
-        pidx = QPersistentModelIndex(value_index)
-        QTimer.singleShot(0, lambda: self._reopen_value_editor(pidx))
+        tab_editing.on_type_changed(self, item_index, lossy)
 
     def _reopen_value_editor(self, value_pindex: QPersistentModelIndex) -> None:
-        if not value_pindex.isValid():
-            return
-        value_index = QModelIndex(value_pindex) if isinstance(value_pindex, QPersistentModelIndex) else value_pindex
-        if not value_index.isValid():
-            return
-        flags = self.data_store.model.flags(value_index)
-        if not (flags & Qt.ItemFlag.ItemIsEditable):
-            return
-        view_index = self._source_to_view(value_index)
-        if not view_index.isValid():
-            return
-        self.data_store.view.setCurrentIndex(view_index)
-        self.data_store.view.edit(view_index)
+        tab_editing.reopen_value_editor(self, value_pindex)
 
     def edit_name_or_value_from_enter(self) -> None:
-        """Start editing from Enter with type-column support.
-
-        - Name/Value columns: edit the current editable cell.
-        - Type column: open the inline type combobox editor.
-        """
-        if self.data_store.view.state() == QAbstractItemView.State.EditingState:
-            return
-        current = self.data_store.view.currentIndex()
-        if not current.isValid():
-            return
-
-        if current.column() == 1:
-            if self.data_store.view.model().flags(current) & Qt.ItemFlag.ItemIsEditable:
-                self.data_store.view.edit(current)
-                QTimer.singleShot(0, self._open_active_type_combo_popup)
-            return
-
-        candidates: list[QModelIndex] = []
-        if current.column() in (0, 2):
-            candidates.append(current)
-        candidates.extend((current.siblingAtColumn(2), current.siblingAtColumn(0)))
-
-        model = self.data_store.view.model()
-        for idx in candidates:
-            if not idx.isValid():
-                continue
-            if not (model.flags(idx) & Qt.ItemFlag.ItemIsEditable):
-                continue
-            self.data_store.view.setCurrentIndex(idx)
-            self.data_store.view.edit(idx)
-            return
+        tab_editing.edit_name_or_value_from_enter(self)
 
     def _open_active_type_combo_popup(self) -> None:
-        for combo in self.data_store.view.findChildren(QComboBox):
-            if combo.parent() is self.data_store.view.viewport() and combo.isVisible():
-                combo.showPopup()
-                return
+        tab_editing.open_active_type_combo_popup(self)
 
     def _set_dirty(self, dirty: bool) -> None:
         self.data_store.io.set_dirty(dirty)
