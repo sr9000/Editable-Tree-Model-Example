@@ -114,7 +114,7 @@ def handle_drop(view, model, mime, action: Qt.DropAction, row: int, column: int,
             # overridden ``startDrag`` skips Qt's default post-drag
             # ``clearOrRemove`` (which would otherwise delete the freshly
             # placed destination rows — the "disappearing item" bug).
-            moved = tab.data_store.mutations.push_move_rows(source_rows, target_parent, target_row, label="drag move")
+            moved = tab.mutations.push_move_rows(source_rows, target_parent, target_row, label="drag move")
             if moved and isinstance(view, JsonTreeView):
                 view.mark_drag_handled_internally()
             if moved:
