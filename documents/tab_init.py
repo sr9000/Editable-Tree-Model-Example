@@ -115,7 +115,6 @@ def bootstrap(
     tab.data_store.model.set_issue_index_provider(tab._severity_provider)
     tab.validationChanged.connect(tab._on_validation_changed)
     init_validation_state(tab, model_data)
-    tab.data_store._diff_applier = DiffApplier(tab)
 
     tab.data_store.undo_stack.cleanChanged.connect(tab._on_clean_changed)
     tab.data_store.undo_stack.indexChanged.connect(tab._on_undo_index_changed)

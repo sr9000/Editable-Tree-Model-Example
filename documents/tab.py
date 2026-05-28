@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QWidget
 
 from documents import tab_commands, tab_editing, tab_init, tab_move_view_state, tab_tree_actions
 from documents.tab_appearance import JsonTabAppearanceController
+from documents.tab_data import JsonTabData
 from documents.tab_dependencies import JsonTabServices
 from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_io import save as tab_save
@@ -29,6 +30,7 @@ from undo.commands import _RenameCmd  # noqa: F401 — re-exported for test impo
 from undo.commands import _SortKeysCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _SwitchFieldCaseCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _MoveRowsCmd
+from undo.diff import DiffApplier
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 
@@ -55,6 +57,9 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     schemaChanged = Signal(object)
     validationChanged = Signal(object)
 
+    data_store: JsonTabData = None  # populated by tab_init.bootstrap
+    _diff_applier: DiffApplier = None
+
     def eventFilter(self, watched, event):  # type: ignore[override]
         navigation = self._navigation
         if navigation is not None and navigation.handle_event_filter(watched, event):
@@ -77,6 +82,9 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         services: JsonTabServices | None = None,
     ):
         super().__init__(parent)
+
+        self._diff_applier = DiffApplier(self)
+
         tab_init.bootstrap(
             self,
             update_actions_callback=update_actions_callback,
@@ -298,12 +306,12 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     # ------------------------------------------------------------------
 
     def _diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool:
-        return self.data_store._diff_applier.apply(item, target, item_index)
+        return self._diff_applier.apply(item, target, item_index)
 
     # -- low-level mutators used by diff and typed commands --------------
 
     def _emit_row_changed(self, item_index: QModelIndex) -> None:
-        self.data_store._diff_applier.emit_row_changed(item_index)
+        self._diff_applier.emit_row_changed(item_index)
 
     def _insert_typed_item(
         self,
@@ -313,7 +321,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         value: Any,
         name: str | int | None = None,
     ) -> bool:
-        return self.data_store._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
+        return self._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
         return self.data_store.mutations.commit_set_data(index, value, role)
