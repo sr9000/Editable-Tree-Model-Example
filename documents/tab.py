@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, QPersistentModelIndex, Qt, QTimer, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
+from documents import tab_commands
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
@@ -18,7 +18,6 @@ from documents.tab_io import save as tab_save
 from documents.tab_io import save_as as tab_save_as
 from documents.tab_io import snapshot as tab_snapshot
 from documents.tab_navigation import JsonTabNavigationController
-from documents.tab_number_types import would_drop_fraction_on_type_change
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
 from documents.tab_setup import (
     init_delegates_and_connections,
@@ -35,7 +34,6 @@ from state.view_state import apply_expanded_relative_paths, iter_expanded_relati
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
-from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
 from tree_actions.selection import selected_source_rows
@@ -67,11 +65,6 @@ from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef
-
-
-def _make_label(text: str, target_qname: str) -> str:
-    timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
-    return f"[{timestamp}] {text} @ {target_qname}"
 
 
 _DEFAULT_DATA = object()
@@ -658,90 +651,16 @@ class JsonTab(QWidget):
     # ------------------------------------------------------------------
 
     def push_move_row(self, parent_index: QModelIndex, src: int, dst: int, *, label: str = "move row") -> bool:
-        if self.data_store.is_read_only:
-            return False
-        if src == dst:
-            return False
-        parent_item = self.data_store.model.get_item(parent_index)
-        n = parent_item.child_count()
-        if not (0 <= src < n and 0 <= dst < n):
-            return False
-        source_idx = self.data_store.model.index(src, 0, parent_index)
-        # push_move_rows uses pre-pop target_row; dst is post-pop.
-        # Forward move (src < dst): removing src shifts later rows down by 1,
-        # so pre-pop target = dst + 1 to land at the same final position.
-        # Backward move (src > dst): no shift needed, pre-pop target = dst.
-        pre_pop_target = dst + 1 if src < dst else dst
-        return self.push_move_rows(
-            [source_idx],
-            parent_index,
-            pre_pop_target,
-            label=label,
-        )
+        return tab_commands.push_move_row(self, parent_index, src, dst, label=label)
 
     def push_move_rows_anchor(
         self,
         sources: list,
-        anchor: "MoveAnchor",  # noqa: F821 — imported lazily below
+        anchor: "MoveAnchor",  # noqa: F821 — see tab_commands
         *,
         label: str = "move rows",
     ) -> bool:
-        """Move *sources* (list of source ``QModelIndex``) to the gap
-        described by ``anchor`` as a single undo command.
-
-        Returns ``False`` when:
-        - *sources* is empty,
-        - any source would become an ancestor of ``anchor.parent_path``
-          (cycle guard), or
-        - the move is a no-op (block already lands at the anchor).
-        """
-        from tree_actions.anchors import anchor_is_cycle, anchor_is_no_op, resolve_anchor_insert_row
-
-        if self.data_store.is_read_only:
-            return False
-        if not sources:
-            return False
-
-        # Snapshot every source's (parent_path, row) BEFORE any mutation.
-        source_paths: list[tuple[tuple, int]] = []
-        source_names: list[Any] = []
-        for idx in sources:
-            row0 = self.data_store.model.index(idx.row(), 0, idx.parent())
-            source_paths.append((self._index_path(row0.parent()), row0.row()))
-            source_names.append(self.data_store.model.get_item(row0).name)
-
-        # Cycle guard.
-        if anchor_is_cycle(anchor, source_paths):
-            self.show_status("Cannot move a parent into its own descendant", 3000)
-            return False
-
-        # No-op guard (path-only). For at_end, resolve to a concrete row first
-        # and compare against the would-be insert position.
-        if anchor_is_no_op(anchor, source_paths):
-            return False
-        if anchor.is_at_end:
-            insert_row = resolve_anchor_insert_row(self.data_store.model, self, anchor, source_paths)
-            same_parent_sources = sorted(r for p, r in source_paths if p == anchor.parent_path)
-            if same_parent_sources:
-                parent_index = self._index_from_path(anchor.parent_path)
-                parent_count = self.data_store.model.rowCount(parent_index)
-                last_src = same_parent_sources[-1]
-                is_contiguous = all(b - a == 1 for a, b in zip(same_parent_sources, same_parent_sources[1:]))
-                # If the block is contiguous and already sits as the suffix,
-                # at_end is a no-op.
-                if is_contiguous and last_src == parent_count - 1 and len(same_parent_sources) == len(source_paths):
-                    return False
-
-        # Build the command.
-        move_view_state = self._capture_move_view_state(sources)
-        target_qname = self._qualified_name(self.data_store.model.index(sources[0].row(), 0, sources[0].parent()))
-        cmd = _MoveRowsCmd(self, _make_label(label, target_qname), source_paths, source_names, anchor)
-        self.data_store.undo_stack.push(cmd)
-        self.data_store._move_view_state_by_cmd_id[id(cmd)] = move_view_state
-        # Expose placed paths for action-layer post-hooks (esp. macros).
-        self.data_store._last_move_placed = cmd.placed_paths
-        self._apply_move_view_state(cmd, undo=False)
-        return True
+        return tab_commands.push_move_rows_anchor(self, sources, anchor, label=label)
 
     def push_move_rows(
         self,
@@ -751,16 +670,7 @@ class JsonTab(QWidget):
         *,
         label: str = "move rows",
     ) -> bool:
-        """Legacy pre-Step-9 API. Translates ``(target_parent, target_row)``
-        (pre-pop convention) into a ``MoveAnchor`` and delegates."""
-        from tree_actions.anchors import pre_pop_target_row_to_anchor
-
-        if self.data_store.is_read_only:
-            return False
-        if not sources:
-            return False
-        anchor = pre_pop_target_row_to_anchor(self, target_parent, target_row)
-        return self.push_move_rows_anchor(sources, anchor, label=label)
+        return tab_commands.push_move_rows(self, sources, target_parent, target_row, label=label)
 
     def _restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
         """Drive the view's selectionModel so the rows at the given
@@ -794,138 +704,22 @@ class JsonTab(QWidget):
             sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
-        if self.data_store.is_read_only:
-            return False
-        if not name_index.isValid() or name_index.column() != 0:
-            return False
-        item = self.data_store.model.get_item(name_index)
-        if not isinstance(new_name, str):
-            return False
-        candidate = new_name.strip()
-        if not candidate or candidate == item.name:
-            return False
-        if item.parent_item is None or item.parent_item.json_type is JsonType.ARRAY:
-            return False
-        if item.parent_item.json_type is JsonType.OBJECT:
-            siblings = {c.name for c in item.parent_item.child_items if c is not item and isinstance(c.name, str)}
-            if candidate in siblings:
-                return False
-        target_qname = self._qualified_name(name_index)
-        cmd = _RenameCmd(self, _make_label(label, target_qname), self._index_path(name_index), item.name, candidate)
-        self.data_store.undo_stack.push(cmd)
-        return True
+        return tab_commands.push_rename(self, name_index, new_name, label=label)
 
     def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
-        if self.data_store.is_read_only:
-            return False
-        if not value_index.isValid() or value_index.column() != 2:
-            return False
-        name_idx = self.data_store.model.index(value_index.row(), 0, value_index.parent())
-        item = self.data_store.model.get_item(name_idx)
-        old_subtree = item.to_json()
-        # Honour explicit_type strict coercion when the type was pinned.
-        if item.explicit_type and item.json_type not in (JsonType.OBJECT, JsonType.ARRAY):
-            ok, coerced = item._coerce_value_for_type(item.json_type, new_value, strict=True)
-            if not ok:
-                return False
-            applied = coerced
-        else:
-            applied = new_value
-        # No-op detection on the affected subtree (subset comparison).
-        if old_subtree == applied and isinstance(applied, type(old_subtree)):
-            return False
-        target_qname = self._qualified_name(name_idx)
-        cmd = _EditValueCmd(self, _make_label(label, target_qname), self._index_path(name_idx), old_subtree, applied)
-        self.data_store.undo_stack.push(cmd)
-        return True
+        return tab_commands.push_edit_value(self, value_index, new_value, label=label)
 
     def push_change_type(self, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
-        if self.data_store.is_read_only:
-            return False
-        if not type_index.isValid() or type_index.column() != 1:
-            return False
-        try:
-            target_type = new_type if isinstance(new_type, JsonType) else JsonType(str(new_type))
-        except ValueError:
-            return False
-        name_idx = self.data_store.model.index(type_index.row(), 0, type_index.parent())
-        item = self.data_store.model.get_item(name_idx)
-        if item.json_type is target_type:
-            return False
-        warn_fraction_loss = would_drop_fraction_on_type_change(item, target_type)
-        old_subtree = item.to_json()
-        old_explicit = item.explicit_type
-        old_type = item.json_type
-        target_qname = self._qualified_name(name_idx)
-        cmd = _ChangeTypeCmd(
-            self,
-            _make_label(label, target_qname),
-            self._index_path(name_idx),
-            old_subtree,
-            old_explicit,
-            old_type,
-            target_type,
-        )
-        self.data_store.undo_stack.push(cmd)
-        if warn_fraction_loss:
-            self.show_status("Fractional part discarded during float-to-integer conversion", 3000)
-        return True
-
+        return tab_commands.push_change_type(self, type_index, new_type, label=label)
 
     def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
-        """``inserts`` is a list of ``{parent_path, row, value, name}``."""
-        if self.data_store.is_read_only:
-            return False
-        if not inserts:
-            return False
-        qname = (
-            target_qname
-            if target_qname is not None
-            else self._qualified_name(self._index_from_path(inserts[0]["parent_path"]))
-        )
-        cmd = _InsertRowsCmd(self, _make_label(label, qname), inserts)
-        self.data_store.undo_stack.push(cmd)
-        return True
+        return tab_commands.push_insert_rows(self, inserts, label=label, target_qname=target_qname)
 
     def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
-        if self.data_store.is_read_only:
-            return False
-        if not indexes:
-            return False
-        ordered = sorted(indexes, key=lambda i: (self._index_path(i.parent()), i.row()), reverse=True)
-        removals = []
-        for idx in ordered:
-            row0 = self.data_store.model.index(idx.row(), 0, idx.parent())
-            item = self.data_store.model.get_item(row0)
-            removals.append(
-                {
-                    "parent_path": self._index_path(idx.parent()),
-                    "row": idx.row(),
-                    "name": item.name,
-                    "value": item.to_json(),
-                }
-            )
-        target_qname = self._qualified_name(ordered[0])
-        cmd = _RemoveRowsCmd(self, _make_label(label, target_qname), removals)
-        self.data_store.undo_stack.push(cmd)
-        return True
+        return tab_commands.push_remove_rows(self, indexes, label=label)
 
     def push_sort_keys(self, index: QModelIndex, *, recursive: bool = False, label: str | None = None) -> bool:
-        if self.data_store.is_read_only:
-            return False
-        if not index.isValid():
-            return False
-        item = self.data_store.model.get_item(index)
-        if item.json_type is not JsonType.OBJECT:
-            return False
-        old_subtree = item.to_json()
-        if not recursive and list(old_subtree.keys()) == sorted(old_subtree.keys()):
-            return False
-        target_qname = self._qualified_name(index)
-        text = label if label is not None else ("sort keys recursive" if recursive else "sort keys")
-        cmd = _SortKeysCmd(self, _make_label(text, target_qname), self._index_path(index), old_subtree, recursive)
-        self.data_store.undo_stack.push(cmd)
-        return True
+        return tab_commands.push_sort_keys(self, index, recursive=recursive, label=label)
 
     def push_switch_field_case(
         self,
@@ -934,54 +728,7 @@ class JsonTab(QWidget):
         label: str = "switch field case",
         target_qname: str | None = None,
     ) -> bool:
-        if self.data_store.is_read_only:
-            return False
-        if not renames:
-            return False
-
-        normalized: list[dict[str, Any]] = []
-        by_parent: dict[tuple[int, ...], dict[int, str]] = {}
-
-        for rec in renames:
-            path = tuple(rec.get("path", ()))
-            old_name = rec.get("old_name")
-            new_name = rec.get("new_name")
-            if not path or not isinstance(old_name, str) or not isinstance(new_name, str):
-                continue
-            if old_name == new_name:
-                continue
-            idx = self._index_from_path(path)
-            if not idx.isValid():
-                continue
-            item = self.data_store.model.get_item(idx)
-            if item.name != old_name:
-                continue
-            parent = item.parent_item
-            if parent is None or parent.json_type is not JsonType.OBJECT:
-                continue
-            normalized.append({"path": path, "old_name": old_name, "new_name": new_name})
-            by_parent.setdefault(path[:-1], {})[path[-1]] = new_name
-
-        if not normalized:
-            return False
-
-        # Preflight: reject operations that would create duplicate sibling names.
-        for parent_path, updates in by_parent.items():
-            parent_index = self._index_from_path(parent_path)
-            parent_item = self.data_store.model.get_item(parent_index)
-            final_names: list[str] = []
-            for row, child in enumerate(parent_item.child_items):
-                if not isinstance(child.name, str):
-                    continue
-                final_names.append(updates.get(row, child.name))
-            if len(set(final_names)) != len(final_names):
-                return False
-
-        first_index = self._index_from_path(normalized[0]["path"])
-        qname = target_qname if target_qname is not None else self._qualified_name(first_index)
-        cmd = _SwitchFieldCaseCmd(self, _make_label(label, qname), normalized)
-        self.data_store.undo_stack.push(cmd)
-        return True
+        return tab_commands.push_switch_field_case(self, renames, label=label, target_qname=target_qname)
 
     def _run_tree_action(
         self,
