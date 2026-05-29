@@ -19,6 +19,7 @@ from documents.tab_navigation import JsonTabNavigationController
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
 from documents.tab_protocols import JsonTabWidgetMarker
 from documents.tab_status import on_current_changed, size_hint_for_item
+from documents.tab_validation import TabValidationController
 from documents.tab_validation_view import JsonTabValidationViewController
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
@@ -148,6 +149,10 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     @property
     def schema_ref(self):
         return self.data_store.schema_ref
+
+    @property
+    def validation(self) -> TabValidationController:
+        return self.data_store.validation
 
     @property
     def undo_stack(self):

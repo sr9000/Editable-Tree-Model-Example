@@ -88,7 +88,7 @@ class TabLifecyclePresenter(QObject):
             QMessageBox.critical(win, "Error", f"Failed to create tab:\n{exc}")
             return None
 
-        tab.data_store.validation.set_auto_rescan(auto_rescan_enabled())
+        tab.validation.set_auto_rescan(auto_rescan_enabled())
 
         tab_index = self._tab_widget.addTab(tab, tab.display_name())
         self._tab_widget.setCurrentIndex(tab_index)
