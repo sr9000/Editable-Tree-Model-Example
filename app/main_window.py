@@ -298,7 +298,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _current_view(self) -> QTreeView | None:
         tab = self._current_tab()
-        return tab.data_store.view if tab is not None else None
+        return tab.view if tab is not None else None
 
     def setup_connections(self):
         setup_main_window_connections(self)
@@ -588,7 +588,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def select_regular_font(self) -> None:
         tab = self._current_tab()
-        seed = QFont(tab.data_store.view.font()) if tab is not None else QFont(self.font())
+        seed = QFont(tab.view.font()) if tab is not None else QFont(self.font())
         if self.fonts.profile.regular_family:
             seed.setFamily(self.fonts.profile.regular_family)
         seed = self._normalize_font_for_dialog(seed)

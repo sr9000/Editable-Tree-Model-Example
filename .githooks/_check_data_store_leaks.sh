@@ -26,6 +26,7 @@ FORBIDDEN_DATA_STORE_ATTRS=(
     "schema_source"    # Phase F (F3)
     "schema_ref"       # Phase F (F3)
     "validation"       # Phase F (F2)
+    "view"             # Phase D (D-light)
 )
 
 if [[ ${#FORBIDDEN_DATA_STORE_ATTRS[@]} -eq 0 ]]; then

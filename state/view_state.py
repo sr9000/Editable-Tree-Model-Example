@@ -75,13 +75,13 @@ def save(tab) -> None:
     settings = QSettings(APPLICATION_ID, "view_state")
     settings.beginGroup(state_key(tab.file_path))
 
-    widths = [int(tab.data_store.view.columnWidth(column)) for column in range(tab.data_store.model.columnCount())]
+    widths = [int(tab.view.columnWidth(column)) for column in range(tab.data_store.model.columnCount())]
     expanded_paths = [list(path) for path in tab._collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
 
-    current_index = tab.data_store.view.currentIndex()
+    current_index = tab.view.currentIndex()
     current_path = list(tab._index_path(current_index)) if current_index.isValid() else []
 
-    font_pt = int(tab.data_store._font_pt or tab.data_store.view.font().pointSize() or 10)
+    font_pt = int(tab.data_store._font_pt or tab.view.font().pointSize() or 10)
 
     settings.setValue("col_widths", widths)
     settings.setValue("expanded", expanded_paths)
@@ -119,19 +119,19 @@ def restore(tab) -> bool:
     if widths is not None:
         for column, width in enumerate(widths[: tab.data_store.model.columnCount()]):
             if width > 0:
-                tab.data_store.view.setColumnWidth(column, width)
+                tab.view.setColumnWidth(column, width)
         # The persisted widths represent the user's last explicit preference;
         # treat name (0) and type (1) columns as user-sized so zoom helpers
         # won't snap them back to content width.
         tab.data_store._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
 
     if expanded is not None:
-        tab.data_store.view.collapseAll()
+        tab.view.collapseAll()
         for path in expanded:
             source_index = tab._index_from_path(path)
             view_index = tab._source_to_view(source_index)
             if view_index.isValid():
-                tab.data_store.view.expand(view_index)
+                tab.view.expand(view_index)
 
     if current_path is not None:
         source_index = tab._index_from_path(current_path)
@@ -139,7 +139,7 @@ def restore(tab) -> bool:
         if current_index.isValid():
             # Always select column 0 when restoring row focus.
             row_index = current_index.siblingAtColumn(0)
-            tab.data_store.view.setCurrentIndex(row_index)
+            tab.view.setCurrentIndex(row_index)
 
     return True
 

@@ -154,7 +154,7 @@ class ValidationDock(QDockWidget):
                     pass
             # Disconnect tree selection sync
             try:
-                sm = self._tab.data_store.view.selectionModel()
+                sm = self._tab.view.selectionModel()
                 if sm is not None:
                     sm.currentChanged.disconnect(self._on_tree_selection_changed)
             except (RuntimeError, TypeError):
@@ -178,7 +178,7 @@ class ValidationDock(QDockWidget):
         self._on_validation_changed(tab.data_store.issue_index)
 
         # Sync tree selection → dock highlight
-        sm = tab.data_store.view.selectionModel()
+        sm = tab.view.selectionModel()
         if sm is not None:
             sm.currentChanged.connect(self._on_tree_selection_changed)
 

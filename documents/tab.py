@@ -24,6 +24,7 @@ from documents.tab_validation_view import JsonTabValidationViewController
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
+from tree.view import JsonTreeView
 from undo.commands import _ChangeTypeCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _EditValueCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _InsertRowsCmd  # noqa: F401 — re-exported for test imports
@@ -157,6 +158,15 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     @property
     def undo_stack(self):
         return self.data_store.undo_stack
+
+    @property
+    def view(self) -> JsonTreeView:
+        """Typed accessor for the underlying tree view.
+
+        Replaces ``tab.data_store.view`` for external callers; see
+        ``plans/20-decouple-jsontab.md`` Phase D.
+        """
+        return self.data_store.view
 
     def closeEvent(self, event):  # type: ignore[override]
         self.data_store.validation.release()

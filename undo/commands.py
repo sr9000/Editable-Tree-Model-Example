@@ -19,7 +19,7 @@ def _select_placed_rows(tab, placed: list[tuple[tuple, int]]) -> None:
     if not placed:
         return
     model = tab.data_store.model
-    sm = tab.data_store.view.selectionModel()
+    sm = tab.view.selectionModel()
     selection = QItemSelection()
     first_view_idx = None
     for parent_path, row in placed:
@@ -50,13 +50,13 @@ class _MoveRowCmd(QUndoCommand):
         p = self._tab.mutations.index_from_path(self._parent_path)
         if self._tab.data_store.model.move_row(p, self._src, self._dst):
             source_index = self._tab.data_store.model.index(self._dst, 0, p)
-            self._tab.data_store.view.setCurrentIndex(self._tab.mutations.source_to_view(source_index))
+            self._tab.view.setCurrentIndex(self._tab.mutations.source_to_view(source_index))
 
     def undo(self):
         p = self._tab.mutations.index_from_path(self._parent_path)
         if self._tab.data_store.model.move_row(p, self._dst, self._src):
             source_index = self._tab.data_store.model.index(self._src, 0, p)
-            self._tab.data_store.view.setCurrentIndex(self._tab.mutations.source_to_view(source_index))
+            self._tab.view.setCurrentIndex(self._tab.mutations.source_to_view(source_index))
 
 
 class _RenameCmd(QUndoCommand):
@@ -222,7 +222,7 @@ class _InsertRowsCmd(QUndoCommand):
             if first_idx is None:
                 first_idx = self._tab.data_store.model.index(rec["row"], 0, p)
         if self._set_current and first_idx is not None and first_idx.isValid():
-            self._tab.data_store.view.setCurrentIndex(self._tab.mutations.source_to_view(first_idx))
+            self._tab.view.setCurrentIndex(self._tab.mutations.source_to_view(first_idx))
 
     def undo(self):
         for rec in reversed(self._inserts):
