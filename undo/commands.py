@@ -176,7 +176,7 @@ class _ChangeTypeCmd(QUndoCommand):
         else:
             return
 
-        mru = self._tab.data_store.affix_mru
+        mru = self._tab.affix_mru
         if mru is None:
             return
         mru_items = mru.items(kind)

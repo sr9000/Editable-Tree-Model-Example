@@ -328,7 +328,7 @@ def _move_selection_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
             if not live_rows:
                 continue
             if tab.mutations.push_move_rows_anchor(live_rows, anchor, label=label):
-                placed_total.extend(tab.data_store.last_move_placed)
+                placed_total.extend(tab.last_move_placed)
                 moved += 1
     finally:
         tab.mutations.end_macro()
@@ -415,7 +415,7 @@ def _move_selection_out_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
             if not live_rows:
                 continue
             if tab.mutations.push_move_rows_anchor(live_rows, anchor, label=label):
-                placed_total.extend(tab.data_store.last_move_placed)
+                placed_total.extend(tab.last_move_placed)
                 moved += 1
     finally:
         tab.mutations.end_macro()

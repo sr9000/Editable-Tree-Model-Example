@@ -81,7 +81,7 @@ def save(tab) -> None:
     current_index = tab.view.currentIndex()
     current_path = list(tab._index_path(current_index)) if current_index.isValid() else []
 
-    font_pt = int(tab.data_store._font_pt or tab.view.font().pointSize() or 10)
+    font_pt = int(tab._font_pt or tab.view.font().pointSize() or 10)
 
     settings.setValue("col_widths", widths)
     settings.setValue("expanded", expanded_paths)
@@ -123,7 +123,7 @@ def restore(tab) -> bool:
         # The persisted widths represent the user's last explicit preference;
         # treat name (0) and type (1) columns as user-sized so zoom helpers
         # won't snap them back to content width.
-        tab.data_store._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
+        tab._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
 
     if expanded is not None:
         tab.view.collapseAll()

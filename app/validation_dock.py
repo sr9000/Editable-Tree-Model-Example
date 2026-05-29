@@ -175,7 +175,7 @@ class ValidationDock(QDockWidget):
         tab.validationChanged.connect(self._on_validation_changed)
         tab.schemaChanged.connect(self._on_schema_changed)
         self._on_schema_changed(tab.schema_ref)
-        self._on_validation_changed(tab.data_store.issue_index)
+        self._on_validation_changed(tab.issue_index)
 
         # Sync tree selection → dock highlight
         sm = tab.view.selectionModel()

@@ -89,7 +89,7 @@ class DockValidationPresenter(QObject):
         win._bound_validation_tab = tab
         if tab is not None:
             tab.validationChanged.connect(self.on_tab_validation_changed)
-            self.on_tab_validation_changed(tab.data_store.issue_index)
+            self.on_tab_validation_changed(tab.issue_index)
         else:
             win._validation_status_label.setVisible(False)
 

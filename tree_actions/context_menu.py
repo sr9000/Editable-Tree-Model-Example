@@ -133,7 +133,7 @@ def _search_is_active(tree_view: QTreeView) -> bool:
     tab = _find_enter_edit_target(tree_view)
     if tab is None:
         return False
-    return bool(tab.data_store.search_edit.text().strip())
+    return bool(tab.search_edit.text().strip())
 
 
 def _goto_row_and_clear_search(tree_view: QTreeView, clicked_index) -> bool:
@@ -154,7 +154,7 @@ def _goto_row_and_clear_search(tree_view: QTreeView, clicked_index) -> bool:
     if tab is None:
         return False
 
-    search_edit = tab.data_store.search_edit
+    search_edit = tab.search_edit
 
     if search_edit.text():
         search_edit.clear()

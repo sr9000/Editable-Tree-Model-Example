@@ -4,7 +4,7 @@ import os
 from typing import Any, Callable
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QLineEdit, QWidget
 
 from documents import tab_commands, tab_editing, tab_init, tab_move_view_state, tab_tree_actions
 from documents.mutation_gateway import DocumentMutationGateway
@@ -21,6 +21,7 @@ from documents.tab_protocols import JsonTabWidgetMarker
 from documents.tab_status import on_current_changed, size_hint_for_item
 from documents.tab_validation import TabValidationController
 from documents.tab_validation_view import JsonTabValidationViewController
+from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
@@ -167,6 +168,32 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         ``plans/20-decouple-jsontab.md`` Phase D.
         """
         return self.data_store.view
+
+    # -- Phase F long tail (F4 / F5): typed accessors for residual
+    # state still leaked into tree_actions/, app/, undo/, state/.
+    @property
+    def search_edit(self) -> QLineEdit:
+        return self.data_store.search_edit
+
+    @property
+    def last_move_placed(self) -> list[tuple[tuple, int]]:
+        return self.data_store.last_move_placed
+
+    @property
+    def issue_index(self) -> IssueIndex | None:
+        return self.data_store.issue_index
+
+    @property
+    def affix_mru(self) -> AffixMRU:
+        return self.data_store.affix_mru
+
+    @property
+    def _font_pt(self) -> int:
+        return self.data_store._font_pt
+
+    @property
+    def _user_sized_columns(self) -> set[int]:
+        return self.data_store._user_sized_columns
 
     def closeEvent(self, event):  # type: ignore[override]
         self.data_store.validation.release()

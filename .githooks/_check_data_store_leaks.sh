@@ -27,6 +27,12 @@ FORBIDDEN_DATA_STORE_ATTRS=(
     "schema_ref"       # Phase F (F3)
     "validation"       # Phase F (F2)
     "view"             # Phase D (D-light)
+    "search_edit"          # Phase F (F4)
+    "last_move_placed"     # Phase F (F5)
+    "issue_index"          # Phase F (F5)
+    "affix_mru"            # Phase F (F5)
+    "_font_pt"             # Phase F (F5)
+    "_user_sized_columns"  # Phase F (F5)
 )
 
 if [[ ${#FORBIDDEN_DATA_STORE_ATTRS[@]} -eq 0 ]]; then
