@@ -69,11 +69,11 @@ def state_key(path: str) -> str:
 
 
 def save(tab) -> None:
-    if not tab.data_store.file_path:
+    if not tab.file_path:
         return
 
     settings = QSettings(APPLICATION_ID, "view_state")
-    settings.beginGroup(state_key(tab.data_store.file_path))
+    settings.beginGroup(state_key(tab.file_path))
 
     widths = [int(tab.data_store.view.columnWidth(column)) for column in range(tab.data_store.model.columnCount())]
     expanded_paths = [list(path) for path in tab._collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
@@ -91,11 +91,11 @@ def save(tab) -> None:
 
 
 def restore(tab) -> bool:
-    if not tab.data_store.file_path:
+    if not tab.file_path:
         return False
 
     settings = QSettings(APPLICATION_ID, "view_state")
-    settings.beginGroup(state_key(tab.data_store.file_path))
+    settings.beginGroup(state_key(tab.file_path))
 
     raw_widths = settings.value("col_widths")
     raw_expanded = settings.value("expanded")

@@ -53,7 +53,7 @@ class TabLifecyclePresenter(QObject):
         if index < 0:
             return
         self._tab_widget.setTabText(index, tab.display_name())
-        self._tab_widget.setTabToolTip(index, tab.data_store.file_path or "Untitled")
+        self._tab_widget.setTabToolTip(index, tab.file_path or "Untitled")
 
     def on_tab_dirty(self, tab: JsonTab) -> None:
         self.refresh_tab_presentation(tab)
@@ -142,17 +142,17 @@ class TabLifecyclePresenter(QObject):
 
         snapshot = None
         if isinstance(widget, JsonTab):
-            was_dirty = widget.data_store.is_dirty
+            was_dirty = widget.is_dirty
             if not win._confirm_close(widget):
                 return
             # Build reopen snapshot: if user discarded dirty edits, remember file path only.
-            if was_dirty and widget.data_store.is_dirty:
+            if was_dirty and widget.is_dirty:
                 # Discard chosen — don't resurrect dirty state on reopen.
-                if widget.data_store.file_path:
+                if widget.file_path:
                     snapshot = {
                         "data": None,
-                        "file_path": widget.data_store.file_path,
-                        "save_format": widget.data_store.save_format,
+                        "file_path": widget.file_path,
+                        "save_format": widget.save_format,
                     }
             else:
                 try:
@@ -162,8 +162,8 @@ class TabLifecyclePresenter(QObject):
                     snap_data = {}
                 snapshot = {
                     "data": snap_data,
-                    "file_path": widget.data_store.file_path,
-                    "save_format": widget.data_store.save_format,
+                    "file_path": widget.file_path,
+                    "save_format": widget.save_format,
                 }
             win._schema_tab_pool.unregister(widget)
             view_state.save(widget)
