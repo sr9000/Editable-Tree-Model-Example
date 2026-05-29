@@ -118,6 +118,37 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         """
         return self.data_store.mutations
 
+    # -- Phase C: typed file-state accessors ---------------------
+    # Forward to JsonTabDataFacade so external callers (app/, undo/,
+    # tree_actions/, state/) stop reaching into tab.data_store.
+    @property
+    def file_path(self) -> str | None:
+        return self.data_store.file_path
+
+    @file_path.setter
+    def file_path(self, value: str | None) -> None:
+        self.data_store.file_path = value
+
+    @property
+    def save_format(self) -> str | None:
+        return self.data_store.save_format
+
+    @save_format.setter
+    def save_format(self, value: str | None) -> None:
+        self.data_store.save_format = value
+
+    @property
+    def is_dirty(self) -> bool:
+        return self.data_store.is_dirty
+
+    @property
+    def schema_source(self):
+        return self.data_store.schema_source
+
+    @property
+    def schema_ref(self):
+        return self.data_store.schema_ref
+
     @property
     def undo_stack(self):
         return self.data_store.undo_stack
