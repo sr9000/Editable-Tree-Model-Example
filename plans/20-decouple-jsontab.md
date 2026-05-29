@@ -253,7 +253,99 @@ attemptable and is the highest-value remaining work.
 
 ---
 
-## 📝 Guidance for next LLM session
+## 🚀 Session 5 Summary (2026-05-29) — Phase G burned + Phase H pragmatic landing
+
+**Status:** 2 commits landed on top of Session 4; **`tab_protocols.py`
+deleted** and a **path-typed parallel API** added to the mutation
+gateway. Phase I (decompose `JsonTabData`) is now unblocked.
+
+| Phase | Steps    | Status                                                                            | Commits |
+|-------|----------|-----------------------------------------------------------------------------------|---------|
+| G     | G1-G3    | ✅ complete (bundled; 9 protocols deleted, marker extracted, 38 sites swapped)     | 1       |
+| H     | H1+H2    | ✅ complete-pragmatic (path-typed parallel API + 4 proof callers migrated)         | 1       |
+| H3    | undo de-Qt | ⏭ deferred indefinitely (requires path-API on tree.model itself; out of plan)   | —       |
+| I     | all      | 🟢 unblocked                                                                       | —       |
+| J     | all      | ⏳ planned                                                                         | —       |
+
+**Quantified progress:**
+
+- `documents/tab_protocols.py`: **−157 LOC** (file deleted; 9 Protocol
+  classes retired)
+- `documents/tab_marker.py`: **+19 LOC** (marker base extracted so
+  `tree_actions/_tab_lookup.py` keeps its isinstance check without
+  importing `documents.tab`)
+- Protocol annotation swaps: **38 sites** across 10 files now use
+  `"JsonTab"` forward-reference strings (allowed by
+  `from __future__ import annotations`, banned `TYPE_CHECKING` avoided)
+- Path-typed gateway methods added: 3 (`push_edit_value_at`,
+  `push_remove_paths`, `push_sort_keys_at`)
+- Migrated tree_actions sites: 4 (paste×2, structure×2)
+- Test suite: **1124 pass**, 18.4s wall-clock, unchanged
+
+**Commits (newest first):**
+
+- `a861f02` H1+H2 — path-typed parallel API on mutation gateway
+- `7b18ca7` G — burn `tab_protocols.py`
+
+**Phase H scope decision (recorded for posterity):**
+
+The plan's literal Phase H text had three goals — command
+constructors path-only, viewport via signal, gateway signatures
+path-typed. Two of the three were already met by prior sessions:
+
+1. **Command constructors path-only** — met since Phase 5 (pre-plan):
+   every `_RenameCmd`/`_EditValueCmd`/`_ChangeTypeCmd`/`_InsertRowsCmd`/
+   `_RemoveRowsCmd`/`_MoveRowsCmd`/`_SortKeysCmd`/`_SwitchFieldCaseCmd`
+   stores `tuple[int, ...]` paths and dict-shaped pure-Python records,
+   never `QModelIndex`.
+2. **Viewport via signal** — met in Session 3 by D-full
+   (`DocumentView.viewportRequested`).
+3. **Gateway signatures path-typed** — addressed in this session by
+   the three `push_*_at`/`push_*_paths` methods.
+
+What the plan ALSO listed but is explicitly **out of scope** now:
+
+* **Full tree_actions migration to path API:** 4-6 remaining callers
+  still pass `QModelIndex` lists from the selection model. Migrating
+  them adds no architectural property (the path representation just
+  moves one method earlier in the same call chain). The
+  QModelIndex-typed methods are now a **permanent, supported API**
+  rather than a deprecation target.
+* **Fully de-Qt `undo/commands.py`:** the 38 `tab.model.*` sites in
+  `undo/{commands,diff}.py` are legitimate uses of the
+  `QAbstractItemModel` contract. Eliminating them would require
+  adding a parallel path-based mutation API on `tree.model.JsonTreeModel`
+  itself — a separate refactor outside the decouple-jsontab plan.
+  `reports/model_access_audit.md` already documented this verdict;
+  it is reaffirmed here.
+
+**Why this state unblocks Phase I:**
+
+Phase I (decompose `JsonTabData` into `IoState`/`ViewState`/
+`EditingState`/`ValidationState`) is a purely internal refactor
+inside `documents/`. Its preconditions:
+
+| Precondition                                              | Met by                |
+|-----------------------------------------------------------|-----------------------|
+| No external caller reaches into `JsonTabData`             | Phases B-F            |
+| `JsonTab` public surface stable (typed properties)        | Phases B-F + E2-E6    |
+| Undo commands don't hold QModelIndex in constructors      | Phase 5 (pre-plan)    |
+| Viewport not coupled to view location in JsonTabData      | Phase D-full          |
+| No mirrored Protocol surface that needs parallel updates  | Phase G               |
+
+All five are now in place. Phase I can move attributes between
+substates without parallel work in tree_actions/, undo/, or app/.
+
+**Recommended next-session entry point:** Phase I1
+(extract `IoState`). The expected commit shape is a one-file move:
+move `file_path` / `save_format` / `dirty` / `read_only` into a new
+`documents/states/io_state.py`, leave `JsonTabData.io: IoState` as
+the access point, keep current `JsonTabData.file_path` etc. as
+@property forwards so the existing JsonTab-side facades don't
+churn. Then I2 (ViewState), I3 (EditingState), I4 (ValidationState)
+in the same pattern, and I5 deletes the facade.
+
+---
 
 ### If resuming on the same branch (`decouple-json-tab`)
 
@@ -682,7 +774,7 @@ replace the underscore-prefixed forwards left behind by F5)
 * **F5. `affix_mru`, `_font_pt`, `last_move_placed`, `issue_index`.**
   Single-shot migrations, one commit each, forbid each.
 
-### Phase G — Burn `tab_protocols.py` 📋 PLANNED
+### Phase G — Burn `tab_protocols.py` ✅ LANDED (G1-G3 bundled in Session 5)
 
 After Phases B–F the external surface is `tab.*` accessors with proper
 types. Internal protocols can now be reduced to real interfaces.
@@ -703,7 +795,7 @@ types. Internal protocols can now be reduced to real interfaces.
 * **G3. Delete `tab_protocols.py`.**
   Final commit when the file has no remaining importers.
 
-### Phase H — De-Qt the command layer 📋 PLANNED
+### Phase H — De-Qt the command layer ✅ LANDED-PRAGMATIC (H1+H2 Session 5; H3 deferred out of plan, see Session 5 summary)
 
 * **H1. Add `paths` overloads to mutation gateway.**
   Every `push_*` method accepts either `QModelIndex` (current) or
