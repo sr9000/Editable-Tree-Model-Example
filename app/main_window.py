@@ -28,6 +28,7 @@ from app.schema_tab_pool import SchemaTabPool
 from app.tab_lifecycle import TabLifecyclePresenter
 from app.theme_controller import ThemeController
 from app.validation_presenter import DockValidationPresenter
+from documents.document_protocol import Document
 from documents.tab import JsonTab
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
@@ -292,7 +293,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         self._open_path(yaml_filename)
 
-    def _current_tab(self) -> JsonTab | None:
+    def _current_tab(self) -> Document | None:
         tab = self.tabWidget.currentWidget()
         return tab if isinstance(tab, JsonTab) else None
 
@@ -303,8 +304,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def setup_connections(self):
         setup_main_window_connections(self)
 
-    def _theme_tabs(self) -> list[JsonTab]:
-        tabs: list[JsonTab] = []
+    def _theme_tabs(self) -> list[Document]:
+        tabs: list[Document] = []
         for i in range(self.tabWidget.count()):
             widget = self.tabWidget.widget(i)
             if isinstance(widget, JsonTab):
