@@ -69,4 +69,11 @@ if [[ -n "$staged_py" ]]; then
     fi
 fi
 
+# Plan 21 K4: forbid imports of the concrete ``JsonTab`` outside documents/.
+if [[ -n "$staged_py" ]]; then
+    if ! bash "$(dirname "$0")/_check_jsontab_import_leaks.sh" $staged_py; then
+        fail=1
+    fi
+fi
+
 exit $fail

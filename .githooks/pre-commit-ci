@@ -50,4 +50,9 @@ if ! bash "$(dirname "$0")/_check_data_store_leaks.sh" $(git ls-files '*.py'); t
     fail=1
 fi
 
+# Plan 21 K4: forbid imports of the concrete ``JsonTab`` outside documents/.
+if ! bash "$(dirname "$0")/_check_jsontab_import_leaks.sh" $(git ls-files '*.py'); then
+    fail=1
+fi
+
 exit $fail

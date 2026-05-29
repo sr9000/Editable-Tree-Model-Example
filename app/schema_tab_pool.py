@@ -6,7 +6,8 @@ from typing import Any, Protocol
 
 from PySide6.QtCore import QObject
 
-from documents.tab import JsonTab
+from documents.document_protocol import Document
+from documents.tab_marker import JsonTabWidgetMarker
 from validation.schema_registry import SchemaSource, get_schema_registry
 
 
@@ -29,11 +30,11 @@ class SchemaPoolWindowProtocol(Protocol):
 
     def _open_path(self, path: str) -> bool: ...
 
-    def _current_tab(self) -> JsonTab | None: ...
+    def _current_tab(self) -> Document | None: ...
 
     def _add_tab(
         self, *, data=None, file_path: str | None = None, save_format: str | None = None
-    ) -> JsonTab | None: ...
+    ) -> Document | None: ...
 
 
 class _RegistryBorrower:
@@ -45,11 +46,11 @@ class SchemaTabPool(QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._tabs_by_source: dict[SchemaSource, JsonTab] = {}
-        self._source_by_tab: dict[JsonTab, SchemaSource] = {}
+        self._tabs_by_source: dict[SchemaSource, Document] = {}
+        self._source_by_tab: dict[Document, SchemaSource] = {}
         self._registry_token = _RegistryBorrower()
 
-    def find(self, source: SchemaSource) -> JsonTab | None:
+    def find(self, source: SchemaSource) -> Document | None:
         tab = self._tabs_by_source.get(source)
         if tab is None:
             return None
@@ -58,7 +59,7 @@ class SchemaTabPool(QObject):
             return None
         return tab
 
-    def register(self, tab: JsonTab, source: SchemaSource, *, read_only: bool) -> None:
+    def register(self, tab: Document, source: SchemaSource, *, read_only: bool) -> None:
         existing = self.find(source)
         if existing is not None and existing is not tab:
             self.unregister(existing)
@@ -75,14 +76,14 @@ class SchemaTabPool(QObject):
 
         tab.destroyed.connect(lambda *_args, t=tab: self.unregister(t))
 
-    def unregister(self, tab: JsonTab) -> None:
+    def unregister(self, tab: Document) -> None:
         source = self._source_by_tab.pop(tab, None)
         if source is None:
             return
         if self._tabs_by_source.get(source) is tab:
             self._tabs_by_source.pop(source, None)
 
-    def open_or_focus(self, window: SchemaPoolWindowProtocol, source: SchemaSource) -> JsonTab | None:
+    def open_or_focus(self, window: SchemaPoolWindowProtocol, source: SchemaSource) -> Document | None:
         tab = self.find(source)
         if tab is not None:
             index = window.tabWidget.indexOf(tab)
@@ -133,18 +134,18 @@ class SchemaTabPool(QObject):
         return tab
 
     @staticmethod
-    def _find_open_file_tab(window: SchemaPoolWindowProtocol, source: SchemaSource) -> JsonTab | None:
+    def _find_open_file_tab(window: SchemaPoolWindowProtocol, source: SchemaSource) -> Document | None:
         resolved = str(Path(source.key).expanduser().resolve())
         for i in range(window.tabWidget.count()):
             widget = window.tabWidget.widget(i)
-            if not isinstance(widget, JsonTab):
+            if not isinstance(widget, JsonTabWidgetMarker):
                 continue
             if widget.file_path and str(Path(widget.file_path).expanduser().resolve()) == resolved:
                 return widget
         return None
 
     @staticmethod
-    def _apply_url_tab_title(window: SchemaPoolWindowProtocol, tab: JsonTab, source: SchemaSource) -> None:
+    def _apply_url_tab_title(window: SchemaPoolWindowProtocol, tab: Document, source: SchemaSource) -> None:
         idx = window.tabWidget.indexOf(tab)
         if idx < 0:
             return

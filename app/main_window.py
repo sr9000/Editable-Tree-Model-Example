@@ -29,7 +29,7 @@ from app.tab_lifecycle import TabLifecyclePresenter
 from app.theme_controller import ThemeController
 from app.validation_presenter import DockValidationPresenter
 from documents.document_protocol import Document
-from documents.tab import JsonTab
+from documents.tab_marker import JsonTabWidgetMarker
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
@@ -295,7 +295,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _current_tab(self) -> Document | None:
         tab = self.tabWidget.currentWidget()
-        return tab if isinstance(tab, JsonTab) else None
+        return tab if isinstance(tab, JsonTabWidgetMarker) else None
 
     def _current_view(self) -> QTreeView | None:
         tab = self._current_tab()
@@ -308,7 +308,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         tabs: list[Document] = []
         for i in range(self.tabWidget.count()):
             widget = self.tabWidget.widget(i)
-            if isinstance(widget, JsonTab):
+            if isinstance(widget, JsonTabWidgetMarker):
                 tabs.append(widget)
         return tabs
 
@@ -346,7 +346,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _refresh_tab_presentation(self, tab: Document) -> None:
         self._tab_lifecycle.refresh_tab_presentation(tab)
 
-    def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> JsonTab | None:
+    def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> Document | None:
         return self._tab_lifecycle.add_tab(data=data, file_path=file_path, save_format=save_format)
 
     def _on_tab_dirty(self, tab: Document) -> None:
@@ -622,10 +622,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._theme_controller.shutdown()
         for i in range(self.tabWidget.count() - 1, -1, -1):
             widget = self.tabWidget.widget(i)
-            if isinstance(widget, JsonTab) and not self._confirm_close(widget, prompt_for_untitled_nonempty=False):
+            if isinstance(widget, JsonTabWidgetMarker) and not self._confirm_close(
+                widget, prompt_for_untitled_nonempty=False
+            ):
                 event.ignore()
                 return
-            if isinstance(widget, JsonTab):
+            if isinstance(widget, JsonTabWidgetMarker):
                 view_state.save(widget)
         self._settings.setValue("window/geometry", self.saveGeometry())
         self._settings.setValue("window/fullscreen", self.isFullScreen())

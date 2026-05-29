@@ -18,8 +18,9 @@ from PySide6.QtWidgets import QMessageBox, QTabWidget
 
 import state.view_state as view_state
 from documents.document_protocol import Document
-from documents.tab import JsonTab
 from documents.tab_dependencies import JsonTabServices
+from documents.tab_factory import create_tab
+from documents.tab_marker import JsonTabWidgetMarker
 
 
 class _MainWindowJsonTabHost:
@@ -68,12 +69,12 @@ class TabLifecyclePresenter(QObject):
         data=None,
         file_path: str | None = None,
         save_format: str | None = None,
-    ) -> JsonTab | None:
+    ) -> Document | None:
         from state.validation_settings import auto_rescan_enabled
 
         win = self._win
         try:
-            tab = JsonTab(
+            tab = create_tab(
                 data=data,
                 file_path=file_path,
                 show_root=True,
@@ -141,7 +142,7 @@ class TabLifecyclePresenter(QObject):
         widget = self._tab_widget.widget(index)
 
         snapshot = None
-        if isinstance(widget, JsonTab):
+        if isinstance(widget, JsonTabWidgetMarker):
             was_dirty = widget.is_dirty
             if not win._confirm_close(widget):
                 return
