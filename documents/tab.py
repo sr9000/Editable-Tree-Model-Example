@@ -124,8 +124,38 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         """
         return self.data_store.mutations
 
+    # -- Phase I (I5): direct substate accessors -------------------
+    # ``JsonTab directly composes the four states.``  These read-only
+    # properties expose each substate object so callers inside
+    # ``documents/`` can grab a whole axis instead of dereferencing
+    # individual ``data_store.<attr>`` fields.  External callers
+    # continue to use the per-attribute typed forwards above.
+    @property
+    def io(self):
+        """The :class:`documents.states.io_state.IoState` substate."""
+        return self.data_store.io
+
+    @property
+    def view_state(self):
+        """The :class:`documents.states.view_state.ViewState` substate."""
+        return self.data_store.view_state
+
+    @property
+    def editing_state(self):
+        """The :class:`documents.states.editing_state.EditingState` substate."""
+        return self.data_store.editing_state
+
+    @property
+    def validation_state(self):
+        """The :class:`documents.states.validation_state.ValidationState` substate.
+
+        Same object as :attr:`validation`; the alias name matches the
+        I1-I4 ``*State`` naming scheme.
+        """
+        return self.data_store.validation
+
     # -- Phase C: typed file-state accessors ---------------------
-    # Forward to JsonTabDataFacade so external callers (app/, undo/,
+    # Forward to JsonTabData so external callers (app/, undo/,
     # tree_actions/, state/) stop reaching into tab.data_store.
     @property
     def file_path(self) -> str | None:
