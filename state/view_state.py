@@ -3,6 +3,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QSettings, QSortFilterProxyModel
 
+from documents.document_protocol import Document
 from settings import APPLICATION_ID
 from state.qsettings_coercion import _coerce_int, _coerce_int_list, _coerce_path, _coerce_paths
 
@@ -68,7 +69,7 @@ def state_key(path: str) -> str:
     return f"view_state/{digest}"
 
 
-def save(tab) -> None:
+def save(tab: Document) -> None:
     if not tab.file_path:
         return
 
@@ -90,7 +91,7 @@ def save(tab) -> None:
     settings.endGroup()
 
 
-def restore(tab) -> bool:
+def restore(tab: Document) -> bool:
     if not tab.file_path:
         return False
 

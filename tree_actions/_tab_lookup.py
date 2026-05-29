@@ -1,12 +1,16 @@
-"""Typed ancestor-walk helper to find the owning ``JsonTab`` of a widget.
+"""Typed ancestor-walk helper to find the owning ``Document`` tab of a widget.
 
 Replaces ad-hoc parent-chain capability probing (``push_insert_rows`` /
 ``push_move_rows`` / ``edit_name_or_value_from_enter`` and similar) in
-``tree_actions/*``. Uses ``isinstance(JsonTab)`` so the OOP contract is
-explicit and a pre-commit hook can forbid stringly-typed reflection.
+``tree_actions/*``. Uses ``isinstance(JsonTabWidgetMarker)`` (an
+abstract marker base) so the OOP contract is explicit, a pre-commit
+hook can forbid stringly-typed reflection, and ``tree_actions`` does
+not import the concrete ``documents.tab`` module.
 
-Lookup uses a marker base exported from ``documents.tab_marker`` so
-``tree_actions`` never imports ``documents.tab``.
+The return type is the :class:`documents.document_protocol.Document`
+protocol (per ``plans/21-promote-substates-to-controllers.md`` Phase
+K3); every consumer in ``tree_actions/`` calls only Document-declared
+attributes (Phase K1 audit).
 """
 
 from __future__ import annotations
@@ -18,16 +22,19 @@ from PySide6.QtCore import QObject
 from documents.tab_marker import JsonTabWidgetMarker
 
 
-def find_owning_tab(widget: object | None) -> "JsonTab" | None:
-    """Walk the Qt ``parent()`` chain and return the first ``JsonTab`` found.
+def find_owning_tab(widget: object | None) -> "Document" | None:
+    """Walk the Qt ``parent()`` chain and return the first owning tab found.
 
     Returns ``None`` when *widget* is not a Qt object or when no
-    ``JsonTab`` ancestor exists (e.g. headless test fixtures).
+    ``JsonTabWidgetMarker`` ancestor exists (e.g. headless test
+    fixtures). The returned value is typed as
+    :class:`documents.document_protocol.Document` -- the structural
+    façade exposed by every concrete ``JsonTab``.
     """
     node = widget
     while node is not None:
         if isinstance(node, JsonTabWidgetMarker):
-            return cast("JsonTab", node)
+            return cast("Document", node)
         if isinstance(node, QObject):
             node = node.parent()
         else:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (
@@ -17,16 +17,11 @@ from PySide6.QtWidgets import (
 )
 
 from app.validation_panel_model import IssueListModel
+from documents.document_protocol import Document
 from state.recent_schemas import recent_schemas
 from validation.index import IssueIndex
 from validation.schema_registry import get_schema_registry
 from validation.schema_types import SchemaRef
-
-
-class ValidationDockTabProtocol(Protocol):
-    data_store: Any
-    validationChanged: Any
-    schemaChanged: Any
 
 
 class ValidationDock(QDockWidget):
@@ -120,7 +115,7 @@ class ValidationDock(QDockWidget):
         layout.addWidget(self.list_view)
         self.setWidget(container)
 
-        self._tab: ValidationDockTabProtocol | None = None
+        self._tab: Document | None = None
 
     # ── public API ────────────────────────────────────────────────────────
 
@@ -139,7 +134,7 @@ class ValidationDock(QDockWidget):
         else:
             self._lbl_status.setText(f"{count} issue{'s' if count != 1 else ''}")
 
-    def attach_tab(self, tab: ValidationDockTabProtocol | None) -> None:
+    def attach_tab(self, tab: Document | None) -> None:
         if self._tab is tab:
             return
         if self._tab is not None:
