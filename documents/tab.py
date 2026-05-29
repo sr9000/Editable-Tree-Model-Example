@@ -25,6 +25,7 @@ from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
+from tree.model import JsonTreeModel
 from tree.view import JsonTreeView
 from undo.commands import _ChangeTypeCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _EditValueCmd  # noqa: F401 — re-exported for test imports
@@ -168,6 +169,19 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         ``plans/20-decouple-jsontab.md`` Phase D.
         """
         return self.data_store.view
+
+    @property
+    def model(self) -> JsonTreeModel:
+        """Typed accessor for the underlying tree model.
+
+        Replaces ``tab.data_store.model`` for external callers; see
+        ``plans/20-decouple-jsontab.md`` Phase E (E-light). Narrow read
+        helpers (root_data / root_index / row_count / column_count)
+        remain a candidate for E2-E6 — until they exist, callers in
+        app/, state/, tree_actions/, undo/ all funnel through this
+        single typed handle.
+        """
+        return self.data_store.model
 
     # -- Phase F long tail (F4 / F5): typed accessors for residual
     # state still leaked into tree_actions/, app/, undo/, state/.

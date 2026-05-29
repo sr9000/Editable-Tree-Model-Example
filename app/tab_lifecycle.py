@@ -98,8 +98,8 @@ class TabLifecyclePresenter(QObject):
 
         tab.view.expandAll()
         tab.resize_key_columns()
-        if tab.data_store.model.show_root:
-            source_index = tab.data_store.model.index(0, 0, QModelIndex())
+        if tab.model.show_root:
+            source_index = tab.model.index(0, 0, QModelIndex())
             tab.view.setCurrentIndex(tab.mutations.source_to_view(source_index))
         view_state.restore(tab)
         # Re-broadcast: ``view_state.restore`` may have rewritten ``_font_pt``
@@ -156,8 +156,8 @@ class TabLifecyclePresenter(QObject):
                     }
             else:
                 try:
-                    src_idx = widget.data_store.model.index(0, 0, QModelIndex())
-                    snap_data = widget.data_store.model.get_item(src_idx).to_json() if src_idx.isValid() else {}
+                    src_idx = widget.model.index(0, 0, QModelIndex())
+                    snap_data = widget.model.get_item(src_idx).to_json() if src_idx.isValid() else {}
                 except Exception:  # noqa: BLE001
                     snap_data = {}
                 snapshot = {

@@ -75,7 +75,7 @@ def save(tab) -> None:
     settings = QSettings(APPLICATION_ID, "view_state")
     settings.beginGroup(state_key(tab.file_path))
 
-    widths = [int(tab.view.columnWidth(column)) for column in range(tab.data_store.model.columnCount())]
+    widths = [int(tab.view.columnWidth(column)) for column in range(tab.model.columnCount())]
     expanded_paths = [list(path) for path in tab._collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
 
     current_index = tab.view.currentIndex()
@@ -117,7 +117,7 @@ def restore(tab) -> bool:
         tab._set_font_pt(font_pt)
 
     if widths is not None:
-        for column, width in enumerate(widths[: tab.data_store.model.columnCount()]):
+        for column, width in enumerate(widths[: tab.model.columnCount()]):
             if width > 0:
                 tab.view.setColumnWidth(column, width)
         # The persisted widths represent the user's last explicit preference;

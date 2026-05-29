@@ -27,6 +27,7 @@ FORBIDDEN_DATA_STORE_ATTRS=(
     "schema_ref"       # Phase F (F3)
     "validation"       # Phase F (F2)
     "view"             # Phase D (D-light)
+    "model"            # Phase E (E-light)
     "search_edit"          # Phase F (F4)
     "last_move_placed"     # Phase F (F5)
     "issue_index"          # Phase F (F5)
