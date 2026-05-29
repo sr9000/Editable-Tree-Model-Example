@@ -378,17 +378,7 @@ See `repo-map.md` for the full module breakdown.
 
 ## ❌ Cons
 
-### Active issues
-- **3 failing tests under `QT_QPA_PLATFORM=offscreen`** —
-  `tests/test_app_color_scheme.py::test_light_theme_sets_light_color_scheme`,
-  `tests/test_app_color_scheme.py::test_dark_theme_sets_dark_color_scheme`,
-  `tests/test_theme_switching.py::test_color_scheme_follows_selected_theme`.
-  Root cause: Qt offscreen QPA ignores
-  `QStyleHints.setColorScheme` and reports `Qt.ColorScheme.Unknown`.
-  These tests should either skip on the offscreen platform or
-  monkey-patch `setColorScheme`. Code is correct on real platforms.
-
-### Secret strings follow-ups (v2 — open)
+### Secret strings follow-ups
 - **No schema-sidecar metadata** for fields whose name does not
   match the secret-prefix heuristic, so a secret survives reload
   only if the name still matches.
@@ -530,5 +520,4 @@ accessibility/theme-snapshot suites), tooling (`pytest-qt` pin,
 `make test`, coverage snapshot), docs (theme schema, README theming
 section, screenshots), and a small UX polish backlog (match
 highlighting, watching icon-asset folders, narrowing
-`MainWindow.update_actions`, fixing the offscreen-platform color
-scheme tests).
+`MainWindow.update_actions`.
