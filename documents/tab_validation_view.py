@@ -3,7 +3,6 @@ from __future__ import annotations
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
 from PySide6.QtWidgets import QAbstractItemView
 
-from documents.tab_protocols import TabValidationViewProtocol
 from tree.model_roles import VALIDATION_SEVERITY_ROLE
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
@@ -18,7 +17,7 @@ _EDITABLE_ITEM_FLAG = Qt.ItemFlag.ItemIsEditable.value
 class JsonTabValidationViewController:
     """Own validation issue navigation and validation repaint behavior."""
 
-    def __init__(self, tab: TabValidationViewProtocol) -> None:
+    def __init__(self, tab: "JsonTab") -> None:
         self._tab = tab
 
     def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:

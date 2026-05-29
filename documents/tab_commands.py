@@ -16,7 +16,6 @@ from typing import Any
 from PySide6.QtCore import QModelIndex
 
 from documents.tab_number_types import would_drop_fraction_on_type_change
-from documents.tab_protocols import TabCommandsProtocol
 from tree.types import JsonType
 from undo.commands import (
     _ChangeTypeCmd,
@@ -36,7 +35,7 @@ def make_label(text: str, target_qname: str) -> str:
 
 
 def push_move_row(
-    tab: TabCommandsProtocol,
+    tab: "JsonTab",
     parent_index: QModelIndex,
     src: int,
     dst: int,
@@ -61,7 +60,7 @@ def push_move_row(
 
 
 def push_move_rows_anchor(
-    tab: TabCommandsProtocol,
+    tab: "JsonTab",
     sources: list,
     anchor: Any,
     *,
@@ -125,7 +124,7 @@ def push_move_rows_anchor(
 
 
 def push_move_rows(
-    tab: TabCommandsProtocol,
+    tab: "JsonTab",
     sources: list,
     target_parent: QModelIndex,
     target_row: int,
@@ -144,7 +143,7 @@ def push_move_rows(
     return push_move_rows_anchor(tab, sources, anchor, label=label)
 
 
-def push_rename(tab: TabCommandsProtocol, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
+def push_rename(tab: "JsonTab", name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
     if tab.data_store.is_read_only:
         return False
     if not name_index.isValid() or name_index.column() != 0:
@@ -168,7 +167,7 @@ def push_rename(tab: TabCommandsProtocol, name_index: QModelIndex, new_name: Any
 
 
 def push_edit_value(
-    tab: TabCommandsProtocol, value_index: QModelIndex, new_value: Any, *, label: str = "edit value"
+    tab: "JsonTab", value_index: QModelIndex, new_value: Any, *, label: str = "edit value"
 ) -> bool:
     if tab.data_store.is_read_only:
         return False
@@ -195,7 +194,7 @@ def push_edit_value(
 
 
 def push_change_type(
-    tab: TabCommandsProtocol, type_index: QModelIndex, new_type: Any, *, label: str = "change type"
+    tab: "JsonTab", type_index: QModelIndex, new_type: Any, *, label: str = "change type"
 ) -> bool:
     if tab.data_store.is_read_only:
         return False
@@ -230,7 +229,7 @@ def push_change_type(
 
 
 def push_insert_rows(
-    tab: TabCommandsProtocol,
+    tab: "JsonTab",
     inserts: list,
     *,
     label: str = "insert",
@@ -251,7 +250,7 @@ def push_insert_rows(
     return True
 
 
-def push_remove_rows(tab: TabCommandsProtocol, indexes: list, *, label: str = "delete") -> bool:
+def push_remove_rows(tab: "JsonTab", indexes: list, *, label: str = "delete") -> bool:
     if tab.data_store.is_read_only:
         return False
     if not indexes:
@@ -276,7 +275,7 @@ def push_remove_rows(tab: TabCommandsProtocol, indexes: list, *, label: str = "d
 
 
 def push_sort_keys(
-    tab: TabCommandsProtocol,
+    tab: "JsonTab",
     index: QModelIndex,
     *,
     recursive: bool = False,
@@ -300,7 +299,7 @@ def push_sort_keys(
 
 
 def push_switch_field_case(
-    tab: TabCommandsProtocol,
+    tab: "JsonTab",
     renames: list[dict[str, Any]],
     *,
     label: str = "switch field case",

@@ -7,7 +7,7 @@ class itself stays narrative.
 
 from __future__ import annotations
 
-from typing import Any, Callable, cast
+from typing import Any, Callable
 
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
@@ -18,7 +18,6 @@ from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_history import TabHistoryController
 from documents.tab_io_controller import TabIOController
 from documents.tab_navigation import JsonTabNavigationController
-from documents.tab_protocols import TabBootstrapProtocol, TabMutationGatewayProtocol
 from documents.tab_setup import (
     init_delegates_and_connections,
     init_layout,
@@ -38,7 +37,7 @@ _DEFAULT_DATA = object()
 
 
 def bootstrap(
-    tab: TabBootstrapProtocol,
+    tab: "JsonTab",
     *,
     update_actions_callback: Callable[[], None] | None,
     status_message_callback: Callable[[str, int], None] | None,

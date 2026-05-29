@@ -12,13 +12,12 @@ from typing import Any
 
 from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex
 
-from documents.tab_protocols import TabMoveViewStateProtocol
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from tree_actions.selection import selected_source_rows
 from undo.commands import _MoveRowsCmd
 
 
-def collect_expanded_paths(tab: TabMoveViewStateProtocol) -> list[tuple[int, ...]]:
+def collect_expanded_paths(tab: "JsonTab") -> list[tuple[int, ...]]:
     """Return paths of every currently expanded row.
 
     Kept around because a few tests (and any future view-state save/restore)
@@ -40,7 +39,7 @@ def collect_expanded_paths(tab: TabMoveViewStateProtocol) -> list[tuple[int, ...
     return paths
 
 
-def capture_move_view_state(tab: TabMoveViewStateProtocol, sources: list) -> dict[str, Any]:
+def capture_move_view_state(tab: "JsonTab", sources: list) -> dict[str, Any]:
     roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]] = {}
     for idx in sources:
         row0 = tab.data_store.model.index(idx.row(), 0, idx.parent())
@@ -70,7 +69,7 @@ def sort_move_paths(paths: list[tuple[tuple[int, ...], int]]) -> list[tuple[tupl
 
 
 def _apply_relative_expansion_mapping(
-    tab: TabMoveViewStateProtocol,
+    tab: "JsonTab",
     source_roots: list[tuple[tuple[int, ...], int]],
     target_roots: list[tuple[tuple[int, ...], int]],
     roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]],
@@ -92,7 +91,7 @@ def _apply_relative_expansion_mapping(
 
 
 def _restore_selection_paths(
-    tab: TabMoveViewStateProtocol,
+    tab: "JsonTab",
     paths: list[tuple[int, ...]],
     current_path: tuple[int, ...] | None,
 ) -> None:
@@ -123,7 +122,7 @@ def _restore_selection_paths(
         sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
 
-def restore_selection_at_paths(tab: TabMoveViewStateProtocol, placed: list[tuple[tuple, int]]) -> None:
+def restore_selection_at_paths(tab: "JsonTab", placed: list[tuple[tuple, int]]) -> None:
     """Drive the view's selectionModel so the rows at the given
     ``(parent_path, row)`` tuples are all selected after a move.
 
@@ -153,7 +152,7 @@ def restore_selection_at_paths(tab: TabMoveViewStateProtocol, placed: list[tuple
         sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
 
-def apply_move_view_state(tab: TabMoveViewStateProtocol, cmd: _MoveRowsCmd, *, undo: bool) -> None:
+def apply_move_view_state(tab: "JsonTab", cmd: _MoveRowsCmd, *, undo: bool) -> None:
     state = tab.data_store._move_view_state_by_cmd_id.get(id(cmd))
     if state is None:
         return
@@ -166,7 +165,7 @@ def apply_move_view_state(tab: TabMoveViewStateProtocol, cmd: _MoveRowsCmd, *, u
     restore_selection_at_paths(tab, cmd.placed_paths)
 
 
-def on_undo_index_changed(tab: TabMoveViewStateProtocol, new_index: int) -> None:
+def on_undo_index_changed(tab: "JsonTab", new_index: int) -> None:
     old_index = tab.data_store._last_undo_index
     if new_index == old_index:
         return

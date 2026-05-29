@@ -18,7 +18,6 @@ from typing import Any
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt
 
-from documents.tab_protocols import TabMutationGatewayProtocol
 
 
 class DocumentMutationGateway:
@@ -29,7 +28,7 @@ class DocumentMutationGateway:
     on the model, view, and history controller.
     """
 
-    def __init__(self, tab: TabMutationGatewayProtocol) -> None:
+    def __init__(self, tab: "JsonTab") -> None:
         self._tab = tab
 
     # ----- value mutation -------------------------------------------------
