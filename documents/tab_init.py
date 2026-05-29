@@ -16,7 +16,7 @@ from documents.tab_demo_data import build_demo_data
 from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_services
 from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_history import TabHistoryController
-from documents.tab_io_controller import TabIOController
+from documents.states.io_state import IoState
 from documents.tab_navigation import JsonTabNavigationController
 from documents.tab_setup import (
     init_delegates_and_connections,
@@ -88,7 +88,7 @@ def bootstrap(
 
     tab.data_store.affix_mru = AffixMRU()
 
-    tab.data_store.io = TabIOController(tab, file_path=file_path, save_format=save_format)
+    tab.data_store.io = IoState(tab, file_path=file_path, save_format=save_format)
     tab.data_store.io.dirtyChanged.connect(tab.dirtyChanged.emit)
 
     init_model(tab, model_data, show_root=show_root)

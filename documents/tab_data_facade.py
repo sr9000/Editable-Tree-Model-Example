@@ -5,9 +5,9 @@ from typing import Any, Protocol
 
 from PySide6.QtGui import QUndoStack
 
+from documents.states.io_state import IoState
 from documents.tab_dependencies import JsonTabHost
 from documents.tab_history import TabHistoryController
-from documents.tab_io_controller import TabIOController
 from documents.tab_validation import TabValidationController
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
@@ -64,7 +64,7 @@ class JsonTabDataFacade:
     """
 
     _host: JsonTabHost | None = None
-    io: TabIOController | None = None
+    io: IoState | None = None
     history: TabHistoryController | None = None
     validation: TabValidationController | None = None
     editability: EditabilityFacadeProtocol | None = None
