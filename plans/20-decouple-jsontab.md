@@ -93,7 +93,6 @@ ViewportRequest plumbing seriously per the D3 risk register.
 
 ---
 
-
 ## 🚀 Session 3 Summary (2026-05-29) — D-full landed
 
 **Status:** 4 commits landed on top of Session 2; **Phase D fully complete**
@@ -181,20 +180,21 @@ the cheapest, most-independent next step. Phase H is now realistically
 attemptable because D-full unblocked it.
 
 ---
+
 ## 🚀 Session 4 Summary (2026-05-29) — Phase E full + Phase F closeout
 
 **Status:** 3 commits landed on top of Session 3; **Phase E now
 fully complete** (E2-E6, not just E-light) and the underscore-prefixed
 forwards left behind by F4+F5 are gone.
 
-| Phase  | Steps    | Status                                                                          | Commits |
-|--------|----------|---------------------------------------------------------------------------------|---------|
-| E      | E2       | ✅ complete (narrow read helpers + zoom_pt/column_widths added)                  | 1       |
-| E      | E3       | ✅ complete (state/view_state.py migrated; transitional underscore props pruned) | 1       |
-| E      | E4-E6    | ✅ complete (5 files / 10 sites migrated, QModelIndex imports cleaned up)        | 1       |
-| E7     | guard    | ✅ already in place from E-light (no change needed)                              | —       |
-| F      | closeout | ✅ complete (zoom_pt / column_widths replace _font_pt / _user_sized_columns)     | (in E3) |
-| G–J    | all      | ⏳ planned                                                                       | —       |
+| Phase | Steps    | Status                                                                          | Commits |
+|-------|----------|---------------------------------------------------------------------------------|---------|
+| E     | E2       | ✅ complete (narrow read helpers + zoom_pt/column_widths added)                  | 1       |
+| E     | E3       | ✅ complete (state/view_state.py migrated; transitional underscore props pruned) | 1       |
+| E     | E4-E6    | ✅ complete (5 files / 10 sites migrated, QModelIndex imports cleaned up)        | 1       |
+| E7    | guard    | ✅ already in place from E-light (no change needed)                              | —       |
+| F     | closeout | ✅ complete (zoom_pt / column_widths replace _font_pt / _user_sized_columns)     | (in E3) |
+| G–J   | all      | ⏳ planned                                                                       | —       |
 
 **Quantified progress:**
 
