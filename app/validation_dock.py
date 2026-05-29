@@ -174,7 +174,7 @@ class ValidationDock(QDockWidget):
 
         tab.validationChanged.connect(self._on_validation_changed)
         tab.schemaChanged.connect(self._on_schema_changed)
-        self._on_schema_changed(tab.data_store.schema_ref)
+        self._on_schema_changed(tab.schema_ref)
         self._on_validation_changed(tab.data_store.issue_index)
 
         # Sync tree selection → dock highlight
@@ -228,7 +228,7 @@ class ValidationDock(QDockWidget):
         menu = QMenu(self)
         act_schema = menu.addAction(self.tr("Go to schema rule"))
         has_schema = self._tab is not None and (
-            self._tab.data_store.schema_ref.path is not None or self._tab.data_store.schema_ref.url is not None
+            self._tab.schema_ref.path is not None or self._tab.schema_ref.url is not None
         )
         act_schema.setEnabled(has_schema and bool(issue.schema_path))
         chosen = menu.exec(self.list_view.viewport().mapToGlobal(QPoint(pos)))

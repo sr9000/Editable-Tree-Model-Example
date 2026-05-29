@@ -23,6 +23,8 @@ FORBIDDEN_DATA_STORE_ATTRS=(
     "is_read_only"     # Phase C (C4)
     "save_format"      # Phase C (C4)
     "undo_stack"       # Phase F (F1-light)
+    "schema_source"    # Phase F (F3)
+    "schema_ref"       # Phase F (F3)
 )
 
 if [[ ${#FORBIDDEN_DATA_STORE_ATTRS[@]} -eq 0 ]]; then
