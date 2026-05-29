@@ -78,8 +78,8 @@ def save(tab) -> None:
     widths = [int(tab.view.columnWidth(column)) for column in range(tab.model.columnCount())]
     expanded_paths = [list(path) for path in tab._collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
 
-    current_index = tab.view.currentIndex()
-    current_path = list(tab._index_path(current_index)) if current_index.isValid() else []
+    current_path_tuple = tab.view_controller.current_path()
+    current_path = list(current_path_tuple) if current_path_tuple is not None else []
 
     font_pt = int(tab._font_pt or tab.view.font().pointSize() or 10)
 
