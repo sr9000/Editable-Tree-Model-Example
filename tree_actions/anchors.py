@@ -67,7 +67,7 @@ def anchor_after_index(sibling_index: QModelIndex, tab) -> MoveAnchor:
     sibling_path = _index_path_from_tab(sibling_index, tab)
     parent_path = sibling_path[:-1]
     parent_index = tab.mutations.index_from_path(parent_path)
-    if sibling_index.row() + 1 >= tab.model.rowCount(parent_index):
+    if sibling_index.row() + 1 >= tab.row_count(parent_index):
         return MoveAnchor(parent_path=parent_path, is_at_end=True)
     next_sibling_path = parent_path + (sibling_index.row() + 1,)
     return MoveAnchor(parent_path=parent_path, before_sibling_path=next_sibling_path)
@@ -157,7 +157,7 @@ def pre_pop_target_row_to_anchor(
     signature.
     """
     parent_path = tab.mutations.index_path(target_parent)
-    n = tab.model.rowCount(target_parent)
+    n = tab.row_count(target_parent)
     if target_row >= n:
         return MoveAnchor(parent_path=parent_path, is_at_end=True)
     sibling_path = parent_path + (target_row,)

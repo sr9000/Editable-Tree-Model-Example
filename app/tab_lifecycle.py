@@ -13,7 +13,7 @@ dock/undo binding/status bar) without duplicating their state.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, QObject
+from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QMessageBox, QTabWidget
 
 import state.view_state as view_state
@@ -98,7 +98,7 @@ class TabLifecyclePresenter(QObject):
 
         tab.view_controller.request_expand_all()
         tab.resize_key_columns()
-        if tab.model.show_root:
+        if tab.root_index().isValid():
             tab.view_controller.request_select_paths([()])
         view_state.restore(tab)
         # Re-broadcast: ``view_state.restore`` may have rewritten ``_font_pt``
@@ -155,8 +155,7 @@ class TabLifecyclePresenter(QObject):
                     }
             else:
                 try:
-                    src_idx = widget.model.index(0, 0, QModelIndex())
-                    snap_data = widget.model.get_item(src_idx).to_json() if src_idx.isValid() else {}
+                    snap_data = widget.root_data()
                 except Exception:  # noqa: BLE001
                     snap_data = {}
                 snapshot = {

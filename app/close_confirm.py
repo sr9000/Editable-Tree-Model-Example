@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QMessageBox
 
 
 def _has_meaningful_data(tab) -> bool:
-    data = tab.model.root_item.to_json()
+    data = tab.root_data()
     if isinstance(data, dict):
         return bool(data)
     if isinstance(data, list):

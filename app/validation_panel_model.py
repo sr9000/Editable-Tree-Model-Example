@@ -40,13 +40,13 @@ class IssueListModel(QAbstractListModel):
 
     def set_tab(self, tab: ValidationPanelTabProtocol | None) -> None:
         self._tab = tab
-        self._root_data = tab.model.root_item.to_json() if tab is not None else None
+        self._root_data = tab.root_data() if tab is not None else None
         self._rebuild_display_cache()
 
     def set_issues(self, issues: Sequence[ValidationIssue]) -> None:
         self.beginResetModel()
         if self._tab is not None:
-            self._root_data = self._tab.model.root_item.to_json()
+            self._root_data = self._tab.root_data()
         self._issues = list(issues)
         self._rebuild_display_cache()
         self.endResetModel()
