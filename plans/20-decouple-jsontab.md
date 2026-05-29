@@ -93,6 +93,94 @@ ViewportRequest plumbing seriously per the D3 risk register.
 
 ---
 
+## 🚀 Session 3 Summary (2026-05-29) — D-full landed
+
+**Status:** 4 commits landed on top of Session 2; **Phase D fully complete**
+(controller + signal + all viewport writes routed; deep prerequisite for
+Phase H now in place).
+
+| Phase | Steps       | Status                       | Commits |
+|-------|-------------|------------------------------|---------|
+| D     | D1–D4       | ✅ complete (full, not light) | 4       |
+| D5    | rename only | ⏭ rolled into Phase I        | —       |
+| G–J   | all         | ⏳ planned                    | —       |
+
+**Quantified progress:**
+
+- `tab.view` viewport-mutation sites outside `documents/`: **5** → **0**
+  (undo + tab_lifecycle + state/view_state all routed through
+  `view_controller.request_*` signals)
+- `tab.view` read sites outside `documents/`: **2** → **0** for selection
+  queries (`current_path`, `has_current`)
+- Remaining `tab.view` accesses (all legitimate and documented):
+    * 4 widget-property reads (`font()`, `columnWidth()`, etc.)
+    * 2 signal-connect subscriptions (`selectionModel().currentChanged`)
+    * 1 raw-view return for downstream helpers (`_current_view()` →
+      delete_selection / expand_all / collapse_all / switch_case_document)
+    * 1 multi-select via `QItemSelection` (undo `_select_placed_rows`)
+- Test suite: **1124 pass**, 18.8s wall-clock, unchanged across every step
+- Heavy targeted suite (154 selection/move/drag tests): passed in 7.78s
+  on D3, no flakes — the risk-bound "revert immediately if any flake"
+  policy was not triggered
+
+**Commits (newest first):**
+
+- `862d0ca` D4 — route viewport writes in tab_lifecycle + view_state
+- `a5e618c` D3 — route 3 undo setCurrentIndex sites through
+  `viewportRequested` signal (the original high-risk step; landed
+  green in a single commit)
+- `9516056` D2 — route 2 selection-query reads (main_window_actions,
+  view_state) through `view_controller.current_path()` / `has_current()`
+- `9081d68` D1 — add `documents/view_controller.py::DocumentView`
+  (signal-mediated viewport controller, no callers yet)
+
+**Key artifacts:**
+
+- New: `documents/view_controller.py` (190 LOC) — `DocumentView` QObject
+  with reads (`current_path`, `selected_paths`, `has_current`), writes
+  (`request_select_paths`, `request_expand`, `request_expand_all`,
+  `request_collapse_all`, `request_scroll_to`), and the
+  `viewportRequested(kind, payload)` signal. Wired by
+  `documents/tab_init.bootstrap` to its own `apply_request` slot, which
+  resolves paths to view-coords through `tab.mutations.source_to_view`
+  and pokes the real `QTreeView`.
+- New: `tab.view_controller: DocumentView` typed property on `JsonTab`.
+- Removed (net): 14 LOC in `state/view_state.py::restore()` — the
+  collapseAll-then-iterate-and-expand-with-validity-checks pattern
+  collapsed to a flat `request_*` sequence because the controller
+  centralises the source→view mapping.
+
+**Notes on the architecture H/I now depend on:**
+
+- The undo command layer now operates **purely on paths and pure-Python
+  payloads** for the 3 setCurrentIndex sites that were the original
+  Phase H pain point. `undo/commands.py::_MoveRowCmd` no longer needs
+  `tab.view` or `tab.mutations.source_to_view` at all in its redo/undo
+  paths; selection restoration is one `view_controller.request_select_paths`
+  call.
+- Phase H's "drop QModelIndex from command signatures" is unblocked.
+- Phase I's "rename `JsonTabData.view` → `_view`" is now purely
+  internal-to-`documents/` (the guard prevents external regressions);
+  it lives more naturally inside the JsonTabData decomposition than as
+  a standalone D5 commit, so D5 has been folded into Phase I.
+
+**Deferred follow-ups (small, low-priority):**
+
+- `undo/commands.py::_select_placed_rows` (line 17) still uses
+  `QItemSelectionModel.select(QItemSelection)` for true multi-select +
+  current-index. The current `request_select_paths` only sets the
+  first path as current — multi-select via the controller would need
+  a richer apply_request branch. Not on any hot path.
+- `validation_dock.py` `currentChanged` signal subscription: could
+  introduce `DocumentView.currentPathChanged(path)` and let the dock
+  subscribe path-typed; deferred because no other consumer wants it.
+
+**Updated entry-point recommendation for Session 4:** Phase G remains
+the cheapest, most-independent next step. Phase H is now realistically
+attemptable because D-full unblocked it.
+
+---
+
 ## 📝 Guidance for next LLM session
 
 ### If resuming on the same branch (`decouple-json-tab`)
@@ -403,7 +491,7 @@ change is to read them off `tab` directly.
 * **C4. Forbid `data_store.{file_path,is_dirty,is_read_only,save_format}`.**
   Extend the pre-commit regex from B4.
 
-### Phase D — Stop leaking `view` (17 hits) ✅ LANDED (D-light, Session 2)
+### Phase D — Stop leaking `view` (17 hits) ✅ LANDED (D-light Session 2; D-full D1–D4 Session 3)
 
 `view` access splits into two intents:
 
