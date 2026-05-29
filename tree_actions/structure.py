@@ -145,7 +145,8 @@ def delete_selection(tree_view: QTreeView) -> bool:
 
     tab = _tab_of(tree_view)
     if tab is not None:
-        return tab.mutations.push_remove_rows(rows, label="delete")
+        # Path-typed API (Phase H).
+        return tab.mutations.push_remove_paths([_index_path(idx) for idx in rows], label="delete")
 
     rows = sorted(rows, key=lambda idx: (_index_path(idx.parent()), idx.row()), reverse=True)
     changed = False
@@ -450,7 +451,8 @@ def sort_selection_keys(tree_view: QTreeView, recursive: bool = False) -> bool:
 
     tab = _tab_of(tree_view)
     if tab is not None:
-        return tab.mutations.push_sort_keys(row0, recursive=recursive)
+        # Path-typed API (Phase H).
+        return tab.mutations.push_sort_keys_at(_index_path(row0), recursive=recursive)
 
     return action_sort_keys(current, model, recursive=recursive)
 

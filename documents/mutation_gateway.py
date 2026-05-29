@@ -82,6 +82,52 @@ class DocumentMutationGateway:
     def push_switch_field_case(self, *args, **kwargs) -> bool:
         return self._tab.push_switch_field_case(*args, **kwargs)
 
+    # ----- path-typed parallel API (Phase H) -----------------------------
+    # The methods above keep QModelIndex-typed signatures so the existing
+    # test suite (~55 push_* call sites) and back-compat callers keep
+    # working unchanged. New callers in tree_actions/ should prefer the
+    # ``*_at`` / ``*_paths`` variants below which take ``tuple[int, ...]``
+    # paths -- the same payload the underlying undo command classes
+    # already store on the redo/undo side. The QModelIndex round-trip
+    # then lives in one place (here) instead of being smeared across
+    # every call site.
+    def push_edit_value_at(
+        self, row_path: tuple[int, ...], new_value: Any, *, label: str = "edit value"
+    ) -> bool:
+        """Path-typed variant of :meth:`push_edit_value`.
+
+        Resolves *row_path* to the column-0 source index, picks its
+        column-2 sibling (the value cell), and delegates. Returns
+        ``False`` when the path no longer resolves to a valid row.
+        """
+        row_index = self.index_from_path(row_path)
+        if not row_index.isValid():
+            return False
+        model = self._tab.data_store.model
+        value_index = model.index(row_index.row(), 2, row_index.parent())
+        return self._tab.push_edit_value(value_index, new_value, label=label)
+
+    def push_remove_paths(
+        self, paths: list[tuple[int, ...]], *, label: str = "delete"
+    ) -> bool:
+        """Path-typed variant of :meth:`push_remove_rows`.
+
+        Returns ``False`` if any path fails to resolve.
+        """
+        indexes = [self.index_from_path(p) for p in paths]
+        if not all(i.isValid() for i in indexes):
+            return False
+        return self._tab.push_remove_rows(indexes, label=label)
+
+    def push_sort_keys_at(
+        self, parent_path: tuple[int, ...], *, recursive: bool = False
+    ) -> bool:
+        """Path-typed variant of :meth:`push_sort_keys`."""
+        parent_index = self.index_from_path(parent_path)
+        if not parent_index.isValid():
+            return False
+        return self._tab.push_sort_keys(parent_index, recursive=recursive)
+
     # ----- macro framing --------------------------------------------------
     def begin_macro(self, label: str) -> None:
         undo_stack = self._tab.undo_stack

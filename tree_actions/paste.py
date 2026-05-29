@@ -232,7 +232,9 @@ def paste_replace_value(tree_view: QTreeView) -> bool:
 
     tab = _tab_of(tree_view)
     if tab is not None:
-        return tab.mutations.push_edit_value(value_index, new_value, label="paste replace")
+        # Path-typed API (Phase H): pass the row's path; gateway picks the
+        # column-2 sibling internally.
+        return tab.mutations.push_edit_value_at(_index_path(row0), new_value, label="paste replace")
 
     return bool(model.setData(value_index, new_value, Qt.ItemDataRole.EditRole))
 
@@ -424,8 +426,8 @@ def paste_replace_zip(tree_view: QTreeView) -> bool:
     moved = 0
     try:
         for target, entry in zip(targets, entries):
-            value_index = model.index(target.row(), 2, target.parent())
-            if tab.mutations.push_edit_value(value_index, entry["value"], label="paste replace each"):
+            # Path-typed API (Phase H).
+            if tab.mutations.push_edit_value_at(_index_path(target), entry["value"], label="paste replace each"):
                 moved += 1
     finally:
         tab.mutations.end_macro()
