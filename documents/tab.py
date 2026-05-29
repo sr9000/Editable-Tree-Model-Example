@@ -21,6 +21,7 @@ from documents.tab_protocols import JsonTabWidgetMarker
 from documents.tab_status import on_current_changed, size_hint_for_item
 from documents.tab_validation import TabValidationController
 from documents.tab_validation_view import JsonTabValidationViewController
+from documents.view_controller import DocumentView
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
@@ -57,6 +58,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     _navigation: JsonTabNavigationController | None = None
     _editability: JsonTabEditabilityController | None = None
     _validation_view: JsonTabValidationViewController | None = None
+    _view_controller: DocumentView | None = None
 
     dirtyChanged = Signal(bool)
     schemaChanged = Signal(object)
@@ -169,6 +171,18 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         ``plans/20-decouple-jsontab.md`` Phase D.
         """
         return self.data_store.view
+
+    @property
+    def view_controller(self) -> DocumentView:
+        """Selection / expansion / scroll controller for the tree view.
+
+        Created by :func:`documents.tab_init.bootstrap`. External callers
+        should prefer this over :attr:`view` whenever the underlying
+        operation is selection-, expansion-, or scroll-related; see
+        ``plans/20-decouple-jsontab.md`` Phase D (D1).
+        """
+        assert self._view_controller is not None, "view_controller accessed before bootstrap"
+        return self._view_controller
 
     @property
     def model(self) -> JsonTreeModel:

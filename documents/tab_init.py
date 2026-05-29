@@ -29,6 +29,7 @@ from documents.tab_setup import (
 )
 from documents.tab_validation import TabValidationController
 from documents.tab_validation_view import JsonTabValidationViewController
+from documents.view_controller import DocumentView
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
@@ -109,6 +110,13 @@ def bootstrap(
     tab.set_monospace_fields_enabled(tab.data_store._monospace_fields_enabled)
     init_shortcuts(tab)
     init_search_filter(tab)
+
+    # Phase D: viewport controller. Created after the QTreeView exists
+    # (init_layout) and after the proxy/model are wired (init_model)
+    # because apply_request resolves source-paths through the proxy.
+    view_controller = DocumentView(tab)
+    tab._view_controller = view_controller
+    view_controller.viewportRequested.connect(view_controller.apply_request)
     # Plug the severity provider before init_validation_state so the first
     # revalidate() → dataChanged repaint already has the provider ready.
     tab.data_store.model.set_issue_index_provider(tab._severity_provider)
