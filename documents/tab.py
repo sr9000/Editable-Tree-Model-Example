@@ -282,19 +282,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     def affix_mru(self) -> AffixMRU:
         return self.data_store.affix_mru
 
-    # -- Phase F (F5): retained underscore-prefixed forwards.
-    # ``zoom_pt`` / :meth:`column_widths` / :meth:`set_column_widths`
-    # are the modern surface; these properties remain only so the
-    # state/view_state.py migration in the next commit can land as a
-    # pure rename. They will be removed alongside it.
-    @property
-    def _font_pt(self) -> int:
-        return self.data_store._font_pt
-
-    @property
-    def _user_sized_columns(self) -> set[int]:
-        return self.data_store._user_sized_columns
-
     def closeEvent(self, event):  # type: ignore[override]
         self.data_store.validation.release()
         super().closeEvent(event)

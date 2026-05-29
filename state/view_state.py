@@ -75,13 +75,13 @@ def save(tab) -> None:
     settings = QSettings(APPLICATION_ID, "view_state")
     settings.beginGroup(state_key(tab.file_path))
 
-    widths = [int(tab.view.columnWidth(column)) for column in range(tab.model.columnCount())]
+    widths = tab.column_widths()
     expanded_paths = [list(path) for path in tab._collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
 
     current_path_tuple = tab.view_controller.current_path()
     current_path = list(current_path_tuple) if current_path_tuple is not None else []
 
-    font_pt = int(tab._font_pt or tab.view.font().pointSize() or 10)
+    font_pt = int(tab.zoom_pt or tab.view.font().pointSize() or 10)
 
     settings.setValue("col_widths", widths)
     settings.setValue("expanded", expanded_paths)
@@ -117,13 +117,7 @@ def restore(tab) -> bool:
         tab._set_font_pt(font_pt)
 
     if widths is not None:
-        for column, width in enumerate(widths[: tab.model.columnCount()]):
-            if width > 0:
-                tab.view.setColumnWidth(column, width)
-        # The persisted widths represent the user's last explicit preference;
-        # treat name (0) and type (1) columns as user-sized so zoom helpers
-        # won't snap them back to content width.
-        tab._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
+        tab.set_column_widths(widths)
 
     if expanded is not None:
         tab.view_controller.request_collapse_all()
