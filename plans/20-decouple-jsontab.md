@@ -259,13 +259,13 @@ attemptable and is the highest-value remaining work.
 deleted** and a **path-typed parallel API** added to the mutation
 gateway. Phase I (decompose `JsonTabData`) is now unblocked.
 
-| Phase | Steps    | Status                                                                            | Commits |
-|-------|----------|-----------------------------------------------------------------------------------|---------|
-| G     | G1-G3    | ✅ complete (bundled; 9 protocols deleted, marker extracted, 38 sites swapped)     | 1       |
-| H     | H1+H2    | ✅ complete-pragmatic (path-typed parallel API + 4 proof callers migrated)         | 1       |
-| H3    | undo de-Qt | ⏭ deferred indefinitely (requires path-API on tree.model itself; out of plan)   | —       |
-| I     | all      | 🟢 unblocked                                                                       | —       |
-| J     | all      | ⏳ planned                                                                         | —       |
+| Phase | Steps      | Status                                                                        | Commits |
+|-------|------------|-------------------------------------------------------------------------------|---------|
+| G     | G1-G3      | ✅ complete (bundled; 9 protocols deleted, marker extracted, 38 sites swapped) | 1       |
+| H     | H1+H2      | ✅ complete-pragmatic (path-typed parallel API + 4 proof callers migrated)     | 1       |
+| H3    | undo de-Qt | ⏭ deferred indefinitely (requires path-API on tree.model itself; out of plan) | —       |
+| I     | all        | 🟢 unblocked                                                                  | —       |
+| J     | all        | ⏳ planned                                                                     | —       |
 
 **Quantified progress:**
 
@@ -325,13 +325,13 @@ Phase I (decompose `JsonTabData` into `IoState`/`ViewState`/
 `EditingState`/`ValidationState`) is a purely internal refactor
 inside `documents/`. Its preconditions:
 
-| Precondition                                              | Met by                |
-|-----------------------------------------------------------|-----------------------|
-| No external caller reaches into `JsonTabData`             | Phases B-F            |
-| `JsonTab` public surface stable (typed properties)        | Phases B-F + E2-E6    |
-| Undo commands don't hold QModelIndex in constructors      | Phase 5 (pre-plan)    |
-| Viewport not coupled to view location in JsonTabData      | Phase D-full          |
-| No mirrored Protocol surface that needs parallel updates  | Phase G               |
+| Precondition                                             | Met by             |
+|----------------------------------------------------------|--------------------|
+| No external caller reaches into `JsonTabData`            | Phases B-F         |
+| `JsonTab` public surface stable (typed properties)       | Phases B-F + E2-E6 |
+| Undo commands don't hold QModelIndex in constructors     | Phase 5 (pre-plan) |
+| Viewport not coupled to view location in JsonTabData     | Phase D-full       |
+| No mirrored Protocol surface that needs parallel updates | Phase G            |
 
 All five are now in place. Phase I can move attributes between
 substates without parallel work in tree_actions/, undo/, or app/.
