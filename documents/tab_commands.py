@@ -166,9 +166,7 @@ def push_rename(tab: "JsonTab", name_index: QModelIndex, new_name: Any, *, label
     return True
 
 
-def push_edit_value(
-    tab: "JsonTab", value_index: QModelIndex, new_value: Any, *, label: str = "edit value"
-) -> bool:
+def push_edit_value(tab: "JsonTab", value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
     if tab.data_store.is_read_only:
         return False
     if not value_index.isValid() or value_index.column() != 2:
@@ -193,9 +191,7 @@ def push_edit_value(
     return True
 
 
-def push_change_type(
-    tab: "JsonTab", type_index: QModelIndex, new_type: Any, *, label: str = "change type"
-) -> bool:
+def push_change_type(tab: "JsonTab", type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
     if tab.data_store.is_read_only:
         return False
     if not type_index.isValid() or type_index.column() != 1:

@@ -4,6 +4,9 @@ and renamed the class to :class:`IoState`.  This module keeps the
 historical ``TabIOController`` symbol importable for tests and any
 not-yet-migrated production callers.
 """
+
 from __future__ import annotations
+
 from documents.states.io_state import IoState as TabIOController
+
 __all__ = ["TabIOController"]

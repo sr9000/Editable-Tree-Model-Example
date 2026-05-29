@@ -10,14 +10,14 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from documents.mutation_gateway import DocumentMutationGateway
+from documents.states.io_state import IoState
+from documents.states.validation_state import ValidationState
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
 from documents.tab_demo_data import build_demo_data
 from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_services
 from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_history import TabHistoryController
-from documents.states.io_state import IoState
-from documents.states.validation_state import ValidationState
 from documents.tab_navigation import JsonTabNavigationController
 from documents.tab_setup import (
     init_delegates_and_connections,

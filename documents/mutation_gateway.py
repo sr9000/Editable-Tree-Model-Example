@@ -19,7 +19,6 @@ from typing import Any
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt
 
 
-
 class DocumentMutationGateway:
     """Thin forwarding façade for document mutations.
 
@@ -91,9 +90,7 @@ class DocumentMutationGateway:
     # already store on the redo/undo side. The QModelIndex round-trip
     # then lives in one place (here) instead of being smeared across
     # every call site.
-    def push_edit_value_at(
-        self, row_path: tuple[int, ...], new_value: Any, *, label: str = "edit value"
-    ) -> bool:
+    def push_edit_value_at(self, row_path: tuple[int, ...], new_value: Any, *, label: str = "edit value") -> bool:
         """Path-typed variant of :meth:`push_edit_value`.
 
         Resolves *row_path* to the column-0 source index, picks its
@@ -107,9 +104,7 @@ class DocumentMutationGateway:
         value_index = model.index(row_index.row(), 2, row_index.parent())
         return self._tab.push_edit_value(value_index, new_value, label=label)
 
-    def push_remove_paths(
-        self, paths: list[tuple[int, ...]], *, label: str = "delete"
-    ) -> bool:
+    def push_remove_paths(self, paths: list[tuple[int, ...]], *, label: str = "delete") -> bool:
         """Path-typed variant of :meth:`push_remove_rows`.
 
         Returns ``False`` if any path fails to resolve.
@@ -119,9 +114,7 @@ class DocumentMutationGateway:
             return False
         return self._tab.push_remove_rows(indexes, label=label)
 
-    def push_sort_keys_at(
-        self, parent_path: tuple[int, ...], *, recursive: bool = False
-    ) -> bool:
+    def push_sort_keys_at(self, parent_path: tuple[int, ...], *, recursive: bool = False) -> bool:
         """Path-typed variant of :meth:`push_sort_keys`."""
         parent_index = self.index_from_path(parent_path)
         if not parent_index.isValid():

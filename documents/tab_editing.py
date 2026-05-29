@@ -10,7 +10,6 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QComboBox
 
 
-
 def on_type_changed(tab: "JsonTab", item_index, lossy: bool) -> None:
     # ``change_type`` already emitted ``dataChanged`` for the row, which closes
     # any persistent inline editor that might have been open on the value cell.
