@@ -174,3 +174,30 @@ D-light precedent:
 This document is the deliverable for E1. The DoD gate is unchanged
 (no code change), and the file's existence unblocks the E-light
 mechanical swap that follows in the next commit.
+
+## Update (2026-05-29, Session 4) — E2-E6 landed
+
+The narrow read helpers proposed above shipped on
+`decouple-json-tab` in three commits:
+
+* **E2** — adds `root_index()`, `root_item()`, `root_data()`,
+  `row_count(parent)`, `column_count()`, plus the Phase F closeout
+  helpers `zoom_pt` / `column_widths()` / `set_column_widths()` on
+  `JsonTab`. Purely additive.
+* **E3** — migrates `state/view_state.py` (the worst offender) to
+  `column_widths()` / `set_column_widths()` / `zoom_pt`; removes the
+  transitional `JsonTab._font_pt` / `JsonTab._user_sized_columns`
+  forwarding properties since `state/view_state.py` was their only
+  external consumer.
+* **E4-E6** (bundled) — migrates the remaining 10 sites in
+  `app/close_confirm.py`, `app/validation_panel_model.py`,
+  `app/main_window.py`, `app/tab_lifecycle.py`, and
+  `tree_actions/anchors.py`.
+
+After Session 4 the residual `tab.model` access surface is exactly
+the **38 sites in `undo/{commands,diff}.py`** flagged in the table
+above as "legitimately need the QAbstractItemModel API". Eliminating
+them is Phase H's job (path-based mutation gateway), which is now
+unblocked: D-full landed the `ViewportRequest` signal that lets undo
+command implementations stop touching the view, and E2-E6 confirm
+that no production caller outside `undo/` needs `tab.model` anymore.

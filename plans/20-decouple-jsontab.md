@@ -93,6 +93,7 @@ ViewportRequest plumbing seriously per the D3 risk register.
 
 ---
 
+
 ## 🚀 Session 3 Summary (2026-05-29) — D-full landed
 
 **Status:** 4 commits landed on top of Session 2; **Phase D fully complete**
@@ -178,6 +179,77 @@ Phase H now in place).
 **Updated entry-point recommendation for Session 4:** Phase G remains
 the cheapest, most-independent next step. Phase H is now realistically
 attemptable because D-full unblocked it.
+
+---
+## 🚀 Session 4 Summary (2026-05-29) — Phase E full + Phase F closeout
+
+**Status:** 3 commits landed on top of Session 3; **Phase E now
+fully complete** (E2-E6, not just E-light) and the underscore-prefixed
+forwards left behind by F4+F5 are gone.
+
+| Phase  | Steps    | Status                                                                          | Commits |
+|--------|----------|---------------------------------------------------------------------------------|---------|
+| E      | E2       | ✅ complete (narrow read helpers + zoom_pt/column_widths added)                  | 1       |
+| E      | E3       | ✅ complete (state/view_state.py migrated; transitional underscore props pruned) | 1       |
+| E      | E4-E6    | ✅ complete (5 files / 10 sites migrated, QModelIndex imports cleaned up)        | 1       |
+| E7     | guard    | ✅ already in place from E-light (no change needed)                              | —       |
+| F      | closeout | ✅ complete (zoom_pt / column_widths replace _font_pt / _user_sized_columns)     | (in E3) |
+| G–J    | all      | ⏳ planned                                                                       | —       |
+
+**Quantified progress:**
+
+- `tab.model` reads outside `undo/`: **12** → **0** (−100%)
+- `tab._font_pt` / `tab._user_sized_columns` external reads:
+  **3** → **0** (−100%)
+- New narrow `JsonTab` helpers shipped: 8 (`root_index`, `root_item`,
+  `root_data`, `row_count`, `column_count`, `zoom_pt` property,
+  `column_widths`, `set_column_widths`)
+- Test suite: **1124 pass**, 18.5s wall-clock, unchanged across every step
+- Phase F long-tail residue removed: `JsonTab._font_pt`,
+  `JsonTab._user_sized_columns` properties deleted (data lives on
+  `JsonTabData` where it belongs)
+
+**Commits (newest first):**
+
+- `2d469d8` E4-E6 — migrate non-undo callers (5 files, 10 sites)
+- `32ebfbf` E3 — migrate `state/view_state.py` + drop transitional props
+- `6304393` E2 — add narrow read helpers (additive only)
+
+**Key artifacts:**
+
+- New helpers on `JsonTab` (`documents/tab.py`) covering the 17
+  non-`undo/` structural/data reads identified by the E1 audit.
+- `state/view_state.py` shrunk by 7 LOC; no more reach-in to
+  underscore-prefixed `JsonTab` properties.
+- `reports/model_access_audit.md` updated with a "Session 4" section
+  recording which helpers shipped against which sites.
+
+**What's left for Phase H:**
+
+After Session 4, the **only** remaining `tab.model` accesses are the
+38 sites inside `undo/{commands,diff}.py`. They genuinely use the
+full `QAbstractItemModel` surface (`beginInsertRows`, `setData(...,
+EditRole)`, `removeRow`, `move_row`, `dataChanged.emit`). Phase H
+will retire them by routing through the path-based mutation gateway;
+this is the deep refactor the plan has been building toward.
+
+The repo state at the end of Session 4 satisfies every Phase G and
+Phase H prerequisite:
+
+* **Phase G** ("Burn `tab_protocols.py`") — independent of E/F; the
+  protocols are now stable enough to be typed and inlined since no
+  external file reaches into `data_store.*` and the `tab.*` surface
+  has typed forwards for every retired attribute.
+* **Phase H** ("De-Qt the command layer") — unblocked because:
+    1. D-full's `ViewportRequest` signal is live, so undo commands
+       can already restore selection without holding a QTreeView.
+    2. E2-E6 confirm no caller outside `undo/` needs `tab.model`,
+       so the mutation gateway can swap its index-based overloads
+       for path-based ones without breaking unrelated code.
+
+**Recommended next-session entry point:** Phase G remains the
+cheapest, most-independent step. Phase H is now realistically
+attemptable and is the highest-value remaining work.
 
 ---
 
@@ -539,7 +611,7 @@ change is to read them off `tab` directly.
   Keep it as a private `_view` and remove from facade properties.
   Forbid `data_store.view` via pre-commit regex.
 
-### Phase E — Stop leaking `model` (54 hits) ✅ LANDED (E1 + E-light, Session 2)
+### Phase E — Stop leaking `model` (54 hits) ✅ LANDED (E1 + E-light Session 2; E2-E6 Session 4)
 
 The biggest single attribute. Most external usage is structural reads
 (`columnCount`, `index`, `parent`, `get_item`) and a few writes during
@@ -584,7 +656,9 @@ load/save. Split by call-site cluster.
 
 (`undo_stack`, `validation`, `schema_source`, `schema_ref`,
 `search_edit`, `affix_mru`, `_font_pt`, `last_move_placed`,
-`issue_index`) ✅ LANDED (F1-light, F2, F3 Session 1; F4+F5 Session 2)
+`issue_index`) ✅ LANDED (F1-light, F2, F3 Session 1; F4+F5 Session 2;
+closeout in Session 4 — `zoom_pt` / `column_widths` / `set_column_widths`
+replace the underscore-prefixed forwards left behind by F5)
 
 * **F1. `undo_stack` → `tab.history` controller.**
   Already partially present (`tab_history.py`); just expose `tab.history`
