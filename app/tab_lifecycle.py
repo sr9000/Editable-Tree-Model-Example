@@ -96,11 +96,10 @@ class TabLifecyclePresenter(QObject):
         win.fonts.subscribe(tab)
         tab.dirtyChanged.connect(lambda _dirty, t=tab: self.on_tab_dirty(t))
 
-        tab.view.expandAll()
+        tab.view_controller.request_expand_all()
         tab.resize_key_columns()
         if tab.model.show_root:
-            source_index = tab.model.index(0, 0, QModelIndex())
-            tab.view.setCurrentIndex(tab.mutations.source_to_view(source_index))
+            tab.view_controller.request_select_paths([()])
         view_state.restore(tab)
         # Re-broadcast: ``view_state.restore`` may have rewritten ``_font_pt``
         # from a previously-saved per-tab value; the global controller wins.

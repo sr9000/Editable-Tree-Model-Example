@@ -126,20 +126,12 @@ def restore(tab) -> bool:
         tab._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
 
     if expanded is not None:
-        tab.view.collapseAll()
+        tab.view_controller.request_collapse_all()
         for path in expanded:
-            source_index = tab._index_from_path(path)
-            view_index = tab._source_to_view(source_index)
-            if view_index.isValid():
-                tab.view.expand(view_index)
+            tab.view_controller.request_expand(tuple(path))
 
     if current_path is not None:
-        source_index = tab._index_from_path(current_path)
-        current_index = tab._source_to_view(source_index)
-        if current_index.isValid():
-            # Always select column 0 when restoring row focus.
-            row_index = current_index.siblingAtColumn(0)
-            tab.view.setCurrentIndex(row_index)
+        tab.view_controller.request_select_paths([tuple(current_path)])
 
     return True
 

@@ -28,6 +28,7 @@ from PySide6.QtCore import QModelIndex, QObject, Signal
 KIND_SELECT_PATHS = "select"
 KIND_EXPAND_PATH = "expand"
 KIND_EXPAND_ALL = "expand_all"
+KIND_COLLAPSE_ALL = "collapse_all"
 KIND_SCROLL_TO = "scroll"
 
 
@@ -120,6 +121,10 @@ class DocumentView(QObject):
         """Ask the viewport to expand every node."""
         self.viewportRequested.emit(KIND_EXPAND_ALL, None)
 
+    def request_collapse_all(self) -> None:
+        """Ask the viewport to collapse every node."""
+        self.viewportRequested.emit(KIND_COLLAPSE_ALL, None)
+
     def request_scroll_to(self, path: tuple[int, ...]) -> None:
         """Ask the viewport to scroll the node at *path* into view."""
         self.viewportRequested.emit(KIND_SCROLL_TO, tuple(path))
@@ -145,6 +150,8 @@ class DocumentView(QObject):
             self._apply_expand(payload)
         elif kind == KIND_EXPAND_ALL:
             view.expandAll()
+        elif kind == KIND_COLLAPSE_ALL:
+            view.collapseAll()
         elif kind == KIND_SCROLL_TO:
             self._apply_scroll(payload)
         # Unknown kinds are silently ignored; the signal contract is
