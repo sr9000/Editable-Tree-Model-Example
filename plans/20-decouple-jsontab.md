@@ -9,24 +9,28 @@
 
 **Status:** 13 commits landed on `decouple-json-tab`; **57% of easy leaks closed**.
 
-| Phase | Steps | Status | Commits |
-|---|---|---|---|
-| A | A1, A3 | ✅ complete | 2 |
-| B | B1–B4 | ✅ complete | 4 |
-| C | C1–C4 | ✅ complete | 4 |
-| F | F1, F2, F3 | ✅ complete | 3 |
-| D | all | ⏭ deferred | — |
-| E | all | ⏭ deferred | — |
-| G–J | all | ⏳ planned | — |
+| Phase | Steps      | Status     | Commits |
+|-------|------------|------------|---------|
+| A     | A1, A3     | ✅ complete | 2       |
+| B     | B1–B4      | ✅ complete | 4       |
+| C     | C1–C4      | ✅ complete | 4       |
+| F     | F1, F2, F3 | ✅ complete | 3       |
+| D     | all        | ⏭ deferred | —       |
+| E     | all        | ⏭ deferred | —       |
+| G–J   | all        | ⏳ planned  | —       |
 
 **Quantified progress:**
+
 - `data_store.*` reads: **212** → **91** (−57%)
-- Leaked attributes retired: 8 of 17 (`mutations, file_path, is_dirty, is_read_only, save_format, undo_stack, schema_source, schema_ref, validation`)
-- Remaining leaks: 9 attrs (56 `model`, 18 `view`, 2 each `search_edit`/`last_move_placed`/`issue_index`, 1 each `affix_mru`/`_font_pt`/`_user_sized_columns`)
+- Leaked attributes retired: 8 of 17 (
+  `mutations, file_path, is_dirty, is_read_only, save_format, undo_stack, schema_source, schema_ref, validation`)
+- Remaining leaks: 9 attrs (56 `model`, 18 `view`, 2 each `search_edit`/`last_move_placed`/`issue_index`, 1 each
+  `affix_mru`/`_font_pt`/`_user_sized_columns`)
 - Test suite: **1124 pass**, 19s wall-clock, unchanged
 - Guard: `.githooks/_check_data_store_leaks.sh` deployed, data-driven, 8 attrs blocked
 
 **Key artifacts:**
+
 - New: `documents/document_protocol.py` (narrow `Document` protocol stub)
 - New: `make test`, `make gate` targets in Makefile
 - Modified: `documents/tab.py` (added 10 typed properties)
@@ -42,43 +46,52 @@
 ### If resuming on the same branch (`decouple-json-tab`)
 
 1. **Start with Phase D (high-risk).** Do NOT attempt bulk Phase E before reading this:
-   - D3 is the riskiest step: it redirects `undo/commands.py`'s `setCurrentIndex` through a new `ViewportRequest` signal.
-   - **Revert-first policy:** If any test flakes, revert D3 immediately and split into D3a (read-side), D3b (signal wiring), D3c (call-site).
-   - Run the full heavy suite after D3: `pytest -q tests/test_undo_*.py tests/test_typed_undo_*.py tests/test_keyboard_multimove*.py tests/test_drag_drop_*.py tests/test_anchor_move.py tests/test_move_preserves_expansion.py tests/test_phase_5_4_persisted_view_state.py`.
-   
+    - D3 is the riskiest step: it redirects `undo/commands.py`'s `setCurrentIndex` through a new `ViewportRequest`
+      signal.
+    - **Revert-first policy:** If any test flakes, revert D3 immediately and split into D3a (read-side), D3b (signal
+      wiring), D3c (call-site).
+    - Run the full heavy suite after D3:
+      `pytest -q tests/test_undo_*.py tests/test_typed_undo_*.py tests/test_keyboard_multimove*.py tests/test_drag_drop_*.py tests/test_anchor_move.py tests/test_move_preserves_expansion.py tests/test_phase_5_4_persisted_view_state.py`.
+
 2. **Before Phase E, complete E1 (audit).** Do NOT rush into mechanical swaps:
-   - Phase E (model, 56 hits) is high-volume and needs intent classification first.
-   - E1 produces `reports/model_access_audit.md` with labels: `read-structural`, `read-data`, `mutate`, `signal-connect`.
-   - This audit determines clustering for E2–E6 steps and prevents Category-5 refactorings.
-   - Allow ~30 min for E1 grepping and classifying.
+    - Phase E (model, 56 hits) is high-volume and needs intent classification first.
+    - E1 produces `reports/model_access_audit.md` with labels: `read-structural`, `read-data`, `mutate`,
+      `signal-connect`.
+    - This audit determines clustering for E2–E6 steps and prevents Category-5 refactorings.
+    - Allow ~30 min for E1 grepping and classifying.
 
 3. **Extend the guard incrementally.** After each phase lands:
    ```bash
    # Add to FORBIDDEN_DATA_STORE_ATTRS in .githooks/_check_data_store_leaks.sh
    # Then commit the guard extension in the same commit as call-site swaps
    ```
-   Current blocklist: `mutations, file_path, is_dirty, is_read_only, save_format, undo_stack, schema_source, schema_ref, validation`.
+   Current blocklist:
+   `mutations, file_path, is_dirty, is_read_only, save_format, undo_stack, schema_source, schema_ref, validation`.
    Next: `model, view, search_edit, last_move_placed, issue_index, affix_mru, _font_pt, _user_sized_columns`.
 
 4. **Timeouts are in place.** All `make gate` runs will use `QT_QPA_PLATFORM=offscreen timeout 600 pytest -q`.
 
 ### If starting fresh (new branch / new repo checkout)
 
-1. **Read this file top-to-bottom.** Phases A–C+F are fully specified and have been proven; Phases D–E–G–H–I–J are pre-planned but untested.
+1. **Read this file top-to-bottom.** Phases A–C+F are fully specified and have been proven; Phases D–E–G–H–I–J are
+   pre-planned but untested.
 
 2. **Use the reference implementation.** Check commit hashes on branch `decouple-json-tab`:
-   - `a39dca9` A1 — adding narrow protocol stub (good template for abstract surface definitions)
-   - `15e37cd` B4 — guard script creation (reusable pattern for data-driven pre-commit hooks)
-   - `821d2d2` C1 — adding properties in bulk (shows how to forward 5 attrs in one method)
-   - `904fde9` F2 — bundling add+swap+guard in one commit (valid when controller already exists end-to-end)
+    - `a39dca9` A1 — adding narrow protocol stub (good template for abstract surface definitions)
+    - `15e37cd` B4 — guard script creation (reusable pattern for data-driven pre-commit hooks)
+    - `821d2d2` C1 — adding properties in bulk (shows how to forward 5 attrs in one method)
+    - `904fde9` F2 — bundling add+swap+guard in one commit (valid when controller already exists end-to-end)
 
-3. **Skip Phase A2.** The reflection ban makes `__getattr__` audit hostile. Static grep (already done) gives the ordering.
+3. **Skip Phase A2.** The reflection ban makes `__getattr__` audit hostile. Static grep (already done) gives the
+   ordering.
 
-4. **Expect Phase D to be the breaking point.** If tests start flaking during D3, that's **not** a bug — it's the signal-wiring complexity showing up. Revert and split at the first flake.
+4. **Expect Phase D to be the breaking point.** If tests start flaking during D3, that's **not** a bug — it's the
+   signal-wiring complexity showing up. Revert and split at the first flake.
 
 ### Practical checklists for the next session
 
 **Before starting a step:**
+
 ```bash
 cd /home/sr9000/PycharmProjects/Editable-Tree-Model-Example
 git checkout decouple-json-tab  # or git pull origin decouple-json-tab
@@ -87,6 +100,7 @@ make gate                        # baseline sanity check (should pass)
 ```
 
 **After each step (before commit):**
+
 ```bash
 make lint              # reformats in-place; add results
 make check-no-reflection  # should pass
@@ -96,6 +110,7 @@ git diff --stat       # review scope (should be ≤300 LOC for mechanical steps,
 ```
 
 **When committing:**
+
 ```bash
 # Copy template: each commit message must include:
 # 1. Step name and plan reference
@@ -125,9 +140,12 @@ DoD:
 
 ### Known flakiness & workarounds
 
-- **Post-pytest core dumps:** The `timeout: the monitored command dumped core` message after ` QT_QPA_PLATFORM=offscreen pytest` is benign (Qt interpreter teardown on offscreen platform). Exit code 0 is success.
-- **Black import wrapping:** `isort` sometimes breaks `from documents.tab_validation_view import (...)` lines; use `git checkout -- <file>` after `make lint` to revert, then add the import via `sed` if needed.
-- **Qt offscreen color-scheme tests:** 3 tests fail under offscreen but not on real platforms (documented in `ai-memory/todo-n-fixme.md`). These are NOT regressions caused by the plan.
+- **Post-pytest core dumps:** The `timeout: the monitored command dumped core` message after
+  ` QT_QPA_PLATFORM=offscreen pytest` is benign (Qt interpreter teardown on offscreen platform). Exit code 0 is success.
+- **Black import wrapping:** `isort` sometimes breaks `from documents.tab_validation_view import (...)` lines; use
+  `git checkout -- <file>` after `make lint` to revert, then add the import via `sed` if needed.
+- **Qt offscreen color-scheme tests:** 3 tests fail under offscreen but not on real platforms (documented in
+  `ai-memory/todo-n-fixme.md`). These are NOT regressions caused by the plan.
 
 ---
 
@@ -253,15 +271,15 @@ Each step has: **goal**, **scope**, **DoD-specific notes**, **rollback**.
 * **A2. ~~Add a deprecation shim recorder.~~ — DEFERRED.**
   Original plan was a `__getattr__` hook on `JsonTabData` logging
   external reads. Two reasons to skip:
-  1. The reflection ban (`.githooks/pre-commit`) matches `__getattr__(`
-     against its `\b(get|has)attr\(` regex, so the hook would need
-     allowlisting purely for instrumentation — wrong trade-off.
-  2. The §1 access matrix already enumerates every leaked attribute
-     (`mutations` 64, `model` 54, `file_path` 27, …) which is the
-     only data the audit was meant to produce. No additional
-     information is needed to drive Phases B–F.
-  Re-open A2 only if Phase B uncovers callers not captured by the
-  static grep.
+    1. The reflection ban (`.githooks/pre-commit`) matches `__getattr__(`
+       against its `\b(get|has)attr\(` regex, so the hook would need
+       allowlisting purely for instrumentation — wrong trade-off.
+    2. The §1 access matrix already enumerates every leaked attribute
+       (`mutations` 64, `model` 54, `file_path` 27, …) which is the
+       only data the audit was meant to produce. No additional
+       information is needed to drive Phases B–F.
+       Re-open A2 only if Phase B uncovers callers not captured by the
+       static grep.
 
 * **A3. Pin the test gate.**
   *Goal:* add a `make test` target wrapping
@@ -425,8 +443,8 @@ load/save. Split by call-site cluster.
 ### Phase F — Stop leaking the long tail
 
 (`undo_stack`, `validation`, `schema_source`, `schema_ref`,
- `search_edit`, `affix_mru`, `_font_pt`, `last_move_placed`,
- `issue_index`) ✅ PARTIALLY LANDED (F1-light, F2, F3; F4–F5 deferred)
+`search_edit`, `affix_mru`, `_font_pt`, `last_move_placed`,
+`issue_index`) ✅ PARTIALLY LANDED (F1-light, F2, F3; F4–F5 deferred)
 
 * **F1. `undo_stack` → `tab.history` controller.**
   Already partially present (`tab_history.py`); just expose `tab.history`
