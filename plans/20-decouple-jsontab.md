@@ -347,6 +347,105 @@ in the same pattern, and I5 deletes the facade.
 
 ---
 
+## 🚀 Session 6 Summary (2026-05-29) — Phase I fully landed
+
+**Status:** 5 commits landed on top of Session 5; **Phase I complete**
+(`JsonTabData` decomposed into 4 substates + `JsonTabDataFacade` deleted).
+Phase J (closeout) is the only remaining work in the plan.
+
+| Phase | Steps   | Status                                                   | Commits |
+|-------|---------|----------------------------------------------------------|---------|
+| I     | I1      | ✅ complete (IoState moved to documents/states/)          | 1       |
+| I     | I2      | ✅ complete (ViewState extracted; 7 attrs forwarded)      | 1       |
+| I     | I3      | ✅ complete (EditingState extracted; 5 attrs forwarded)   | 1       |
+| I     | I4      | ✅ complete (ValidationState aliased in states/)          | 1       |
+| I     | I5      | ✅ complete (JsonTabDataFacade deleted; merged into Data) | 1       |
+| J     | all     | ⏳ planned                                                | —       |
+
+**Quantified progress:**
+
+- `documents/states/` subpackage created with 4 substate modules
+  (`io_state.py` 64 LOC, `view_state.py` 42 LOC, `editing_state.py`
+  33 LOC, `validation_state.py` 16 LOC alias) + `__init__.py` 17 LOC
+- `documents/tab_data_facade.py`: **−190 LOC** (file deleted; contents
+  merged into `tab_data.py`)
+- `documents/tab_data.py`: **+155 LOC** net (now self-contained with
+  protocols + ~25 property forwards + 2 cross-cutting controllers)
+- New `JsonTab` substate accessors: 4 (`io`, `view_state`,
+  `editing_state`, `validation_state`)
+- Test suite: **1124 pass**, ~18.4s wall-clock, unchanged across
+  every step (I1: 18.34s, I2: 18.30s, I3: 18.50s, I4: 18.62s,
+  I5: 18.60s)
+
+**Commits (newest first):**
+
+- `74bc4b2` I5 — delete JsonTabDataFacade; JsonTab composes substates directly
+- `0ea3191` I4 — expose ValidationState in documents/states/
+- `46bf7b3` I3 — extract EditingState into documents/states/
+- `b808e99` I2 — extract ViewState into documents/states/
+- `2f29030` I1 — extract IoState into documents/states/
+
+**Architectural end state:**
+
+```
+JsonTab
+├── tab.io                  → IoState         (file_path/save_format/dirty)
+├── tab.view_state          → ViewState       (ui/view/proxy/3×delegate/search_edit)
+├── tab.editing_state       → EditingState    (model/mutations/affix_mru/history/last_move_placed)
+├── tab.validation_state    → ValidationState (= TabValidationController; schema/issue_index/timer)
+│
+└── tab.data_store : JsonTabData
+    ├── view_state            ← canonical storage for view widgets
+    ├── editing_state         ← canonical storage for editing axis
+    ├── io                    ← canonical storage for IO axis
+    ├── validation            ← canonical storage for validation axis
+    ├── editability           ← cross-cutting controller (read-only mode)
+    ├── appearance            ← cross-cutting controller (font/theme)
+    └── ~30 @property forwards (file_path, model, view, undo_stack,
+                                is_dirty, schema_*, _font_pt, ...)
+        — preserved verbatim for the 61 test files that reach into
+        tab.data_store.<attr> per Plan 20 section 6.
+```
+
+**Design decisions recorded in commit messages:**
+
+- I1 + I2 + I3 are "true" extractions: each creates a new substate
+  dataclass and moves storage into it; the legacy attribute names
+  on `JsonTabData` survive as read+write @property forwards.
+- I4 is an **alias** (`ValidationState = TabValidationController`)
+  rather than a body move, because the underlying 236-LOC controller
+  already encapsulates everything correctly and would have only
+  acquired a different module path from a physical move. Same
+  outcome as I1 for the dataclass annotation and the I2-I3 pattern
+  for the property forwards. Plan section 0 rule "no semantic change
+  in a structural step" is honoured by both flavours.
+- I5 deletes `JsonTabDataFacade` outright by inlining all of its
+  contents (protocols + ~25 property forwards + dataclass field
+  inventory) into `JsonTabData`. Eliminates the subclass relation
+  that was no longer load-bearing after I1-I4.
+- The four `tab.<substate>` accessors added in I5 satisfy the
+  plan's literal "JsonTab directly composes the four states"
+  wording while leaving external callers on their existing typed
+  per-attribute forwards (no churn outside `documents/`).
+
+**What's left for Phase J (closeout):**
+
+* Update `ai-memory/{repo-map.md, pros-n-cons.md, todo-n-fixme.md,
+  history.md}` to reflect the new substate architecture and cross-
+  reference Plan 20.
+* Update the Phase I status marker in section 3 below (this commit
+  + the commit you are reading do that).
+* Verify there are no longer any references to `JsonTabDataFacade`
+  or `tab_data_facade` outside historical commit messages.
+* Tag `decouple-jsontab-complete` and merge to `master`.
+
+**Recommended next-session entry point:** Phase J. There is no
+deferred deep refactor blocking the merge — all five Phase H/I
+preconditions are satisfied and the test gate has stayed green
+across 13 of the plan's 16 substantive commits.
+
+---
+
 ### If resuming on the same branch (`decouple-json-tab`)
 
 1. **Start with Phase D (high-risk).** Do NOT attempt bulk Phase E before reading this:
@@ -815,7 +914,7 @@ types. Internal protocols can now be reduced to real interfaces.
   `ViewportRequest` signal added in D3.
   *DoD:* full gate + the full undo/drag/keyboard suites listed in D3.
 
-### Phase I — Decompose `JsonTabData` 📋 PLANNED
+### Phase I — Decompose `JsonTabData` ✅ LANDED (I1–I5 Session 6)
 
 Now that nothing external reaches into it, split it.
 
