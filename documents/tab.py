@@ -189,16 +189,83 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         """Typed accessor for the underlying tree model.
 
         Replaces ``tab.data_store.model`` for external callers; see
-        ``plans/20-decouple-jsontab.md`` Phase E (E-light). Narrow read
-        helpers (root_data / root_index / row_count / column_count)
-        remain a candidate for E2-E6 — until they exist, callers in
-        app/, state/, tree_actions/, undo/ all funnel through this
-        single typed handle.
+        ``plans/20-decouple-jsontab.md`` Phase E (E-light). For the
+        17 non-``undo/`` sites that only needed structural reads,
+        prefer the narrow helpers below (Phase E, E2): :meth:`root_data`,
+        :meth:`root_index`, :meth:`root_item`, :meth:`row_count`,
+        :meth:`column_count`. Raw ``.model`` access remains the right
+        tool for ``undo/`` where the full ``QAbstractItemModel`` API
+        is genuinely needed; Phase H will retire those last usages
+        through the path-based mutation gateway.
         """
         return self.data_store.model
 
+    # -- Phase E (E2): narrow read helpers covering the structural /
+    # data-read intents identified in reports/model_access_audit.md.
+    # These let callers in app/, state/, tree_actions/ depend on a
+    # tiny stable surface instead of the full QAbstractItemModel.
+    def root_index(self) -> QModelIndex:
+        """Return the index of the root row.
+
+        When ``model.show_root`` is False the document is rendered as
+        an implicit top-level container; in that case the conventional
+        ``root index`` for traversal is the invalid index, since
+        :meth:`JsonTreeModel.get_item` maps the invalid index to the
+        real ``root_item``.
+        """
+        model = self.data_store.model
+        if not model.show_root:
+            return QModelIndex()
+        return model.index(0, 0, QModelIndex())
+
+    def root_item(self) -> JsonTreeItem:
+        """Return the root :class:`JsonTreeItem` of the document tree."""
+        return self.data_store.model.root_item
+
+    def root_data(self) -> Any:
+        """Return a fresh JSON-serialisable snapshot of the document root."""
+        return self.data_store.model.root_item.to_json()
+
+    def row_count(self, parent: QModelIndex = QModelIndex()) -> int:
+        """Number of children directly under ``parent``."""
+        return self.data_store.model.rowCount(parent)
+
+    def column_count(self) -> int:
+        """Number of columns in the document model (Name / Type / Value)."""
+        return self.data_store.model.columnCount()
+
+    # -- Phase E (E2/E3): viewport + zoom helpers consolidating the
+    # last bits of underscore-prefixed reach-in from state/view_state.py.
+    @property
+    def zoom_pt(self) -> int:
+        """Per-tab editor font point-size override (0 ⇒ inherit global)."""
+        return self.data_store._font_pt
+
+    def column_widths(self) -> list[int]:
+        """Snapshot the current widths of every model column from the view."""
+        view = self.data_store.view
+        model = self.data_store.model
+        return [int(view.columnWidth(c)) for c in range(model.columnCount())]
+
+    def set_column_widths(self, widths: list[int]) -> None:
+        """Restore previously-snapshotted column widths.
+
+        Positive values are written through to the tree view; the name
+        (column 0) and type (column 1) columns are additionally marked
+        as *user-sized* so subsequent zoom or content-resize passes do
+        not snap them back to content width. This is the inverse of
+        :meth:`column_widths`.
+        """
+        store = self.data_store
+        model = store.model
+        view = store.view
+        for column, width in enumerate(widths[: model.columnCount()]):
+            if width > 0:
+                view.setColumnWidth(column, width)
+        store._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
+
     # -- Phase F long tail (F4 / F5): typed accessors for residual
-    # state still leaked into tree_actions/, app/, undo/, state/.
+    # state still leaked into tree_actions/, app/, undo/.
     @property
     def search_edit(self) -> QLineEdit:
         return self.data_store.search_edit
@@ -215,6 +282,11 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     def affix_mru(self) -> AffixMRU:
         return self.data_store.affix_mru
 
+    # -- Phase F (F5): retained underscore-prefixed forwards.
+    # ``zoom_pt`` / :meth:`column_widths` / :meth:`set_column_widths`
+    # are the modern surface; these properties remain only so the
+    # state/view_state.py migration in the next commit can land as a
+    # pure rename. They will be removed alongside it.
     @property
     def _font_pt(self) -> int:
         return self.data_store._font_pt
