@@ -49,14 +49,12 @@ class _MoveRowCmd(QUndoCommand):
     def redo(self):
         p = self._tab.mutations.index_from_path(self._parent_path)
         if self._tab.model.move_row(p, self._src, self._dst):
-            source_index = self._tab.model.index(self._dst, 0, p)
-            self._tab.view.setCurrentIndex(self._tab.mutations.source_to_view(source_index))
+            self._tab.view_controller.request_select_paths([self._parent_path + (self._dst,)])
 
     def undo(self):
         p = self._tab.mutations.index_from_path(self._parent_path)
         if self._tab.model.move_row(p, self._dst, self._src):
-            source_index = self._tab.model.index(self._src, 0, p)
-            self._tab.view.setCurrentIndex(self._tab.mutations.source_to_view(source_index))
+            self._tab.view_controller.request_select_paths([self._parent_path + (self._src,)])
 
 
 class _RenameCmd(QUndoCommand):
@@ -215,14 +213,16 @@ class _InsertRowsCmd(QUndoCommand):
 
     def redo(self):
         first_idx = None
+        first_path: tuple[int, ...] | None = None
         for rec in self._inserts:
             p = self._tab.mutations.index_from_path(rec["parent_path"])
             parent_item = self._tab.model.get_item(p)
             self._tab._insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec.get("name"))
             if first_idx is None:
                 first_idx = self._tab.model.index(rec["row"], 0, p)
-        if self._set_current and first_idx is not None and first_idx.isValid():
-            self._tab.view.setCurrentIndex(self._tab.mutations.source_to_view(first_idx))
+                first_path = tuple(rec["parent_path"]) + (rec["row"],)
+        if self._set_current and first_idx is not None and first_idx.isValid() and first_path is not None:
+            self._tab.view_controller.request_select_paths([first_path])
 
     def undo(self):
         for rec in reversed(self._inserts):
