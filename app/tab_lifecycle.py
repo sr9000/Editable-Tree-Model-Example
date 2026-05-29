@@ -17,6 +17,7 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QMessageBox, QTabWidget
 
 import state.view_state as view_state
+from documents.document_protocol import Document
 from documents.tab import JsonTab
 from documents.tab_dependencies import JsonTabServices
 
@@ -48,14 +49,14 @@ class TabLifecyclePresenter(QObject):
 
     # ── presentation helpers ──────────────────────────────────────────────
 
-    def refresh_tab_presentation(self, tab: JsonTab) -> None:
+    def refresh_tab_presentation(self, tab: Document) -> None:
         index = self._tab_widget.indexOf(tab)
         if index < 0:
             return
         self._tab_widget.setTabText(index, tab.display_name())
         self._tab_widget.setTabToolTip(index, tab.file_path or "Untitled")
 
-    def on_tab_dirty(self, tab: JsonTab) -> None:
+    def on_tab_dirty(self, tab: Document) -> None:
         self.refresh_tab_presentation(tab)
         self._win.update_actions()
 

@@ -78,7 +78,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setAcceptDrops(True)
         self._history_dialog: QDialog | None = None
         self._history_view: QUndoView | None = None
-        self._bound_undo_tab: JsonTab | None = None
+        self._bound_undo_tab: Document | None = None
         self._startup_window_mode: str = "normal"
         self._settings = QSettings(APPLICATION_ID, "app")
         # All font preferences (regular family, monospace family, editor
@@ -343,13 +343,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _on_tab_changed(self, _index: int) -> None:
         self._tab_lifecycle.on_tab_changed(_index)
 
-    def _refresh_tab_presentation(self, tab: JsonTab) -> None:
+    def _refresh_tab_presentation(self, tab: Document) -> None:
         self._tab_lifecycle.refresh_tab_presentation(tab)
 
     def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> JsonTab | None:
         return self._tab_lifecycle.add_tab(data=data, file_path=file_path, save_format=save_format)
 
-    def _on_tab_dirty(self, tab: JsonTab) -> None:
+    def _on_tab_dirty(self, tab: Document) -> None:
         self._tab_lifecycle.on_tab_dirty(tab)
 
     @property
@@ -378,7 +378,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.statusBar.showMessage(f"Opened: {resolved}", 2000)
         return True
 
-    def _save_tab(self, tab: JsonTab, *, save_as: bool = False) -> bool:
+    def _save_tab(self, tab: Document, *, save_as: bool = False) -> bool:
         from state.validation_settings import clear_schema_path
 
         if tab.is_read_only:
@@ -396,7 +396,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._on_tab_dirty(tab)
         return True
 
-    def _confirm_reload_dirty_tab(self, tab: JsonTab) -> str:
+    def _confirm_reload_dirty_tab(self, tab: Document) -> str:
         if not tab.is_dirty:
             return "reload"
 
@@ -420,7 +420,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return "overwrite"
         return "cancel"
 
-    def _reload_tab_from_path(self, tab: JsonTab, path: str) -> bool:
+    def _reload_tab_from_path(self, tab: Document, path: str) -> bool:
         resolved = str(Path(path).resolve())
         self.statusBar.showMessage(f"Reloading: {resolved}", 0)
         try:
@@ -444,7 +444,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.statusBar.showMessage(f"Reloaded: {resolved}", 2000)
         return True
 
-    def _confirm_close(self, tab: JsonTab, *, prompt_for_untitled_nonempty: bool = True) -> bool:
+    def _confirm_close(self, tab: Document, *, prompt_for_untitled_nonempty: bool = True) -> bool:
         return confirm_close(self, tab, prompt_for_untitled_nonempty=prompt_for_untitled_nonempty)
 
     def open_file_dialog(self) -> None:
