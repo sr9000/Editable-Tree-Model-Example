@@ -17,6 +17,7 @@ from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_se
 from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_history import TabHistoryController
 from documents.states.io_state import IoState
+from documents.states.validation_state import ValidationState
 from documents.tab_navigation import JsonTabNavigationController
 from documents.tab_setup import (
     init_delegates_and_connections,
@@ -26,7 +27,6 @@ from documents.tab_setup import (
     init_shortcuts,
     init_validation_state,
 )
-from documents.tab_validation import TabValidationController
 from documents.tab_validation_view import JsonTabValidationViewController
 from documents.view_controller import DocumentView
 from state.affix_mru import AffixMRU
@@ -97,7 +97,7 @@ def bootstrap(
     tab.data_store.affix_mru.bootstrap_from_tree(tab.data_store.model.root_item)
     tab.data_store.mutations = DocumentMutationGateway(tab)
 
-    tab.data_store.validation = TabValidationController(
+    tab.data_store.validation = ValidationState(
         tab,
         tab.data_store.model,
         on_schema_changed=lambda ref: tab.schemaChanged.emit(ref),
