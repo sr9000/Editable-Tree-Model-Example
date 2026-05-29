@@ -337,7 +337,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _on_system_color_scheme_changed(self, *_args) -> None:
         self._theme_controller.on_system_color_scheme_changed(*_args)
 
-    def _bind_undo_signals(self, tab: JsonTab | None) -> None:
+    def _bind_undo_signals(self, tab: Document | None) -> None:
         bind_undo_signals(self, tab)
 
     def _on_tab_changed(self, _index: int) -> None:

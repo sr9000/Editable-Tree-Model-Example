@@ -2,6 +2,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QDialog, QUndoView, QVBoxLayout
 
+from documents.document_protocol import Document
+
 
 def setup_history_menu(window) -> None:
     window.historyMenu = window.menuBar.addMenu("&History")
@@ -28,7 +30,7 @@ def setup_history_menu(window) -> None:
     window.historyMenu.addAction(window.showHistoryAction)
 
 
-def bind_undo_signals(window, tab) -> None:
+def bind_undo_signals(window, tab: Document | None) -> None:
     previous = window._bound_undo_tab
     if previous is not None:
         try:
