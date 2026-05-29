@@ -380,23 +380,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _save_tab(self, tab: JsonTab, *, save_as: bool = False) -> bool:
         from state.validation_settings import clear_schema_path
 
-        if tab.data_store.is_read_only:
+        if tab.is_read_only:
             return False
-        old_path = tab.data_store.file_path
+        old_path = tab.file_path
         ok = tab.save_as() if save_as else tab.save()
         if not ok:
             return False
-        if save_as and isinstance(old_path, str) and tab.data_store.file_path and old_path != tab.data_store.file_path:
+        if save_as and isinstance(old_path, str) and tab.file_path and old_path != tab.file_path:
             view_state.discard(old_path)
             clear_schema_path(Path(old_path))
         view_state.save(tab)
-        if tab.data_store.file_path:
-            push_recent(self, tab.data_store.file_path)
+        if tab.file_path:
+            push_recent(self, tab.file_path)
         self._on_tab_dirty(tab)
         return True
 
     def _confirm_reload_dirty_tab(self, tab: JsonTab) -> str:
-        if not tab.data_store.is_dirty:
+        if not tab.is_dirty:
             return "reload"
 
         name = tab.display_name().replace(" *", "")
@@ -437,8 +437,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if changed:
             tab.data_store.undo_stack.clear()
         tab.data_store.undo_stack.setClean()
-        tab.data_store.save_format = source_format
-        tab.data_store.file_path = resolved
+        tab.save_format = source_format
+        tab.file_path = resolved
         tab.data_store.validation.revalidate()
         self._refresh_tab_presentation(tab)
         self.update_actions()
@@ -473,14 +473,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def reload_from_disk(self) -> None:
         tab = self._current_tab()
-        if tab is None or tab.data_store.is_read_only or not tab.data_store.file_path:
+        if tab is None or tab.is_read_only or not tab.file_path:
             return
         decision = self._confirm_reload_dirty_tab(tab)
         if decision == "cancel":
             return
         if decision == "overwrite" and not self._save_tab(tab, save_as=False):
             return
-        self._reload_tab_from_path(tab, tab.data_store.file_path)
+        self._reload_tab_from_path(tab, tab.file_path)
 
     def create_new_file(self):
         self._add_tab(data={}, file_path=None)
@@ -613,11 +613,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def copy_current_file_path(self) -> None:
         """Put the absolute path of the current tab on the system clipboard."""
         tab = self._current_tab()
-        if tab is None or not tab.data_store.file_path:
+        if tab is None or not tab.file_path:
             self.statusBar.showMessage(self.tr("No file path to copy"), 2000)
             return
-        QApplication.clipboard().setText(tab.data_store.file_path)
-        self.statusBar.showMessage(self.tr("Copied: {path}").format(path=tab.data_store.file_path), 2000)
+        QApplication.clipboard().setText(tab.file_path)
+        self.statusBar.showMessage(self.tr("Copied: {path}").format(path=tab.file_path), 2000)
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._theme_controller.shutdown()

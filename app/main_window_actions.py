@@ -48,14 +48,14 @@ def setup_connections(window):
 def update_actions(window):
     tab = window._current_tab()
     has_tab = tab is not None
-    can_edit = bool(tab and not tab.data_store.is_read_only)
+    can_edit = bool(tab and not tab.is_read_only)
     has_valid_index = bool(tab and tab.data_store.view.selectionModel().currentIndex().isValid())
 
     window.fileNewFromClipboardAction.setEnabled(clipboard_text_is_valid_data())
-    window.fileSaveAction.setEnabled(has_tab and can_edit and tab.data_store.is_dirty)
+    window.fileSaveAction.setEnabled(has_tab and can_edit and tab.is_dirty)
     window.fileSaveAsAction.setEnabled(has_tab and can_edit)
-    window.fileReloadAction.setEnabled(has_tab and can_edit and bool(tab.data_store.file_path))
-    window.fileCopyPathAction.setEnabled(bool(tab and tab.data_store.file_path))
+    window.fileReloadAction.setEnabled(has_tab and can_edit and bool(tab.file_path))
+    window.fileCopyPathAction.setEnabled(bool(tab and tab.file_path))
     window.fileCloseTabAction.setEnabled(has_tab)
     window.fileReopenTabAction.setEnabled(bool(window._closed_tabs_stack))
     window.rowInsertAction.setEnabled(has_valid_index and can_edit)
