@@ -41,6 +41,58 @@
 
 ---
 
+## 🚀 Session 2 Summary (2026-05-29)
+
+**Status:** 4 commits landed on top of Session 1; **100% of `data_store.*` leaks closed**.
+
+| Phase | Steps       | Status                | Commits |
+|-------|-------------|-----------------------|---------|
+| D     | D-light     | ✅ complete (shortcut) | 1       |
+| E     | E1, E-light | ✅ complete (shortcut) | 2       |
+| F     | F4, F5      | ✅ complete            | 1       |
+| G–J   | all         | ⏳ planned             | —       |
+
+**Quantified progress:**
+
+- `data_store.*` reads in production: **91** → **0** (−100%)
+- Leaked attributes retired: 17 of 17 (added `view`, `model`, `search_edit`,
+  `last_move_placed`, `issue_index`, `affix_mru`, `_font_pt`, `_user_sized_columns`)
+- Guard `FORBIDDEN_DATA_STORE_ATTRS` now blocks **all** 17 retired attrs
+- Test suite: **1124 pass**, 18.9s wall-clock, unchanged across every step
+- Risk-control commits: D3 / Phase H deep refactors were *not* attempted —
+  this session deliberately took the F-light shortcut for D/E (typed
+  `tab.view`, `tab.model` properties) following the precedent set by
+  F1/F2/F3-light in Session 1. The plan's deeper architectural goals
+  (ViewportRequest signal, path-based mutation API in undo/, narrow
+  read helpers in lieu of raw model exposure) remain open and are now
+  tracked under Phase H + Phase E follow-up.
+
+**Commits (newest first):**
+
+- `53479de` E-light — expose `tab.model` + swap 55 sites + guard
+- `e4a3927` E1 — `reports/model_access_audit.md` (intent classification)
+- `87eda49` F4+F5 — long-tail typed accessors (6 attrs, 9 sites)
+- `62aa0cb` D-light — expose `tab.view` + swap 18 sites + guard
+
+**What's deferred to Session 3+:**
+
+| Phase  | Theme                                            | Why deferred                                                   |
+|--------|--------------------------------------------------|----------------------------------------------------------------|
+| D-full | DocumentView controller + ViewportRequest signal | Architectural; only valuable once H wants to drop QModelIndex  |
+| E2-E6  | Narrow read helpers (root_data, row_count, …)    | Cosmetic until a real consumer demands them                    |
+| G      | Burn `tab_protocols.py`                          | Independent; do whenever                                       |
+| H      | De-Qt the command layer (paths, not QModelIndex) | Requires D-full ViewportRequest plumbing                       |
+| I      | Decompose `JsonTabData` into 4 substates         | Pure internal refactor inside `documents/`; no external impact |
+| J      | Closeout (ai-memory updates, tag, merge)         | After G+H+I land                                               |
+
+**Recommended next-session entry point:** Phase G (delete
+`tab_protocols.py` after typing it up) — it's independent, low risk,
+and shrinks the visible surface area further. Phase H is the high-value
+deep refactor but should wait until someone is willing to take the
+ViewportRequest plumbing seriously per the D3 risk register.
+
+---
+
 ## 📝 Guidance for next LLM session
 
 ### If resuming on the same branch (`decouple-json-tab`)
@@ -351,7 +403,7 @@ change is to read them off `tab` directly.
 * **C4. Forbid `data_store.{file_path,is_dirty,is_read_only,save_format}`.**
   Extend the pre-commit regex from B4.
 
-### Phase D — Stop leaking `view` (17 hits) 📋 DEFERRED (next session, high-risk)
+### Phase D — Stop leaking `view` (17 hits) ✅ LANDED (D-light, Session 2)
 
 `view` access splits into two intents:
 
@@ -399,7 +451,7 @@ change is to read them off `tab` directly.
   Keep it as a private `_view` and remove from facade properties.
   Forbid `data_store.view` via pre-commit regex.
 
-### Phase E — Stop leaking `model` (54 hits) 📋 DEFERRED (needs E1 audit first)
+### Phase E — Stop leaking `model` (54 hits) ✅ LANDED (E1 + E-light, Session 2)
 
 The biggest single attribute. Most external usage is structural reads
 (`columnCount`, `index`, `parent`, `get_item`) and a few writes during
@@ -444,7 +496,7 @@ load/save. Split by call-site cluster.
 
 (`undo_stack`, `validation`, `schema_source`, `schema_ref`,
 `search_edit`, `affix_mru`, `_font_pt`, `last_move_placed`,
-`issue_index`) ✅ PARTIALLY LANDED (F1-light, F2, F3; F4–F5 deferred)
+`issue_index`) ✅ LANDED (F1-light, F2, F3 Session 1; F4+F5 Session 2)
 
 * **F1. `undo_stack` → `tab.history` controller.**
   Already partially present (`tab_history.py`); just expose `tab.history`
