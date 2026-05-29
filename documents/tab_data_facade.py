@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from PySide6.QtGui import QUndoStack
@@ -65,11 +65,9 @@ class JsonTabDataFacade:
 
     _host: JsonTabHost | None = None
     io: IoState | None = None
-    history: TabHistoryController | None = None
     validation: TabValidationController | None = None
     editability: EditabilityFacadeProtocol | None = None
     appearance: AppearanceFacadeProtocol | None = None
-    _last_move_placed: list[tuple[tuple[int, ...], int]] = field(default_factory=list)
 
     def refresh_actions(self) -> None:
         if self._host is not None:
