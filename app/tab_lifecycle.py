@@ -122,7 +122,7 @@ class TabLifecyclePresenter(QObject):
             tab.resize_key_columns()
         if win._history_dialog is not None and win._history_dialog.isVisible():
             if tab is not None and win._history_view is not None:
-                win._history_view.setStack(tab.data_store.undo_stack)
+                win._history_view.setStack(tab.undo_stack)
         win.update_actions()
 
     # ── close ─────────────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ FORBIDDEN_DATA_STORE_ATTRS=(
     "is_dirty"         # Phase C (C4)
     "is_read_only"     # Phase C (C4)
     "save_format"      # Phase C (C4)
+    "undo_stack"       # Phase F (F1-light)
 )
 
 if [[ ${#FORBIDDEN_DATA_STORE_ATTRS[@]} -eq 0 ]]; then

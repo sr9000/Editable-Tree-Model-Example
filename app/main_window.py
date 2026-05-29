@@ -435,8 +435,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         root_item = tab.data_store.model.get_item(root_index)
         changed = tab._diff_apply(root_item, data, root_index)
         if changed:
-            tab.data_store.undo_stack.clear()
-        tab.data_store.undo_stack.setClean()
+            tab.undo_stack.clear()
+        tab.undo_stack.setClean()
         tab.save_format = source_format
         tab.file_path = resolved
         tab.data_store.validation.revalidate()
