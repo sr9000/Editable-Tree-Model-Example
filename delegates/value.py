@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QStyle, QStyleOptionViewItem, QTreeView, QWidget
 from delegates.base import _TextEditorDelegateBase, paint_editor_underlay
 from delegates.color_codec import parse_color
 from delegates.edit_context import DefaultEditContext, DelegateEditContext
-from delegates.editor_factory import (
+from editors.factory import (
     _SecretEditorWatcher,
     create_value_editor,
     set_value_editor_data,

@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QWidget
 
 from editors.windowed.multiline_widget import QMultilineEditor
 from settings import APPLICATION_ID, MODAL_WINDOW_SIZE
+from ui.dialogs import Ui_QMultilineDialog
 
 QMULTILINEDIALOG_ID = "QMultilineDialog-19beb602-e9c1-479b-a037-d9dbfbddec65"
 
@@ -20,52 +21,40 @@ class QMultilineDialog(QDialog):
         callback: Callable[[str], None] = lambda _: None,
     ) -> None:
         super().__init__(parent)
+        self._ui = Ui_QMultilineDialog()
+        self._ui.setupUi(self)
         self._callback = callback
 
-        self.setWindowTitle("Edit Multiline Text")
         self.setModal(True)
         self.resize(*MODAL_WINDOW_SIZE)
 
-        self.editor = QMultilineEditor(self)
+        self.editor = QMultilineEditor(self._ui.editorHost)
+        editor_layout = QVBoxLayout(self._ui.editorHost)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.addWidget(self.editor)
         if sensitive:
             self.editor.setSensitive(True)
         self.editor.setPlainText(text or "")
         self._applyGlobalEditorFontSettings()
 
-        # Controls row
-        self.wrapCheckBox = QCheckBox("Word wrap")
+        self.wrapCheckBox = self._ui.wrapCheckBox
         self.wrapCheckBox.setChecked(self.editor.wordWrap())
         self.wrapCheckBox.toggled.connect(self.editor.setWordWrap)
         self.wrapCheckBox.toggled.connect(self._saveSettings)
 
-        self.lineNumbersCheckBox = QCheckBox("Line numbers")
+        self.lineNumbersCheckBox = self._ui.lineNumbersCheckBox
         self.lineNumbersCheckBox.setChecked(self.editor.lineNumbersVisible())
         self.lineNumbersCheckBox.toggled.connect(self.editor.setLineNumbersVisible)
         self.lineNumbersCheckBox.toggled.connect(self._saveSettings)
 
-        self.monospacedCheckBox = QCheckBox("Monospaced")
+        self.monospacedCheckBox = self._ui.monospacedCheckBox
         self.monospacedCheckBox.setChecked(self.editor.isMonospaced())
         self.monospacedCheckBox.toggled.connect(self.editor.setMonospaced)
         self.monospacedCheckBox.toggled.connect(self._saveSettings)
 
-        controls = QHBoxLayout()
-        controls.addWidget(self.wrapCheckBox)
-        controls.addWidget(self.lineNumbersCheckBox)
-        controls.addWidget(self.monospacedCheckBox)
-        controls.addStretch(1)
-
-        # Buttons
-        self.buttonBox = QDialogButtonBox(self)
-        self.buttonBox.addButton(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.accept)
-        self.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel).clicked.connect(self.reject)
-
-        # Layout
-        self._layout = QVBoxLayout(self)
-        self._layout.addLayout(controls)
-        self._layout.addWidget(self.editor)
-        self._layout.addWidget(self.buttonBox)
-
-        self.setLayout(self._layout)
+        self.buttonBox = self._ui.buttonBox
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
 
         # Restore settings after UI is fully initialized
         self._restoreSettings()
@@ -74,7 +63,8 @@ class QMultilineDialog(QDialog):
         settings = QSettings(APPLICATION_ID, "app")
         regular_family = str(settings.value("view/regular_font_family", "", type=str) or "")
         mono_family = str(settings.value("view/monospace_font_family", "", type=str) or "")
-        point_size = int(settings.value("view/editor_font_point_size", 10, type=int) or 10)
+        point_size_raw = settings.value("view/editor_font_point_size", 10, type=int)
+        point_size = int(point_size_raw or 10)
 
         if regular_family:
             self.editor.setRegularFontFamily(regular_family)

@@ -22,7 +22,8 @@ from PySide6.QtWidgets import QApplication, QLabel, QMenu
 from app.dialogs.attach_schema_dlg import AttachSchemaDialog
 from app.validation_dock import ValidationDock
 from state.recent_schemas import recent_schemas
-from validation.schema_registry import SchemaSource, get_schema_registry, open_in_browser
+from validation.schema_registry import get_schema_registry, open_in_browser
+from validation.schema_types import SchemaSource
 
 
 class DockValidationPresenter(QObject):

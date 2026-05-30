@@ -10,11 +10,16 @@ from weakref import WeakSet
 from PySide6.QtCore import QFileSystemWatcher, QObject, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 
-from state.recent_schemas import push_recent_schema
 from validation.schema_source import load_schema
 from validation.schema_types import SchemaRef, SchemaSource
 
 _LOG = logging.getLogger(__name__)
+
+
+def push_recent_schema(source: SchemaSource) -> None:
+    from state.recent_schemas import push_recent_schema
+
+    push_recent_schema(source)
 
 
 def open_in_browser(source: "SchemaSource") -> bool:

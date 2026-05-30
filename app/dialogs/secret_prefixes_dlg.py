@@ -4,39 +4,28 @@ from collections.abc import Iterable
 
 from PySide6.QtWidgets import (
     QDialog,
-    QDialogButtonBox,
-    QHBoxLayout,
     QInputDialog,
-    QListWidget,
     QMessageBox,
-    QPushButton,
-    QVBoxLayout,
 )
+
+from ui.dialogs import Ui_SecretPrefixesDialog
 
 
 class SecretPrefixesDialog(QDialog):
     def __init__(self, prefixes: Iterable[str], parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Secret word prefixes")
+        self._ui = Ui_SecretPrefixesDialog()
+        self._ui.setupUi(self)
 
-        self.list_widget = QListWidget(self)
+        self.list_widget = self._ui.listWidget
+        self.add_btn = self._ui.addButton
+        self.edit_btn = self._ui.editButton
+        self.remove_btn = self._ui.removeButton
+        self.ok_cancel = self._ui.buttonBox
+
         for prefix in prefixes:
             self.list_widget.addItem(str(prefix))
 
-        buttons_row = QHBoxLayout()
-        self.add_btn = QPushButton("Add", self)
-        self.edit_btn = QPushButton("Edit", self)
-        self.remove_btn = QPushButton("Remove", self)
-        buttons_row.addWidget(self.add_btn)
-        buttons_row.addWidget(self.edit_btn)
-        buttons_row.addWidget(self.remove_btn)
-
-        self.ok_cancel = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.list_widget)
-        layout.addLayout(buttons_row)
-        layout.addWidget(self.ok_cancel)
 
         self.add_btn.clicked.connect(self._add)
         self.edit_btn.clicked.connect(self._edit)

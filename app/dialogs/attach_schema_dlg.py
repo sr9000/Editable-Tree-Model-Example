@@ -3,70 +3,34 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QComboBox,
-    QDialog,
-    QDialogButtonBox,
-    QFileDialog,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QDialog, QFileDialog
 
 from state.recent_schemas import recent_schemas
-from validation.schema_registry import SchemaSource
+from ui.dialogs import Ui_AttachSchemaDialog
+from validation.schema_types import SchemaSource
 
 
 class AttachSchemaDialog(QDialog):
     def __init__(self, parent=None, *, start_dir: str = "", recent_sources: list[SchemaSource] | None = None) -> None:
         super().__init__(parent)
+        self._ui = Ui_AttachSchemaDialog()
+        self._ui.setupUi(self)
         self._start_dir = start_dir
 
-        self.setWindowTitle(self.tr("Attach JSON Schema"))
-        self.resize(540, 110)
+        self._edit = self._ui.pathLineEdit
+        self._recent_label = self._ui.recentLabel
+        self._recent_combo = self._ui.recentComboBox
+        self._recent_row_widget = self._ui.recentRowWidget
+        self.buttonBox = self._ui.buttonBox
 
-        label = QLabel(self.tr("Schema file path or URL (http/https):"), self)
-        self._edit = QLineEdit(self)
-        self._edit.setPlaceholderText("https://...  or  /path/to/schema.json")
-
-        self._recent_label = QLabel(self.tr("Recent schemas:"), self)
-        self._recent_combo = QComboBox(self)
         self._recent_combo.currentIndexChanged.connect(self._on_recent_selected)
-
-        recent_row = QHBoxLayout()
-        recent_row.setContentsMargins(0, 0, 0, 0)
-        recent_row.addWidget(self._recent_label)
-        recent_row.addWidget(self._recent_combo, 1)
-
-        self._recent_row_widget = QWidget(self)
-        self._recent_row_widget.setLayout(recent_row)
 
         recents = list(recent_sources) if recent_sources is not None else recent_schemas()
         self._populate_recent_combo(recents)
         self._recent_row_widget.setVisible(bool(recents))
-
-        browse = QPushButton(self.tr("Browse..."), self)
-        browse.clicked.connect(self._browse)
-
-        row = QHBoxLayout()
-        row.addWidget(self._edit, 1)
-        row.addWidget(browse)
-
-        buttons = QDialogButtonBox(parent=self)
-        buttons.setStandardButtons(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-
-        layout = QVBoxLayout(self)
-        layout.addWidget(self._recent_row_widget)
-        layout.addWidget(label)
-        layout.addLayout(row)
-        layout.addWidget(buttons)
+        self._ui.browseButton.clicked.connect(self._browse)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
 
     @classmethod
     def ask(

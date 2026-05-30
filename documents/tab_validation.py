@@ -16,8 +16,8 @@ from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
-from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef, discover_schema, load_schema
+from validation.schema_types import SchemaSource
 from validation.validator import validate_document
 from validation.yaml_validate import validate_yaml_documents
 

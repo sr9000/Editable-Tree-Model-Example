@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QApplication
 from app.main_window import MainWindow
 from settings import APPLICATION_ID
 from state.recent_schemas import push_recent_schema
-from validation.schema_registry import SchemaSource
+from validation.schema_types import SchemaSource
 
 
 def _settings() -> QSettings:

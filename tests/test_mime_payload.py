@@ -174,6 +174,6 @@ def test_build_tree_mime_empty_rows_returns_none(qtbot):
 
 
 def test_mime_json_tree_constant_value():
-    from tree_actions import MIME_JSON_TREE as reexported
+    from tree_actions.clipboard import MIME_JSON_TREE as reexported
 
     assert reexported == MIME_JSON_TREE == "application/x-json-tree"

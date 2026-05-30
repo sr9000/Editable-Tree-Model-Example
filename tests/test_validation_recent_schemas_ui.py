@@ -8,7 +8,7 @@ from app.main_window import MainWindow
 from app.validation_dock import ValidationDock
 from settings import APPLICATION_ID
 from state.recent_schemas import push_recent_schema
-from validation.schema_registry import SchemaSource
+from validation.schema_types import SchemaSource
 
 schema_registry_module = importlib.import_module("validation.schema_registry")
 

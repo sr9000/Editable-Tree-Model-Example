@@ -2,10 +2,11 @@ from typing import Callable
 
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QStatusBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QWidget
 
 from editors.windowed.hexedit import QHexEdit
 from settings import APPLICATION_ID, MODAL_WINDOW_SIZE
+from ui.dialogs import Ui_QHexDialog
 
 QHEXDIALOG_ID = "QHexDialog-7a927c68-412c-4f06-8ce6-2158dde1314e"
 
@@ -15,61 +16,46 @@ class QHexDialog(QDialog):
         self, parent: QWidget | None = None, data: bytes = b"", callback: Callable[[bytes], None] = lambda _: None
     ) -> None:
         super().__init__(parent)
+        self._ui = Ui_QHexDialog()
+        self._ui.setupUi(self)
         self._callback = callback
 
-        self.setWindowTitle("Edit Binary Data")
         self.setModal(True)
         self.resize(*MODAL_WINDOW_SIZE)
 
-        self.editor = QHexEdit(self)
+        self.editor = QHexEdit(self._ui.editorHost)
+        editor_layout = QVBoxLayout(self._ui.editorHost)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.addWidget(self.editor)
         self.editor.setData(data or b"")
         self._applyGlobalEditorFontSettings()
 
-        # Status bar
-        self.statusBar = QStatusBar(self)
+        self.statusBar = self._ui.statusBar
         self.editor.currentAddressChanged.connect(self.onAddressChanged)
 
-        # Controls row
-        self.addressCheckBox = QCheckBox("Address area")
+        self.addressCheckBox = self._ui.addressCheckBox
         self.addressCheckBox.setChecked(self.editor.addressArea())
         self.addressCheckBox.toggled.connect(self.editor.setAddressArea)
         self.addressCheckBox.toggled.connect(self._saveSettings)
 
-        self.asciiCheckBox = QCheckBox("ASCII area")
+        self.asciiCheckBox = self._ui.asciiCheckBox
         self.asciiCheckBox.setChecked(self.editor.asciiArea())
         self.asciiCheckBox.toggled.connect(self.editor.setAsciiArea)
         self.asciiCheckBox.toggled.connect(self._saveSettings)
 
-        self.highlightingCheckBox = QCheckBox("Modified bytes")
+        self.highlightingCheckBox = self._ui.highlightingCheckBox
         self.highlightingCheckBox.setChecked(self.editor.highlighting())
         self.highlightingCheckBox.toggled.connect(self.editor.setHighlighting)
         self.highlightingCheckBox.toggled.connect(self._saveSettings)
 
-        self.capsCheckBox = QCheckBox("CAPS")
+        self.capsCheckBox = self._ui.capsCheckBox
         self.capsCheckBox.setChecked(self.editor.hexCaps())
         self.capsCheckBox.toggled.connect(self.editor.setHexCaps)
         self.capsCheckBox.toggled.connect(self._saveSettings)
 
-        controls = QHBoxLayout()
-        controls.addWidget(self.addressCheckBox)
-        controls.addWidget(self.asciiCheckBox)
-        controls.addWidget(self.highlightingCheckBox)
-        controls.addWidget(self.capsCheckBox)
-        controls.addStretch(1)
-
-        # Buttons
-        self.buttonBox = QDialogButtonBox(self)
-        self.buttonBox.addButton(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.accept)
-        self.buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel).clicked.connect(self.reject)
-
-        # Layout
-        self._layout = QVBoxLayout(self)
-        self._layout.addLayout(controls)
-        self._layout.addWidget(self.editor)
-        self._layout.addWidget(self.statusBar)
-        self._layout.addWidget(self.buttonBox)
-
-        self.setLayout(self._layout)
+        self.buttonBox = self._ui.buttonBox
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
 
         # Restore settings after UI is fully initialized
         self._restoreSettings()
@@ -77,7 +63,8 @@ class QHexDialog(QDialog):
     def _applyGlobalEditorFontSettings(self) -> None:
         settings = QSettings(APPLICATION_ID, "app")
         mono_family = str(settings.value("view/monospace_font_family", "", type=str) or "")
-        point_size = int(settings.value("view/editor_font_point_size", 10, type=int) or 10)
+        point_size_raw = settings.value("view/editor_font_point_size", 10, type=int)
+        point_size = int(point_size_raw or 10)
 
         font = QFont(self.editor.font())
         if mono_family:
