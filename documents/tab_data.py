@@ -23,7 +23,7 @@ section 6 tests stay as they are.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from PySide6.QtGui import QUndoStack
@@ -81,18 +81,76 @@ class AppearanceFacadeProtocol(Protocol):
 
 @dataclass
 class JsonTabData:
-    """Per-tab document state composed from four single-responsibility substates.
-    See module docstring for the substate inventory.
+    """Per-tab document state, now a thin **forwarder** backed by JsonTab.
+
+    Plan 21 P1 relocated the six controller references (``view_state`` /
+    ``editing_state`` / ``io`` / ``validation`` / ``editability`` /
+    ``appearance``) plus ``_host`` onto :class:`documents.tab.JsonTab`
+    private attributes (``tab._view_state`` etc.).  ``JsonTabData`` keeps
+    every legacy ``data_store.<attr>`` forward working by reading those
+    attributes off the host tab, so the ~800 test reach-in sites stay
+    green until Plan 21 P2 migrates them and P3 deletes this class.
     """
 
+    _tab: Any = None
+
     # ----- The four substates + two cross-cutting controllers --------------
-    view_state: ViewState = field(default_factory=ViewState)
-    editing_state: EditingController | None = None
-    io: IoController | None = None
-    validation: ValidationState | None = None
-    editability: EditabilityFacadeProtocol | None = None
-    appearance: AppearanceFacadeProtocol | None = None
-    _host: JsonTabHost | None = None
+    # These now live on the host tab; the properties forward to it.
+    @property
+    def view_state(self) -> ViewState:
+        return self._tab._view_state
+
+    @view_state.setter
+    def view_state(self, value: ViewState) -> None:
+        self._tab._view_state = value
+
+    @property
+    def editing_state(self) -> EditingController | None:
+        return self._tab._editing
+
+    @editing_state.setter
+    def editing_state(self, value: EditingController | None) -> None:
+        self._tab._editing = value
+
+    @property
+    def io(self) -> IoController | None:
+        return self._tab._io
+
+    @io.setter
+    def io(self, value: IoController | None) -> None:
+        self._tab._io = value
+
+    @property
+    def validation(self) -> ValidationState | None:
+        return self._tab._validation
+
+    @validation.setter
+    def validation(self, value: ValidationState | None) -> None:
+        self._tab._validation = value
+
+    @property
+    def editability(self) -> EditabilityFacadeProtocol | None:
+        return self._tab._editability
+
+    @editability.setter
+    def editability(self, value: EditabilityFacadeProtocol | None) -> None:
+        self._tab._editability = value
+
+    @property
+    def appearance(self) -> AppearanceFacadeProtocol | None:
+        return self._tab._appearance
+
+    @appearance.setter
+    def appearance(self, value: AppearanceFacadeProtocol | None) -> None:
+        self._tab._appearance = value
+
+    @property
+    def _host(self) -> JsonTabHost | None:
+        return self._tab._host
+
+    @_host.setter
+    def _host(self, value: JsonTabHost | None) -> None:
+        self._tab._host = value
 
     # ----- Host shortcuts (unchanged from former JsonTabDataFacade) --------
     def refresh_actions(self) -> None:

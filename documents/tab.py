@@ -8,10 +8,12 @@ from PySide6.QtWidgets import QLineEdit, QWidget
 
 from documents import tab_init
 from documents.mutation_gateway import DocumentMutationGateway
-from documents.states.editing_controller import TreeAction
+from documents.states.editing_controller import EditingController, TreeAction
+from documents.states.io_controller import IoController
+from documents.states.view_state import ViewState
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
-from documents.tab_dependencies import JsonTabServices
+from documents.tab_dependencies import JsonTabHost, JsonTabServices
 from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_marker import JsonTabWidgetMarker
 from documents.tab_navigation import JsonTabNavigationController
@@ -51,6 +53,15 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     _navigation: JsonTabNavigationController | None = None
     _editability: JsonTabEditabilityController | None = None
     _view_controller: ViewController | None = None
+
+    # Plan 21 P1: the six controllers + host now live directly on JsonTab.
+    # ``data_store`` (below) is a thin forwarder onto these attributes,
+    # retained only until Plan 21 P2/P3 retire the ``data_store.*`` reach-in.
+    _io: IoController | None = None
+    _view_state: ViewState | None = None
+    _editing: EditingController | None = None
+    _validation: TabValidationController | None = None
+    _host: JsonTabHost | None = None
 
     dirtyChanged = Signal(bool)
     schemaChanged = Signal(object)
