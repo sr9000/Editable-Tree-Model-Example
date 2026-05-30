@@ -1,1 +1,0 @@
-"""Document widgets package."""

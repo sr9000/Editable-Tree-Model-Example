@@ -7,11 +7,7 @@ from units import counts, format_bytes
 
 
 def format_validation_status(issue_index) -> str:
-    """Return a short human-readable summary of *issue_index* for status bars.
-
-    Returns an empty string when there are no issues (caller should hide the
-    widget).  Example non-empty returns: ``"Validation: 3 errors · 1 warning"``.
-    """
+    """Return a short status-bar summary for ``issue_index``."""
     n = len(issue_index)
     if n == 0:
         return ""

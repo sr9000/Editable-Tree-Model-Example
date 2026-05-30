@@ -1,11 +1,4 @@
-"""IoController -- file-IO controller for a :class:`documents.tab.JsonTab`.
-
-Plan 21 Phase L (L1): the IO axis is promoted from a passive substate
-(``IoState``, Plan 20 Phase I) to an *active controller* that owns both
-the IO data (file path, save format, dirty flag) **and** the
-save/save_as/snapshot behaviour that previously lived as free functions
-in ``documents/tab_io.py`` (now deleted).
-"""
+"""Per-tab file IO controller."""
 
 from __future__ import annotations
 
@@ -23,12 +16,7 @@ from io_formats import (
 
 
 class IoController(QObject):
-    """Per-tab IO controller.
-
-    Owns the file path, save format and dirty flag for a single
-    :class:`documents.tab.JsonTab`, and implements the save / save_as /
-    snapshot orchestration directly (formerly ``documents.tab_io``).
-    """
+    """Own the file path, save format, dirty flag, and save helpers for a tab."""
 
     dirtyChanged = Signal(bool)
 
@@ -39,7 +27,6 @@ class IoController(QObject):
         self.save_format: str | None = save_format
         self._dirty: bool = False
 
-    # ----- dirty flag ----------------------------------------------------
     @property
     def dirty(self) -> bool:
         return self._dirty
@@ -55,7 +42,6 @@ class IoController(QObject):
         """Slot for ``QUndoStack.cleanChanged``."""
         self.set_dirty(not clean)
 
-    # ----- save/load orchestration ---------------------------------------
     def snapshot(self):
         return self._tab.model.root_item.to_json()
 

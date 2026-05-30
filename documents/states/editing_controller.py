@@ -1,16 +1,4 @@
-"""EditingController -- editing controller for a :class:`documents.tab.JsonTab`.
-
-Plan 21 Phase N: the editing axis is promoted from a passive substate
-(``EditingState``, Plan 20 Phase I) to an *active controller* that owns
-both the editing data (tree model, mutation gateway, undo history, affix
-MRU, last-move-placed cache) **and** the typed-command ``push_*``
-behaviour that previously lived as free functions in
-``documents/tab_commands.py``.
-
-Subsequent Plan 21 N steps fold the remaining editing helper modules
-(``tab_editing.py`` / ``tab_move_view_state.py`` / ``tab_tree_actions.py``)
-and the diff/insert primitives onto this controller.
-"""
+"""Per-tab editing controller."""
 
 from __future__ import annotations
 
@@ -73,7 +61,6 @@ class TreeAction(Enum):
     SORT_KEYS = auto()
 
 
-# Order matches the historical ``elif`` chain inside ``JsonTab._run_tree_action``.
 _ACTIONS: tuple[tuple[TreeAction, Callable[..., bool]], ...] = (
     (TreeAction.COPY_ONLY, copy_selection),
     (TreeAction.CUT, cut_selection),
@@ -91,13 +78,7 @@ _ACTIONS: tuple[tuple[TreeAction, Callable[..., bool]], ...] = (
 
 
 class EditingController(QObject):
-    """Per-tab editing controller.
-
-    Owns the tree model, mutation gateway, undo-history controller, affix
-    MRU and last-move-placed cache for a single
-    :class:`documents.tab.JsonTab`, and implements the typed-command
-    ``push_*`` orchestration directly (formerly ``documents.tab_commands``).
-    """
+    """Own editing state and mutation helpers for one tab."""
 
     def __init__(self, tab) -> None:
         super().__init__(tab)
@@ -108,10 +89,6 @@ class EditingController(QObject):
         self.history: TabHistoryController | None = None
         self.last_move_placed: list[tuple[tuple[int, ...], int]] = []
         self._diff_applier = DiffApplier(tab)
-
-    # ------------------------------------------------------------------
-    # Typed-command push helpers (formerly documents/tab_commands.py)
-    # ------------------------------------------------------------------
 
     @staticmethod
     def make_label(text: str, target_qname: str) -> str:
@@ -150,14 +127,7 @@ class EditingController(QObject):
         *,
         label: str = "move rows",
     ) -> bool:
-        """Move *sources* to the gap described by ``anchor`` as a single undo command.
-
-        Returns ``False`` when:
-        - *sources* is empty,
-        - any source would become an ancestor of ``anchor.parent_path``
-          (cycle guard), or
-        - the move is a no-op (block already lands at the anchor).
-        """
+        """Move ``sources`` to the gap described by ``anchor`` as one undo command."""
         from tree_actions.anchors import anchor_is_cycle, anchor_is_no_op, resolve_anchor_insert_row
 
         tab = self._tab
@@ -215,8 +185,7 @@ class EditingController(QObject):
         *,
         label: str = "move rows",
     ) -> bool:
-        """Legacy pre-Step-9 API. Translates ``(target_parent, target_row)``
-        (pre-pop convention) into a ``MoveAnchor`` and delegates."""
+        """Translate the legacy pre-pop target into a ``MoveAnchor`` and delegate."""
         from tree_actions.anchors import pre_pop_target_row_to_anchor
 
         tab = self._tab
@@ -319,7 +288,7 @@ class EditingController(QObject):
         label: str = "insert",
         target_qname: str | None = None,
     ) -> bool:
-        """``inserts`` is a list of ``{parent_path, row, value, name}``."""
+        """Insert rows described by ``{parent_path, row, value, name}`` records."""
         tab = self._tab
         if tab.editability.is_read_only:
             return False
@@ -441,10 +410,6 @@ class EditingController(QObject):
         tab.undo_stack.push(cmd)
         return True
 
-    # ------------------------------------------------------------------
-    # Edit-from-Enter and type-change editor lifecycle (was tab_editing.py)
-    # ------------------------------------------------------------------
-
     def on_type_changed(self, item_index, lossy: bool) -> None:
         tab = self._tab
         # ``change_type`` already emitted ``dataChanged`` for the row, which
@@ -490,11 +455,7 @@ class EditingController(QObject):
         tab.view_state.view.edit(view_index)
 
     def edit_name_or_value_from_enter(self) -> None:
-        """Start editing from Enter with type-column support.
-
-        - Name/Value columns: edit the current editable cell.
-        - Type column: open the inline type combobox editor.
-        """
+        """Start editing the current name, type, or value cell from Enter."""
         tab = self._tab
         if tab.view_state.view.state() == QAbstractItemView.State.EditingState:
             return
@@ -529,10 +490,6 @@ class EditingController(QObject):
             if combo.parent() is tab.view_state.view.viewport() and combo.isVisible():
                 combo.showPopup()
                 return
-
-    # ------------------------------------------------------------------
-    # Move-row view-state capture/restore (was tab_move_view_state.py)
-    # ------------------------------------------------------------------
 
     def collect_expanded_paths(self) -> list[tuple[int, ...]]:
         """Return paths of every currently expanded row."""
@@ -638,7 +595,7 @@ class EditingController(QObject):
             sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
-        """Select the rows at the given ``(parent_path, row)`` tuples after a move."""
+        """Select the rows at the given ``(parent_path, row)`` tuples."""
         tab = self._tab
         if not placed:
             return
@@ -695,10 +652,6 @@ class EditingController(QObject):
                     self.apply_move_view_state(cmd, undo=True)
         tab.editing.history.last_undo_index = new_index
 
-    # ------------------------------------------------------------------
-    # Tree-mutation action dispatch (was tab_tree_actions.py)
-    # ------------------------------------------------------------------
-
     def run_tree_action(self, success_message: str, actions: set[TreeAction]) -> None:
         tab = self._tab
         if tab.editability.is_read_only:
@@ -728,9 +681,6 @@ class EditingController(QObject):
             return False
         return insert_child_current(tab.view_state.view)
 
-    # ------------------------------------------------------------------
-    # Smart-restore diff + low-level insert primitives (was on JsonTab)
-    # ------------------------------------------------------------------
     @property
     def diff_applier(self) -> DiffApplier:
         return self._diff_applier

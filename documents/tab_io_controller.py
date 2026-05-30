@@ -1,11 +1,4 @@
-"""Back-compat re-export of :class:`documents.states.io_controller.IoController`.
-
-Plan 20 Phase I (I1) moved the IO substate into ``documents/states/`` and
-Plan 21 Phase L (L1) promoted it from ``IoState`` to the active
-:class:`IoController`.  This module keeps the historical
-``TabIOController`` symbol importable for tests and any not-yet-migrated
-production callers.
-"""
+"""Back-compat re-export for :class:`documents.states.io_controller.IoController`."""
 
 from __future__ import annotations
 

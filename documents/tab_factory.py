@@ -1,15 +1,4 @@
-"""Factory for constructing :class:`documents.tab.JsonTab` widgets.
-
-External callers (``app/``) construct tabs through this factory so they
-do not need to import the concrete ``JsonTab`` class. The factory's
-return type is :class:`documents.document_protocol.Document` -- the
-narrow façade declared in Phase K1 of
-``plans/21-promote-substates-to-controllers.md``.
-
-The pre-commit guard ``.githooks/_check_jsontab_import_leaks.sh``
-(installed by Plan 21 Phase K4) forbids ``from documents.tab import``
-outside ``documents/``; this factory is the single legitimate route.
-"""
+"""Factory helpers for creating document tabs."""
 
 from __future__ import annotations
 
@@ -38,13 +27,7 @@ def create_tab(
     save_format: str | None = None,
     services: JsonTabServices | None = None,
 ) -> Document:
-    """Construct a JSON tab widget and return it typed as :class:`Document`.
-
-    Thin wrapper around :class:`documents.tab.JsonTab`'s constructor.
-    ``data`` defaults to ``None`` here so callers don't need to know
-    about the concrete tab's ``_DEFAULT_DATA`` sentinel; the wrapper
-    forwards the constructor's own default when ``data is None``.
-    """
+    """Construct a :class:`JsonTab` and expose it as :class:`Document`."""
     if data is None:
         return JsonTab(
             update_actions_callback=update_actions_callback,

@@ -1,46 +1,4 @@
-"""``Document`` protocol -- typed façade that JsonTab presents externally.
-
-This module defines the **complete external surface** the rest of the
-application (``app/``, ``undo/``, ``tree_actions/``, ``state/``) is
-allowed to depend on. It is the north-star seam introduced by
-``plans/20-decouple-jsontab.md`` Step A1 and fleshed out by
-``plans/21-promote-substates-to-controllers.md`` Phase K1 to match the
-current externally-accessed surface of :class:`documents.tab.JsonTab`.
-
-Why this protocol exists
-------------------------
-* External callers should import :class:`Document` (not ``JsonTab``) so
-  ``JsonTab``'s internal restructuring (Phases L-P of Plan 21) does not
-  ripple through ``app/``, ``undo/``, ``tree_actions/``, ``state/``.
-* Subsequent phases of Plan 21 will **shrink** this protocol as
-  individual ``JsonTab`` properties retire in favour of controller
-  access (e.g. ``tab.io``, ``tab.view``, ``tab.editing``,
-  ``tab.validation``). K1 captures the *current* surface verbatim so
-  later phases have a stable type target to delete from.
-* The protocol is :func:`runtime_checkable` so ``isinstance(x, Document)``
-  works in tab-lookup helpers (e.g. ``tree_actions/_tab_lookup.py``).
-
-Audit method
-------------
-``grep -rhoE '\\btab\\.[a-zA-Z_]+' app/ undo/ tree_actions/ state/``
-plus the equivalent ``self.tab.`` / ``self._tab.`` / ``widget.`` /
-``target.`` flavours. Every distinct attribute is declared below.
-
-Imports
--------
-The project's pre-commit hook forbids the typing-only guard symbol
-(see ``.githooks/pre-commit-ci``) outside the allowlist, so dependent
-types are imported eagerly. The imports chosen
-here intentionally do **not** create cycles -- none of them import
-``documents.tab``:
-
-* ``documents.mutation_gateway`` is leaf-level.
-* ``documents.view_controller`` only imports Qt + tree primitives.
-* ``documents.tab_validation`` only imports validation + io_formats.
-* ``tree.view`` / ``tree.model`` / ``tree.item`` are pure tree code.
-* ``state.affix_mru`` only imports settings + tree.item + units.
-* ``validation.index`` / ``validation.schema_source`` are leaf-level.
-"""
+"""Typed external protocol exposed by document tabs."""
 
 from __future__ import annotations
 
@@ -62,53 +20,20 @@ from tree.view import JsonTreeView
 
 @runtime_checkable
 class Document(Protocol):
-    """Stable façade exposed by a JSON tab to the rest of the app.
+    """Stable application-facing surface implemented by :class:`documents.tab.JsonTab`."""
 
-    Members are grouped by axis (io / view / editing / validation /
-    appearance / editability / signals) matching the controller
-    decomposition that Plan 21 is building toward. The protocol stays
-    flat (no nested namespaces) until each controller has absorbed its
-    methods and we can collapse the per-attribute forwards into a single
-    ``tab.<controller>`` access.
-
-    Notes
-    -----
-    * Members prefixed with a single underscore are still externally
-      reached (``app/``, ``undo/``, ``tree_actions/``, ``state/``).
-      They are declared here so callers can be typed against
-      :class:`Document`; Plan 21 phases N-O retire them.
-    * Qt signals are typed as ``ClassVar[Signal]`` per Plan 21 §5.
-    * Inherited :class:`QWidget` members (``parent()``, ``destroyed``,
-      ``font()``, ``setFont()``, …) are not redeclared; callers that
-      need them should narrow to :class:`QWidget` locally.
-    """
-
-    # =========================================================
-    # Identity / file state  (axis: io)
-    # =========================================================
-    # Plan 21 L3: file path, save format and dirty flag are reached
-    # through the IoController (``tab.io.file_path`` / ``.save_format`` /
-    # ``.dirty``).  The former top-level ``file_path`` / ``save_format`` /
-    # ``is_dirty`` forwards on JsonTab were dropped in this step.
+    # IO
     @property
     def io(self) -> IoController: ...
     def display_name(self) -> str: ...
     def save(self) -> bool: ...
     def save_as(self, path: str | None = ...) -> bool: ...
 
-    # =========================================================
-    # Schema / validation identity  (axis: validation)
-    # =========================================================
-    # Plan 21 O2: schema_source / schema_ref / issue_index /
-    # goto_validation_issue are reached through the ValidationController
-    # (``tab.validation.schema_source`` etc.).  The former top-level
-    # forwards on JsonTab were dropped in this step.
+    # Validation
     @property
     def validation(self) -> TabValidationController: ...
 
-    # =========================================================
-    # Editing axis  (controller: EditingController)
-    # =========================================================
+    # Editing
     @property
     def editing(self) -> "EditingController": ...
     @property
@@ -122,19 +47,14 @@ class Document(Protocol):
     @property
     def last_move_placed(self) -> list[tuple[tuple, int]]: ...
 
-    # Narrow read helpers introduced by Plan 20 Phase E2 -- preferred
-    # over reaching through ``model`` for structural reads.
     def root_index(self) -> QModelIndex: ...
     def root_item(self) -> JsonTreeItem: ...
     def root_data(self) -> Any: ...
     def row_count(self, parent: QModelIndex = ...) -> int: ...
 
-    # Edit-from-Enter entry point (wired by the navigation controller).
     def edit_name_or_value_from_enter(self) -> None: ...
 
-    # =========================================================
-    # View / viewport  (axis: view)
-    # =========================================================
+    # View
     @property
     def view(self) -> JsonTreeView: ...
     @property
@@ -144,38 +64,19 @@ class Document(Protocol):
 
     def resize_key_columns(self, force: bool = ...) -> None: ...
 
-    # The proxy / source / path helpers, the search filter, the
-    # column-width snapshot/restore and the expanded-paths collector
-    # live on ``ViewController`` (Plan 21 M3) / ``EditingController``
-    # (Plan 21 N6) and are reached via ``tab.view_controller.*`` /
-    # ``tab.editing.*``.
-
-    # =========================================================
-    # Appearance / editability  (cross-cutting controllers)
-    # =========================================================
-    # Plan 21 O4: read-only / editable mode lives on the
-    # JsonTabEditabilityController, reached via ``tab.editability.*``.
+    # Appearance / editability
     @property
     def editability(self) -> "JsonTabEditabilityController": ...
 
-    # Plan 21 O3: theme / font / zoom / key-column routing lives on the
-    # JsonTabAppearanceController, reached via ``tab.appearance.*``.  The
-    # type is a forward-ref string to avoid the import cycle
-    # (document_protocol -> tab_appearance -> tab_data -> editing_controller
-    #  -> state.view_state -> document_protocol), mirroring ``editing``.
     @property
     def appearance(self) -> "JsonTabAppearanceController": ...
     @property
     def zoom_pt(self) -> int: ...
 
-    # =========================================================
-    # Host messaging façade (status bar)
-    # =========================================================
+    # Host messaging
     def show_status(self, message: str, timeout_ms: int = ...) -> None: ...
 
-    # =========================================================
-    # Signals  (per Plan 21 §5: ClassVar[Signal])
-    # =========================================================
+    # Signals
     dirtyChanged: ClassVar[Signal]
     schemaChanged: ClassVar[Signal]
     validationChanged: ClassVar[Signal]

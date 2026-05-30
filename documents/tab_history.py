@@ -1,9 +1,4 @@
-"""Tab-scoped history controller.
-
-Owns the ``QUndoStack``, the command→view-state map used by move commands to
-restore selection/expansion after undo/redo, and the index-tracking variable.
-Parented to the host tab so destruction cascades.
-"""
+"""Per-tab undo/history controller."""
 
 from __future__ import annotations
 
@@ -23,7 +18,6 @@ class TabHistoryController(QObject):
         self._move_view_state_by_cmd_id: dict[int, dict[str, Any]] = {}
         self._last_undo_index: int = self.undo_stack.index()
 
-    # ----- view-state map ------------------------------------------------
     def register_view_state(self, cmd_id: int, state: dict) -> None:
         self._move_view_state_by_cmd_id[cmd_id] = state
 
@@ -33,7 +27,6 @@ class TabHistoryController(QObject):
     def has_view_state(self, cmd_id: int) -> bool:
         return cmd_id in self._move_view_state_by_cmd_id
 
-    # ----- index tracking ------------------------------------------------
     @property
     def last_undo_index(self) -> int:
         return self._last_undo_index
@@ -42,7 +35,6 @@ class TabHistoryController(QObject):
     def last_undo_index(self, value: int) -> None:
         self._last_undo_index = value
 
-    # ----- expansion capture --------------------------------------------
     def iter_expanded_relative_paths(self, root_index):
         return iter_expanded_relative_paths(self._tab.view_state.view, root_index)
 
