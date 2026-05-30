@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QLineEdit, QWidget
 
 from documents import tab_init
 from documents.mutation_gateway import DocumentMutationGateway
-from documents.states.editing_controller import EditingController, TreeAction
+from documents.states.editing_controller import EditingController
 from documents.states.io_controller import IoController
 from documents.states.view_state import ViewState
 from documents.tab_appearance import JsonTabAppearanceController
@@ -247,10 +247,3 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
 
     def _on_current_changed(self, current: QModelIndex, _previous: QModelIndex) -> None:
         on_current_changed(self, current, _previous)
-
-    def _run_tree_action(
-        self,
-        success_message: str,
-        actions: set[TreeAction],
-    ) -> None:
-        self.editing.run_tree_action(success_message, actions)

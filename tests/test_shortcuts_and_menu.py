@@ -36,7 +36,7 @@ def test_shortcuts_canary_triggers_every_tab_shortcut(qtbot):
     def _record(_message: str, actions: set[TreeAction]) -> None:
         calls.append(actions)
 
-    tab._run_tree_action = _record  # type: ignore[method-assign]
+    tab.editing.run_tree_action = _record  # type: ignore[method-assign]
     find_triggered: list[bool] = []
     tab._find_shortcut.activated.connect(lambda: find_triggered.append(True))
 

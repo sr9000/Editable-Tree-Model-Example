@@ -183,7 +183,7 @@ def test_ctrl_v_dispatches_to_multi_paste_when_multiple_rows_selected(qtbot):
 
     QApplication.clipboard().setText("99")
     before_count = tab.undo_stack.count()
-    tab._run_tree_action("Pasted JSON", {TreeAction.PASTE})
+    tab.editing.run_tree_action("Pasted JSON", {TreeAction.PASTE})
 
     assert _root_values(tab) == [1, 99, 2, 3, 99]
     assert tab.undo_stack.count() == before_count + 1

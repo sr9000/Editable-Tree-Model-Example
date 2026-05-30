@@ -154,49 +154,51 @@ def init_delegates_and_connections(tab: "JsonTab") -> None:
 
 def init_shortcuts(tab: "JsonTab") -> None:
     tab._copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, tab.view_state.view)
-    tab._copy_shortcut.activated.connect(lambda: tab._run_tree_action("Copied selection", {TreeAction.COPY_ONLY}))
+    tab._copy_shortcut.activated.connect(
+        lambda: tab.editing.run_tree_action("Copied selection", {TreeAction.COPY_ONLY})
+    )
 
     tab._cut_shortcut = QShortcut(QKeySequence.StandardKey.Cut, tab.view_state.view)
-    tab._cut_shortcut.activated.connect(lambda: tab._run_tree_action("Cut selection", {TreeAction.CUT}))
+    tab._cut_shortcut.activated.connect(lambda: tab.editing.run_tree_action("Cut selection", {TreeAction.CUT}))
 
     tab._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, tab.view_state.view)
-    tab._paste_shortcut.activated.connect(lambda: tab._run_tree_action("Pasted JSON", {TreeAction.PASTE}))
+    tab._paste_shortcut.activated.connect(lambda: tab.editing.run_tree_action("Pasted JSON", {TreeAction.PASTE}))
 
     tab._paste_zip_shortcut = QShortcut(QKeySequence("Ctrl+Shift+V"), tab.view_state.view)
     tab._paste_zip_shortcut.activated.connect(
-        lambda: tab._run_tree_action("Inserted at selection", {TreeAction.PASTE_ZIP})
+        lambda: tab.editing.run_tree_action("Inserted at selection", {TreeAction.PASTE_ZIP})
     )
 
     tab._replace_zip_shortcut = QShortcut(QKeySequence("Ctrl+Alt+V"), tab.view_state.view)
     tab._replace_zip_shortcut.activated.connect(
-        lambda: tab._run_tree_action("Replaced values at selection", {TreeAction.REPLACE_ZIP})
+        lambda: tab.editing.run_tree_action("Replaced values at selection", {TreeAction.REPLACE_ZIP})
     )
 
     # Delete stays on MainWindow to avoid ambiguous shortcut warnings.
 
     tab._duplicate_shortcut = QShortcut(QKeySequence("Ctrl+D"), tab.view_state.view)
     tab._duplicate_shortcut.activated.connect(
-        lambda: tab._run_tree_action("Duplicated selection", {TreeAction.DUPLICATE})
+        lambda: tab.editing.run_tree_action("Duplicated selection", {TreeAction.DUPLICATE})
     )
 
     tab._move_up_shortcut = QShortcut(QKeySequence("Alt+Up"), tab.view_state.view)
-    tab._move_up_shortcut.activated.connect(lambda: tab._run_tree_action("Moved up", {TreeAction.MOVE_UP}))
+    tab._move_up_shortcut.activated.connect(lambda: tab.editing.run_tree_action("Moved up", {TreeAction.MOVE_UP}))
 
     tab._move_down_shortcut = QShortcut(QKeySequence("Alt+Down"), tab.view_state.view)
-    tab._move_down_shortcut.activated.connect(lambda: tab._run_tree_action("Moved down", {TreeAction.MOVE_DOWN}))
+    tab._move_down_shortcut.activated.connect(lambda: tab.editing.run_tree_action("Moved down", {TreeAction.MOVE_DOWN}))
 
     tab._move_out_up_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Up"), tab.view_state.view)
     tab._move_out_up_shortcut.activated.connect(
-        lambda: tab._run_tree_action("Moved out of parent", {TreeAction.MOVE_OUT_UP})
+        lambda: tab.editing.run_tree_action("Moved out of parent", {TreeAction.MOVE_OUT_UP})
     )
 
     tab._move_out_down_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Down"), tab.view_state.view)
     tab._move_out_down_shortcut.activated.connect(
-        lambda: tab._run_tree_action("Moved out of parent", {TreeAction.MOVE_OUT_DOWN})
+        lambda: tab.editing.run_tree_action("Moved out of parent", {TreeAction.MOVE_OUT_DOWN})
     )
 
     tab._sort_shortcut = QShortcut(QKeySequence("Ctrl+Alt+S"), tab.view_state.view)
-    tab._sort_shortcut.activated.connect(lambda: tab._run_tree_action("Sorted keys", {TreeAction.SORT_KEYS}))
+    tab._sort_shortcut.activated.connect(lambda: tab.editing.run_tree_action("Sorted keys", {TreeAction.SORT_KEYS}))
 
     tab._find_shortcut = QShortcut(QKeySequence.StandardKey.Find, tab.view_state.view)
     tab._find_shortcut.activated.connect(tab.view_state.search_edit.setFocus)
