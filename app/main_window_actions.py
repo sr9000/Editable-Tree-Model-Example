@@ -48,7 +48,7 @@ def setup_connections(window):
 def update_actions(window):
     tab = window._current_tab()
     has_tab = tab is not None
-    can_edit = bool(tab and not tab.is_read_only)
+    can_edit = bool(tab and not tab.editability.is_read_only)
     has_valid_index = bool(tab and tab.view_controller.has_current())
 
     window.fileNewFromClipboardAction.setEnabled(clipboard_text_is_valid_data())

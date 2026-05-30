@@ -153,9 +153,10 @@ class Document(Protocol):
     # =========================================================
     # Appearance / editability  (cross-cutting controllers)
     # =========================================================
+    # Plan 21 O4: read-only / editable mode lives on the
+    # JsonTabEditabilityController, reached via ``tab.editability.*``.
     @property
-    def is_read_only(self) -> bool: ...
-    def set_read_only(self, enabled: bool) -> None: ...
+    def editability(self) -> "JsonTabEditabilityController": ...
 
     # Plan 21 O3: theme / font / zoom / key-column routing lives on the
     # JsonTabAppearanceController, reached via ``tab.appearance.*``.  The

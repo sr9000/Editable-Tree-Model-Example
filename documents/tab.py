@@ -95,14 +95,16 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
             services=services,
         )
 
-    def set_read_only(self, enabled: bool) -> None:
-        editability = self._editability
-        if editability is not None:
-            editability.set_read_only(enabled)
-
     @property
-    def is_read_only(self) -> bool:
-        return self.data_store.is_read_only
+    def editability(self) -> JsonTabEditabilityController:
+        """Read-only / editable mode controller.
+
+        Plan 21 O4 retired the ``set_read_only`` / ``is_read_only``
+        forwarders on ``JsonTab``; callers reach them through
+        ``tab.editability.*``.
+        """
+        assert self._editability is not None, "editability accessed before bootstrap"
+        return self._editability
 
     @property
     def mutations(self) -> DocumentMutationGateway:

@@ -44,7 +44,7 @@ class DocumentMutationGateway:
         tab method becomes a one-line delegation.
         """
         tab = self._tab
-        if tab.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if role != Qt.ItemDataRole.EditRole or not index.isValid():
             return False

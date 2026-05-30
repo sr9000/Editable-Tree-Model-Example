@@ -381,7 +381,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _save_tab(self, tab: Document, *, save_as: bool = False) -> bool:
         from state.validation_settings import clear_schema_path
 
-        if tab.is_read_only:
+        if tab.editability.is_read_only:
             return False
         old_path = tab.io.file_path
         ok = tab.save_as() if save_as else tab.save()
@@ -472,7 +472,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def reload_from_disk(self) -> None:
         tab = self._current_tab()
-        if tab is None or tab.is_read_only or not tab.io.file_path:
+        if tab is None or tab.editability.is_read_only or not tab.io.file_path:
             return
         decision = self._confirm_reload_dirty_tab(tab)
         if decision == "cancel":
