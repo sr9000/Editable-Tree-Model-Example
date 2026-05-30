@@ -16,7 +16,6 @@ from documents.states.editing.tree_actions import TreeAction
 from state.affix_mru import AffixMRU
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
-from tree.types import JsonType
 from tree_actions.structure import (
     insert_child_current,
     insert_sibling_after,
@@ -24,7 +23,6 @@ from tree_actions.structure import (
 )
 from undo.commands import _MoveRowsCmd
 from undo.diff import DiffApplier
-
 
 
 class EditingController(QObject):
