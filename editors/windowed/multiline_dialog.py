@@ -5,7 +5,7 @@ from typing import Callable
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QVBoxLayout, QWidget
 
-from qmultiline_editor import QMultilineEditor
+from editors.windowed.multiline_widget import QMultilineEditor
 from settings import APPLICATION_ID, MODAL_WINDOW_SIZE
 
 QMULTILINEDIALOG_ID = "QMultilineDialog-19beb602-e9c1-479b-a037-d9dbfbddec65"
