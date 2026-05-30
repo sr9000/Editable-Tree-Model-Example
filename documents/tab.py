@@ -36,14 +36,11 @@ from undo.commands import _MoveRowsCmd
 
 _DEFAULT_DATA = tab_init._DEFAULT_DATA
 
-# QUndoCommand.id() values for typed commands that support mergeWith().
-# Qt requires id() to fit in a signed 32-bit int (anything larger overflows
-# the C++ ``int`` return type and raises ``SystemError`` from PySide).
+# Typed command ids must fit in a signed 32-bit int for Qt.
 _CMD_ID_RENAME = 0x0E71_0001
 _CMD_ID_EDIT_VALUE = 0x0E71_0002
 
-# Time window in seconds during which two consecutive same-path edits
-# collapse into one undo entry. Tuned for keystroke-level typing.
+# Merge consecutive same-path edits within this time window.
 _MERGE_WINDOW_SECONDS = 0.5
 
 
@@ -53,10 +50,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     _editability: JsonTabEditabilityController | None = None
     _view_controller: ViewController | None = None
 
-    # Plan 21 P3: the six controllers + host live directly on JsonTab.
-    # ``JsonTabData`` / ``tab.data_store`` have been deleted; callers reach
-    # each axis through ``tab.io`` / ``tab.view_state`` / ``tab.editing`` /
-    # ``tab.validation`` / ``tab.appearance`` / ``tab.editability``.
     _io: IoController | None = None
     _view_state: ViewState | None = None
     _editing: EditingController | None = None
@@ -106,70 +99,40 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
 
     @property
     def editability(self) -> JsonTabEditabilityController:
-        """Read-only / editable mode controller.
-
-        Plan 21 O4 retired the ``set_read_only`` / ``is_read_only``
-        forwarders on ``JsonTab``; callers reach them through
-        ``tab.editability.*``.
-        """
+        """Read-only/editable mode controller."""
         assert self._editability is not None, "editability accessed before bootstrap"
         return self._editability
 
     @property
     def mutations(self) -> DocumentMutationGateway:
-        """Typed accessor for the document mutation gateway.
-
-        Replaces ``tab.data_store.mutations`` for external callers; see
-        ``plans/20-decouple-jsontab.md`` Phase B.
-        """
+        """Typed accessor for the document mutation gateway."""
         return self._editing.mutations
 
-    # -- Phase I (I5): direct substate accessors -------------------
-    # ``JsonTab directly composes the four states.``  These read-only
-    # properties expose each substate / controller object so callers
-    # inside ``documents/`` can grab a whole axis directly.  Plan 21 P3
-    # removed ``JsonTabData``; the controllers now live on JsonTab as
-    # ``_io`` / ``_view_state`` / ``_editing`` / ``_validation``.
     @property
     def io(self) -> IoController:
-        """The :class:`documents.states.io_controller.IoController`."""
+        """Return the IO controller."""
         return self._io
 
     @property
     def view_state(self) -> ViewState:
-        """The :class:`documents.states.view_state.ViewState` substate."""
+        """Return the passive view state container."""
         return self._view_state
 
     @property
     def editing_state(self) -> EditingController:
-        """The :class:`documents.states.editing_controller.EditingController`."""
+        """Alias for the editing controller."""
         return self._editing
 
     @property
     def editing(self) -> EditingController:
-        """The :class:`documents.states.editing_controller.EditingController`.
-
-        Active controller owning the editing axis (tree model, mutation
-        gateway, undo history, affix MRU, last-move cache) and the typed
-        ``push_*`` command behaviour; see Plan 21 Phase N.
-        """
+        """Return the editing controller."""
         return self._editing
 
     @property
     def validation_state(self) -> TabValidationController:
-        """Same object as :attr:`validation`; the alias name matches the
-        I1-I4 ``*State`` naming scheme.
-        """
+        """Alias for :attr:`validation`."""
         return self._validation
 
-    # -- Phase C: typed file-state accessors ---------------------
-    # Plan 21 L3 retired the per-attribute ``file_path`` / ``save_format``
-    # / ``is_dirty`` forwards; external callers reach those through the
-    # IoController (``tab.io.file_path`` / ``.save_format`` / ``.dirty``).
-    # Plan 21 O2 retired ``schema_source`` / ``schema_ref`` /
-    # ``issue_index`` / ``goto_validation_issue`` / ``_severity_provider``
-    # / ``_on_validation_changed``; external callers reach those through
-    # the ValidationController (``tab.validation.schema_source`` etc.).
     @property
     def validation(self) -> TabValidationController:
         return self._validation
@@ -180,78 +143,48 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
 
     @property
     def view(self) -> JsonTreeView:
-        """Typed accessor for the underlying tree view.
-
-        Replaces ``tab.data_store.view`` for external callers; see
-        ``plans/20-decouple-jsontab.md`` Phase D.
-        """
+        """Return the underlying tree view."""
         return self._view_state.view
 
     @property
     def view_controller(self) -> ViewController:
-        """Selection / expansion / scroll controller for the tree view.
-
-        Created by :func:`documents.tab_init.bootstrap`. External callers
-        should prefer this over :attr:`view` whenever the underlying
-        operation is selection-, expansion-, or scroll-related; see
-        ``plans/20-decouple-jsontab.md`` Phase D (D1) and
-        ``plans/21-promote-substates-to-controllers.md`` Phase M (M1).
-        """
+        """Return the selection, expansion, and scroll controller."""
         assert self._view_controller is not None, "view_controller accessed before bootstrap"
         return self._view_controller
 
     @property
     def model(self) -> JsonTreeModel:
-        """Typed accessor for the underlying tree model.
-
-        Replaces ``tab.data_store.model`` for external callers; see
-        ``plans/20-decouple-jsontab.md`` Phase E (E-light).
-        """
+        """Return the underlying tree model."""
         return self._editing.model
 
-    # -- Phase E (E2): narrow read helpers covering the structural /
-    # data-read intents identified in reports/model_access_audit.md.
-    # These let callers in app/, state/, tree_actions/ depend on a
-    # tiny stable surface instead of the full QAbstractItemModel.
     def root_index(self) -> QModelIndex:
-        """Return the index of the root row.
-
-        When ``model.show_root`` is False the document is rendered as
-        an implicit top-level container; in that case the conventional
-        ``root index`` for traversal is the invalid index, since
-        :meth:`JsonTreeModel.get_item` maps the invalid index to the
-        real ``root_item``.
-        """
+        """Return the index used as the logical root for traversal."""
         model = self._editing.model
         if not model.show_root:
             return QModelIndex()
         return model.index(0, 0, QModelIndex())
 
     def root_item(self) -> JsonTreeItem:
-        """Return the root :class:`JsonTreeItem` of the document tree."""
+        """Return the root tree item."""
         return self._editing.model.root_item
 
     def root_data(self) -> Any:
-        """Return a fresh JSON-serialisable snapshot of the document root."""
+        """Return a fresh JSON-serializable snapshot of the document root."""
         return self._editing.model.root_item.to_json()
 
     def row_count(self, parent: QModelIndex = QModelIndex()) -> int:
-        """Number of children directly under ``parent``."""
+        """Return the number of children directly under ``parent``."""
         return self._editing.model.rowCount(parent)
 
     def column_count(self) -> int:
-        """Number of columns in the document model (Name / Type / Value)."""
+        """Return the number of model columns."""
         return self._editing.model.columnCount()
 
-    # -- Phase E (E2/E3): viewport + zoom helpers consolidating the
-    # last bits of underscore-prefixed reach-in from state/view_state.py.
     @property
     def zoom_pt(self) -> int:
-        """Per-tab editor font point-size override (0 ⇒ inherit global)."""
+        """Per-tab editor font point-size override."""
         return self._appearance.font_pt
 
-    # -- Phase F long tail (F4 / F5): typed accessors for residual
-    # state still leaked into tree_actions/, app/, undo/.
     @property
     def search_edit(self) -> QLineEdit:
         return self._view_state.search_edit

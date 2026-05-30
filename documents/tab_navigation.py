@@ -22,14 +22,14 @@ class NavigationKey(IntEnum):
 
 
 class JsonTabNavigationController:
-    """Tree-view keyboard navigation owned by a ``JsonTab`` instance."""
+    """Keyboard navigation helper for a tab tree view."""
 
     def __init__(self, tab, edit_name_or_value_from_enter: Callable[[], None]) -> None:
         self._tab = tab
         self._edit_name_or_value_from_enter = edit_name_or_value_from_enter
 
     def handle_event_filter(self, watched: QObject | None, event: QEvent) -> bool:
-        """Return ``True`` when a tree-view keyboard event was consumed."""
+        """Return ``True`` when a keyboard event is consumed."""
         view = self._tab.view
         if view is not None and watched in (view, view.viewport()):
             if event.type() != QEvent.Type.KeyPress or not isinstance(event, QKeyEvent):
@@ -58,7 +58,7 @@ class JsonTabNavigationController:
         view.setExpanded(row_anchor, not view.isExpanded(row_anchor))
 
     def handle_arrow_navigation(self, key: int | Qt.Key, modifiers: Qt.KeyboardModifier) -> bool:
-        """Use arrows for cell navigation; never expand/collapse rows."""
+        """Use arrows for cell navigation without expanding or collapsing rows."""
         if modifiers != Qt.KeyboardModifier.NoModifier:
             return False
         navigation_key = NavigationKey.from_qt_key(key)

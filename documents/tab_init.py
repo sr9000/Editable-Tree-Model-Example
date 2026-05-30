@@ -1,9 +1,4 @@
-"""Bootstrap a :class:`documents.tab.JsonTab` widget.
-
-Encapsulates the dense ``__init__`` body — controller wiring, view layout,
-delegate setup, validation/history setup, signal connections — so the tab
-class itself stays narrative.
-"""
+"""Bootstrap helpers for :class:`documents.tab.JsonTab`."""
 
 from __future__ import annotations
 
@@ -108,14 +103,11 @@ def bootstrap(
     init_shortcuts(tab)
     init_search_filter(tab)
 
-    # Phase D: viewport controller. Created after the QTreeView exists
-    # (init_layout) and after the proxy/model are wired (init_model)
-    # because apply_request resolves source-paths through the proxy.
+    # Create the viewport controller after the view and proxy exist.
     view_controller = ViewController(tab)
     tab._view_controller = view_controller
     view_controller.viewportRequested.connect(view_controller.apply_request)
-    # Plug the severity provider before init_validation_state so the first
-    # revalidate() → dataChanged repaint already has the provider ready.
+    # Install the severity provider before the first revalidation.
     tab.model.set_issue_index_provider(tab.validation.severity_provider)
     tab.validationChanged.connect(tab.validation.on_validation_changed)
     init_validation_state(tab, model_data)

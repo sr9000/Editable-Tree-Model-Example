@@ -19,20 +19,12 @@ from units import counts, format_bytes
 
 
 class JsonTabEditContext(DefaultEditContext):
-    """``DelegateEditContext`` implementation backed by a ``JsonTab``.
-
-    Holds a weakref-style direct reference to the host tab (lifetime is
-    coupled to the tab anyway because the delegate is parented to it).
-    Routes commits through ``tab.mutations.commit_set_data`` so the seam
-    published in Phase 0 is honoured, and exposes ``affix_mru`` /
-    ``icon_provider`` / status callback collaborators owned by the tab.
-    """
+    """`DelegateEditContext` implementation backed by a `JsonTab`."""
 
     def __init__(self, tab) -> None:
         super().__init__()
         self._tab = tab
 
-    # ---- commit ----
     def commit(self, index, value, role=Qt.ItemDataRole.EditRole) -> EditResult:  # type: ignore[override]
         idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
         if idx.model() is None:
@@ -40,7 +32,6 @@ class JsonTabEditContext(DefaultEditContext):
         accepted = bool(self._tab.mutations.commit_set_data(idx, value, role))
         return EditResult(accepted=accepted)
 
-    # ---- collaborators ----
     def notify_status(self, message: str, timeout_ms: int = 0) -> None:  # type: ignore[override]
         try:
             self._tab.show_status(message, timeout_ms)
@@ -53,7 +44,6 @@ class JsonTabEditContext(DefaultEditContext):
     def affix_mru(self):  # type: ignore[override]
         return self._tab.affix_mru
 
-    # ---- confirmation dialogs (parented to a real widget) ----
     def confirm_large_text_edit(  # type: ignore[override]
         self,
         parent,
@@ -115,9 +105,6 @@ def init_layout(tab: "JsonTab") -> None:
 
 
 def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
-    # ``undo_stack`` is owned by ``TabHistoryController`` (Phase 2.2); the
-    # tab exposes it via a delegating property.
-
     tab.editing.model = JsonTreeModel(
         model_data, tab.view_state.view, show_root=show_root, icon_provider=tab.appearance.icon_provider
     )
@@ -157,9 +144,7 @@ def init_delegates_and_connections(tab: "JsonTab") -> None:
     tab.view_state.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
     tab.view_state.view.customContextMenuRequested.connect(functools.partial(show_context_menu, tab.view_state.view))
 
-    # Track user-initiated column resizes.  The guard flag prevents
-    # programmatic resizes (resizeColumnToContents / setColumnWidth from
-    # zoom helpers) from being mis-classified as user actions.
+    # Ignore programmatic resizes when tracking user-sized columns.
     def _on_section_resized(logical: int, _old: int, _new: int) -> None:
         if not tab.appearance.programmatic_column_resize:
             tab.appearance.user_sized_columns.add(logical)
@@ -177,7 +162,6 @@ def init_shortcuts(tab: "JsonTab") -> None:
     tab._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, tab.view_state.view)
     tab._paste_shortcut.activated.connect(lambda: tab._run_tree_action("Pasted JSON", {TreeAction.PASTE}))
 
-    # Step 10: Ctrl+Shift+V = multi-insert after each paired selected target.
     tab._paste_zip_shortcut = QShortcut(QKeySequence("Ctrl+Shift+V"), tab.view_state.view)
     tab._paste_zip_shortcut.activated.connect(
         lambda: tab._run_tree_action("Inserted at selection", {TreeAction.PASTE_ZIP})
@@ -188,8 +172,7 @@ def init_shortcuts(tab: "JsonTab") -> None:
         lambda: tab._run_tree_action("Replaced values at selection", {TreeAction.REPLACE_ZIP})
     )
 
-    # Delete is owned by MainWindow's rowRemoveAction (Del). Keeping a second
-    # per-tab Delete shortcut causes ambiguous shortcut warnings.
+    # Delete stays on MainWindow to avoid ambiguous shortcut warnings.
 
     tab._duplicate_shortcut = QShortcut(QKeySequence("Ctrl+D"), tab.view_state.view)
     tab._duplicate_shortcut.activated.connect(
@@ -218,8 +201,7 @@ def init_shortcuts(tab: "JsonTab") -> None:
     tab._find_shortcut = QShortcut(QKeySequence.StandardKey.Find, tab.view_state.view)
     tab._find_shortcut.activated.connect(tab.view_state.search_edit.setFocus)
 
-    # Zoom shortcuts are owned by MainWindow QAction entries (View menu).
-    # Keeping a second per-tab QShortcut copy causes ambiguous shortcut warnings.
+    # Zoom stays on MainWindow to avoid ambiguous shortcut warnings.
 
 
 def init_search_filter(tab: "JsonTab") -> None:

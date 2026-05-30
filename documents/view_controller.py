@@ -1,19 +1,4 @@
-"""View controller for a :class:`documents.tab.JsonTab`.
-
-Centralises selection / expansion / scroll reads and writes for one
-``JsonTreeView`` so callers outside ``documents/`` never touch the
-QTreeView directly. Writes are buffered through the
-:attr:`ViewController.viewportRequested` signal so non-Qt-aware
-producers (notably undo command implementations) can ask the viewport
-to act without importing or holding references to the widget itself.
-
-Plan 21 Phase M promoted this from the selection-only ``DocumentView``
-into a full ``ViewController`` that also owns the proxy/source path
-helpers (formerly ``documents.tab_paths``) and the search-filter glue.
-
-See ``plans/20-decouple-jsontab.md`` Phase D (D1) and
-``plans/21-promote-substates-to-controllers.md`` Phase M (M1).
-"""
+"""Selection, path, and viewport controller for a document tree view."""
 
 from __future__ import annotations
 
@@ -23,17 +8,9 @@ from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, QSortFil
 
 from tree.types import JsonType
 
-# Note: the constructor's ``tab`` parameter is documented to be a
-# ``documents.tab.JsonTab`` but is not statically typed here because
-# importing JsonTab eagerly would create a circular import (JsonTab
-# itself imports ViewController).
+# ``tab`` stays loosely typed here to avoid a circular import with ``documents.tab``.
 
-
-# Kind tags carried by ``viewportRequested``. Kept as module-level
-# string constants (rather than a true enum) because the receiver in
-# ``tab_init`` switches on them with a small if-chain and the values
-# also appear in test assertions / log messages where a plain string
-# is friendlier than an enum repr.
+# Plain string tags keep signal payloads simple for tests and logging.
 KIND_SELECT_PATHS = "select"
 KIND_EXPAND_PATH = "expand"
 KIND_EXPAND_ALL = "expand_all"
@@ -42,121 +19,76 @@ KIND_SCROLL_TO = "scroll"
 
 
 class ViewController(QObject):
-    """Selection / expansion / scroll controller for one ``JsonTreeView``.
-
-    Reads (``current_path``, ``selected_paths``, ``has_current``) are
-    synchronous and return path tuples relative to ``root_item``.
-
-    Writes (``request_select_paths``, ``request_expand``,
-    ``request_expand_all``, ``request_scroll_to``) emit
-    ``viewportRequested`` which the owning tab wires to a slot that
-    performs the action on the real ``QTreeView``. Consumers must not
-    rely on the write being applied synchronously — callers that need
-    to inspect the post-condition should listen for the appropriate
-    Qt signal (e.g. ``selectionChanged``) or refetch on the next
-    event-loop turn.
-    """
+    """Controller for selection, expansion, scrolling, and path mapping."""
 
     viewportRequested = Signal(str, object)
-    """``(kind, payload)`` notification of a viewport mutation request.
-
-    ``kind`` is one of the ``KIND_*`` constants in this module.
-    ``payload`` is:
-      * for ``KIND_SELECT_PATHS``: ``list[tuple[int, ...]]`` (non-empty)
-      * for ``KIND_EXPAND_PATH``:  ``tuple[int, ...]``
-      * for ``KIND_EXPAND_ALL``:   ``None``
-      * for ``KIND_SCROLL_TO``:    ``tuple[int, ...]``
-    """
+    """Signal carrying ``(kind, payload)`` viewport mutation requests."""
 
     def __init__(self, tab: "JsonTab") -> None:
         super().__init__(tab)
         self._tab = tab
 
-    # ------------------------------------------------------------------
-    # Widget accessors (the view axis owns the QTreeView / proxy / search
-    # edit; storage still lives on ``ViewState`` until Phase P).
-    # ------------------------------------------------------------------
-
     @property
     def widget(self):
-        """The underlying :class:`tree.view.JsonTreeView`."""
+        """Return the underlying tree view."""
         return self._tab.view_state.view
 
     @property
     def proxy(self):
-        """The :class:`tree_filter_proxy.TreeFilterProxy` wrapping the model."""
+        """Return the proxy wrapping the model."""
         return self._tab.view_state.proxy
 
     @property
     def search_edit(self):
-        """The search/filter ``QLineEdit``."""
+        """Return the search/filter line edit."""
         return self._tab.view_state.search_edit
 
     @property
     def ui(self):
-        """The generated ``Ui_JsonTab`` form object."""
+        """Return the generated UI object."""
         return self._tab.view_state.ui
 
     @property
     def name_delegate(self):
-        """Column-0 (name) item delegate."""
+        """Return the name-column delegate."""
         return self._tab.view_state.name_delegate
 
     @property
     def type_delegate(self):
-        """Column-1 (type) item delegate."""
+        """Return the type-column delegate."""
         return self._tab.view_state.type_delegate
 
     @property
     def value_delegate(self):
-        """Column-2 (value) item delegate."""
+        """Return the value-column delegate."""
         return self._tab.view_state.value_delegate
 
     @property
     def _model(self):
         return self._tab.model
 
-    # ------------------------------------------------------------------
-    # Search filter
-    # ------------------------------------------------------------------
-
     def set_filter_text(self, text: str) -> None:
-        """Push *text* straight to the proxy filter."""
+        """Push ``text`` straight to the proxy filter."""
         self._tab.view_state.proxy.set_filter_text(text)
 
     def apply_filter(self) -> None:
         """Re-apply the search edit's current text to the proxy filter."""
         self._tab.view_state.proxy.set_filter_text(self._tab.view_state.search_edit.text())
 
-    # ------------------------------------------------------------------
-    # Column widths (snapshot / restore for persisted view state)
-    # ------------------------------------------------------------------
-
     def column_widths(self) -> list[int]:
-        """Snapshot the current widths of every model column from the view."""
+        """Return the current widths of all model columns."""
         view = self._tab.view_state.view
         model = self._tab.model
         return [int(view.columnWidth(c)) for c in range(model.columnCount())]
 
     def set_column_widths(self, widths: list[int]) -> None:
-        """Restore previously-snapshotted column widths.
-
-        Positive values are written through to the tree view; the name
-        (column 0) and type (column 1) columns are additionally marked
-        as *user-sized* so subsequent zoom or content-resize passes do
-        not snap them back to content width. This is the inverse of
-        :meth:`column_widths`.
-        """
+        """Restore previously saved column widths."""
         model = self._tab.model
         view = self._tab.view_state.view
         for column, width in enumerate(widths[: model.columnCount()]):
             if width > 0:
                 view.setColumnWidth(column, width)
         self._tab.appearance.user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
-
-    # ------------------------------------------------------------------
-    # Proxy <-> source <-> view index mapping (was documents/tab_paths.py)
-    # ------------------------------------------------------------------
 
     @staticmethod
     def proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
@@ -174,19 +106,7 @@ class ViewController(QObject):
         return src
 
     def index_path(self, index: QModelIndex) -> tuple[int, ...]:
-        """Return a stable, parent-relative path for *index*.
-
-        Convention: paths are **always relative to ``root_item``** — the
-        synthetic root row that ``show_root=True`` exposes is implicit and
-        NEVER appears in returned paths. So:
-
-        - ``root_item`` itself → ``()``
-        - first child of root_item → ``(0,)``
-        - grand-child at root_item.child(2).child(1) → ``(2, 1)``
-
-        This convention matches :meth:`index_from_path`, which always starts
-        its walk at ``root_item`` (regardless of ``show_root``).
-        """
+        """Return a stable path for ``index`` relative to ``root_item``."""
         index = self.proxy_to_source(index)
         if not index.isValid():
             return ()
@@ -202,7 +122,7 @@ class ViewController(QObject):
         return tuple(reversed(path))
 
     def index_from_path(self, path: tuple[int | None, ...] | None) -> QModelIndex:
-        """Inverse of :meth:`index_path` — walk *path* starting at root_item."""
+        """Return the source index reached by walking ``path`` from ``root_item``."""
         if path is None:
             return QModelIndex()
         model = self._tab.model
@@ -251,12 +171,8 @@ class ViewController(QObject):
                 parts.append(f".{name}")
         return "".join(parts)
 
-    # ------------------------------------------------------------------
-    # Reads
-    # ------------------------------------------------------------------
-
     def has_current(self) -> bool:
-        """Return True iff the underlying selection has a valid current index."""
+        """Return whether the selection has a valid current index."""
         sm = self._tab.view.selectionModel()
         return sm is not None and sm.currentIndex().isValid()
 
@@ -287,48 +203,30 @@ class ViewController(QObject):
             result.append(path)
         return result
 
-    # ------------------------------------------------------------------
-    # Writes (signal-mediated)
-    # ------------------------------------------------------------------
-
     def request_select_paths(self, paths: list[tuple[int, ...]]) -> None:
-        """Ask the viewport to make *paths* the current selection.
-
-        The first entry becomes the current index; the rest are added to
-        the selection. No-op when *paths* is empty.
-        """
+        """Ask the viewport to select ``paths``."""
         if not paths:
             return
         self.viewportRequested.emit(KIND_SELECT_PATHS, list(paths))
 
     def request_expand(self, path: tuple[int, ...]) -> None:
-        """Ask the viewport to expand the node at *path*."""
+        """Ask the viewport to expand ``path``."""
         self.viewportRequested.emit(KIND_EXPAND_PATH, tuple(path))
 
     def request_expand_all(self) -> None:
-        """Ask the viewport to expand every node."""
+        """Ask the viewport to expand all nodes."""
         self.viewportRequested.emit(KIND_EXPAND_ALL, None)
 
     def request_collapse_all(self) -> None:
-        """Ask the viewport to collapse every node."""
+        """Ask the viewport to collapse all nodes."""
         self.viewportRequested.emit(KIND_COLLAPSE_ALL, None)
 
     def request_scroll_to(self, path: tuple[int, ...]) -> None:
-        """Ask the viewport to scroll the node at *path* into view."""
+        """Ask the viewport to scroll ``path`` into view."""
         self.viewportRequested.emit(KIND_SCROLL_TO, tuple(path))
 
-    # ------------------------------------------------------------------
-    # Apply (consumed by JsonTab's wiring; not part of the public API
-    # for callers outside ``documents/``)
-    # ------------------------------------------------------------------
-
     def apply_request(self, kind: str, payload: object) -> None:
-        """Handle a ``viewportRequested`` emission on the QTreeView.
-
-        Wired by :func:`documents.tab_init.bootstrap` to the signal.
-        Public-but-internal: tests reach in to assert behaviour, but
-        callers outside ``documents/`` should not invoke this directly.
-        """
+        """Apply a queued viewport request to the tree view."""
         view = self._tab.view
         if view is None:
             return
