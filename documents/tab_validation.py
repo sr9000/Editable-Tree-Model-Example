@@ -13,7 +13,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import QObject, QTimer
+from PySide6.QtCore import QItemSelectionModel, QModelIndex, QObject, Qt, QTimer
+from PySide6.QtWidgets import QAbstractItemView
 
 from io_formats.detect import SAVE_FORMAT_YAML_MULTI
 from tree.model_roles import VALIDATION_SEVERITY_ROLE
@@ -21,6 +22,7 @@ from validation import get_schema_registry
 from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
+from validation.json_pointer import instance_path_to_model_path
 from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef, discover_schema, load_schema
 from validation.validator import validate_document
@@ -231,6 +233,69 @@ class TabValidationController(QObject):
                 sig.disconnect(slot)
             except (RuntimeError, TypeError):
                 pass
+
+    # ------------------------------------------------------------------
+    # Issue navigation + repaint (was documents/tab_validation_view.py)
+    # ------------------------------------------------------------------
+    _SELECT_ROW_FLAGS = QItemSelectionModel.SelectionFlag(
+        QItemSelectionModel.SelectionFlag.ClearAndSelect.value | QItemSelectionModel.SelectionFlag.Rows.value
+    )
+    _EDITABLE_ITEM_FLAG = Qt.ItemFlag.ItemIsEditable.value
+
+    def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
+        root_data = self._tab.data_store.model.root_item.to_json()
+        model_path = instance_path_to_model_path(root_data, issue.instance_path)
+        if model_path is None:
+            self._tab.show_status("Validation issue path no longer exists", 2000)
+            return False
+        source_row = self._tab.view_controller.index_from_path(model_path)
+        if not source_row.isValid():
+            self._tab.show_status("Validation issue path no longer exists", 2000)
+            return False
+        source_row = source_row.siblingAtColumn(0)
+        view_row = self._tab.view_controller.source_to_view(source_row)
+        if not view_row.isValid():
+            self._tab.show_status("Validation issue path no longer exists", 2000)
+            return False
+        selection_model = self._tab.data_store.view.selectionModel()
+        if selection_model is not None:
+            selection_model.select(view_row, self._SELECT_ROW_FLAGS)
+            selection_model.setCurrentIndex(view_row, QItemSelectionModel.SelectionFlag.NoUpdate)
+        view = self._tab.data_store.view
+        view.setCurrentIndex(view_row)
+        view.scrollTo(view_row, QAbstractItemView.ScrollHint.PositionAtCenter)
+        if not edit:
+            return True
+        source_value = source_row.siblingAtColumn(2)
+        if not source_value.isValid():
+            return True
+        if not (self._tab.data_store.model.flags(source_value).value & self._EDITABLE_ITEM_FLAG):
+            return True
+        view_value = self._tab.view_controller.source_to_view(source_value)
+        if not view_value.isValid():
+            return True
+        view.setCurrentIndex(view_value)
+        view.edit(view_value)
+        return True
+
+    def severity_provider(self, model_path: tuple[int, ...]) -> str | None:
+        return self.severity_for(model_path)
+
+    def on_validation_changed(self, _index: IssueIndex) -> None:
+        """Emit recursive dataChanged so all visible rows repaint their badges."""
+
+        def emit_ranges(parent: QModelIndex) -> None:
+            model = self._tab.data_store.model
+            rows = model.rowCount(parent)
+            if rows <= 0:
+                return
+            top_left = model.index(0, 0, parent)
+            bottom_right = model.index(rows - 1, model.columnCount(parent) - 1, parent)
+            model.dataChanged.emit(top_left, bottom_right, [VALIDATION_SEVERITY_ROLE])
+            for row in range(rows):
+                emit_ranges(model.index(row, 0, parent))
+
+        emit_ranges(QModelIndex())
 
 
 __all__ = ["TabValidationController"]

@@ -17,7 +17,6 @@ from documents.tab_marker import JsonTabWidgetMarker
 from documents.tab_navigation import JsonTabNavigationController
 from documents.tab_status import on_current_changed, size_hint_for_item
 from documents.tab_validation import TabValidationController
-from documents.tab_validation_view import JsonTabValidationViewController
 from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
@@ -53,7 +52,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     _appearance: JsonTabAppearanceController | None = None
     _navigation: JsonTabNavigationController | None = None
     _editability: JsonTabEditabilityController | None = None
-    _validation_view: JsonTabValidationViewController | None = None
     _view_controller: ViewController | None = None
 
     dirtyChanged = Signal(bool)
@@ -279,18 +277,13 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         super().closeEvent(event)
 
     def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
-        validation_view = self._validation_view
-        return validation_view is not None and validation_view.goto_validation_issue(issue, edit=edit)
+        return self.validation.goto_validation_issue(issue, edit=edit)
 
     def _severity_provider(self, model_path: tuple[int, ...]) -> str | None:
-        """Lazily queried by the model for VALIDATION_SEVERITY_ROLE."""
-        validation_view = self._validation_view
-        return validation_view.severity_provider(model_path) if validation_view is not None else None
+        return self.validation.severity_provider(model_path)
 
     def _on_validation_changed(self, _index: IssueIndex) -> None:
-        validation_view = self._validation_view
-        if validation_view is not None:
-            validation_view.on_validation_changed(_index)
+        self.validation.on_validation_changed(_index)
 
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
         appearance = self._appearance

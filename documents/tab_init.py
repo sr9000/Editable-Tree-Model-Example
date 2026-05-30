@@ -28,7 +28,6 @@ from documents.tab_setup import (
     init_shortcuts,
     init_validation_state,
 )
-from documents.tab_validation_view import JsonTabValidationViewController
 from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
@@ -60,7 +59,6 @@ def bootstrap(
     tab._navigation = JsonTabNavigationController(tab.data_store, tab.edit_name_or_value_from_enter)
     tab._editability = JsonTabEditabilityController(tab.data_store)
     tab.data_store.editability = tab._editability
-    tab._validation_view = JsonTabValidationViewController(tab)
 
     resolved_services = services or build_legacy_json_tab_services(
         update_actions_callback=update_actions_callback,
