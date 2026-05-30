@@ -80,11 +80,11 @@ def test_commit_set_data_on_big_tree_is_responsive(qtbot):
     # Select an inner row of the big array and move it up.
     inner = tab.data_store.model.index(500, 0, arr_idx)
     v_inner = _view_idx(tab, inner)
-    tab.data_store.view.setCurrentIndex(v_inner)
-    tab.data_store.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    tab.view.setCurrentIndex(v_inner)
+    tab.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     start = time.perf_counter()
-    assert move_selection_up(tab.data_store.view)
+    assert move_selection_up(tab.view)
     elapsed_move = time.perf_counter() - start
 
     # Generous bound: a single move on 2k siblings should be well under 2s.
@@ -135,11 +135,11 @@ def test_duplicate_then_undo_redo_on_big_array(qtbot):
 
     inner = tab.data_store.model.index(50, 0, arr_idx)
     v_inner = _view_idx(tab, inner)
-    tab.data_store.view.setCurrentIndex(v_inner)
-    tab.data_store.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    tab.view.setCurrentIndex(v_inner)
+    tab.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     before = tab._snapshot()
-    assert duplicate_selection(tab.data_store.view)
+    assert duplicate_selection(tab.view)
     after = tab._snapshot()
     assert after != before
 
@@ -171,10 +171,10 @@ def test_expansion_preserved_across_undo_redo(qtbot):
     assert obj_idx is not None and arr_idx is not None
     v_obj = _view_idx(tab, obj_idx)
     v_arr = _view_idx(tab, arr_idx)
-    tab.data_store.view.setExpanded(v_obj, True)
-    tab.data_store.view.setExpanded(v_arr, True)
-    assert tab.data_store.view.isExpanded(v_obj)
-    assert tab.data_store.view.isExpanded(v_arr)
+    tab.view.setExpanded(v_obj, True)
+    tab.view.setExpanded(v_arr, True)
+    assert tab.view.isExpanded(v_obj)
+    assert tab.view.isExpanded(v_arr)
 
     # Edit a leaf inside the array — sibling expansion must survive
     # the resulting commit + the subsequent undo + redo.
@@ -190,16 +190,16 @@ def test_expansion_preserved_across_undo_redo(qtbot):
             obj_idx = tab.data_store.model.index(r, 0, QModelIndex())
         elif name == "array":
             arr_idx = tab.data_store.model.index(r, 0, QModelIndex())
-    assert tab.data_store.view.isExpanded(_view_idx(tab, obj_idx))
-    assert tab.data_store.view.isExpanded(_view_idx(tab, arr_idx))
+    assert tab.view.isExpanded(_view_idx(tab, obj_idx))
+    assert tab.view.isExpanded(_view_idx(tab, arr_idx))
 
     tab.data_store.undo_stack.undo()
-    assert tab.data_store.view.isExpanded(_view_idx(tab, obj_idx))
-    assert tab.data_store.view.isExpanded(_view_idx(tab, arr_idx))
+    assert tab.view.isExpanded(_view_idx(tab, obj_idx))
+    assert tab.view.isExpanded(_view_idx(tab, arr_idx))
 
     tab.data_store.undo_stack.redo()
-    assert tab.data_store.view.isExpanded(_view_idx(tab, obj_idx))
-    assert tab.data_store.view.isExpanded(_view_idx(tab, arr_idx))
+    assert tab.view.isExpanded(_view_idx(tab, obj_idx))
+    assert tab.view.isExpanded(_view_idx(tab, arr_idx))
 
 
 def test_undo_walking_is_responsive(qtbot):
@@ -214,12 +214,12 @@ def test_undo_walking_is_responsive(qtbot):
             break
     inner = tab.data_store.model.index(1500, 0, arr_idx)
     v_inner = _view_idx(tab, inner)
-    tab.data_store.view.setCurrentIndex(v_inner)
-    tab.data_store.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    tab.view.setCurrentIndex(v_inner)
+    tab.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     # 10 mutations.
     for _ in range(10):
-        assert move_selection_up(tab.data_store.view)
+        assert move_selection_up(tab.view)
 
     start = time.perf_counter()
     for _ in range(10):

@@ -8,8 +8,8 @@ from tree_actions.structure import delete_selection, move_selection_down, move_s
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:
     source_index = tab.data_store.model.index(row, 0, parent)
     idx = tab._source_to_view(source_index)
-    tab.data_store.view.setCurrentIndex(idx)
-    tab.data_store.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    tab.view.setCurrentIndex(idx)
+    tab.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
 
 def test_undo_redo_delete_selection(qtbot):
@@ -19,7 +19,7 @@ def test_undo_redo_delete_selection(qtbot):
     before = tab.data_store.model.root_item.to_json()
 
     _select_row0(tab, 0)
-    assert delete_selection(tab.data_store.view)
+    assert delete_selection(tab.view)
     assert tab.data_store.model.root_item.to_json() != before
 
     tab.data_store.undo_stack.undo()
@@ -36,13 +36,13 @@ def test_undo_redo_paste(qtbot):
     before = tab.data_store.model.root_item.to_json()
     idx = tab.data_store.model.index(0, 0, QModelIndex())
     view_idx = tab._source_to_view(idx)
-    tab.data_store.view.setCurrentIndex(view_idx)
-    tab.data_store.view.selectionModel().select(view_idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    tab.view.setCurrentIndex(view_idx)
+    tab.view.selectionModel().select(view_idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
     from PySide6.QtWidgets import QApplication
 
     QApplication.clipboard().setText('{"pasted": 1}')
-    assert paste_from_clipboard(tab.data_store.view)
+    assert paste_from_clipboard(tab.view)
 
     tab.data_store.undo_stack.undo()
     assert tab.data_store.model.root_item.to_json() == before
@@ -83,7 +83,7 @@ def test_undo_redo_move_object_member_up(qtbot):
     assert len(keys_before) >= 2
 
     _select_row0(tab, 1)
-    assert move_selection_up(tab.data_store.view)
+    assert move_selection_up(tab.view)
 
     keys_after = _keys_in_order(tab)
     assert keys_after != keys_before
@@ -103,7 +103,7 @@ def test_undo_redo_move_object_member_down(qtbot):
 
     keys_before = _keys_in_order(tab)
     _select_row0(tab, 0)
-    assert move_selection_down(tab.data_store.view)
+    assert move_selection_down(tab.view)
 
     keys_after = _keys_in_order(tab)
     assert keys_after[0] == keys_before[1]
@@ -129,7 +129,7 @@ def test_undo_command_text_includes_path_and_timestamp(qtbot):
 
     # Duplicate "integer" -> label should mention `$.integer` and `duplicate`.
     _select_row0(tab, 2)
-    assert duplicate_selection(tab.data_store.view)
+    assert duplicate_selection(tab.view)
     text2 = tab.data_store.undo_stack.command(tab.data_store.undo_stack.count() - 1).text()
     assert re.match(r"^\[\d{2}:\d{2}:\d{2}\] duplicate @ \$\.integer$", text2), text2
 

@@ -27,7 +27,7 @@ def _idx(tab: JsonTab, *path: int):
 
 def _select_source_rows(tab: JsonTab, *source_indexes) -> None:
     first, *rest = source_indexes
-    sm = tab.data_store.view.selectionModel()
+    sm = tab.view.selectionModel()
     first_view = tab._source_to_view(first)
     sm.select(
         first_view,
@@ -53,7 +53,7 @@ def test_alt_up_single_row_reorders_within_parent_and_undo(qtbot):
     b = _idx(tab, 1)
     _select_source_rows(tab, b)
 
-    assert move_selection_up(tab.data_store.view)
+    assert move_selection_up(tab.view)
     assert list(tab.data_store.model.root_item.to_json().keys()) == ["b", "a", "c"]
     _assert_single_undo_roundtrip(tab, before, before_count)
 
@@ -67,7 +67,7 @@ def test_alt_up_multiselect_block_moves_together_and_undo(qtbot):
     c = _idx(tab, 2)
     _select_source_rows(tab, b, c)
 
-    assert move_selection_up(tab.data_store.view)
+    assert move_selection_up(tab.view)
     assert list(tab.data_store.model.root_item.to_json().keys()) == ["b", "c", "a"]
     _assert_single_undo_roundtrip(tab, before, before_count)
 
@@ -80,7 +80,7 @@ def test_alt_up_bubbles_out_before_parent_at_boundary_and_undo(qtbot):
     x = _idx(tab, 0, 0)
     _select_source_rows(tab, x)
 
-    assert move_selection_up(tab.data_store.view)
+    assert move_selection_up(tab.view)
     assert tab.data_store.model.root_item.to_json() == {"x": 1, "obj": {"y": 2, "z": 3}, "tail": 0}
     _assert_single_undo_roundtrip(tab, before, before_count)
 
@@ -93,7 +93,7 @@ def test_alt_up_on_root_level_row_is_noop(qtbot):
     a = _idx(tab, 0)
     _select_source_rows(tab, a)
 
-    assert move_selection_up(tab.data_store.view) is False
+    assert move_selection_up(tab.view) is False
     assert tab.data_store.undo_stack.count() == before_count
     assert tab.data_store.model.root_item.to_json() == before
 
@@ -107,7 +107,7 @@ def test_alt_down_discontinuous_selection_moves_each_parent_independently(qtbot)
     right_x = _idx(tab, 1, 0)
     _select_source_rows(tab, left_a, right_x)
 
-    assert move_selection_down(tab.data_store.view)
+    assert move_selection_down(tab.view)
     assert tab.data_store.model.root_item.to_json() == {
         "left": {"b": 2, "a": 1, "c": 3},
         "right": {"y": 5, "x": 4, "z": 6},
@@ -124,7 +124,7 @@ def test_alt_down_bottom_block_bubbles_out_after_parent_and_undo(qtbot):
     z = _idx(tab, 0, 2)
     _select_source_rows(tab, y, z)
 
-    assert move_selection_down(tab.data_store.view)
+    assert move_selection_down(tab.view)
     assert tab.data_store.model.root_item.to_json() == {"obj": {"x": 1}, "y": 2, "z": 3, "tail": 0}
     _assert_single_undo_roundtrip(tab, before, before_count)
 
@@ -137,7 +137,7 @@ def test_show_root_true_root_level_move_uses_root_relative_paths(qtbot):
     b = _idx(tab, 1)
     _select_source_rows(tab, b)
 
-    assert move_selection_up(tab.data_store.view)
+    assert move_selection_up(tab.view)
     assert list(tab.data_store.model.root_item.to_json().keys()) == ["b", "a", "c"]
     tab.data_store.undo_stack.undo()
     assert tab.data_store.model.root_item.to_json() == before
@@ -153,7 +153,7 @@ def test_show_root_true_boundary_move_bubbles_out_and_redo_does_not_crash(qtbot)
     x = _idx(tab, 0, 0)
     _select_source_rows(tab, x)
 
-    assert move_selection_up(tab.data_store.view)
+    assert move_selection_up(tab.view)
     assert tab.data_store.model.root_item.to_json() == {"x": 1, "obj": {"y": 2}, "tail": 0}
     tab.data_store.undo_stack.undo()
     assert tab.data_store.model.root_item.to_json() == before
@@ -166,11 +166,11 @@ def test_move_selection_out_up_down_regardless_of_boundary(qtbot):
 
     y = _idx(tab, 1, 1)
     _select_source_rows(tab, y)
-    assert move_selection_out_up(tab.data_store.view)
+    assert move_selection_out_up(tab.view)
     assert tab.data_store.model.root_item.to_json() == {"head": 0, "y": 2, "obj": {"x": 1}, "tail": 3}
 
     tab.data_store.undo_stack.undo()
     x = _idx(tab, 1, 0)
     _select_source_rows(tab, x)
-    assert move_selection_out_down(tab.data_store.view)
+    assert move_selection_out_down(tab.view)
     assert tab.data_store.model.root_item.to_json() == {"head": 0, "obj": {"y": 2}, "x": 1, "tail": 3}

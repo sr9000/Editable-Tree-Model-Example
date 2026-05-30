@@ -12,7 +12,7 @@ from tree_actions.context_menu import show_context_menu
 
 def _set_current_source_row(tab: JsonTab, source_index: QModelIndex) -> None:
     view_index = tab._source_to_view(source_index)
-    sm = tab.data_store.view.selectionModel()
+    sm = tab.view.selectionModel()
     sm.select(
         view_index,
         QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
@@ -112,12 +112,12 @@ def test_context_menu_shows_shortcuts_for_registered_actions(qtbot):
     tab = JsonTab(lambda *_: None, data={"obj": {"x": 1, "y": 2}, "tail": 3}, show_root=True)
     qtbot.addWidget(tab)
     tab.show()
-    tab.data_store.view.expandAll()
+    tab.view.expandAll()
     QApplication.processEvents()
 
     nested = tab._index_from_path((0, 0))
     _set_current_source_row(tab, nested)
-    position = tab.data_store.view.visualRect(tab._source_to_view(nested)).center()
+    position = tab.view.visualRect(tab._source_to_view(nested)).center()
 
     seen: dict[str, str] = {}
 
@@ -129,7 +129,7 @@ def test_context_menu_shows_shortcuts_for_registered_actions(qtbot):
             elif action.text():
                 seen[action.text()] = action.shortcut().toString()
 
-    menu = show_context_menu(tab.data_store.view, position, execute=False)
+    menu = show_context_menu(tab.view, position, execute=False)
     assert menu is not None
     _collect(menu)
 

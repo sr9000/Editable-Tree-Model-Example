@@ -29,30 +29,30 @@ def test_json_tab_filter_is_debounced(qtbot):
     tab = JsonTab(lambda *_: None, data={"alpha": "one", "beta": "two"})
     qtbot.addWidget(tab)
 
-    assert tab.data_store.proxy.rowCount(QModelIndex()) == 2
+    assert tab.view_controller.proxy.rowCount(QModelIndex()) == 2
 
-    tab.data_store.search_edit.setText("beta")
+    tab.view_controller.search_edit.setText("beta")
     qtbot.wait(50)
-    assert tab.data_store.proxy.rowCount(QModelIndex()) == 2
+    assert tab.view_controller.proxy.rowCount(QModelIndex()) == 2
 
     qtbot.wait(300)
-    assert tab.data_store.proxy.rowCount(QModelIndex()) == 1
-    assert tab.data_store.proxy.data(tab.data_store.proxy.index(0, 0, QModelIndex())) == "beta"
+    assert tab.view_controller.proxy.rowCount(QModelIndex()) == 1
+    assert tab.view_controller.proxy.data(tab.view_controller.proxy.index(0, 0, QModelIndex())) == "beta"
 
 
 def test_delete_selection_targets_source_row_while_filtered(qtbot):
     tab = JsonTab(lambda *_: None, data={"root": {"arr": [1, "needle", 3]}, "other": "x"})
     qtbot.addWidget(tab)
 
-    tab.data_store.search_edit.setText("needle")
+    tab.view_controller.search_edit.setText("needle")
     qtbot.wait(350)
 
-    root = tab.data_store.proxy.index(0, 0, QModelIndex())
-    arr = tab.data_store.proxy.index(0, 0, root)
-    leaf = tab.data_store.proxy.index(0, 0, arr)
+    root = tab.view_controller.proxy.index(0, 0, QModelIndex())
+    arr = tab.view_controller.proxy.index(0, 0, root)
+    leaf = tab.view_controller.proxy.index(0, 0, arr)
     assert leaf.isValid()
 
-    tab.data_store.view.setCurrentIndex(leaf)
-    assert delete_selection(tab.data_store.view)
+    tab.view.setCurrentIndex(leaf)
+    assert delete_selection(tab.view)
 
     assert tab.data_store.model.root_item.to_json() == {"root": {"arr": [1, 3]}, "other": "x"}

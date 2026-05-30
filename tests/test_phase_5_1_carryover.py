@@ -107,7 +107,7 @@ def test_malformed_bytes_payload_does_not_raise_in_create_editor(qtbot):
     item = tab.data_store.model.get_item(name_idx)
     item.value = "!!!not-base64!!!"
 
-    delegate = tab.data_store.value_delegate
+    delegate = tab.view_controller.value_delegate
     parent = QWidget(tab)
     qtbot.addWidget(parent)
     opt = QStyleOptionViewItem()
@@ -143,7 +143,7 @@ def test_large_bytes_manual_edit_warns_and_can_cancel(qtbot, monkeypatch):
     monkeypatch.setattr("delegates.edit_context.QMessageBox.warning", _warn)
     monkeypatch.setattr("dialogs.qhexedit_dlg.QHexDialog.open", _open)
 
-    delegate = tab.data_store.value_delegate
+    delegate = tab.view_controller.value_delegate
     parent = QWidget(tab)
     qtbot.addWidget(parent)
 
@@ -179,7 +179,7 @@ def test_large_bytes_manual_edit_warns_and_opens_on_confirm(qtbot, monkeypatch):
     monkeypatch.setattr("delegates.edit_context.QMessageBox.warning", _warn)
     monkeypatch.setattr("dialogs.qhexedit_dlg.QHexDialog.open", _open)
 
-    delegate = tab.data_store.value_delegate
+    delegate = tab.view_controller.value_delegate
     parent = QWidget(tab)
     qtbot.addWidget(parent)
 
@@ -208,7 +208,7 @@ def test_large_string_manual_edit_warns_and_can_cancel(qtbot, monkeypatch):
 
     monkeypatch.setattr("delegates.edit_context.QMessageBox.warning", _warn)
 
-    delegate = tab.data_store.value_delegate
+    delegate = tab.view_controller.value_delegate
     parent = QWidget(tab)
     qtbot.addWidget(parent)
     editor = delegate.createEditor(parent, QStyleOptionViewItem(), value_idx)
@@ -241,7 +241,7 @@ def test_large_multiline_manual_edit_warns_and_opens_on_confirm(qtbot, monkeypat
     monkeypatch.setattr("delegates.edit_context.QMessageBox.warning", _warn)
     monkeypatch.setattr("dialogs.qmultiline_dlg.QMultilineDialog.open", _open)
 
-    delegate = tab.data_store.value_delegate
+    delegate = tab.view_controller.value_delegate
     parent = QWidget(tab)
     qtbot.addWidget(parent)
     editor = delegate.createEditor(parent, QStyleOptionViewItem(), value_idx)
@@ -261,4 +261,4 @@ def test_programmatic_type_change_does_not_set_interactive_flag(qtbot):
     type_idx = tab.data_store.model.index(0, 1, QModelIndex())
 
     tab.data_store.model.setData(type_idx, JsonType.STRING, Qt.ItemDataRole.EditRole)
-    assert tab.data_store.type_delegate._interactive is False
+    assert tab.view_controller.type_delegate._interactive is False

@@ -17,8 +17,8 @@ def _select(view: QTreeView, idx) -> None:
 
 def _select_tab(tab: JsonTab, source_index) -> None:
     view_idx = tab._source_to_view(source_index)
-    tab.data_store.view.setCurrentIndex(view_idx)
-    tab.data_store.view.selectionModel().select(
+    tab.view.setCurrentIndex(view_idx)
+    tab.view.selectionModel().select(
         view_idx, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows
     )
 
@@ -80,7 +80,7 @@ def test_paste_replace_value_swaps_subtree(qtbot):
     _select_tab(tab, target)
 
     QApplication.clipboard().setText('{"new": [10, 20, 30]}')
-    assert paste_replace_value(tab.data_store.view)
+    assert paste_replace_value(tab.view)
     assert tab.data_store.model.get_item(target).to_json() == [10, 20, 30]
 
     # Undo restores original subtree.
@@ -97,7 +97,7 @@ def test_paste_replace_value_rejects_multiple_entries(qtbot):
 
     QApplication.clipboard().setText('{"a": 1, "b": 2}')
     # Multi-entry clipboard ⇒ ambiguous replace; refuse.
-    assert not paste_replace_value(tab.data_store.view)
+    assert not paste_replace_value(tab.view)
     assert tab.data_store.model.get_item(target).to_json() == 1
 
 

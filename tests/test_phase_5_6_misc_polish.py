@@ -16,10 +16,10 @@ def test_view_menu_expand_collapse_toggles_expansion(qtbot):
     root_view = tab._source_to_view(root)
 
     win.viewCollapseAllAction.trigger()
-    assert not tab.data_store.view.isExpanded(root_view)
+    assert not tab.view.isExpanded(root_view)
 
     win.viewExpandAllAction.trigger()
-    assert tab.data_store.view.isExpanded(root_view)
+    assert tab.view.isExpanded(root_view)
 
 
 def test_model_reset_calls_resize_key_columns(qtbot):
@@ -48,11 +48,11 @@ def test_view_zoom_actions_call_tab_zoom_and_resize(qtbot):
     tab = win._add_tab(data={"foo": 1}, file_path=None)
     assert tab is not None
 
-    before = tab.data_store.view.font().pointSize()
+    before = tab.view.font().pointSize()
     win.viewZoomInAction.trigger()
-    after_in = tab.data_store.view.font().pointSize()
+    after_in = tab.view.font().pointSize()
     win.viewResetZoomAction.trigger()
-    after_reset = tab.data_store.view.font().pointSize()
+    after_reset = tab.view.font().pointSize()
 
     assert after_in >= before
     assert after_reset == tab.data_store._default_font_pt
@@ -65,7 +65,7 @@ def test_zoom_preserves_user_column_widths(qtbot):
 
     # Simulate the user dragging col 0 to a custom width.
     custom_width = 200
-    tab.data_store.view.setColumnWidth(0, custom_width)
+    tab.view.setColumnWidth(0, custom_width)
     tab.data_store._user_sized_columns.add(0)  # mark as user-sized (normally done by sectionResized handler)
 
     # Zoom in three times.
@@ -74,22 +74,22 @@ def test_zoom_preserves_user_column_widths(qtbot):
 
     # Col 0 must remain unchanged because it is user-sized.
     assert (
-        tab.data_store.view.columnWidth(0) == custom_width
-    ), f"Expected col 0 to stay at {custom_width}, got {tab.data_store.view.columnWidth(0)}"
+        tab.view.columnWidth(0) == custom_width
+    ), f"Expected col 0 to stay at {custom_width}, got {tab.view.columnWidth(0)}"
 
     # Col 1 (not hand-resized) should have been scaled up.
-    assert tab.data_store.view.columnWidth(1) > 0
+    assert tab.view.columnWidth(1) > 0
 
 
 def test_zoom_updates_tree_icon_size(qtbot):
     tab = JsonTab(lambda *_: None, data={"foo": 1}, show_root=True)
     qtbot.addWidget(tab)
 
-    before = tab.data_store.view.iconSize().height()
+    before = tab.view.iconSize().height()
     tab.zoom_in()
-    after_in = tab.data_store.view.iconSize().height()
+    after_in = tab.view.iconSize().height()
     tab.zoom_out()
-    after_out = tab.data_store.view.iconSize().height()
+    after_out = tab.view.iconSize().height()
 
     assert after_in >= before
     assert after_out <= after_in

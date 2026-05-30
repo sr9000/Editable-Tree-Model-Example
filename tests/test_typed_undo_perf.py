@@ -31,8 +31,8 @@ def _make_huge_array_tab(qtbot, *, n: int) -> JsonTab:
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:
     source_index = tab.data_store.model.index(row, 0, parent)
     idx = tab._source_to_view(source_index)
-    tab.data_store.view.setCurrentIndex(idx)
-    tab.data_store.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    tab.view.setCurrentIndex(idx)
+    tab.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
 
 def _deep_size(obj, _seen=None) -> int:
@@ -67,7 +67,7 @@ def test_move_undo_redo_is_o1_on_huge_array(qtbot):
     _select_row0(tab, 1500)
     moves = 20
     for _ in range(moves):
-        assert move_selection_up(tab.data_store.view)
+        assert move_selection_up(tab.view)
 
     # Every recorded command is a typed move-rows command.
     for i in range(tab.data_store.undo_stack.count()):
@@ -100,7 +100,7 @@ def test_move_command_state_is_bounded_constant(qtbot):
 
     for tab in (tab_small, tab_huge):
         _select_row0(tab, 5 if tab is tab_small else 1500)
-        assert move_selection_up(tab.data_store.view)
+        assert move_selection_up(tab.view)
 
     cmd_small = tab_small.data_store.undo_stack.command(0)
     cmd_huge = tab_huge.data_store.undo_stack.command(0)
@@ -152,9 +152,9 @@ def test_no_routine_action_pushes_full_document_snapshot(qtbot):
 
     # Drive a representative mix of routine actions.
     _select_row0(tab, 100)
-    assert move_selection_up(tab.data_store.view)
+    assert move_selection_up(tab.view)
     _select_row0(tab, 200)
-    assert delete_selection(tab.data_store.view)
+    assert delete_selection(tab.view)
     leaf_v = tab.data_store.model.index(1, 2, tab.data_store.model.index(300, 0, QModelIndex()))
     assert tab.commit_set_data(leaf_v, "tagged", Qt.ItemDataRole.EditRole)
     name_idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
@@ -183,7 +183,7 @@ def test_delete_inner_stores_only_removed_subtree(qtbot):
     surviving 2999 rows in the undo command."""
     tab = _make_huge_array_tab(qtbot, n=3000)
     _select_row0(tab, 1500)
-    assert delete_selection(tab.data_store.view)
+    assert delete_selection(tab.view)
 
     cmd = tab.data_store.undo_stack.command(tab.data_store.undo_stack.count() - 1)
     assert isinstance(cmd, _RemoveRowsCmd)

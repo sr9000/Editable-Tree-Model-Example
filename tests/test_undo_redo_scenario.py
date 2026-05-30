@@ -31,9 +31,9 @@ from tree_actions.structure import (
 
 
 def _select(tab: JsonTab, index: QModelIndex) -> None:
-    sel = tab.data_store.view.selectionModel()
+    sel = tab.view.selectionModel()
     view_index = tab._source_to_view(index)
-    tab.data_store.view.setCurrentIndex(view_index)
+    tab.view.setCurrentIndex(view_index)
     sel.select(view_index, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
 
@@ -94,7 +94,7 @@ def test_undo_redo_comprehensive_scenario(qtbot):
     tab = JsonTab(lambda *_: None)
     qtbot.addWidget(tab)
     model = tab.data_store.model
-    view = tab.data_store.view
+    view = tab.view
 
     # --- All JsonType values are represented in the seed ---------------------
     assert _gather_types(tab) == _TYPES_IN_SEED

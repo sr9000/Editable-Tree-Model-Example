@@ -18,7 +18,7 @@ def _idx(tab: JsonTab, *path: int):
 
 def _select_source_rows(tab: JsonTab, *source_indexes) -> None:
     first, *rest = source_indexes
-    sm = tab.data_store.view.selectionModel()
+    sm = tab.view.selectionModel()
     first_view = tab._source_to_view(first)
     sm.select(
         first_view,
@@ -53,9 +53,9 @@ def test_move_preserves_expansion_and_selection_and_undo(qtbot):
     d = _idx(tab, 1, 0, 1)
     x = _idx(tab, 2)
 
-    tab.data_store.view.setExpanded(tab._source_to_view(b), True)
-    tab.data_store.view.setExpanded(tab._source_to_view(d), True)
-    tab.data_store.view.setExpanded(tab._source_to_view(x), False)
+    tab.view.setExpanded(tab._source_to_view(b), True)
+    tab.view.setExpanded(tab._source_to_view(d), True)
+    tab.view.setExpanded(tab._source_to_view(x), False)
     _select_source_rows(tab, b, x)
 
     assert tab.push_move_rows([b, x], target, 0)
@@ -67,21 +67,21 @@ def test_move_preserves_expansion_and_selection_and_undo(qtbot):
     moved_d = _idx(tab, 0, moved_b_row, 1)
     moved_x = _idx(tab, 0, moved_x_row)
 
-    assert tab.data_store.view.isExpanded(tab._source_to_view(moved_b))
-    assert tab.data_store.view.isExpanded(tab._source_to_view(moved_d))
-    assert not tab.data_store.view.isExpanded(tab._source_to_view(moved_x))
+    assert tab.view.isExpanded(tab._source_to_view(moved_b))
+    assert tab.view.isExpanded(tab._source_to_view(moved_d))
+    assert not tab.view.isExpanded(tab._source_to_view(moved_x))
 
     expected_selected = {(0, moved_b_row), (0, moved_x_row)}
-    selected_paths = {tab._index_path(idx) for idx in selected_source_rows(tab.data_store.view) if idx.isValid()}
+    selected_paths = {tab._index_path(idx) for idx in selected_source_rows(tab.view) if idx.isValid()}
     assert selected_paths == expected_selected
-    assert tab._index_path(tab._proxy_to_source(tab.data_store.view.currentIndex())) in expected_selected
+    assert tab._index_path(tab._proxy_to_source(tab.view.currentIndex())) in expected_selected
 
     tab.data_store.undo_stack.undo()
 
-    assert tab.data_store.view.isExpanded(tab._source_to_view(_idx(tab, 1, 0)))
-    assert tab.data_store.view.isExpanded(tab._source_to_view(_idx(tab, 1, 0, 1)))
-    assert not tab.data_store.view.isExpanded(tab._source_to_view(_idx(tab, 2)))
+    assert tab.view.isExpanded(tab._source_to_view(_idx(tab, 1, 0)))
+    assert tab.view.isExpanded(tab._source_to_view(_idx(tab, 1, 0, 1)))
+    assert not tab.view.isExpanded(tab._source_to_view(_idx(tab, 2)))
 
-    restored_selected = {tab._index_path(idx) for idx in selected_source_rows(tab.data_store.view) if idx.isValid()}
+    restored_selected = {tab._index_path(idx) for idx in selected_source_rows(tab.view) if idx.isValid()}
     assert restored_selected == {(1, 0), (2,)}
-    assert tab._index_path(tab._proxy_to_source(tab.data_store.view.currentIndex())) == (1, 0)
+    assert tab._index_path(tab._proxy_to_source(tab.view.currentIndex())) == (1, 0)

@@ -38,22 +38,22 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     qtbot.addWidget(tab)
 
     for column in range(3):
-        tab.data_store.view.setColumnWidth(column, 140 + (column * 25))
+        tab.view.setColumnWidth(column, 140 + (column * 25))
 
     root = tab.data_store.model.index(0, 0, QModelIndex())
     foo = tab.data_store.model.index(0, 0, root)
     bar = tab.data_store.model.index(0, 0, foo)
     leaf = tab.data_store.model.index(1, 0, bar)
 
-    tab.data_store.view.collapseAll()
-    tab.data_store.view.expand(tab._source_to_view(root))
-    tab.data_store.view.expand(tab._source_to_view(foo))
-    tab.data_store.view.setCurrentIndex(tab._source_to_view(leaf))
+    tab.view.collapseAll()
+    tab.view.expand(tab._source_to_view(root))
+    tab.view.expand(tab._source_to_view(foo))
+    tab.view.setCurrentIndex(tab._source_to_view(leaf))
 
     tab.zoom_in()
     tab.zoom_in()
-    saved_font_pt = tab.data_store.view.font().pointSize()
-    saved_widths = [tab.data_store.view.columnWidth(column) for column in range(3)]
+    saved_font_pt = tab.view.font().pointSize()
+    saved_widths = [tab.view.columnWidth(column) for column in range(3)]
 
     save(tab)
 
@@ -68,18 +68,18 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     assert restore(restored)
 
     for column in range(3):
-        assert restored.data_store.view.columnWidth(column) == saved_widths[column]
+        assert restored.view.columnWidth(column) == saved_widths[column]
 
     root2 = restored.data_store.model.index(0, 0, QModelIndex())
     foo2 = restored.data_store.model.index(0, 0, root2)
     bar2 = restored.data_store.model.index(0, 0, foo2)
     leaf2 = restored.data_store.model.index(1, 0, bar2)
 
-    assert restored.data_store.view.isExpanded(restored._source_to_view(root2))
-    assert restored.data_store.view.isExpanded(restored._source_to_view(foo2))
-    assert not restored.data_store.view.isExpanded(restored._source_to_view(bar2))
-    assert restored.data_store.view.currentIndex() == restored._source_to_view(leaf2)
-    assert restored.data_store.view.font().pointSize() == saved_font_pt
+    assert restored.view.isExpanded(restored._source_to_view(root2))
+    assert restored.view.isExpanded(restored._source_to_view(foo2))
+    assert not restored.view.isExpanded(restored._source_to_view(bar2))
+    assert restored.view.currentIndex() == restored._source_to_view(leaf2)
+    assert restored.view.font().pointSize() == saved_font_pt
 
 
 def test_save_as_discards_old_view_state_group(tmp_path, monkeypatch, qtbot):
@@ -97,7 +97,7 @@ def test_save_as_discards_old_view_state_group(tmp_path, monkeypatch, qtbot):
     new_path = str(tmp_path / "new.json")
     tab.data_store.file_path = old_path
 
-    tab.data_store.view.setColumnWidth(0, 222)
+    tab.view.setColumnWidth(0, 222)
     save(tab)
 
     def _fake_save_as() -> bool:

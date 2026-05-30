@@ -16,7 +16,7 @@ def _make_tab(qtbot, data, *, show_root: bool = False) -> JsonTab:
 
 
 def _select_rows(tab: JsonTab, *paths: tuple[int, ...]) -> None:
-    sm = tab.data_store.view.selectionModel()
+    sm = tab.view.selectionModel()
     first, *rest = paths
     first_view = tab._source_to_view(tab._index_from_path(first))
     sm.select(first_view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
@@ -65,7 +65,7 @@ def test_switch_selection_case_non_recursive(qtbot):
     tab = _make_tab(qtbot, {"outerNode": {"innerKey": 1}, "tailValue": 2})
     _select_rows(tab, (0,))
 
-    assert switch_selection_case(tab.data_store.view, "snake_case", recursive=False)
+    assert switch_selection_case(tab.view, "snake_case", recursive=False)
     assert tab.data_store.model.root_item.to_json() == {"outer_node": {"innerKey": 1}, "tailValue": 2}
 
 
@@ -73,7 +73,7 @@ def test_switch_selection_case_recursive(qtbot):
     tab = _make_tab(qtbot, {"outerNode": {"innerKey": 1}, "tailValue": 2})
     _select_rows(tab, (0,))
 
-    assert switch_selection_case(tab.data_store.view, "snake_case", recursive=True)
+    assert switch_selection_case(tab.view, "snake_case", recursive=True)
     assert tab.data_store.model.root_item.to_json() == {"outer_node": {"inner_key": 1}, "tailValue": 2}
 
 
@@ -81,7 +81,7 @@ def test_switch_document_case_undo_redo_and_typed_command(qtbot):
     tab = _make_tab(qtbot, {"myKey": {"innerKey": 1}, "Another-Key": 2})
     before = tab.data_store.model.root_item.to_json()
 
-    assert switch_document_case(tab.data_store.view, "PascalCase")
+    assert switch_document_case(tab.view, "PascalCase")
     after = tab.data_store.model.root_item.to_json()
     assert after == {"MyKey": {"InnerKey": 1}, "AnotherKey": 2}
 
@@ -99,19 +99,19 @@ def test_switch_document_case_rejects_name_collision(qtbot):
     before = tab.data_store.model.root_item.to_json()
     count_before = tab.data_store.undo_stack.count()
 
-    assert not switch_document_case(tab.data_store.view, "snake_case")
+    assert not switch_document_case(tab.view, "snake_case")
     assert tab.data_store.model.root_item.to_json() == before
     assert tab.data_store.undo_stack.count() == count_before
 
 
 def test_context_menu_contains_switch_case_submenus(qtbot):
     tab = _make_tab(qtbot, {"obj": {"xKey": 1}, "tailValue": 3}, show_root=True)
-    tab.data_store.view.expandAll()
+    tab.view.expandAll()
     _select_rows(tab, (0, 0))
 
     nested = tab._index_from_path((0, 0))
-    position = tab.data_store.view.visualRect(tab._source_to_view(nested)).center()
-    menu = show_context_menu(tab.data_store.view, position, execute=False)
+    position = tab.view.visualRect(tab._source_to_view(nested)).center()
+    menu = show_context_menu(tab.view, position, execute=False)
 
     top_titles = [action.text() for action in menu.actions() if action.text()]
     assert "Switch Case" in top_titles

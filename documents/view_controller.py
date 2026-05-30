@@ -93,6 +93,26 @@ class ViewController(QObject):
         return self._tab.data_store.search_edit
 
     @property
+    def ui(self):
+        """The generated ``Ui_JsonTab`` form object."""
+        return self._tab.data_store.ui
+
+    @property
+    def name_delegate(self):
+        """Column-0 (name) item delegate."""
+        return self._tab.data_store.name_delegate
+
+    @property
+    def type_delegate(self):
+        """Column-1 (type) item delegate."""
+        return self._tab.data_store.type_delegate
+
+    @property
+    def value_delegate(self):
+        """Column-2 (value) item delegate."""
+        return self._tab.data_store.value_delegate
+
+    @property
     def _model(self):
         return self._tab.data_store.model
 

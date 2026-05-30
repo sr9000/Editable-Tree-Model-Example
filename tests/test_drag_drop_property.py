@@ -41,19 +41,19 @@ def _make_tab(qtbot, data, show_root) -> JsonTab:
 
 def _proxy_root(tab):
     if tab.data_store.model.show_root:
-        return tab.data_store.proxy.index(0, 0, QModelIndex())
+        return tab.view_controller.proxy.index(0, 0, QModelIndex())
     return QModelIndex()
 
 
 def _pidx(tab, path):
     idx = _proxy_root(tab)
     for r in path:
-        idx = tab.data_store.proxy.index(r, 0, idx)
+        idx = tab.view_controller.proxy.index(r, 0, idx)
     return idx
 
 
 def _select(tab, proxy_indexes):
-    sm = tab.data_store.view.selectionModel()
+    sm = tab.view.selectionModel()
     sel = QItemSelection()
     for pidx in proxy_indexes:
         sel.select(pidx, pidx)
@@ -63,9 +63,9 @@ def _select(tab, proxy_indexes):
 def _drop(tab, sel_paths, row, col, parent_path):
     sel = [_pidx(tab, p) for p in sel_paths]
     _select(tab, sel)
-    mime = tab.data_store.proxy.mimeData(sel)
+    mime = tab.view_controller.proxy.mimeData(sel)
     parent = _proxy_root(tab) if parent_path is None else _pidx(tab, parent_path)
-    return tab.data_store.proxy.dropMimeData(mime, Qt.DropAction.MoveAction, row, col, parent)
+    return tab.view_controller.proxy.dropMimeData(mime, Qt.DropAction.MoveAction, row, col, parent)
 
 
 def _enumerate_paths(item, prefix=()) -> list[tuple[tuple[int, ...], bool]]:

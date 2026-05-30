@@ -50,7 +50,7 @@ def _proxy_root(tab) -> QModelIndex:
     one level deeper, under the single synthetic root row.
     """
     if tab.data_store.model.show_root:
-        return tab.data_store.proxy.index(0, 0, QModelIndex())
+        return tab.view_controller.proxy.index(0, 0, QModelIndex())
     return QModelIndex()
 
 
@@ -58,12 +58,12 @@ def _pidx(tab, *path):
     """Walk a path of rows through the proxy, relative to the visible root."""
     idx = _proxy_root(tab)
     for r in path:
-        idx = tab.data_store.proxy.index(r, 0, idx)
+        idx = tab.view_controller.proxy.index(r, 0, idx)
     return idx
 
 
 def _select(tab, proxy_indexes):
-    sm = tab.data_store.view.selectionModel()
+    sm = tab.view.selectionModel()
     sel = QItemSelection()
     for pidx in proxy_indexes:
         sel.select(pidx, pidx)
@@ -73,9 +73,9 @@ def _select(tab, proxy_indexes):
 def _drop(tab, sel_paths, row, col, parent_path=None):
     sel = [_pidx(tab, *p) for p in sel_paths]
     _select(tab, sel)
-    mime = tab.data_store.proxy.mimeData(sel)
+    mime = tab.view_controller.proxy.mimeData(sel)
     parent_pidx = _proxy_root(tab) if parent_path is None else _pidx(tab, *parent_path)
-    return tab.data_store.proxy.dropMimeData(mime, Qt.DropAction.MoveAction, row, col, parent_pidx)
+    return tab.view_controller.proxy.dropMimeData(mime, Qt.DropAction.MoveAction, row, col, parent_pidx)
 
 
 # Convenience: 4 indicator helpers ------------------------------------------------
@@ -257,7 +257,7 @@ def test_drag_first_root_child_flag_is_drag_enabled(qtbot, show_root):
     """Bug-3 sanity: the 1st child must report ``ItemIsDragEnabled``."""
     tab = _make_tab(qtbot, [{"a": 1}, {"b": 2}], show_root)
     pidx = _pidx(tab, 0)
-    flags = tab.data_store.proxy.flags(pidx)
+    flags = tab.view_controller.proxy.flags(pidx)
     assert bool(flags & Qt.ItemFlag.ItemIsDragEnabled)
 
 

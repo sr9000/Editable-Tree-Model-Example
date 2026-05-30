@@ -118,7 +118,7 @@ def test_internal_move_view_skips_post_drag_clear_or_remove(qtbot):
 
     # The dnd handler marked the view as drag-handled-internally; this is
     # what would prevent Qt's startDrag from invoking clearOrRemove.
-    assert tab.data_store.view._drag_handled_internally is True
+    assert tab.view._drag_handled_internally is True
 
     # An explicit removeRows from user code is still honoured.
     assert tab.data_store.model.removeRows(0, 1, src)
