@@ -1,12 +1,12 @@
-"""Contract tests for ``documents/tab_io_controller.py``."""
+"""Contract tests for ``documents/states/io_controller.py``."""
 
 from __future__ import annotations
 
 import pytest
 from PySide6.QtWidgets import QApplication
 
+from documents.states.io_controller import IoController
 from documents.tab import JsonTab
-from documents.tab_io_controller import TabIOController
 
 
 @pytest.fixture(scope="module")
@@ -18,7 +18,7 @@ def _qapp():
 def test_tab_exposes_io_controller(_qapp):
     tab = JsonTab(update_actions_callback=lambda: None, data={"a": 1}, file_path="/tmp/x.json")
     try:
-        assert isinstance(tab.io, TabIOController)
+        assert isinstance(tab.io, IoController)
         assert tab.io.file_path == "/tmp/x.json"
         assert tab.io.file_path == "/tmp/x.json"
         assert tab.io.dirty is False
