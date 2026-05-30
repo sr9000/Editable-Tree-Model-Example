@@ -69,7 +69,7 @@ def test_switch_selection_case_non_recursive(qtbot):
     _select_rows(tab, (0,))
 
     assert switch_selection_case(tab.view, "snake_case", recursive=False)
-    assert tab.data_store.model.root_item.to_json() == {"outer_node": {"innerKey": 1}, "tailValue": 2}
+    assert tab.model.root_item.to_json() == {"outer_node": {"innerKey": 1}, "tailValue": 2}
 
 
 def test_switch_selection_case_recursive(qtbot):
@@ -77,34 +77,34 @@ def test_switch_selection_case_recursive(qtbot):
     _select_rows(tab, (0,))
 
     assert switch_selection_case(tab.view, "snake_case", recursive=True)
-    assert tab.data_store.model.root_item.to_json() == {"outer_node": {"inner_key": 1}, "tailValue": 2}
+    assert tab.model.root_item.to_json() == {"outer_node": {"inner_key": 1}, "tailValue": 2}
 
 
 def test_switch_document_case_undo_redo_and_typed_command(qtbot):
     tab = _make_tab(qtbot, {"myKey": {"innerKey": 1}, "Another-Key": 2})
-    before = tab.data_store.model.root_item.to_json()
+    before = tab.model.root_item.to_json()
 
     assert switch_document_case(tab.view, "PascalCase")
-    after = tab.data_store.model.root_item.to_json()
+    after = tab.model.root_item.to_json()
     assert after == {"MyKey": {"InnerKey": 1}, "AnotherKey": 2}
 
-    cmd = tab.data_store.undo_stack.command(tab.data_store.undo_stack.count() - 1)
+    cmd = tab.undo_stack.command(tab.undo_stack.count() - 1)
     assert isinstance(cmd, _SwitchFieldCaseCmd)
 
-    tab.data_store.undo_stack.undo()
-    assert tab.data_store.model.root_item.to_json() == before
-    tab.data_store.undo_stack.redo()
-    assert tab.data_store.model.root_item.to_json() == after
+    tab.undo_stack.undo()
+    assert tab.model.root_item.to_json() == before
+    tab.undo_stack.redo()
+    assert tab.model.root_item.to_json() == after
 
 
 def test_switch_document_case_rejects_name_collision(qtbot):
     tab = _make_tab(qtbot, {"myKey": 1, "my_key": 2})
-    before = tab.data_store.model.root_item.to_json()
-    count_before = tab.data_store.undo_stack.count()
+    before = tab.model.root_item.to_json()
+    count_before = tab.undo_stack.count()
 
     assert not switch_document_case(tab.view, "snake_case")
-    assert tab.data_store.model.root_item.to_json() == before
-    assert tab.data_store.undo_stack.count() == count_before
+    assert tab.model.root_item.to_json() == before
+    assert tab.undo_stack.count() == count_before
 
 
 def test_context_menu_contains_switch_case_submenus(qtbot):

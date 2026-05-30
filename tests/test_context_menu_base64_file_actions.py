@@ -25,7 +25,7 @@ def _select_value_cell(tab: JsonTab, path: tuple[int, ...]) -> None:
 
 
 def _value_at(tab: JsonTab, path: tuple[int, ...]) -> str:
-    return str(tab.data_store.model.get_item(tab.view_controller.index_from_path(path)).value)
+    return str(tab.model.get_item(tab.view_controller.index_from_path(path)).value)
 
 
 def test_attach_base64_from_file_replaces_value(qtbot, tmp_path, monkeypatch):

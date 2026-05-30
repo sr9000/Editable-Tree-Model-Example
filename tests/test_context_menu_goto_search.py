@@ -27,7 +27,7 @@ def test_context_menu_adds_goto_only_when_search_active(qtbot):
     tab.view.expandAll()
     QApplication.processEvents()
 
-    source_row = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
+    source_row = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
     pos = tab.view.visualRect(tab.view_controller.source_to_view(source_row)).center()
 
     menu = show_context_menu(tab.view, pos, execute=False)
@@ -50,9 +50,7 @@ def test_goto_clears_search_and_focuses_clicked_field(qtbot):
     tab.view.expandAll()
     QApplication.processEvents()
 
-    target_source = tab.data_store.model.index(
-        0, 0, tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
-    )
+    target_source = tab.model.index(0, 0, tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex())))
     target_path = _index_path(target_source)
 
     tab.view_controller.search_edit.setText("needle")

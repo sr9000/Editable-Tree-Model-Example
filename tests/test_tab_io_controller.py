@@ -20,8 +20,8 @@ def test_tab_exposes_io_controller(_qapp):
     try:
         assert isinstance(tab.io, TabIOController)
         assert tab.io.file_path == "/tmp/x.json"
-        assert tab.data_store.file_path == "/tmp/x.json"
-        assert tab.data_store.is_dirty is False
+        assert tab.io.file_path == "/tmp/x.json"
+        assert tab.io.dirty is False
     finally:
         tab.deleteLater()
 
@@ -33,7 +33,7 @@ def test_dirty_signal_propagates_through_facade(_qapp):
         tab.dirtyChanged.connect(events.append)
         tab._set_dirty(True)
         assert events == [True]
-        assert tab.data_store.is_dirty is True
+        assert tab.io.dirty is True
         tab._set_dirty(False)
         assert events == [True, False]
     finally:
@@ -43,9 +43,9 @@ def test_dirty_signal_propagates_through_facade(_qapp):
 def test_file_path_setter_via_facade(_qapp):
     tab = JsonTab(update_actions_callback=lambda: None, data={"a": 1})
     try:
-        tab.data_store.file_path = "/tmp/new.json"
+        tab.io.file_path = "/tmp/new.json"
         assert tab.io.file_path == "/tmp/new.json"
-        tab.data_store.save_format = "json"
+        tab.io.save_format = "json"
         assert tab.io.save_format == "json"
     finally:
         tab.deleteLater()

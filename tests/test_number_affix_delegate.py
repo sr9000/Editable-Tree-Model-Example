@@ -9,7 +9,7 @@ from units.number_affix import AffixKind, NumberAffix
 
 
 def _value_index(tab: JsonTab):
-    return tab.data_store.model.index(0, 2, QModelIndex())
+    return tab.model.index(0, 2, QModelIndex())
 
 
 def test_currency_affix_editor_commit(qtbot):
@@ -26,11 +26,9 @@ def test_currency_affix_editor_commit(qtbot):
     editor.affix_combo.setCurrentText("$")
     editor.number_editor.setValue(1234)
     editor.space_button.setChecked(True)
-    tab.view_controller.value_delegate.setModelData(
-        editor, tab.data_store.model, tab.view_controller.source_to_view(index)
-    )
+    tab.view_controller.value_delegate.setModelData(editor, tab.model, tab.view_controller.source_to_view(index))
 
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.value == NumberAffix(AffixKind.CURRENCY, "$", True, 1234)
 
 
@@ -48,11 +46,9 @@ def test_units_affix_editor_commit_float(qtbot):
     editor.affix_combo.setCurrentText("%")
     editor.number_editor.setValue(mpq("1999/20"))
     editor.space_button.setChecked(False)
-    tab.view_controller.value_delegate.setModelData(
-        editor, tab.data_store.model, tab.view_controller.source_to_view(index)
-    )
+    tab.view_controller.value_delegate.setModelData(editor, tab.model, tab.view_controller.source_to_view(index))
 
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.value == NumberAffix(AffixKind.UNITS, "%", False, mpq("1999/20"))
 
 
@@ -61,7 +57,7 @@ def test_invalid_affix_refuses_commit(qtbot):
     qtbot.addWidget(tab)
 
     index = _value_index(tab)
-    original = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex())).value
+    original = tab.model.get_item(tab.model.index(0, 0, QModelIndex())).value
 
     editor = tab.view_controller.value_delegate.createEditor(
         tab.view, QStyleOptionViewItem(), tab.view_controller.source_to_view(index)
@@ -69,11 +65,9 @@ def test_invalid_affix_refuses_commit(qtbot):
     assert isinstance(editor, AffixCompositeEditor)
     editor.affix_combo.setCurrentText("")
     editor.number_editor.setValue(10)
-    tab.view_controller.value_delegate.setModelData(
-        editor, tab.data_store.model, tab.view_controller.source_to_view(index)
-    )
+    tab.view_controller.value_delegate.setModelData(editor, tab.model, tab.view_controller.source_to_view(index))
 
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert editor.property("invalid") is True
     assert item.value == original
 
@@ -82,8 +76,8 @@ def test_empty_affix_type_switch_paints_without_raising(qtbot):
     tab = JsonTab(lambda *_: None, data={"v": 1234})
     qtbot.addWidget(tab)
 
-    type_index = tab.data_store.model.index(0, 1, QModelIndex())
-    assert tab.data_store.model.setData(type_index, JsonType.INTEGER_CURRENCY)
+    type_index = tab.model.index(0, 1, QModelIndex())
+    assert tab.model.setData(type_index, JsonType.INTEGER_CURRENCY)
 
     option = QStyleOptionViewItem()
     tab.view_controller.value_delegate.initStyleOption(option, tab.view_controller.source_to_view(_value_index(tab)))

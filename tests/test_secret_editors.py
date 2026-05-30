@@ -11,7 +11,7 @@ def test_secret_line_editor_is_password_with_toggle(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    src = tab.data_store.model.index(0, 2, QModelIndex())
+    src = tab.model.index(0, 2, QModelIndex())
     idx = tab.view_controller.source_to_view(src)
     tab.view.setCurrentIndex(idx)
     tab.view.edit(idx)
@@ -35,7 +35,7 @@ def test_secret_text_editor_masks_and_reveals(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    src = tab.data_store.model.index(0, 2, QModelIndex())
+    src = tab.model.index(0, 2, QModelIndex())
     idx = tab.view_controller.source_to_view(src)
     tab.view.setCurrentIndex(idx)
     tab.view.edit(idx)
@@ -51,7 +51,7 @@ def test_secret_text_editor_masks_and_reveals(qtbot):
     assert ok is not None
     qtbot.mouseClick(ok, Qt.MouseButton.LeftButton)
 
-    src_after = tab.data_store.model.index(0, 2, QModelIndex())
+    src_after = tab.model.index(0, 2, QModelIndex())
     assert str(src_after.data(Qt.ItemDataRole.EditRole) or "") == "line1\nline2\nline3"
 
 
@@ -60,7 +60,7 @@ def test_secret_editor_closes_on_focus_out(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    src = tab.data_store.model.index(0, 2, QModelIndex())
+    src = tab.model.index(0, 2, QModelIndex())
     idx = tab.view_controller.source_to_view(src)
     tab.view.setCurrentIndex(idx)
     tab.view.edit(idx)

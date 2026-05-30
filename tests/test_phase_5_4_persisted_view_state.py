@@ -40,10 +40,10 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     for column in range(3):
         tab.view.setColumnWidth(column, 140 + (column * 25))
 
-    root = tab.data_store.model.index(0, 0, QModelIndex())
-    foo = tab.data_store.model.index(0, 0, root)
-    bar = tab.data_store.model.index(0, 0, foo)
-    leaf = tab.data_store.model.index(1, 0, bar)
+    root = tab.model.index(0, 0, QModelIndex())
+    foo = tab.model.index(0, 0, root)
+    bar = tab.model.index(0, 0, foo)
+    leaf = tab.model.index(1, 0, bar)
 
     tab.view.collapseAll()
     tab.view.expand(tab.view_controller.source_to_view(root))
@@ -70,10 +70,10 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     for column in range(3):
         assert restored.view.columnWidth(column) == saved_widths[column]
 
-    root2 = restored.data_store.model.index(0, 0, QModelIndex())
-    foo2 = restored.data_store.model.index(0, 0, root2)
-    bar2 = restored.data_store.model.index(0, 0, foo2)
-    leaf2 = restored.data_store.model.index(1, 0, bar2)
+    root2 = restored.model.index(0, 0, QModelIndex())
+    foo2 = restored.model.index(0, 0, root2)
+    bar2 = restored.model.index(0, 0, foo2)
+    leaf2 = restored.model.index(1, 0, bar2)
 
     assert restored.view.isExpanded(restored.view_controller.source_to_view(root2))
     assert restored.view.isExpanded(restored.view_controller.source_to_view(foo2))
@@ -95,13 +95,13 @@ def test_save_as_discards_old_view_state_group(tmp_path, monkeypatch, qtbot):
 
     old_path = str(tmp_path / "old.json")
     new_path = str(tmp_path / "new.json")
-    tab.data_store.file_path = old_path
+    tab.io.file_path = old_path
 
     tab.view.setColumnWidth(0, 222)
     save(tab)
 
     def _fake_save_as() -> bool:
-        tab.data_store.file_path = new_path
+        tab.io.file_path = new_path
         return True
 
     monkeypatch.setattr(tab, "save_as", _fake_save_as)
@@ -120,6 +120,6 @@ def test_save_as_discards_old_view_state_group(tmp_path, monkeypatch, qtbot):
     assert isinstance(new_widths, list)
     assert int(new_widths[0]) == 222
 
-    tab.data_store.undo_stack.setClean()
+    tab.undo_stack.setClean()
     win.close()
     win.deleteLater()

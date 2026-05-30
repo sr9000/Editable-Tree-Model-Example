@@ -52,8 +52,8 @@ def test_context_menu_uses_recursive_expand_collapse_labels(qtbot):
     tab.view.expandAll()
     QApplication.processEvents()
 
-    root = tab.data_store.model.index(0, 0, QModelIndex())
-    obj_row = tab.data_store.model.index(0, 0, root)
+    root = tab.model.index(0, 0, QModelIndex())
+    obj_row = tab.model.index(0, 0, root)
     _set_current_source_row(tab, obj_row)
     position = tab.view.visualRect(tab.view_controller.source_to_view(obj_row)).center()
 
@@ -74,10 +74,10 @@ def test_recursive_expand_collapse_scope_to_selected_subtree(qtbot):
     tab.view.expandAll()
     QApplication.processEvents()
 
-    root = tab.data_store.model.index(0, 0, QModelIndex())
-    a_row = tab.data_store.model.index(0, 0, root)
-    b_row = tab.data_store.model.index(1, 0, root)
-    a_child = tab.data_store.model.index(0, 0, a_row)
+    root = tab.model.index(0, 0, QModelIndex())
+    a_row = tab.model.index(0, 0, root)
+    b_row = tab.model.index(1, 0, root)
+    a_child = tab.model.index(0, 0, a_row)
 
     tab.view.collapseAll()
     _set_current_source_row(tab, a_row)

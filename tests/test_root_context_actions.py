@@ -20,7 +20,7 @@ def _cleanup(win: MainWindow) -> None:
     for i in range(win.tabWidget.count()):
         w = win.tabWidget.widget(i)
         if isinstance(w, JsonTab):
-            w.data_store.undo_stack.setClean()
+            w.undo_stack.setClean()
     win.close()
     win.deleteLater()
     QApplication.processEvents()
@@ -28,7 +28,7 @@ def _cleanup(win: MainWindow) -> None:
 
 def _select_root(tab: JsonTab) -> None:
     """Select the visible fake-root row."""
-    root_idx = tab.data_store.model.index(0, 0, QModelIndex())
+    root_idx = tab.model.index(0, 0, QModelIndex())
     view_idx = tab.view_controller.source_to_view(root_idx)
     sm = tab.view.selectionModel()
     sm.select(view_idx, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows)
@@ -101,7 +101,7 @@ def test_expand_recursively_on_root_expands_all(qtbot):
         result = expand_selection_recursive(tab.view)
         assert result is True
         # After expand-all, at least the root row is expanded
-        root_view_idx = tab.view_controller.source_to_view(tab.data_store.model.index(0, 0, QModelIndex()))
+        root_view_idx = tab.view_controller.source_to_view(tab.model.index(0, 0, QModelIndex()))
         assert tab.view.isExpanded(root_view_idx)
     finally:
         _cleanup(win)

@@ -91,9 +91,9 @@ def test_tab_restores_persisted_schema_on_open(tmp_path, qtbot):
     tab = JsonTab(lambda *_: None, data={"value": 1}, file_path=str(doc_path), show_root=True)
     qtbot.addWidget(tab)
 
-    assert tab.data_store.schema_ref.origin == "manual"
-    assert tab.data_store.schema is not None
-    assert tab.data_store.schema_ref.path == schema_path.resolve()
+    assert tab.validation.schema_ref.origin == "manual"
+    assert tab.validation.schema is not None
+    assert tab.validation.schema_ref.path == schema_path.resolve()
 
 
 def test_tab_no_error_when_persisted_schema_is_missing(tmp_path, qtbot):
@@ -109,8 +109,8 @@ def test_tab_no_error_when_persisted_schema_is_missing(tmp_path, qtbot):
     qtbot.addWidget(tab)
 
     # Missing schema → fall back to "none"
-    assert tab.data_store.schema_ref.origin == "none"
-    assert tab.data_store.schema is None
+    assert tab.validation.schema_ref.origin == "none"
+    assert tab.validation.schema is None
 
 
 def test_tab_does_not_override_inline_schema_with_persistence(tmp_path, qtbot):
@@ -139,8 +139,8 @@ def test_tab_does_not_override_inline_schema_with_persistence(tmp_path, qtbot):
     qtbot.addWidget(tab)
 
     # Inline schema must win over the persisted manual one
-    assert tab.data_store.schema_ref.origin == "inline"
-    assert tab.data_store.schema_ref.path == inline_schema_path.resolve()
+    assert tab.validation.schema_ref.origin == "inline"
+    assert tab.validation.schema_ref.path == inline_schema_path.resolve()
 
 
 # ── clear_schema_path wipes QSettings entry ──────────────────────────────

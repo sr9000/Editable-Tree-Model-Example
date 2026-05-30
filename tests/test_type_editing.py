@@ -143,7 +143,7 @@ def test_caps_lock_does_not_close_name_editor(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    name_index = tab.data_store.model.index(0, 0, QModelIndex())
+    name_index = tab.model.index(0, 0, QModelIndex())
     assert name_index.isValid()
     view_index = tab.view_controller.source_to_view(name_index)
     tab.view.setCurrentIndex(view_index)
@@ -175,7 +175,7 @@ def test_enter_starts_editing_name_or_value(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_name = tab.data_store.model.index(0, 0, QModelIndex())
+    source_name = tab.model.index(0, 0, QModelIndex())
     view_name = tab.view_controller.source_to_view(source_name)
     tab.view.setCurrentIndex(view_name)
     tab.view.setFocus()
@@ -192,7 +192,7 @@ def test_enter_from_type_column_opens_type_combobox(qtbot, enter_key):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_type = tab.data_store.model.index(0, 1, QModelIndex())
+    source_type = tab.model.index(0, 1, QModelIndex())
     view_type = tab.view_controller.source_to_view(source_type)
     tab.view.setCurrentIndex(view_type)
     tab.view.setFocus()
@@ -209,7 +209,7 @@ def test_type_cell_icon_hidden_while_type_combobox_active(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_type = tab.data_store.model.index(0, 1, QModelIndex())
+    source_type = tab.model.index(0, 1, QModelIndex())
     view_type = tab.view_controller.source_to_view(source_type)
     tab.view.setCurrentIndex(view_type)
     tab.view.edit(view_type)
@@ -226,7 +226,7 @@ def test_arrow_left_right_moves_between_columns(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_name = tab.data_store.model.index(0, 0, QModelIndex())
+    source_name = tab.model.index(0, 0, QModelIndex())
     view_name = tab.view_controller.source_to_view(source_name)
     tab.view.setCurrentIndex(view_name)
     tab.view.setFocus()
@@ -246,7 +246,7 @@ def test_arrow_up_down_moves_between_rows(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_mid_value = tab.data_store.model.index(1, 2, QModelIndex())
+    source_mid_value = tab.model.index(1, 2, QModelIndex())
     view_mid_value = tab.view_controller.source_to_view(source_mid_value)
     tab.view.setCurrentIndex(view_mid_value)
     tab.view.setFocus()
@@ -265,7 +265,7 @@ def test_arrow_left_right_do_not_expand_or_collapse_rows(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_obj_name = tab.data_store.model.index(0, 0, QModelIndex())
+    source_obj_name = tab.model.index(0, 0, QModelIndex())
     view_obj_name = tab.view_controller.source_to_view(source_obj_name)
     tab.view.collapse(view_obj_name)
     assert not tab.view.isExpanded(view_obj_name)
@@ -287,7 +287,7 @@ def test_space_toggles_expand_and_collapse_current_row(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_obj_type = tab.data_store.model.index(0, 1, QModelIndex())
+    source_obj_type = tab.model.index(0, 1, QModelIndex())
     view_obj_type = tab.view_controller.source_to_view(source_obj_type)
     view_obj_name = view_obj_type.siblingAtColumn(0)
 
@@ -389,19 +389,19 @@ def test_json_type_delegate_preselects_and_commits(qtbot):
 def test_bool_to_string_undo_redo(qtbot):
     tab = JsonTab(lambda *_: None, data={"flag": True})
     qtbot.addWidget(tab)
-    type_idx = tab.data_store.model.index(0, 1, QModelIndex())
+    type_idx = tab.model.index(0, 1, QModelIndex())
 
     tab.editing.push_change_type(type_idx, JsonType.STRING)
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.value == "true"
 
-    tab.data_store.undo_stack.undo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.BOOLEAN
     assert item.value is True
 
-    tab.data_store.undo_stack.redo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.redo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.value == "true"
 
 
@@ -412,23 +412,23 @@ def test_bytes_to_zlib_undo_redo(qtbot):
     qtbot.addWidget(tab)
 
     # The model infers BYTES type from the b64 string on load.
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.BYTES
 
-    type_idx = tab.data_store.model.index(0, 1, QModelIndex())
+    type_idx = tab.model.index(0, 1, QModelIndex())
     tab.editing.push_change_type(type_idx, JsonType.ZLIB)
 
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.ZLIB
     assert decode_bytes(item.value, JsonType.ZLIB) == raw
 
-    tab.data_store.undo_stack.undo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.BYTES
     assert decode_bytes(item.value, JsonType.BYTES) == raw
 
-    tab.data_store.undo_stack.redo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.redo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.ZLIB
     assert decode_bytes(item.value, JsonType.ZLIB) == raw
 
@@ -437,24 +437,24 @@ def test_array_to_object_undo_redo(qtbot):
     tab = JsonTab(lambda *_: None, data={"arr": [1, 2, 3]})
     qtbot.addWidget(tab)
 
-    arr_idx = tab.data_store.model.index(0, 0, QModelIndex())
-    type_idx = tab.data_store.model.index(0, 1, QModelIndex())
+    arr_idx = tab.model.index(0, 0, QModelIndex())
+    type_idx = tab.model.index(0, 1, QModelIndex())
 
     tab.editing.push_change_type(type_idx, JsonType.OBJECT)
-    item = tab.data_store.model.get_item(arr_idx)
+    item = tab.model.get_item(arr_idx)
     assert item.json_type is JsonType.OBJECT
     assert item.child_count() == 3
     assert [c.name for c in item.child_items] == ["item1", "item2", "item3"]
 
-    tab.data_store.undo_stack.undo()
-    item = tab.data_store.model.get_item(arr_idx)
+    tab.undo_stack.undo()
+    item = tab.model.get_item(arr_idx)
     assert item.json_type is JsonType.ARRAY
     assert item.child_count() == 3
     assert all(c.name is None for c in item.child_items)
     assert [c.value for c in item.child_items] == [1, 2, 3]
 
-    tab.data_store.undo_stack.redo()
-    item = tab.data_store.model.get_item(arr_idx)
+    tab.undo_stack.redo()
+    item = tab.model.get_item(arr_idx)
     assert item.json_type is JsonType.OBJECT
     assert [c.name for c in item.child_items] == ["item1", "item2", "item3"]
 

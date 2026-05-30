@@ -32,7 +32,7 @@ def _selected_paths(tab: JsonTab) -> set[tuple[int, ...]]:
 
 
 def _root_values(tab: JsonTab) -> list:
-    return [item.to_json() for item in tab.data_store.model.root_item.child_items]
+    return [item.to_json() for item in tab.model.root_item.child_items]
 
 
 def test_context_menu_prepare_preserves_selection_when_clicking_selected_value_cell(qtbot):

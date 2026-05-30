@@ -23,7 +23,7 @@ def _cleanup(win: MainWindow) -> None:
     for i in range(win.tabWidget.count()):
         w = win.tabWidget.widget(i)
         if isinstance(w, JsonTab):
-            w.data_store.undo_stack.setClean()
+            w.undo_stack.setClean()
     win.close()
     win.deleteLater()
     QApplication.processEvents()
@@ -87,9 +87,9 @@ def test_close_cancels_if_user_cancels(qtbot, monkeypatch):
         tab = win._add_tab(data={"x": 1})
         assert tab is not None
         # Make dirty
-        idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
+        idx = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
         tab.editing.push_edit_value(idx.siblingAtColumn(2), 99, label="dirty")
-        assert tab.data_store.is_dirty
+        assert tab.io.dirty
 
         win.close_current_tab()
         assert _tab_count(win) == 1  # Not closed
@@ -142,7 +142,7 @@ def test_close_nonempty_untitled_tab_prompts_and_cancel_keeps_tab(qtbot, monkeyp
     try:
         tab = win._add_tab(data={"k": 1})
         assert tab is not None
-        idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
+        idx = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
         tab.editing.push_edit_value(idx.siblingAtColumn(2), 2, label="dirty")
         win.close_current_tab()
         assert _tab_count(win) == 1
@@ -157,7 +157,7 @@ def test_close_nonempty_untitled_tab_save_uses_save_as(qtbot, monkeypatch):
     try:
         tab = win._add_tab(data={"k": 1})
         assert tab is not None
-        idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
+        idx = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
         tab.editing.push_edit_value(idx.siblingAtColumn(2), 2, label="dirty")
         calls = {"save_as": []}
 
@@ -215,7 +215,7 @@ def test_reopen_restores_clean_tab_data(qtbot, monkeypatch):
         assert _tab_count(win) == 1
         tab = _current_tab(win)
         assert tab is not None
-        assert tab.data_store.model.root_item.to_json() == {"msg": "hello"}
+        assert tab.model.root_item.to_json() == {"msg": "hello"}
     finally:
         _cleanup(win)
 
@@ -238,14 +238,14 @@ def test_reopen_multiple_tabs_lifo_order(qtbot, monkeypatch):
         win.reopen_closed_tab()
         tab = _current_tab(win)
         assert tab is not None
-        data = tab.data_store.model.root_item.to_json()
+        data = tab.model.root_item.to_json()
         assert data == {"first": 1}
 
         # Reopen again: should get 'second'
         win.reopen_closed_tab()
         tab = _current_tab(win)
         assert tab is not None
-        data = tab.data_store.model.root_item.to_json()
+        data = tab.model.root_item.to_json()
         assert data == {"second": 2}
     finally:
         _cleanup(win)
@@ -264,9 +264,9 @@ def test_reopen_after_discard_does_not_resurrect_dirty_data(qtbot, monkeypatch, 
         tab = _current_tab(win)
 
         # Make tab dirty
-        first_row = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
+        first_row = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
         tab.editing.push_edit_value(first_row.siblingAtColumn(2), "dirty_value", label="dirty")
-        assert tab.data_store.is_dirty
+        assert tab.io.dirty
 
         win.close_current_tab()  # User chose Discard
         assert _tab_count(win) == 0
@@ -275,7 +275,7 @@ def test_reopen_after_discard_does_not_resurrect_dirty_data(qtbot, monkeypatch, 
         # Should reload from disk — original clean data
         tab = _current_tab(win)
         assert tab is not None
-        data = tab.data_store.model.root_item.to_json()
+        data = tab.model.root_item.to_json()
         assert data == {"original": True}  # NOT the dirty value
     finally:
         _cleanup(win)

@@ -28,14 +28,14 @@ def test_tabs_share_single_registry_entry_and_release_on_close(qtbot, tmp_path, 
     qtbot.addWidget(tab_a)
     qtbot.addWidget(tab_b)
 
-    tab_a.data_store.validation.set_schema(ref)
-    tab_b.data_store.validation.set_schema(ref)
+    tab_a.validation.set_schema(ref)
+    tab_b.validation.set_schema(ref)
 
     source = SchemaSource.for_file(schema_path)
     entry = get_schema_registry().lookup(source)
     assert entry is not None
-    assert tab_a.data_store.schema is tab_b.data_store.schema
-    assert tab_a.data_store.schema is entry.inline
+    assert tab_a.validation.schema is tab_b.validation.schema
+    assert tab_a.validation.schema is entry.inline
     assert entry.ref_count == 2
     assert calls["count"] == 1
 

@@ -88,7 +88,7 @@ def test_json_tab_set_theme_emits_data_changed_for_type_column_icons(qtbot):
     def _on_data_changed(top_left, bottom_right, roles):
         emissions.append((top_left.column(), bottom_right.column(), list(roles)))
 
-    tab.data_store.model.dataChanged.connect(_on_data_changed)
+    tab.model.dataChanged.connect(_on_data_changed)
     try:
         tab.appearance.set_theme(dark, dark_icons)
     finally:

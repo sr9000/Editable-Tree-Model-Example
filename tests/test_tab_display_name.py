@@ -31,17 +31,17 @@ def tab(qtbot):
     ],
 )
 def test_display_name_uses_basename(tab, file_path, expected):
-    tab.data_store.file_path = file_path
+    tab.io.file_path = file_path
     assert tab.display_name() == expected
 
 
 @pytest.mark.parametrize("file_path", ["", None])
 def test_display_name_untitled_when_no_path(tab, file_path):
-    tab.data_store.file_path = file_path
+    tab.io.file_path = file_path
     assert tab.display_name() == "Untitled"
 
 
 def test_display_name_appends_dirty_marker(tab):
-    tab.data_store.file_path = "C:\\Users\\me\\data.json"
+    tab.io.file_path = "C:\\Users\\me\\data.json"
     tab._set_dirty(True)
     assert tab.display_name() == "data.json *"

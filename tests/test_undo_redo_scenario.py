@@ -38,7 +38,7 @@ def _select(tab: JsonTab, index: QModelIndex) -> None:
 
 
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:
-    _select(tab, tab.data_store.model.index(row, 0, parent))
+    _select(tab, tab.model.index(row, 0, parent))
 
 
 def _ordered_repr(value):
@@ -63,9 +63,9 @@ def _gather_types(tab: JsonTab) -> set[JsonType]:
     found: set[JsonType] = set()
 
     def visit(parent):
-        for r in range(tab.data_store.model.rowCount(parent)):
-            child0 = tab.data_store.model.index(r, 0, parent)
-            found.add(tab.data_store.model.get_item(child0).json_type)
+        for r in range(tab.model.rowCount(parent)):
+            child0 = tab.model.index(r, 0, parent)
+            found.add(tab.model.get_item(child0).json_type)
             visit(child0)
 
     visit(QModelIndex())
@@ -73,9 +73,9 @@ def _gather_types(tab: JsonTab) -> set[JsonType]:
 
 
 def _row_index_for_type(tab: JsonTab, json_type: JsonType, parent: QModelIndex = QModelIndex()) -> QModelIndex:
-    for r in range(tab.data_store.model.rowCount(parent)):
-        idx = tab.data_store.model.index(r, 0, parent)
-        if tab.data_store.model.get_item(idx).json_type is json_type:
+    for r in range(tab.model.rowCount(parent)):
+        idx = tab.model.index(r, 0, parent)
+        if tab.model.get_item(idx).json_type is json_type:
             return idx
     return QModelIndex()
 
@@ -93,7 +93,7 @@ def test_undo_redo_comprehensive_scenario(qtbot):
     """
     tab = JsonTab(lambda *_: None)
     qtbot.addWidget(tab)
-    model = tab.data_store.model
+    model = tab.model
     view = tab.view
 
     # --- All JsonType values are represented in the seed ---------------------
@@ -103,18 +103,16 @@ def test_undo_redo_comprehensive_scenario(qtbot):
     states: list = [_state(tab)]
 
     def commit_step(action_callable, *, expect_change: bool = True) -> None:
-        prev_count = tab.data_store.undo_stack.count()
+        prev_count = tab.undo_stack.count()
         result = action_callable()
         if expect_change:
             assert result, f"action expected to push but returned False at step {prev_count + 1}"
             assert (
-                tab.data_store.undo_stack.count() == prev_count + 1
+                tab.undo_stack.count() == prev_count + 1
             ), f"action expected to push exactly one command at step {prev_count + 1}"
             states.append(_state(tab))
         else:
-            assert (
-                tab.data_store.undo_stack.count() == prev_count
-            ), f"action expected NOT to push but did at step {prev_count + 1}"
+            assert tab.undo_stack.count() == prev_count, f"action expected NOT to push but did at step {prev_count + 1}"
 
     # 1. Edit a value: commit_set_data on a value column (column 2).
     # NOTE: re-fetch indexes immediately before each step in case earlier
@@ -193,22 +191,22 @@ def test_undo_redo_comprehensive_scenario(qtbot):
     commit_step(lambda: move_selection_up(view), expect_change=False)
 
     n = len(states) - 1  # number of pushed commands
-    assert tab.data_store.undo_stack.count() == n
+    assert tab.undo_stack.count() == n
     assert _state(tab) == states[n]
-    assert not tab.data_store.undo_stack.canRedo()
+    assert not tab.undo_stack.canRedo()
 
     # ------------------------------------------------------------------
     # undo x3, redo x2, new action, redo (no effect)
     # ------------------------------------------------------------------
-    tab.data_store.undo_stack.undo()
-    tab.data_store.undo_stack.undo()
-    tab.data_store.undo_stack.undo()
+    tab.undo_stack.undo()
+    tab.undo_stack.undo()
+    tab.undo_stack.undo()
     assert _state(tab) == states[n - 3]
 
-    tab.data_store.undo_stack.redo()
-    tab.data_store.undo_stack.redo()
+    tab.undo_stack.redo()
+    tab.undo_stack.redo()
     assert _state(tab) == states[n - 1]
-    assert tab.data_store.undo_stack.canRedo()  # one command still ahead
+    assert tab.undo_stack.canRedo()  # one command still ahead
 
     # New action wipes the redo branch.
     _select_row0(tab, 0)
@@ -216,53 +214,53 @@ def test_undo_redo_comprehensive_scenario(qtbot):
     state_after_new = _state(tab)
     assert state_after_new != states[n]
     assert state_after_new != states[n - 1]
-    assert not tab.data_store.undo_stack.canRedo(), "new action must wipe redo branch"
+    assert not tab.undo_stack.canRedo(), "new action must wipe redo branch"
 
     # Redo here must be a no-op.
-    tab.data_store.undo_stack.redo()
+    tab.undo_stack.redo()
     assert _state(tab) == state_after_new
 
     # ------------------------------------------------------------------
     # undo x2, new action, redo (no effect)
     # ------------------------------------------------------------------
-    tab.data_store.undo_stack.undo()
-    tab.data_store.undo_stack.undo()
+    tab.undo_stack.undo()
+    tab.undo_stack.undo()
     mid_state = _state(tab)
-    assert tab.data_store.undo_stack.canRedo()
+    assert tab.undo_stack.canRedo()
 
     _select_row0(tab, 0)
     assert insert_sibling_before(view)
     after_second_branch = _state(tab)
     assert after_second_branch != mid_state
-    assert not tab.data_store.undo_stack.canRedo()
+    assert not tab.undo_stack.canRedo()
 
-    tab.data_store.undo_stack.redo()
+    tab.undo_stack.redo()
     assert _state(tab) == after_second_branch
 
     # ------------------------------------------------------------------
     # Undo all the way back, then undo past init (history limit no-op).
     # ------------------------------------------------------------------
-    while tab.data_store.undo_stack.canUndo():
-        tab.data_store.undo_stack.undo()
+    while tab.undo_stack.canUndo():
+        tab.undo_stack.undo()
     assert _state(tab) == states[0]
-    assert not tab.data_store.undo_stack.canUndo()
+    assert not tab.undo_stack.canUndo()
 
     init_state = _state(tab)
-    tab.data_store.undo_stack.undo()  # past init -> no-op
+    tab.undo_stack.undo()  # past init -> no-op
     assert _state(tab) == init_state
-    assert not tab.data_store.undo_stack.canUndo()
+    assert not tab.undo_stack.canUndo()
 
     # ------------------------------------------------------------------
     # Redo all the way forward, then redo past final (no-op).
     # ------------------------------------------------------------------
-    while tab.data_store.undo_stack.canRedo():
-        tab.data_store.undo_stack.redo()
+    while tab.undo_stack.canRedo():
+        tab.undo_stack.redo()
     final_state = _state(tab)
-    assert not tab.data_store.undo_stack.canRedo()
+    assert not tab.undo_stack.canRedo()
 
-    tab.data_store.undo_stack.redo()  # past final -> no-op
+    tab.undo_stack.redo()  # past final -> no-op
     assert _state(tab) == final_state
-    assert not tab.data_store.undo_stack.canRedo()
+    assert not tab.undo_stack.canRedo()
 
     # Defensive teardown: this scenario drives clipboard-heavy actions and a
     # long command stack; explicit disposal avoids a flaky process-exit crash.

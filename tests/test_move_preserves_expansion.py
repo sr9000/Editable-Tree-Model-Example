@@ -31,9 +31,9 @@ def _select_source_rows(tab: JsonTab, *source_indexes) -> None:
 
 
 def _child_row_by_name(tab: JsonTab, parent, name: str) -> int:
-    for row in range(tab.data_store.model.rowCount(parent)):
-        idx = tab.data_store.model.index(row, 0, parent)
-        if tab.data_store.model.get_item(idx).name == name:
+    for row in range(tab.model.rowCount(parent)):
+        idx = tab.model.index(row, 0, parent)
+        if tab.model.get_item(idx).name == name:
             return row
     raise AssertionError(f"missing child {name!r}")
 
@@ -79,7 +79,7 @@ def test_move_preserves_expansion_and_selection_and_undo(qtbot):
         in expected_selected
     )
 
-    tab.data_store.undo_stack.undo()
+    tab.undo_stack.undo()
 
     assert tab.view.isExpanded(tab.view_controller.source_to_view(_idx(tab, 1, 0)))
     assert tab.view.isExpanded(tab.view_controller.source_to_view(_idx(tab, 1, 0, 1)))

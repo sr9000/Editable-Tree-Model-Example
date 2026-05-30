@@ -49,7 +49,7 @@ def _proxy_root(tab) -> QModelIndex:
     directly under the invalid index. With show_root=True they appear
     one level deeper, under the single synthetic root row.
     """
-    if tab.data_store.model.show_root:
+    if tab.model.show_root:
         return tab.view_controller.proxy.index(0, 0, QModelIndex())
     return QModelIndex()
 
@@ -101,7 +101,7 @@ def on_viewport(tab, sel_paths):
 
 
 def snap(tab):
-    return tab.data_store.model.root_item.to_json()
+    return tab.model.root_item.to_json()
 
 
 # ===========================================================================
@@ -272,8 +272,8 @@ def test_undo_reverses_drop_into_container(qtbot, show_root):
     before = snap(tab)
     assert on_item(tab, [(3,)], (4,))  # d INTO e
     assert snap(tab) != before
-    assert tab.data_store.undo_stack.count() == 1
-    tab.data_store.undo_stack.undo()
+    assert tab.undo_stack.count() == 1
+    tab.undo_stack.undo()
     assert snap(tab) == before
 
 
@@ -282,7 +282,7 @@ def test_undo_reverses_drop_after_sibling(qtbot, show_root):
     before = snap(tab)
     assert below_of(tab, [(0,)], 4)
     assert snap(tab) != before
-    tab.data_store.undo_stack.undo()
+    tab.undo_stack.undo()
     assert snap(tab) == before
 
 
@@ -290,7 +290,7 @@ def test_undo_reverses_multi_source_drop(qtbot, show_root):
     tab = _make_tab(qtbot, [{"a": 1}, {"b": 2}, {"c": 3}, {"d": 4}, {"e": 5}, {"f": 6}], show_root)
     before = snap(tab)
     assert on_item(tab, [(0,), (1,), (2,)], (4,))
-    tab.data_store.undo_stack.undo()
+    tab.undo_stack.undo()
     assert snap(tab) == before
 
 
@@ -331,7 +331,7 @@ def test_drag_container_with_subtree(qtbot, show_root):
     x_slot = result[0]
     nested_val = next(v for k, v in x_slot.items() if k != "x")
     assert nested_val == {"nested": {"deep": [1, 2, 3]}}
-    tab.data_store.undo_stack.undo()
+    tab.undo_stack.undo()
     assert snap(tab) == before
 
 
@@ -415,7 +415,7 @@ def test_repeated_container_drops_remain_consistent(qtbot, show_root):
     tab = _make_tab(qtbot, [{"a": 1}, {"b": 2}, {"c": 3}], show_root)
     # 12 alternating drops INTO the last container.
     for _ in range(12):
-        n = tab.data_store.model.root_item.child_count()
+        n = tab.model.root_item.child_count()
         if n < 2:
             break
         # Drop element 0 into element 1.
@@ -435,19 +435,19 @@ def test_full_redo_undo_cycle_round_trips(qtbot, show_root):
     on_item(tab, [(0,)], (2,))
     below_of(tab, [(0,)], 1)
     # Undo all three.
-    while tab.data_store.undo_stack.canUndo():
-        tab.data_store.undo_stack.undo()
+    while tab.undo_stack.canUndo():
+        tab.undo_stack.undo()
     assert snap(tab) == before
     # Redo all three back to the final state.
-    while tab.data_store.undo_stack.canRedo():
-        tab.data_store.undo_stack.redo()
+    while tab.undo_stack.canRedo():
+        tab.undo_stack.redo()
     after_redo = snap(tab)
     # Repeat undo to verify the chain stays correct.
-    while tab.data_store.undo_stack.canUndo():
-        tab.data_store.undo_stack.undo()
+    while tab.undo_stack.canUndo():
+        tab.undo_stack.undo()
     assert snap(tab) == before
-    while tab.data_store.undo_stack.canRedo():
-        tab.data_store.undo_stack.redo()
+    while tab.undo_stack.canRedo():
+        tab.undo_stack.redo()
     assert snap(tab) == after_redo
 
 

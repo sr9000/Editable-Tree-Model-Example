@@ -30,7 +30,7 @@ def _make_tab(qtbot, data: dict, schema: dict | None = None) -> JsonTab:
     tab = JsonTab(lambda *_: None, data=data, show_root=True)
     qtbot.addWidget(tab)
     if schema is not None:
-        tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
+        tab.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
     return tab
 
 
@@ -94,7 +94,7 @@ def test_clear_schema_hidden_again_after_clear(qtbot):
     dock.attach_tab(tab)
     assert not dock._btn_clear_schema.isHidden()
 
-    tab.data_store.validation.clear_schema()
+    tab.validation.clear_schema()
     assert dock._btn_clear_schema.isHidden()
     assert not dock._btn_rescan.isEnabled()
 

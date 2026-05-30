@@ -22,14 +22,14 @@ def _make_huge_array_tab(qtbot, *, n: int) -> JsonTab:
     tab = JsonTab(lambda *_: None)
     qtbot.addWidget(tab)
     big = [{"k": i, "v": f"item-{i}"} for i in range(n)]
-    tab.data_store.model.beginResetModel()
-    tab.data_store.model.root_item = JsonTreeItem(None, big)
-    tab.data_store.model.endResetModel()
+    tab.model.beginResetModel()
+    tab.model.root_item = JsonTreeItem(None, big)
+    tab.model.endResetModel()
     return tab
 
 
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:
-    source_index = tab.data_store.model.index(row, 0, parent)
+    source_index = tab.model.index(row, 0, parent)
     idx = tab.view_controller.source_to_view(source_index)
     tab.view.setCurrentIndex(idx)
     tab.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
@@ -70,19 +70,19 @@ def test_move_undo_redo_is_o1_on_huge_array(qtbot):
         assert move_selection_up(tab.view)
 
     # Every recorded command is a typed move-rows command.
-    for i in range(tab.data_store.undo_stack.count()):
-        cmd = tab.data_store.undo_stack.command(i)
+    for i in range(tab.undo_stack.count()):
+        cmd = tab.undo_stack.command(i)
         assert isinstance(cmd, _MoveRowsCmd), f"step {i}: got {type(cmd).__name__}"
 
     # Time undo + redo round trip.
     start = time.perf_counter()
     for _ in range(moves):
-        tab.data_store.undo_stack.undo()
+        tab.undo_stack.undo()
     undo_elapsed = time.perf_counter() - start
 
     start = time.perf_counter()
     for _ in range(moves):
-        tab.data_store.undo_stack.redo()
+        tab.undo_stack.redo()
     redo_elapsed = time.perf_counter() - start
 
     # Each step is one ``move_row`` swap on the model. On a 3000-row
@@ -102,8 +102,8 @@ def test_move_command_state_is_bounded_constant(qtbot):
         _select_row0(tab, 5 if tab is tab_small else 1500)
         assert move_selection_up(tab.view)
 
-    cmd_small = tab_small.data_store.undo_stack.command(0)
-    cmd_huge = tab_huge.data_store.undo_stack.command(0)
+    cmd_small = tab_small.undo_stack.command(0)
+    cmd_huge = tab_huge.undo_stack.command(0)
     assert isinstance(cmd_small, _MoveRowsCmd)
     assert isinstance(cmd_huge, _MoveRowsCmd)
 
@@ -125,10 +125,10 @@ def test_leaf_edit_undo_redo_is_constant_time_on_huge_array(qtbot):
     tab = _make_huge_array_tab(qtbot, n=3000)
 
     # Edit the value of an inner element's "v" field.
-    inner_obj = tab.data_store.model.index(1234, 0, QModelIndex())
-    v_value = tab.data_store.model.index(1, 2, inner_obj)
+    inner_obj = tab.model.index(1234, 0, QModelIndex())
+    v_value = tab.model.index(1, 2, inner_obj)
     assert tab.editing.commit_set_data(v_value, "PATCHED", Qt.ItemDataRole.EditRole)
-    cmd = tab.data_store.undo_stack.command(tab.data_store.undo_stack.count() - 1)
+    cmd = tab.undo_stack.command(tab.undo_stack.count() - 1)
     assert isinstance(cmd, _EditValueCmd)
 
     # The stored subtree on each side must be the leaf, not the array.
@@ -138,8 +138,8 @@ def test_leaf_edit_undo_redo_is_constant_time_on_huge_array(qtbot):
     # Time 50 undo/redo cycles on a 3000-element document.
     start = time.perf_counter()
     for _ in range(25):
-        tab.data_store.undo_stack.undo()
-        tab.data_store.undo_stack.redo()
+        tab.undo_stack.undo()
+        tab.undo_stack.redo()
     elapsed = time.perf_counter() - start
     assert elapsed < 2.0, f"25x leaf-edit undo/redo cycles too slow: {elapsed:.3f}s"
 
@@ -155,16 +155,16 @@ def test_no_routine_action_pushes_full_document_snapshot(qtbot):
     assert move_selection_up(tab.view)
     _select_row0(tab, 200)
     assert delete_selection(tab.view)
-    leaf_v = tab.data_store.model.index(1, 2, tab.data_store.model.index(300, 0, QModelIndex()))
+    leaf_v = tab.model.index(1, 2, tab.model.index(300, 0, QModelIndex()))
     assert tab.editing.commit_set_data(leaf_v, "tagged", Qt.ItemDataRole.EditRole)
-    name_idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
+    name_idx = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
     assert tab.editing.commit_set_data(name_idx, "renamed", Qt.ItemDataRole.EditRole)
 
     full_root_json = tab._snapshot()
     full_size = _deep_size(full_root_json)
 
-    for i in range(tab.data_store.undo_stack.count()):
-        cmd = tab.data_store.undo_stack.command(i)
+    for i in range(tab.undo_stack.count()):
+        cmd = tab.undo_stack.command(i)
         # Snapshot fields must not exist on the typed commands.
         for forbidden in ("_before", "_after"):
             msg = f"command {i} ({type(cmd).__name__}) has {forbidden}"
@@ -185,7 +185,7 @@ def test_delete_inner_stores_only_removed_subtree(qtbot):
     _select_row0(tab, 1500)
     assert delete_selection(tab.view)
 
-    cmd = tab.data_store.undo_stack.command(tab.data_store.undo_stack.count() - 1)
+    cmd = tab.undo_stack.command(tab.undo_stack.count() - 1)
     assert isinstance(cmd, _RemoveRowsCmd)
     assert len(cmd._removals) == 1
     rec = cmd._removals[0]
@@ -199,7 +199,7 @@ def test_delete_inner_stores_only_removed_subtree(qtbot):
     # Round-trip undo / redo timing.
     start = time.perf_counter()
     for _ in range(25):
-        tab.data_store.undo_stack.undo()
-        tab.data_store.undo_stack.redo()
+        tab.undo_stack.undo()
+        tab.undo_stack.redo()
     elapsed = time.perf_counter() - start
     assert elapsed < 2.0, f"25x delete-row undo/redo cycles too slow: {elapsed:.3f}s"

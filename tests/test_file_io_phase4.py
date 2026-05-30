@@ -13,7 +13,7 @@ def _close_window_cleanly(win: MainWindow) -> None:
     for i in range(win.tabWidget.count()):
         tab = win.tabWidget.widget(i)
         if hasattr(tab, "undo_stack"):  # allow: test fixture supports legacy and new tab shapes
-            tab.data_store.undo_stack.setClean()
+            tab.undo_stack.setClean()
     win.close()
     win.deleteLater()
 
@@ -49,8 +49,8 @@ def test_setup_model_loads_json_file(tmp_path, monkeypatch, qapp):
     try:
         assert win.tabWidget.count() == 1
         tab = win.tabWidget.widget(0)
-        assert tab.data_store.file_path == str(path.resolve())
-        assert tab.data_store.model.root_item.to_json()["name"] == "demo"
+        assert tab.io.file_path == str(path.resolve())
+        assert tab.model.root_item.to_json()["name"] == "demo"
     finally:
         _close_window_cleanly(win)
 
@@ -63,7 +63,7 @@ def test_setup_model_loads_json_array_root(tmp_path, monkeypatch, qapp):
     win = MainWindow(str(path))
     try:
         tab = win.tabWidget.widget(0)
-        assert tab.data_store.model.root_item.to_json() == [1, 2, 3]
+        assert tab.model.root_item.to_json() == [1, 2, 3]
     finally:
         _close_window_cleanly(win)
 
@@ -76,7 +76,7 @@ def test_setup_model_loads_yaml_multi_doc_as_root_array(tmp_path, monkeypatch, q
     win = MainWindow(str(path))
     try:
         tab = win.tabWidget.widget(0)
-        assert tab.data_store.model.root_item.to_json() == [{"a": 1}, {"b": 2}]
+        assert tab.model.root_item.to_json() == [{"a": 1}, {"b": 2}]
     finally:
         _close_window_cleanly(win)
 
@@ -87,14 +87,14 @@ def test_dirty_flips_on_edit_and_clears_on_save(tmp_path, monkeypatch, qapp):
     try:
         win.create_new_file()
         tab = win.tabWidget.currentWidget()
-        assert not tab.data_store.is_dirty
+        assert not tab.io.dirty
 
         _make_dirty(tab)
-        assert tab.data_store.is_dirty
+        assert tab.io.dirty
 
         out = tmp_path / "saved.json"
         assert tab.save_as(str(out))
-        assert not tab.data_store.is_dirty
+        assert not tab.io.dirty
 
         parsed = simplejson.loads(out.read_text(encoding="utf-8"))
         assert parsed == {"a": 1}
@@ -150,18 +150,18 @@ def test_dump_text_yaml_multi_and_jsonl(tmp_path):
 def test_json_tab_shows_special_root_and_allows_root_type_change(qapp):
     tab = JsonTab(lambda *_args, **_kwargs: None, data={"a": 1}, show_root=True)
     try:
-        root = tab.data_store.model.index(0, 0, QModelIndex())
+        root = tab.model.index(0, 0, QModelIndex())
         assert root.isValid()
-        assert tab.data_store.model.data(root) == "<root>"
+        assert tab.model.data(root) == "<root>"
 
-        root_type = tab.data_store.model.index(0, 1, QModelIndex())
+        root_type = tab.model.index(0, 1, QModelIndex())
         assert tab.editing.commit_set_data(root_type, JsonType.ARRAY)
         # Phase-3: OBJECT→ARRAY preserves children (names dropped, values kept)
-        assert tab.data_store.model.root_item.to_json() == [1]
+        assert tab.model.root_item.to_json() == [1]
 
         assert tab.editing.commit_set_data(root_type, JsonType.OBJECT)
         # Phase-3: ARRAY→OBJECT preserves children (names assigned item1, item2, …)
-        assert tab.data_store.model.root_item.to_json() == {"item1": 1}
+        assert tab.model.root_item.to_json() == {"item1": 1}
     finally:
         tab.deleteLater()
 
@@ -169,9 +169,9 @@ def test_json_tab_shows_special_root_and_allows_root_type_change(qapp):
 def test_sort_keys_on_root_object(qapp):
     tab = JsonTab(lambda *_args, **_kwargs: None, data={"z": 1, "a": 2}, show_root=True)
     try:
-        root = tab.data_store.model.index(0, 0, QModelIndex())
+        root = tab.model.index(0, 0, QModelIndex())
         assert tab.editing.push_sort_keys(root)
-        assert list(tab.data_store.model.root_item.to_json().keys()) == ["a", "z"]
+        assert list(tab.model.root_item.to_json().keys()) == ["a", "z"]
     finally:
         tab.deleteLater()
 
@@ -190,8 +190,8 @@ def test_json_tab_save_jsonl_mode(tmp_path, qapp):
     tab = JsonTab(lambda *_args, **_kwargs: None, data=[{"a": 1}, {"b": 2}], show_root=True)
     try:
         out = tmp_path / "events.jsonl"
-        tab.data_store.file_path = str(out)
-        tab.data_store.save_format = SAVE_FORMAT_JSONL
+        tab.io.file_path = str(out)
+        tab.io.save_format = SAVE_FORMAT_JSONL
         assert tab.save()
         assert out.read_text(encoding="utf-8") == '{"a": 1}\n{"b": 2}\n'
     finally:

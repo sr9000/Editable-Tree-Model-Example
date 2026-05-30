@@ -55,4 +55,4 @@ def test_delete_selection_targets_source_row_while_filtered(qtbot):
     tab.view.setCurrentIndex(leaf)
     assert delete_selection(tab.view)
 
-    assert tab.data_store.model.root_item.to_json() == {"root": {"arr": [1, 3]}, "other": "x"}
+    assert tab.model.root_item.to_json() == {"root": {"arr": [1, 3]}, "other": "x"}

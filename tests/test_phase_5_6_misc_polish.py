@@ -12,7 +12,7 @@ def test_view_menu_expand_collapse_toggles_expansion(qtbot):
     tab = win._add_tab(data={"foo": {"bar": 1}}, file_path=None)
     assert tab is not None
 
-    root = tab.data_store.model.index(0, 0, QModelIndex())
+    root = tab.model.index(0, 0, QModelIndex())
     root_view = tab.view_controller.source_to_view(root)
 
     win.viewCollapseAllAction.trigger()
@@ -35,8 +35,8 @@ def test_model_reset_calls_resize_key_columns(qtbot):
 
     tab.appearance.resize_key_columns = _spy
 
-    tab.data_store.model.beginResetModel()
-    tab.data_store.model.endResetModel()
+    tab.model.beginResetModel()
+    tab.model.endResetModel()
 
     assert calls, "expected modelReset to trigger key-column resize"
 
@@ -55,7 +55,7 @@ def test_view_zoom_actions_call_tab_zoom_and_resize(qtbot):
     after_reset = tab.view.font().pointSize()
 
     assert after_in >= before
-    assert after_reset == tab.data_store._default_font_pt
+    assert after_reset == tab.appearance.default_font_pt
 
 
 def test_zoom_preserves_user_column_widths(qtbot):
@@ -66,7 +66,7 @@ def test_zoom_preserves_user_column_widths(qtbot):
     # Simulate the user dragging col 0 to a custom width.
     custom_width = 200
     tab.view.setColumnWidth(0, custom_width)
-    tab.data_store._user_sized_columns.add(0)  # mark as user-sized (normally done by sectionResized handler)
+    tab.appearance.user_sized_columns.add(0)  # mark as user-sized (normally done by sectionResized handler)
 
     # Zoom in three times.
     for _ in range(3):
@@ -104,7 +104,7 @@ def test_float_to_integer_type_change_shows_fraction_loss_warning(qtbot):
     tab = JsonTab(lambda *_: None, data={"v": 3.5}, show_root=True, status_message_callback=_status)
     qtbot.addWidget(tab)
 
-    root_idx = tab.data_store.model.index(0, 0, QModelIndex())
-    type_idx = tab.data_store.model.index(0, 1, root_idx)
+    root_idx = tab.model.index(0, 0, QModelIndex())
+    type_idx = tab.model.index(0, 1, root_idx)
     assert tab.editing.push_change_type(type_idx, JsonType.INTEGER)
     assert any("Fractional part discarded" in text for text, _ in messages)

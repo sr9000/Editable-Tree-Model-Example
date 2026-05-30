@@ -19,9 +19,9 @@ def test_tab_initializes_schema_and_validation_state_from_inline_ref(qtbot, tmp_
     tab = JsonTab(lambda *_: None, data=data, file_path=str(tmp_path / "doc.json"), show_root=True)
     qtbot.addWidget(tab)
 
-    assert tab.data_store.schema_ref.origin == "inline"
-    assert tab.data_store.schema is not None
-    assert len(tab.data_store.issue_index) == 0
+    assert tab.validation.schema_ref.origin == "inline"
+    assert tab.validation.schema is not None
+    assert len(tab.validation.issue_index) == 0
 
 
 def test_tab_set_schema_emits_signals_and_revalidates(qtbot):
@@ -38,11 +38,11 @@ def test_tab_set_schema_emits_signals_and_revalidates(qtbot):
 
     with qtbot.waitSignal(tab.schemaChanged, timeout=1000):
         with qtbot.waitSignal(tab.validationChanged, timeout=1000):
-            tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
+            tab.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
 
-    assert tab.data_store.schema_ref.origin == "manual"
-    assert tab.data_store.schema is not None
-    assert len(tab.data_store.issue_index) == 1
+    assert tab.validation.schema_ref.origin == "manual"
+    assert tab.validation.schema is not None
+    assert len(tab.validation.issue_index) == 1
 
 
 def test_tab_set_schema_path_sets_file_schema_source(qtbot, tmp_path):
@@ -52,10 +52,10 @@ def test_tab_set_schema_path_sets_file_schema_source(qtbot, tmp_path):
     tab = JsonTab(lambda *_: None, data={"value": 10}, show_root=True)
     qtbot.addWidget(tab)
 
-    tab.data_store.validation.set_schema(SchemaRef(path=schema_path, inline=None, origin="manual"))
+    tab.validation.set_schema(SchemaRef(path=schema_path, inline=None, origin="manual"))
 
-    assert tab.data_store.schema_source is not None
-    assert tab.data_store.schema_source.kind == "file"
+    assert tab.validation.schema_source is not None
+    assert tab.validation.schema_source.kind == "file"
 
 
 def test_tab_clear_schema_resets_to_none_and_clears_issue_index(qtbot):
@@ -69,15 +69,15 @@ def test_tab_clear_schema_resets_to_none_and_clears_issue_index(qtbot):
         },
         "required": ["value"],
     }
-    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
-    assert len(tab.data_store.issue_index) == 1
+    tab.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
+    assert len(tab.validation.issue_index) == 1
 
     with qtbot.waitSignal(tab.validationChanged, timeout=1000):
-        tab.data_store.validation.clear_schema()
+        tab.validation.clear_schema()
 
-    assert tab.data_store.schema_ref.origin == "none"
-    assert tab.data_store.schema is None
-    assert len(tab.data_store.issue_index) == 0
+    assert tab.validation.schema_ref.origin == "none"
+    assert tab.validation.schema is None
+    assert len(tab.validation.issue_index) == 0
 
 
 def test_validation_settings_stub_roundtrip(tmp_path):
