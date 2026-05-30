@@ -4,7 +4,7 @@ from PySide6.QtCore import QSettings
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QStatusBar, QVBoxLayout, QWidget
 
-from qhexedit import QHexEdit
+from editors.windowed.hexedit import QHexEdit
 from settings import APPLICATION_ID, MODAL_WINDOW_SIZE
 
 QHEXDIALOG_ID = "QHexDialog-7a927c68-412c-4f06-8ce6-2158dde1314e"
