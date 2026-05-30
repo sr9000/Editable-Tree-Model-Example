@@ -17,15 +17,17 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer
+from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex, QPersistentModelIndex, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QComboBox
 
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_history import TabHistoryController
 from documents.tab_number_types import would_drop_fraction_on_type_change
 from state.affix_mru import AffixMRU
+from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from tree.model import JsonTreeModel
 from tree.types import JsonType
+from tree_actions.selection import selected_source_rows
 from undo.commands import (
     _ChangeTypeCmd,
     _EditValueCmd,
@@ -475,6 +477,171 @@ class EditingController:
             if combo.parent() is tab.data_store.view.viewport() and combo.isVisible():
                 combo.showPopup()
                 return
+
+    # ------------------------------------------------------------------
+    # Move-row view-state capture/restore (was tab_move_view_state.py)
+    # ------------------------------------------------------------------
+
+    def collect_expanded_paths(self) -> list[tuple[int, ...]]:
+        """Return paths of every currently expanded row."""
+        tab = self._tab
+        paths: list[tuple[int, ...]] = []
+
+        def visit(parent_index: QModelIndex) -> None:
+            for r in range(tab.data_store.model.rowCount(parent_index)):
+                child = tab.data_store.model.index(r, 0, parent_index)
+                if not child.isValid():
+                    continue
+                view_child = tab.view_controller.source_to_view(child)
+                if tab.data_store.view.isExpanded(view_child):
+                    paths.append(tab.view_controller.index_path(child))
+                    visit(child)
+
+        visit(QModelIndex())
+        return paths
+
+    def capture_move_view_state(self, sources: list) -> dict[str, Any]:
+        tab = self._tab
+        roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]] = {}
+        for idx in sources:
+            row0 = tab.data_store.model.index(idx.row(), 0, idx.parent())
+            if not row0.isValid():
+                continue
+            key = (tab.view_controller.index_path(row0.parent()), row0.row())
+            view_idx = tab.view_controller.source_to_view(row0)
+            roots_state[key] = {
+                "expanded_root": bool(view_idx.isValid() and tab.data_store.view.isExpanded(view_idx)),
+                "expanded_rel": list(iter_expanded_relative_paths(tab.data_store.view, row0)),
+            }
+
+        selected_paths = [
+            tab.view_controller.index_path(idx) for idx in selected_source_rows(tab.data_store.view) if idx.isValid()
+        ]
+        current_src = tab.view_controller.proxy_to_source(tab.data_store.view.currentIndex())
+        if current_src.isValid():
+            current_src = tab.data_store.model.index(current_src.row(), 0, current_src.parent())
+        current_path = tab.view_controller.index_path(current_src) if current_src.isValid() else None
+        return {
+            "roots": roots_state,
+            "selection_before": selected_paths,
+            "current_before": current_path,
+        }
+
+    @staticmethod
+    def sort_move_paths(paths: list[tuple[tuple[int, ...], int]]) -> list[tuple[tuple[int, ...], int]]:
+        return sorted(paths, key=lambda p: (p[0], p[1]))
+
+    def _apply_relative_expansion_mapping(
+        self,
+        source_roots: list[tuple[tuple[int, ...], int]],
+        target_roots: list[tuple[tuple[int, ...], int]],
+        roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]],
+    ) -> None:
+        tab = self._tab
+        ordered_sources = self.sort_move_paths(source_roots)
+        for source_root, target_root in zip(ordered_sources, target_roots):
+            state = roots_state.get(source_root)
+            if state is None:
+                continue
+            target_parent_path, target_row = target_root
+            target_parent = tab.view_controller.index_from_path(target_parent_path)
+            target_index = tab.data_store.model.index(target_row, 0, target_parent)
+            if not target_index.isValid():
+                continue
+            target_view = tab.view_controller.source_to_view(target_index)
+            if target_view.isValid():
+                tab.data_store.view.setExpanded(target_view, bool(state.get("expanded_root", False)))
+            apply_expanded_relative_paths(tab.data_store.view, target_index, state.get("expanded_rel", []))
+
+    def _restore_selection_paths(
+        self,
+        paths: list[tuple[int, ...]],
+        current_path: tuple[int, ...] | None,
+    ) -> None:
+        tab = self._tab
+        sm = tab.data_store.view.selectionModel()
+        if sm is None:
+            return
+        selection = QItemSelection()
+        first_view_idx = None
+        for path in paths:
+            src_idx = tab.view_controller.index_from_path(path)
+            view_idx = tab.view_controller.source_to_view(src_idx)
+            if not view_idx.isValid():
+                continue
+            selection.select(view_idx, view_idx)
+            if first_view_idx is None:
+                first_view_idx = view_idx
+        sm.select(
+            selection,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+        )
+        if current_path is not None:
+            src_current = tab.view_controller.index_from_path(current_path)
+            view_current = tab.view_controller.source_to_view(src_current)
+            if view_current.isValid():
+                sm.setCurrentIndex(view_current, QItemSelectionModel.SelectionFlag.NoUpdate)
+                return
+        if first_view_idx is not None:
+            sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
+
+    def restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
+        """Select the rows at the given ``(parent_path, row)`` tuples after a move."""
+        tab = self._tab
+        if not placed:
+            return
+        sm = tab.data_store.view.selectionModel()
+        if sm is None:
+            return
+        selection = QItemSelection()
+        first_view_idx = None
+        for parent_path, row in placed:
+            p = tab.view_controller.index_from_path(parent_path)
+            src_idx = tab.data_store.model.index(row, 0, p)
+            view_idx = tab.view_controller.source_to_view(src_idx)
+            if view_idx.isValid():
+                selection.select(view_idx, view_idx)
+                if first_view_idx is None:
+                    first_view_idx = view_idx
+        sm.select(
+            selection,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+        )
+        if first_view_idx is not None:
+            sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
+
+    def apply_move_view_state(self, cmd: _MoveRowsCmd, *, undo: bool) -> None:
+        tab = self._tab
+        state = tab.data_store._move_view_state_by_cmd_id.get(id(cmd))
+        if state is None:
+            return
+        roots_state = state.get("roots", {})
+        if undo:
+            self._apply_relative_expansion_mapping(
+                cmd.source_paths, self.sort_move_paths(cmd.source_paths), roots_state
+            )
+            self._restore_selection_paths(state.get("selection_before", []), state.get("current_before"))
+            return
+        self._apply_relative_expansion_mapping(cmd.source_paths, cmd.placed_paths, roots_state)
+        self.restore_selection_at_paths(cmd.placed_paths)
+
+    def on_undo_index_changed(self, new_index: int) -> None:
+        tab = self._tab
+        old_index = tab.data_store._last_undo_index
+        if new_index == old_index:
+            return
+
+        if new_index > old_index:
+            for i in range(old_index, new_index):
+                cmd = tab.data_store.undo_stack.command(i)
+                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in tab.data_store._move_view_state_by_cmd_id:
+                    self.apply_move_view_state(cmd, undo=False)
+        else:
+            for i in range(old_index - 1, new_index - 1, -1):
+                cmd = tab.data_store.undo_stack.command(i)
+                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in tab.data_store._move_view_state_by_cmd_id:
+                    self.apply_move_view_state(cmd, undo=True)
+        tab.data_store._last_undo_index = new_index
 
 
 __all__ = ["EditingController"]

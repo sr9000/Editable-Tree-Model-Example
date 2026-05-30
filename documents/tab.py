@@ -6,7 +6,7 @@ from typing import Any, Callable
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
 from PySide6.QtWidgets import QLineEdit, QWidget
 
-from documents import tab_init, tab_move_view_state, tab_tree_actions
+from documents import tab_init, tab_tree_actions
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
@@ -438,16 +438,16 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         on_current_changed(self, current, _previous)
 
     def _collect_expanded_paths(self) -> list[tuple[int, ...]]:
-        return tab_move_view_state.collect_expanded_paths(self)
+        return self.editing.collect_expanded_paths()
 
     def _capture_move_view_state(self, sources: list) -> dict[str, Any]:
-        return tab_move_view_state.capture_move_view_state(self, sources)
+        return self.editing.capture_move_view_state(sources)
 
     def _apply_move_view_state(self, cmd: _MoveRowsCmd, *, undo: bool) -> None:
-        tab_move_view_state.apply_move_view_state(self, cmd, undo=undo)
+        self.editing.apply_move_view_state(cmd, undo=undo)
 
     def _on_undo_index_changed(self, new_index: int) -> None:
-        tab_move_view_state.on_undo_index_changed(self, new_index)
+        self.editing.on_undo_index_changed(new_index)
 
     # ------------------------------------------------------------------
     # Smart-restore diff helpers
@@ -501,7 +501,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         return self.editing.push_move_rows(sources, target_parent, target_row, label=label)
 
     def _restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
-        tab_move_view_state.restore_selection_at_paths(self, placed)
+        self.editing.restore_selection_at_paths(placed)
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
         return self.editing.push_rename(name_index, new_name, label=label)
