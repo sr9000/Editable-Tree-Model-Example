@@ -1,1 +1,0 @@
-"""Qt item delegates package."""

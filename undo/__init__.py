@@ -1,1 +1,0 @@
-"""Undo command package."""
