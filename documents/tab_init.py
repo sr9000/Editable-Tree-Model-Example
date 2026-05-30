@@ -7,7 +7,6 @@ from typing import Any, Callable
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.states.editing_controller import EditingController
 from documents.states.io_controller import IoController
-from documents.states.validation_state import ValidationState
 from documents.states.view_state import ViewState
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_demo_data import build_demo_data
@@ -23,6 +22,7 @@ from documents.tab_setup import (
     init_shortcuts,
     init_validation_state,
 )
+from documents.tab_validation import TabValidationController
 from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
@@ -90,7 +90,7 @@ def bootstrap(
     tab._editing.affix_mru.bootstrap_from_tree(tab.model.root_item)
     tab._editing.mutations = DocumentMutationGateway(tab)
 
-    tab._validation = ValidationState(
+    tab._validation = TabValidationController(
         tab,
         tab.model,
         on_schema_changed=lambda ref: tab.schemaChanged.emit(ref),

@@ -119,19 +119,9 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         return self._view_state
 
     @property
-    def editing_state(self) -> EditingController:
-        """Alias for the editing controller."""
-        return self._editing
-
-    @property
     def editing(self) -> EditingController:
         """Return the editing controller."""
         return self._editing
-
-    @property
-    def validation_state(self) -> TabValidationController:
-        """Alias for :attr:`validation`."""
-        return self._validation
 
     @property
     def validation(self) -> TabValidationController:
