@@ -27,13 +27,13 @@ def test_model_reset_calls_resize_key_columns(qtbot):
     qtbot.addWidget(tab)
 
     calls: list[int] = []
-    original = tab.resize_key_columns
+    original = tab.appearance.resize_key_columns
 
     def _spy(force: bool = False) -> None:
         calls.append(1)
         original(force=force)
 
-    tab.resize_key_columns = _spy
+    tab.appearance.resize_key_columns = _spy
 
     tab.data_store.model.beginResetModel()
     tab.data_store.model.endResetModel()
@@ -70,7 +70,7 @@ def test_zoom_preserves_user_column_widths(qtbot):
 
     # Zoom in three times.
     for _ in range(3):
-        tab.zoom_in()
+        tab.appearance.zoom_in()
 
     # Col 0 must remain unchanged because it is user-sized.
     assert (
@@ -86,9 +86,9 @@ def test_zoom_updates_tree_icon_size(qtbot):
     qtbot.addWidget(tab)
 
     before = tab.view.iconSize().height()
-    tab.zoom_in()
+    tab.appearance.zoom_in()
     after_in = tab.view.iconSize().height()
-    tab.zoom_out()
+    tab.appearance.zoom_out()
     after_out = tab.view.iconSize().height()
 
     assert after_in >= before

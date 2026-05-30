@@ -270,42 +270,18 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         self.data_store.validation.release()
         super().closeEvent(event)
 
-    def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_theme(theme, icon_provider)
+    @property
+    def appearance(self) -> JsonTabAppearanceController:
+        """Theme / font / icon-size / key-column appearance controller.
 
-    def set_monospace_fields_enabled(self, enabled: bool) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_monospace_fields_enabled(enabled)
-
-    def set_regular_font_family(self, family: str) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_regular_font_family(family)
-
-    def set_monospace_font_family(self, family: str) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_monospace_font_family(family)
-
-    def set_editor_font_point_size(self, point_size: int) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_editor_font_point_size(point_size)
-
-    def apply_font_profile(self, profile) -> None:
-        """Aspect entry point called by ``FontController``.
-
-        Order matters: family must be set before point size so the column
-        scaler sees the final font width, and the monospace toggle must
-        come last because it triggers a viewport repaint that picks up
-        the freshly-installed delegate fonts.
+        Plan 21 O3 retired the 14 ``set_theme`` / ``apply_font_profile`` /
+        ``zoom_*`` / ``set_*_font_*`` / ``resize_key_columns`` /
+        ``_scale_columns_for_font`` / ``_set_font_pt`` /
+        ``_sync_icon_size_with_font`` / ``_on_model_reset`` forwarders on
+        ``JsonTab``; callers reach the behaviour through ``tab.appearance.*``.
         """
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.apply_font_profile(profile)
+        assert self._appearance is not None, "appearance accessed before bootstrap"
+        return self._appearance
 
     def refresh_actions(self) -> None:
         self.data_store._host.refresh_actions()
@@ -316,58 +292,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
 
     def show_permanent_message(self, message: str) -> None:
         self.data_store._host.show_permanent_message(message)
-
-    def _on_model_reset(self) -> None:
-        # Force-resize so a brand-new model always gets snug initial widths,
-        # regardless of whether the user had previously hand-resized those cols.
-        self.resize_key_columns(force=True)
-
-    def resize_key_columns(self, force: bool = False) -> None:
-        """Snap name/type columns to content width.
-
-        When *force* is False (the default), columns that the user has
-        manually resized (tracked in ``_user_sized_columns``) are left alone.
-        Pass ``force=True`` (e.g. on model reset) to override.
-        """
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.resize_key_columns(force=force)
-
-    def _scale_columns_for_font(self, old_pt: int, new_pt: int) -> None:
-        """Proportionally scale name/type column widths when the font changes.
-
-        Columns the user has hand-resized are left alone.  The value column
-        (col 2) is never touched because it is set to stretch.
-        """
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.scale_columns_for_font(old_pt, new_pt)
-
-    def _set_font_pt(self, pt: int) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_font_pt(pt)
-
-    def _sync_icon_size_with_font(self) -> None:
-        # Keep type-column icons visually in step with the active tree font.
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.sync_icon_size_with_font()
-
-    def zoom_in(self) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.zoom_in()
-
-    def zoom_out(self) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.zoom_out()
-
-    def zoom_reset(self) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.zoom_reset()
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
         self.editing.on_type_changed(item_index, lossy)

@@ -169,6 +169,11 @@ class JsonTabAppearanceController:
             self.set_monospace_font_family(profile.monospace_family)
         self.set_monospace_fields_enabled(profile.monospace_fields_enabled)
 
+    def on_model_reset(self) -> None:
+        # Force-resize so a brand-new model always gets snug initial widths,
+        # regardless of whether the user had previously hand-resized those cols.
+        self.resize_key_columns(force=True)
+
     def resize_key_columns(self, force: bool = False) -> None:
         self._programmatic_column_resize = True
         try:

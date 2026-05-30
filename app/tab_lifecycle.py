@@ -99,7 +99,7 @@ class TabLifecyclePresenter(QObject):
         tab.dirtyChanged.connect(lambda _dirty, t=tab: self.on_tab_dirty(t))
 
         tab.view_controller.request_expand_all()
-        tab.resize_key_columns()
+        tab.appearance.resize_key_columns()
         if tab.root_index().isValid():
             tab.view_controller.request_select_paths([()])
         view_state.restore(tab)
@@ -120,7 +120,7 @@ class TabLifecyclePresenter(QObject):
         win._bind_validation_status(tab)
         win.validation_dock.attach_tab(tab)
         if tab is not None:
-            tab.resize_key_columns()
+            tab.appearance.resize_key_columns()
         if win._history_dialog is not None and win._history_dialog.isVisible():
             if tab is not None and win._history_view is not None:
                 win._history_view.setStack(tab.undo_stack)

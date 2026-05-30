@@ -50,8 +50,8 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     tab.view.expand(tab.view_controller.source_to_view(foo))
     tab.view.setCurrentIndex(tab.view_controller.source_to_view(leaf))
 
-    tab.zoom_in()
-    tab.zoom_in()
+    tab.appearance.zoom_in()
+    tab.appearance.zoom_in()
     saved_font_pt = tab.view.font().pointSize()
     saved_widths = [tab.view.columnWidth(column) for column in range(3)]
 

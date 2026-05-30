@@ -181,7 +181,7 @@ def test_json_tab_set_theme_emits_repaint_data_changed(qapp):
 
     tab.data_store.model.dataChanged.connect(_on_data_changed)
     try:
-        tab.set_theme(DARK_DEFAULT)
+        tab.appearance.set_theme(DARK_DEFAULT)
     finally:
         tab.deleteLater()
 

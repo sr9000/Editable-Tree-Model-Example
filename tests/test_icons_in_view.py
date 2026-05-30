@@ -90,7 +90,7 @@ def test_json_tab_set_theme_emits_data_changed_for_type_column_icons(qtbot):
 
     tab.data_store.model.dataChanged.connect(_on_data_changed)
     try:
-        tab.set_theme(dark, dark_icons)
+        tab.appearance.set_theme(dark, dark_icons)
     finally:
         tab.deleteLater()
 

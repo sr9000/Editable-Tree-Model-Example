@@ -55,8 +55,6 @@ from documents.states.io_controller import IoController
 from documents.tab_validation import TabValidationController
 from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
-from themes.icon_provider import IconProvider
-from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
 from tree.view import JsonTreeView
@@ -159,11 +157,15 @@ class Document(Protocol):
     def is_read_only(self) -> bool: ...
     def set_read_only(self, enabled: bool) -> None: ...
 
-    def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = ...) -> None: ...
-    def apply_font_profile(self, profile: Any) -> None: ...
+    # Plan 21 O3: theme / font / zoom / key-column routing lives on the
+    # JsonTabAppearanceController, reached via ``tab.appearance.*``.  The
+    # type is a forward-ref string to avoid the import cycle
+    # (document_protocol -> tab_appearance -> tab_data -> editing_controller
+    #  -> state.view_state -> document_protocol), mirroring ``editing``.
+    @property
+    def appearance(self) -> "JsonTabAppearanceController": ...
     @property
     def zoom_pt(self) -> int: ...
-    def _set_font_pt(self, pt: int) -> None: ...
 
     # =========================================================
     # Host messaging façade (status bar)

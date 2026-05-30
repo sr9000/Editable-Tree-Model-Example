@@ -316,7 +316,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._theme = theme
         self._icon_provider = icon_provider
         for tab in self._theme_tabs():
-            tab.set_theme(theme, icon_provider)
+            tab.appearance.set_theme(theme, icon_provider)
 
     def _apply_theme(self, theme) -> None:
         self._theme_controller.apply_theme(theme)

@@ -126,7 +126,7 @@ def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
     tab.data_store.proxy.setSourceModel(tab.data_store.model)
 
     tab.data_store.view.setModel(tab.data_store.proxy)
-    tab.data_store.model.modelReset.connect(tab._on_model_reset)
+    tab.data_store.model.modelReset.connect(tab.appearance.on_model_reset)
 
 
 def init_validation_state(tab: "JsonTab", model_data: Any) -> None:

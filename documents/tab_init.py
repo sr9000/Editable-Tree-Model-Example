@@ -79,7 +79,7 @@ def bootstrap(
 
     init_layout(tab)
     tab._editability.capture_editable_view_state()
-    tab._sync_icon_size_with_font()
+    tab.appearance.sync_icon_size_with_font()
 
     if data is _DEFAULT_DATA:
         model_data = build_demo_data()
@@ -106,7 +106,7 @@ def bootstrap(
     )
 
     init_delegates_and_connections(tab)
-    tab.set_monospace_fields_enabled(tab.data_store._monospace_fields_enabled)
+    tab.appearance.set_monospace_fields_enabled(tab.data_store._monospace_fields_enabled)
     init_shortcuts(tab)
     init_search_filter(tab)
 

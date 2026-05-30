@@ -115,7 +115,7 @@ def restore(tab: Document) -> bool:
         return False
 
     if font_pt is not None:
-        tab._set_font_pt(font_pt)
+        tab.appearance.set_font_pt(font_pt)
 
     if widths is not None:
         tab.view_controller.set_column_widths(widths)
