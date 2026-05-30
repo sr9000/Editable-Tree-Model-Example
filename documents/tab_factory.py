@@ -58,6 +58,7 @@ def create_tab(
             save_format=save_format,
             services=services,
         )
+
     return JsonTab(
         update_actions_callback=update_actions_callback,
         status_message_callback=status_message_callback,

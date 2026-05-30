@@ -54,6 +54,8 @@ from validation.schema_source import SchemaRef
 class EditabilityFacadeProtocol(Protocol):
     @property
     def is_read_only(self) -> bool: ...
+
+
 class AppearanceFacadeProtocol(Protocol):
     @property
     def theme(self) -> ThemeSpec | None: ...
@@ -75,6 +77,8 @@ class AppearanceFacadeProtocol(Protocol):
     def regular_font_family(self) -> str | None: ...
     @property
     def monospace_font_family(self) -> str | None: ...
+
+
 @dataclass
 class JsonTabData:
     """Per-tab document state composed from four single-responsibility substates.
