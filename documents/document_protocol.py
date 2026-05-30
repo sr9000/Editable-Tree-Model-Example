@@ -60,9 +60,6 @@ from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
 from tree.view import JsonTreeView
-from validation.index import IssueIndex
-from validation.issue import ValidationIssue
-from validation.schema_source import SchemaSource
 
 
 @runtime_checkable
@@ -104,15 +101,12 @@ class Document(Protocol):
     # =========================================================
     # Schema / validation identity  (axis: validation)
     # =========================================================
-    @property
-    def schema_source(self) -> SchemaSource | None: ...
-    @property
-    def schema_ref(self) -> str | None: ...
-    @property
-    def issue_index(self) -> IssueIndex | None: ...
+    # Plan 21 O2: schema_source / schema_ref / issue_index /
+    # goto_validation_issue are reached through the ValidationController
+    # (``tab.validation.schema_source`` etc.).  The former top-level
+    # forwards on JsonTab were dropped in this step.
     @property
     def validation(self) -> TabValidationController: ...
-    def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = ...) -> bool: ...
 
     # =========================================================
     # Editing axis  (controller: EditingController)

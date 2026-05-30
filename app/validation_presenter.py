@@ -89,7 +89,7 @@ class DockValidationPresenter(QObject):
         win._bound_validation_tab = tab
         if tab is not None:
             tab.validationChanged.connect(self.on_tab_validation_changed)
-            self.on_tab_validation_changed(tab.issue_index)
+            self.on_tab_validation_changed(tab.validation.issue_index)
         else:
             win._validation_status_label.setVisible(False)
 
@@ -110,7 +110,7 @@ class DockValidationPresenter(QObject):
         tab = self._win._current_tab()
         if tab is None:
             return
-        tab.goto_validation_issue(issue, edit=edit)
+        tab.validation.goto_validation_issue(issue, edit=edit)
 
     def on_rescan_requested(self) -> None:
         tab = self._win._current_tab()
@@ -168,9 +168,9 @@ class DockValidationPresenter(QObject):
     def on_reload_schema_requested(self) -> None:
         win = self._win
         tab = win._current_tab()
-        if tab is None or tab.schema_source is None:
+        if tab is None or tab.validation.schema_source is None:
             return
-        if get_schema_registry().reload(tab.schema_source) is None:
+        if get_schema_registry().reload(tab.validation.schema_source) is None:
             win.statusBar.showMessage(win.tr("Reload failed"), 3000)
             return
         tab.validation.revalidate()
@@ -179,10 +179,10 @@ class DockValidationPresenter(QObject):
     def on_open_schema_file_requested(self) -> None:
         win = self._win
         tab = win._current_tab()
-        if tab is None or tab.schema_source is None:
+        if tab is None or tab.validation.schema_source is None:
             return
 
-        source = tab.schema_source
+        source = tab.validation.schema_source
         if source is None:
             return
         if source.kind == "url":
@@ -214,9 +214,9 @@ class DockValidationPresenter(QObject):
                 schema_path=(),
                 kind="",
             )
-            schema_tab.goto_validation_issue(fake_issue)
+            schema_tab.validation.goto_validation_issue(fake_issue)
 
-        source = tab.schema_source
+        source = tab.validation.schema_source
         if source is None:
             return
         schema_tab = win._schema_tab_pool.open_or_focus(win, source)
@@ -247,7 +247,7 @@ class DockValidationPresenter(QObject):
         win._schemas_copy_path_action = QAction(win.tr("Copy full path"), win)
         win._schemas_copy_path_action.triggered.connect(
             lambda: (
-                self.copy_schema_source_key(win._current_tab().schema_source)
+                self.copy_schema_source_key(win._current_tab().validation.schema_source)
                 if win._current_tab() is not None
                 else None
             )
@@ -299,7 +299,7 @@ class DockValidationPresenter(QObject):
             empty.setEnabled(False)
 
         tab = win._current_tab()
-        source = tab.schema_source if tab is not None else None
+        source = tab.validation.schema_source if tab is not None else None
         has_source = source is not None
         win._schemas_open_current_action.setEnabled(has_source)
         win._schemas_copy_path_action.setEnabled(has_source)

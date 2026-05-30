@@ -32,8 +32,6 @@ from undo.commands import _RenameCmd  # noqa: F401 — re-exported for test impo
 from undo.commands import _SortKeysCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _SwitchFieldCaseCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _MoveRowsCmd
-from validation.index import IssueIndex
-from validation.issue import ValidationIssue
 
 _DEFAULT_DATA = tab_init._DEFAULT_DATA
 
@@ -159,14 +157,10 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     # Plan 21 L3 retired the per-attribute ``file_path`` / ``save_format``
     # / ``is_dirty`` forwards; external callers reach those through the
     # IoController (``tab.io.file_path`` / ``.save_format`` / ``.dirty``).
-    @property
-    def schema_source(self):
-        return self.data_store.schema_source
-
-    @property
-    def schema_ref(self):
-        return self.data_store.schema_ref
-
+    # Plan 21 O2 retired ``schema_source`` / ``schema_ref`` /
+    # ``issue_index`` / ``goto_validation_issue`` / ``_severity_provider``
+    # / ``_on_validation_changed``; external callers reach those through
+    # the ValidationController (``tab.validation.schema_source`` etc.).
     @property
     def validation(self) -> TabValidationController:
         return self.data_store.validation
@@ -265,8 +259,8 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         return self.data_store.last_move_placed
 
     @property
-    def issue_index(self) -> IssueIndex | None:
-        return self.data_store.issue_index
+    def last_move_placed(self) -> list[tuple[tuple, int]]:
+        return self.data_store.last_move_placed
 
     @property
     def affix_mru(self) -> AffixMRU:
@@ -275,15 +269,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     def closeEvent(self, event):  # type: ignore[override]
         self.data_store.validation.release()
         super().closeEvent(event)
-
-    def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
-        return self.validation.goto_validation_issue(issue, edit=edit)
-
-    def _severity_provider(self, model_path: tuple[int, ...]) -> str | None:
-        return self.validation.severity_provider(model_path)
-
-    def _on_validation_changed(self, _index: IssueIndex) -> None:
-        self.validation.on_validation_changed(_index)
 
     def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
         appearance = self._appearance

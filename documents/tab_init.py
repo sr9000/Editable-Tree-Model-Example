@@ -118,8 +118,8 @@ def bootstrap(
     view_controller.viewportRequested.connect(view_controller.apply_request)
     # Plug the severity provider before init_validation_state so the first
     # revalidate() → dataChanged repaint already has the provider ready.
-    tab.data_store.model.set_issue_index_provider(tab._severity_provider)
-    tab.validationChanged.connect(tab._on_validation_changed)
+    tab.data_store.model.set_issue_index_provider(tab.validation.severity_provider)
+    tab.validationChanged.connect(tab.validation.on_validation_changed)
     init_validation_state(tab, model_data)
 
     tab.data_store.undo_stack.cleanChanged.connect(tab._on_clean_changed)
