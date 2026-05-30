@@ -31,12 +31,12 @@ from app.validation_presenter import DockValidationPresenter
 from documents.document_protocol import Document
 from documents.tab_marker import JsonTabWidgetMarker
 from io_formats.load import load_file_with_format
-from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
 from tree_actions.clipboard import clipboard_to_tab_data
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 from tree_actions.structure import switch_document_case as switch_case_document
+from ui.mainwindow import Ui_MainWindow
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):

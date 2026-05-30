@@ -10,12 +10,12 @@ from delegates.edit_context import DefaultEditContext, EditResult
 from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
-from documents.json_tab_ui import Ui_JsonTab
 from documents.states.editing_controller import TreeAction
 from documents.tab_status import on_current_changed
+from tree.filter_proxy import TreeFilterProxy
 from tree.model import JsonTreeModel
 from tree_actions.context_menu import show_context_menu
-from tree.filter_proxy import TreeFilterProxy
+from ui.json_tab_ui import Ui_JsonTab
 from units import counts, format_bytes
 
 

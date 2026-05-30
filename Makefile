@@ -4,9 +4,9 @@ lint:
 	autoflake .
 	isort . \
 		--gitignore \
-		-s mainwindow.py \
-		-s documents/json_tab_ui.py
-	black . --line-length 120 --extend-exclude "mainwindow.py|documents/json_tab_ui\.py"
+		-s ui/mainwindow.py \
+		-s ui/json_tab_ui.py
+	black . --line-length 120 --extend-exclude "ui/mainwindow.py|ui/json_tab_ui\.py"
 
 # Activate the repo-local git hooks for every fresh clone.
 # Idempotent — safe to run multiple times.

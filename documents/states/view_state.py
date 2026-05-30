@@ -9,9 +9,9 @@ from PySide6.QtWidgets import QLineEdit
 from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
-from documents.json_tab_ui import Ui_JsonTab
-from tree.view import JsonTreeView
 from tree.filter_proxy import TreeFilterProxy
+from tree.view import JsonTreeView
+from ui.json_tab_ui import Ui_JsonTab
 
 
 @dataclass

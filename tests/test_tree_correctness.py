@@ -5,8 +5,8 @@ from PySide6.QtWidgets import QTreeView
 
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
-from tree_actions.structure import action_insert_child
 from tree.types import JsonType, parse_json_type
+from tree_actions.structure import action_insert_child
 from units.number_affix import AffixKind, NumberAffix
 
 
