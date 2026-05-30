@@ -31,7 +31,7 @@ from undo.commands import _RemoveRowsCmd  # noqa: F401 — re-exported for test 
 from undo.commands import _RenameCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _SortKeysCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _SwitchFieldCaseCmd  # noqa: F401 — re-exported for test imports
-from undo.commands import _MoveRowsCmd
+from undo.commands import _MoveRowsCmd  # noqa: F401 — re-exported for test imports
 
 _DEFAULT_DATA = tab_init._DEFAULT_DATA
 
