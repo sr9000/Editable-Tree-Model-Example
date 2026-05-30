@@ -5,8 +5,8 @@ from typing import Iterable
 from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
-from qbigint_spinbox import QBigIntSpinBox
-from qmpq_spinbox import QMpqSpinBox
+from editors.inline.bigint_spinbox import QBigIntSpinBox
+from editors.inline.mpq_spinbox import QMpqSpinBox
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.types import JsonType
 from units.number_affix import AffixKind, NumberAffix, format_number_affix, parse_number_affix
