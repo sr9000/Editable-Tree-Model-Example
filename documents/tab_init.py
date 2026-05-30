@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from documents.mutation_gateway import DocumentMutationGateway
-from documents.states.io_state import IoState
+from documents.states.io_controller import IoController
 from documents.states.validation_state import ValidationState
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
@@ -88,7 +88,7 @@ def bootstrap(
 
     tab.data_store.affix_mru = AffixMRU()
 
-    tab.data_store.io = IoState(tab, file_path=file_path, save_format=save_format)
+    tab.data_store.io = IoController(tab, file_path=file_path, save_format=save_format)
     tab.data_store.io.dirtyChanged.connect(tab.dirtyChanged.emit)
 
     init_model(tab, model_data, show_root=show_root)

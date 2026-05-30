@@ -1,8 +1,8 @@
 """JsonTabData -- per-tab document state container.
 Phase I result:  ``JsonTabData`` is the single composition point for the
 four per-axis substates a :class:`documents.tab.JsonTab` owns:
-* :class:`documents.states.io_state.IoState` -- file path, save format,
-  dirty flag (exposed as :attr:`io`).
+* :class:`documents.states.io_controller.IoController` -- file path,
+  save format, dirty flag, save/save_as/snapshot (exposed as :attr:`io`).
 * :class:`documents.states.view_state.ViewState` -- UI widgets, proxy,
   delegates (exposed as :attr:`view_state`; individual widgets remain
   reachable via :attr:`view`, :attr:`proxy`, etc. property forwards).
@@ -35,7 +35,7 @@ from delegates.value import ValueDelegate
 from documents.json_tab_ui import Ui_JsonTab
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.states.editing_state import EditingState
-from documents.states.io_state import IoState
+from documents.states.io_controller import IoController
 from documents.states.validation_state import ValidationState
 from documents.states.view_state import ViewState
 from documents.tab_dependencies import JsonTabHost
@@ -88,7 +88,7 @@ class JsonTabData:
     # ----- The four substates + two cross-cutting controllers --------------
     view_state: ViewState = field(default_factory=ViewState)
     editing_state: EditingState = field(default_factory=EditingState)
-    io: IoState | None = None
+    io: IoController | None = None
     validation: ValidationState | None = None
     editability: EditabilityFacadeProtocol | None = None
     appearance: AppearanceFacadeProtocol | None = None
@@ -209,7 +209,7 @@ class JsonTabData:
     def last_move_placed(self) -> list[tuple[tuple, int]]:
         return self.editing_state.last_move_placed
 
-    # ----- IoState forwards (read+write) -----------------------------------
+    # ----- IoController forwards (read+write) ------------------------------
     @property
     def file_path(self) -> str | None:
         return self.io.file_path if self.io is not None else None

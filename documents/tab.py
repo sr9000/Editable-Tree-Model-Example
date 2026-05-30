@@ -12,9 +12,6 @@ from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
 from documents.tab_dependencies import JsonTabServices
 from documents.tab_editability import JsonTabEditabilityController
-from documents.tab_io import save as tab_save
-from documents.tab_io import save_as as tab_save_as
-from documents.tab_io import snapshot as tab_snapshot
 from documents.tab_marker import JsonTabWidgetMarker
 from documents.tab_navigation import JsonTabNavigationController
 from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
@@ -132,7 +129,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     # continue to use the per-attribute typed forwards above.
     @property
     def io(self):
-        """The :class:`documents.states.io_state.IoState` substate."""
+        """The :class:`documents.states.io_controller.IoController` substate."""
         return self.data_store.io
 
     @property
@@ -474,13 +471,13 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         return f"{name} *" if self.data_store.is_dirty else name
 
     def save(self) -> bool:
-        return tab_save(self)
+        return self.io.save()
 
     def save_as(self, path: str | None = None) -> bool:
-        return tab_save_as(self, path=path)
+        return self.io.save_as(path=path)
 
     def _snapshot(self) -> Any:
-        return tab_snapshot(self)
+        return self.io.snapshot()
 
     def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
         return index_path(self, index)

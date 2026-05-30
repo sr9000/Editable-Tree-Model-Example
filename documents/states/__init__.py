@@ -3,7 +3,8 @@
 Plan 20 Phase I decomposes the former ``JsonTabData`` god-dataclass
 into four single-responsibility substates:
 
-* :class:`documents.states.io_state.IoState` -- file_path, save_format, dirty
+* :class:`documents.states.io_controller.IoController` -- file_path,
+  save_format, dirty + save/save_as/snapshot (promoted in Plan 21 L1)
 * :class:`documents.states.view_state.ViewState` -- ui widgets + delegates + proxy
 * :class:`documents.states.editing_state.EditingState` -- model, mutations,
   history (undo stack), affix MRU, move-view caches
