@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex
 
+from documents.states.editing.context import EditingContext
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from tree_actions.selection import selected_source_rows
 from undo.commands import _MoveRowsCmd
@@ -14,13 +15,12 @@ from undo.commands import _MoveRowsCmd
 class MoveViewState:
     """Capture and restore expansion/selection around move-row commands."""
 
-    def __init__(self, tab, history_provider: Callable[[], Any | None]) -> None:
-        self._tab = tab
-        self._history_provider = history_provider
+    def __init__(self, context: EditingContext) -> None:
+        self._context = context
 
     def collect_expanded_paths(self) -> list[tuple[int, ...]]:
         """Return paths of every currently expanded row."""
-        tab = self._tab
+        tab = self._context.tab
         paths: list[tuple[int, ...]] = []
 
         def visit(parent_index: QModelIndex) -> None:
@@ -37,7 +37,7 @@ class MoveViewState:
         return paths
 
     def capture_move_view_state(self, sources: list) -> dict[str, Any]:
-        tab = self._tab
+        tab = self._context.tab
         roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]] = {}
         for idx in sources:
             row0 = tab.model.index(idx.row(), 0, idx.parent())
@@ -50,7 +50,9 @@ class MoveViewState:
                 "expanded_rel": list(iter_expanded_relative_paths(tab.view_state.view, row0)),
             }
 
-        selected_paths = [tab.view_controller.index_path(idx) for idx in selected_source_rows(tab.view_state.view) if idx.isValid()]
+        selected_paths = [
+            tab.view_controller.index_path(idx) for idx in selected_source_rows(tab.view_state.view) if idx.isValid()
+        ]
         current_src = tab.view_controller.proxy_to_source(tab.view_state.view.currentIndex())
         if current_src.isValid():
             current_src = tab.model.index(current_src.row(), 0, current_src.parent())
@@ -71,7 +73,7 @@ class MoveViewState:
         target_roots: list[tuple[tuple[int, ...], int]],
         roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]],
     ) -> None:
-        tab = self._tab
+        tab = self._context.tab
         ordered_sources = self.sort_move_paths(source_roots)
         for source_root, target_root in zip(ordered_sources, target_roots):
             state = roots_state.get(source_root)
@@ -92,7 +94,7 @@ class MoveViewState:
         paths: list[tuple[int, ...]],
         current_path: tuple[int, ...] | None,
     ) -> None:
-        tab = self._tab
+        tab = self._context.tab
         sm = tab.view_state.view.selectionModel()
         if sm is None:
             return
@@ -121,7 +123,7 @@ class MoveViewState:
 
     def restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
         """Select the rows at the given ``(parent_path, row)`` tuples."""
-        tab = self._tab
+        tab = self._context.tab
         if not placed:
             return
         sm = tab.view_state.view.selectionModel()
@@ -145,7 +147,7 @@ class MoveViewState:
             sm.setCurrentIndex(first_view_idx, QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def apply_move_view_state(self, cmd: _MoveRowsCmd, *, undo: bool) -> None:
-        history = self._history_provider()
+        history = self._context.history_provider()
         if history is None:
             return
         state = history.view_state_for(id(cmd))
@@ -153,15 +155,17 @@ class MoveViewState:
             return
         roots_state = state.get("roots", {})
         if undo:
-            self._apply_relative_expansion_mapping(cmd.source_paths, self.sort_move_paths(cmd.source_paths), roots_state)
+            self._apply_relative_expansion_mapping(
+                cmd.source_paths, self.sort_move_paths(cmd.source_paths), roots_state
+            )
             self._restore_selection_paths(state.get("selection_before", []), state.get("current_before"))
             return
         self._apply_relative_expansion_mapping(cmd.source_paths, cmd.placed_paths, roots_state)
         self.restore_selection_at_paths(cmd.placed_paths)
 
     def on_undo_index_changed(self, new_index: int) -> None:
-        tab = self._tab
-        history = self._history_provider()
+        tab = self._context.tab
+        history = self._context.history_provider()
         if history is None:
             return
         old_index = history.last_undo_index

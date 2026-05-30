@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any
 
 from PySide6.QtCore import QModelIndex
 
+from documents.states.editing.context import EditingContext
 from documents.tab_number_types import would_drop_fraction_on_type_change
 from tree.types import JsonType
-from tree_actions.anchors import anchor_is_cycle, anchor_is_no_op, pre_pop_target_row_to_anchor, resolve_anchor_insert_row
+from tree_actions.anchors import (
+    anchor_is_cycle,
+    anchor_is_no_op,
+    pre_pop_target_row_to_anchor,
+    resolve_anchor_insert_row,
+)
 from undo.commands import (
     _ChangeTypeCmd,
     _EditValueCmd,
@@ -23,10 +29,8 @@ from undo.commands import (
 
 
 class CommandDispatcher:
-    def __init__(self, tab, *, move, history_provider: Callable[[], Any | None]) -> None:
-        self._tab = tab
-        self._move = move
-        self._history_provider = history_provider
+    def __init__(self, context: EditingContext) -> None:
+        self._context = context
 
     @staticmethod
     def make_label(text: str, target_qname: str) -> str:
@@ -41,7 +45,7 @@ class CommandDispatcher:
         *,
         label: str = "move row",
     ) -> bool:
-        tab = self._tab
+        tab = self._context.tab
         if tab.editability.is_read_only:
             return False
         if src == dst:
@@ -66,7 +70,7 @@ class CommandDispatcher:
         label: str = "move rows",
     ) -> bool:
         """Move ``sources`` to the gap described by ``anchor`` as one undo command."""
-        tab = self._tab
+        tab = self._context.tab
         if tab.editability.is_read_only:
             return False
         if not sources:
@@ -103,16 +107,18 @@ class CommandDispatcher:
                     return False
 
         # Build the command.
-        move_view_state = self._move.capture_move_view_state(sources)
+        move = self._context.move_view_state
+        assert move is not None, "move_view_state is required"
+        move_view_state = move.capture_move_view_state(sources)
         target_qname = tab.view_controller.qualified_name(model.index(sources[0].row(), 0, sources[0].parent()))
         cmd = _MoveRowsCmd(tab, self.make_label(label, target_qname), source_paths, source_names, anchor)
         tab.undo_stack.push(cmd)
-        history = self._history_provider()
+        history = self._context.history_provider()
         if history is not None:
             history.register_view_state(id(cmd), move_view_state)
         # Expose placed paths for action-layer post-hooks (esp. macros).
         tab.editing.last_move_placed = cmd.placed_paths
-        self._move.apply_move_view_state(cmd, undo=False)
+        move.apply_move_view_state(cmd, undo=False)
         return True
 
     def push_move_rows(
@@ -124,7 +130,7 @@ class CommandDispatcher:
         label: str = "move rows",
     ) -> bool:
         """Translate the legacy pre-pop target into a ``MoveAnchor`` and delegate."""
-        tab = self._tab
+        tab = self._context.tab
         if tab.editability.is_read_only:
             return False
         if not sources:
@@ -133,7 +139,7 @@ class CommandDispatcher:
         return self.push_move_rows_anchor(sources, anchor, label=label)
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
-        tab = self._tab
+        tab = self._context.tab
         if tab.editability.is_read_only:
             return False
         if not name_index.isValid() or name_index.column() != 0:
@@ -151,12 +157,14 @@ class CommandDispatcher:
             if candidate in siblings:
                 return False
         target_qname = tab.view_controller.qualified_name(name_index)
-        cmd = _RenameCmd(tab, self.make_label(label, target_qname), tab.view_controller.index_path(name_index), item.name, candidate)
+        cmd = _RenameCmd(
+            tab, self.make_label(label, target_qname), tab.view_controller.index_path(name_index), item.name, candidate
+        )
         tab.undo_stack.push(cmd)
         return True
 
     def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
-        tab = self._tab
+        tab = self._context.tab
         if tab.editability.is_read_only:
             return False
         if not value_index.isValid() or value_index.column() != 2:
@@ -176,12 +184,14 @@ class CommandDispatcher:
         if old_subtree == applied and isinstance(applied, type(old_subtree)):
             return False
         target_qname = tab.view_controller.qualified_name(name_idx)
-        cmd = _EditValueCmd(tab, self.make_label(label, target_qname), tab.view_controller.index_path(name_idx), old_subtree, applied)
+        cmd = _EditValueCmd(
+            tab, self.make_label(label, target_qname), tab.view_controller.index_path(name_idx), old_subtree, applied
+        )
         tab.undo_stack.push(cmd)
         return True
 
     def push_change_type(self, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
-        tab = self._tab
+        tab = self._context.tab
         if tab.editability.is_read_only:
             return False
         if not type_index.isValid() or type_index.column() != 1:
@@ -221,7 +231,7 @@ class CommandDispatcher:
         target_qname: str | None = None,
     ) -> bool:
         """Insert rows described by ``{parent_path, row, value, name}`` records."""
-        tab = self._tab
+        tab = self._context.tab
         if tab.editability.is_read_only:
             return False
         if not inserts:
@@ -236,7 +246,7 @@ class CommandDispatcher:
         return True
 
     def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
-        tab = self._tab
+        tab = self._context.tab
         if tab.editability.is_read_only:
             return False
         if not indexes:
@@ -266,7 +276,7 @@ class CommandDispatcher:
         recursive: bool = False,
         label: str | None = None,
     ) -> bool:
-        tab = self._tab
+        tab = self._context.tab
         if tab.editability.is_read_only:
             return False
         if not index.isValid():
@@ -279,7 +289,9 @@ class CommandDispatcher:
             return False
         target_qname = tab.view_controller.qualified_name(index)
         text = label if label is not None else ("sort keys recursive" if recursive else "sort keys")
-        cmd = _SortKeysCmd(tab, self.make_label(text, target_qname), tab.view_controller.index_path(index), old_subtree, recursive)
+        cmd = _SortKeysCmd(
+            tab, self.make_label(text, target_qname), tab.view_controller.index_path(index), old_subtree, recursive
+        )
         tab.undo_stack.push(cmd)
         return True
 
@@ -290,7 +302,7 @@ class CommandDispatcher:
         label: str = "switch field case",
         target_qname: str | None = None,
     ) -> bool:
-        tab = self._tab
+        tab = self._context.tab
         if tab.editability.is_read_only:
             return False
         if not renames:

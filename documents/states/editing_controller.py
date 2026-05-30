@@ -2,25 +2,23 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, Qt
 
-from documents.states.editing.command_dispatcher import CommandDispatcher
 from documents.mutation_gateway import DocumentMutationGateway
+from documents.states.editing.command_dispatcher import CommandDispatcher
+from documents.states.editing.context import EditingContext
 from documents.states.editing.inline_edit_controller import InlineEditController
 from documents.states.editing.move_view_state import MoveViewState
-from documents.tab_history import TabHistoryController
 from documents.states.editing.tree_actions import ACTIONS as _ACTIONS
 from documents.states.editing.tree_actions import TreeAction
+from documents.tab_history import TabHistoryController
 from state.affix_mru import AffixMRU
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
-from tree_actions.structure import (
-    insert_child_current,
-    insert_sibling_after,
-    insert_sibling_before,
-)
+from tree_actions.structure import insert_child_current, insert_sibling_after, insert_sibling_before
 from undo.commands import _MoveRowsCmd
 from undo.diff import DiffApplier
 
@@ -36,9 +34,11 @@ class EditingController(QObject):
         self.affix_mru: AffixMRU | None = None
         self.history: TabHistoryController | None = None
         self.last_move_placed: list[tuple[tuple[int, ...], int]] = []
-        self._inline = InlineEditController(tab)
-        self._move = MoveViewState(tab, lambda: self.history)
-        self._commands = CommandDispatcher(tab, move=self._move, history_provider=lambda: self.history)
+        context = EditingContext(tab=tab, move_view_state=None, history_provider=lambda: self.history)
+        self._move = MoveViewState(context)
+        context = replace(context, move_view_state=self._move)
+        self._inline = InlineEditController(context)
+        self._commands = CommandDispatcher(context)
         self._diff_applier = DiffApplier(tab)
 
     @staticmethod

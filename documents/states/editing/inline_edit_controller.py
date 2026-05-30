@@ -5,13 +5,15 @@ from __future__ import annotations
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QComboBox
 
+from documents.states.editing.context import EditingContext
+
 
 class InlineEditController:
-    def __init__(self, tab) -> None:
-        self._tab = tab
+    def __init__(self, context: EditingContext) -> None:
+        self._context = context
 
     def on_type_changed(self, item_index, lossy: bool) -> None:
-        tab = self._tab
+        tab = self._context.tab
         # ``change_type`` already emitted ``dataChanged`` for the row, which
         # closes any persistent inline editor that might have been open on the
         # value cell. We additionally close it explicitly so the row is in a
@@ -39,7 +41,7 @@ class InlineEditController:
         QTimer.singleShot(0, lambda: self.reopen_value_editor(pidx))
 
     def reopen_value_editor(self, value_pindex: QPersistentModelIndex) -> None:
-        tab = self._tab
+        tab = self._context.tab
         if not value_pindex.isValid():
             return
         value_index = QModelIndex(value_pindex) if isinstance(value_pindex, QPersistentModelIndex) else value_pindex
@@ -56,7 +58,7 @@ class InlineEditController:
 
     def edit_name_or_value_from_enter(self) -> None:
         """Start editing the current name, type, or value cell from Enter."""
-        tab = self._tab
+        tab = self._context.tab
         if tab.view_state.view.state() == QAbstractItemView.State.EditingState:
             return
         current = tab.view_state.view.currentIndex()
@@ -85,7 +87,7 @@ class InlineEditController:
             return
 
     def open_active_type_combo_popup(self) -> None:
-        tab = self._tab
+        tab = self._context.tab
         for combo in tab.view_state.view.findChildren(QComboBox):
             if combo.parent() is tab.view_state.view.viewport() and combo.isVisible():
                 combo.showPopup()
