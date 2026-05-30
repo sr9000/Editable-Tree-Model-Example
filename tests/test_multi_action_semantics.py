@@ -22,8 +22,8 @@ import json
 from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QApplication
 
+from documents.states.editing_controller import TreeAction
 from documents.tab import JsonTab
-from documents.tab_tree_actions import TreeAction
 from tree_actions.clipboard import MIME_JSON_TREE, copy_selection
 from tree_actions.paste import paste_auto, paste_clones_at_targets, paste_insert_after_zip, paste_replace_zip
 from tree_actions.selection import deepest_selected_rows, selection_shape

@@ -6,8 +6,9 @@ from typing import Any, Callable
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
 from PySide6.QtWidgets import QLineEdit, QWidget
 
-from documents import tab_init, tab_tree_actions
+from documents import tab_init
 from documents.mutation_gateway import DocumentMutationGateway
+from documents.states.editing_controller import TreeAction
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
 from documents.tab_dependencies import JsonTabServices
@@ -533,15 +534,15 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     def _run_tree_action(
         self,
         success_message: str,
-        actions: set[tab_tree_actions.TreeAction],
+        actions: set[TreeAction],
     ) -> None:
-        tab_tree_actions.run_tree_action(self, success_message, actions)
+        self.editing.run_tree_action(success_message, actions)
 
     def insert_sibling_before(self) -> bool:
-        return tab_tree_actions.do_insert_sibling_before(self)
+        return self.editing.do_insert_sibling_before()
 
     def insert_sibling_after(self) -> bool:
-        return tab_tree_actions.do_insert_sibling_after(self)
+        return self.editing.do_insert_sibling_after()
 
     def insert_child(self) -> bool:
-        return tab_tree_actions.do_insert_child(self)
+        return self.editing.do_insert_child()

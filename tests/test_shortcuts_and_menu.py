@@ -5,8 +5,8 @@ from PySide6.QtGui import QShortcut
 from PySide6.QtWidgets import QApplication, QMenu
 
 from app.main_window import MainWindow
+from documents.states.editing_controller import TreeAction
 from documents.tab import JsonTab
-from documents.tab_tree_actions import TreeAction
 from tree_actions.context_menu import show_context_menu
 
 
