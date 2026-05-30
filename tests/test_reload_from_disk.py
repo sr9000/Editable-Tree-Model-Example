@@ -31,7 +31,7 @@ def test_reload_action_enabled_state(qtbot):
         win.update_actions()
         assert not win.fileReloadAction.isEnabled()
 
-        tab.data_store.file_path = "/tmp/reloadable.json"
+        tab.io.file_path = "/tmp/reloadable.json"
         win._refresh_tab_presentation(tab)
         win.update_actions()
         assert win.fileReloadAction.isEnabled()
@@ -39,7 +39,7 @@ def test_reload_action_enabled_state(qtbot):
         for i in range(win.tabWidget.count()):
             maybe_tab = win.tabWidget.widget(i)
             if isinstance(maybe_tab, JsonTab):
-                maybe_tab.data_store.undo_stack.setClean()
+                maybe_tab.undo_stack.setClean()
         win.close()
         win.deleteLater()
         QApplication.processEvents()
@@ -55,10 +55,10 @@ def test_reload_from_disk_discard_reloads_disk_state(qtbot, tmp_path, monkeypatc
         assert win._open_path(str(doc))
         tab = _current_tab(win)
 
-        a_name = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
+        a_name = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
         a_value = a_name.siblingAtColumn(2)
-        assert tab.push_edit_value(a_value, 99, label="dirty")
-        assert tab.data_store.is_dirty
+        assert tab.editing.push_edit_value(a_value, 99, label="dirty")
+        assert tab.io.dirty
 
         def _choose_discard(box):
             box: QMessageBox
@@ -76,14 +76,14 @@ def test_reload_from_disk_discard_reloads_disk_state(qtbot, tmp_path, monkeypatc
 
         win.reload_from_disk()
 
-        assert tab.data_store.model.root_item.to_json() == {"a": 2}
-        assert not tab.data_store.is_dirty
+        assert tab.model.root_item.to_json() == {"a": 2}
+        assert not tab.io.dirty
         assert json.loads(doc.read_text()) == {"a": 2}
     finally:
         for i in range(win.tabWidget.count()):
             maybe_tab = win.tabWidget.widget(i)
             if isinstance(maybe_tab, JsonTab):
-                maybe_tab.data_store.undo_stack.setClean()
+                maybe_tab.undo_stack.setClean()
         win.close()
         win.deleteLater()
         QApplication.processEvents()
@@ -99,10 +99,10 @@ def test_reload_from_disk_cancel_keeps_current_state(qtbot, tmp_path, monkeypatc
         assert win._open_path(str(doc))
         tab = _current_tab(win)
 
-        a_name = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
+        a_name = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
         a_value = a_name.siblingAtColumn(2)
-        assert tab.push_edit_value(a_value, 99, label="dirty")
-        assert tab.data_store.is_dirty
+        assert tab.editing.push_edit_value(a_value, 99, label="dirty")
+        assert tab.io.dirty
 
         _write_json(doc, {"a": 2})
 
@@ -117,13 +117,13 @@ def test_reload_from_disk_cancel_keeps_current_state(qtbot, tmp_path, monkeypatc
 
         win.reload_from_disk()
 
-        assert tab.data_store.model.root_item.to_json() == {"a": 99}
-        assert tab.data_store.is_dirty
+        assert tab.model.root_item.to_json() == {"a": 99}
+        assert tab.io.dirty
     finally:
         for i in range(win.tabWidget.count()):
             maybe_tab = win.tabWidget.widget(i)
             if isinstance(maybe_tab, JsonTab):
-                maybe_tab.data_store.undo_stack.setClean()
+                maybe_tab.undo_stack.setClean()
         win.close()
         win.deleteLater()
         QApplication.processEvents()
@@ -139,10 +139,10 @@ def test_reload_from_disk_overwrite_saves_then_reloads(qtbot, tmp_path, monkeypa
         assert win._open_path(str(doc))
         tab = _current_tab(win)
 
-        a_name = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
+        a_name = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
         a_value = a_name.siblingAtColumn(2)
-        assert tab.push_edit_value(a_value, 99, label="dirty")
-        assert tab.data_store.is_dirty
+        assert tab.editing.push_edit_value(a_value, 99, label="dirty")
+        assert tab.io.dirty
 
         def _choose_overwrite(box):
             box: QMessageBox
@@ -158,14 +158,14 @@ def test_reload_from_disk_overwrite_saves_then_reloads(qtbot, tmp_path, monkeypa
         _write_json(doc, {"a": 2})
         win.reload_from_disk()
 
-        assert tab.data_store.model.root_item.to_json() == {"a": 99}
-        assert not tab.data_store.is_dirty
+        assert tab.model.root_item.to_json() == {"a": 99}
+        assert not tab.io.dirty
         assert json.loads(doc.read_text()) == {"a": 99}
     finally:
         for i in range(win.tabWidget.count()):
             maybe_tab = win.tabWidget.widget(i)
             if isinstance(maybe_tab, JsonTab):
-                maybe_tab.data_store.undo_stack.setClean()
+                maybe_tab.undo_stack.setClean()
         win.close()
         win.deleteLater()
         QApplication.processEvents()

@@ -12,7 +12,7 @@ def _make_tab(qtbot, data) -> JsonTab:
 
 
 def _idx(tab: JsonTab, *path: int):
-    return tab._index_from_path(path)
+    return tab.view_controller.index_from_path(path)
 
 
 def test_internal_drag_drop_move_and_single_undo(qtbot):
@@ -26,22 +26,22 @@ def test_internal_drag_drop_move_and_single_undo(qtbot):
 
     src = _idx(tab, 0)
     other = _idx(tab, 1)
-    row_a = tab.data_store.model.index(0, 0, src)
-    row_b = tab.data_store.model.index(1, 0, src)
+    row_a = tab.model.index(0, 0, src)
+    row_b = tab.model.index(1, 0, src)
 
-    mime = tab.data_store.model.mimeData([row_a, row_b])
+    mime = tab.model.mimeData([row_a, row_b])
     assert mime is not None
 
-    ok = tab.data_store.model.dropMimeData(mime, Qt.DropAction.MoveAction, 1, 0, other)
+    ok = tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, 1, 0, other)
     assert ok
 
-    root = tab.data_store.model.root_item.to_json()
+    root = tab.model.root_item.to_json()
     assert root["src"] == {"c": 3}
     assert list(root["other"].items())[1:] == [("a", 1), ("b", 2)]
 
-    assert tab.data_store.undo_stack.count() == 1
-    tab.data_store.undo_stack.undo()
-    assert tab.data_store.model.root_item.to_json() == {
+    assert tab.undo_stack.count() == 1
+    tab.undo_stack.undo()
+    assert tab.model.root_item.to_json() == {
         "src": {"a": 1, "b": 2, "c": 3},
         "other": {"q": 9},
     }
@@ -52,36 +52,36 @@ def test_cross_tab_copy_drop_keeps_source_unchanged(qtbot):
     target = _make_tab(qtbot, {"right": {}})
 
     left = _idx(source, 0)
-    a = source.data_store.model.index(0, 0, left)
-    b = source.data_store.model.index(1, 0, left)
-    mime = source.data_store.model.mimeData([a, b])
+    a = source.model.index(0, 0, left)
+    b = source.model.index(1, 0, left)
+    mime = source.model.mimeData([a, b])
 
     right = _idx(target, 0)
-    ok = target.data_store.model.dropMimeData(mime, Qt.DropAction.CopyAction, 0, 0, right)
+    ok = target.model.dropMimeData(mime, Qt.DropAction.CopyAction, 0, 0, right)
     assert ok
 
-    assert source.data_store.model.root_item.to_json() == {"left": {"a": 1, "b": 2}}
-    assert target.data_store.model.root_item.to_json() == {"right": {"a": 1, "b": 2}}
+    assert source.model.root_item.to_json() == {"left": {"a": 1, "b": 2}}
+    assert target.model.root_item.to_json() == {"right": {"a": 1, "b": 2}}
 
 
 def test_on_row_drop_onto_primitive_falls_back_to_sibling_after(qtbot):
     tab = _make_tab(qtbot, {"obj": {"a": 1}, "dst": {"x": 0, "y": 9}})
     obj = _idx(tab, 0)
-    src_child = tab.data_store.model.index(0, 0, obj)
-    mime = tab.data_store.model.mimeData([src_child])
+    src_child = tab.model.index(0, 0, obj)
+    mime = tab.model.mimeData([src_child])
 
     dst = _idx(tab, 1)
-    primitive = tab.data_store.model.index(0, 0, dst)
+    primitive = tab.model.index(0, 0, dst)
 
-    assert tab.data_store.model.canDropMimeData(
+    assert tab.model.canDropMimeData(
         mime,
         Qt.DropAction.MoveAction,
         -1,
         0,
         primitive,
     )
-    assert tab.data_store.model.dropMimeData(mime, Qt.DropAction.MoveAction, -1, 0, primitive)
-    assert tab.data_store.model.root_item.to_json() == {"obj": {}, "dst": {"x": 0, "a": 1, "y": 9}}
+    assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, -1, 0, primitive)
+    assert tab.model.root_item.to_json() == {"obj": {}, "dst": {"x": 0, "a": 1, "y": 9}}
 
 
 def test_move_action_without_internal_source_falls_back_to_copy(qtbot):
@@ -89,15 +89,15 @@ def test_move_action_without_internal_source_falls_back_to_copy(qtbot):
     target = _make_tab(qtbot, {"right": {}})
 
     left = _idx(source, 0)
-    a = source.data_store.model.index(0, 0, left)
-    mime = source.data_store.model.mimeData([a])
+    a = source.model.index(0, 0, left)
+    mime = source.model.mimeData([a])
 
     right = _idx(target, 0)
-    ok = target.data_store.model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, right)
+    ok = target.model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, right)
     assert ok
 
-    assert source.data_store.model.root_item.to_json() == {"left": {"a": 1}}
-    assert target.data_store.model.root_item.to_json() == {"right": {"a": 1}}
+    assert source.model.root_item.to_json() == {"left": {"a": 1}}
+    assert target.model.root_item.to_json() == {"right": {"a": 1}}
 
 
 def test_internal_move_view_skips_post_drag_clear_or_remove(qtbot):
@@ -111,18 +111,18 @@ def test_internal_move_view_skips_post_drag_clear_or_remove(qtbot):
 
     src = _idx(tab, 0)
     dst = _idx(tab, 1)
-    a = tab.data_store.model.index(0, 0, src)
+    a = tab.model.index(0, 0, src)
 
-    mime = tab.data_store.model.mimeData([a])
-    assert tab.data_store.model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, dst)
+    mime = tab.model.mimeData([a])
+    assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, dst)
 
     # The dnd handler marked the view as drag-handled-internally; this is
     # what would prevent Qt's startDrag from invoking clearOrRemove.
-    assert tab.data_store.view._drag_handled_internally is True
+    assert tab.view._drag_handled_internally is True
 
     # An explicit removeRows from user code is still honoured.
-    assert tab.data_store.model.removeRows(0, 1, src)
-    root = tab.data_store.model.root_item.to_json()
+    assert tab.model.removeRows(0, 1, src)
+    root = tab.model.root_item.to_json()
     assert root["dst"] == {"a": 1}
     assert root["src"] == {"c": 3}
 
@@ -132,11 +132,11 @@ def test_internal_move_auto_renames_object_key_collisions(qtbot):
 
     src = _idx(tab, 0)
     dst = _idx(tab, 1)
-    k = tab.data_store.model.index(0, 0, src)
-    mime = tab.data_store.model.mimeData([k])
+    k = tab.model.index(0, 0, src)
+    mime = tab.model.mimeData([k])
 
-    assert tab.data_store.model.dropMimeData(mime, Qt.DropAction.MoveAction, 1, 0, dst)
-    assert tab.data_store.model.root_item.to_json() == {"src": {}, "dst": {"k": 2, "k_2": 1}}
+    assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, 1, 0, dst)
+    assert tab.model.root_item.to_json() == {"src": {}, "dst": {"k": 2, "k_2": 1}}
 
 
 def test_internal_move_array_child_into_object_gets_generated_name(qtbot):
@@ -144,12 +144,12 @@ def test_internal_move_array_child_into_object_gets_generated_name(qtbot):
 
     arr = _idx(tab, 0)
     obj = _idx(tab, 1)
-    item = tab.data_store.model.index(0, 0, arr)
-    mime = tab.data_store.model.mimeData([item])
+    item = tab.model.index(0, 0, arr)
+    mime = tab.model.mimeData([item])
 
-    assert tab.data_store.model.dropMimeData(mime, Qt.DropAction.MoveAction, 1, 0, obj)
+    assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, 1, 0, obj)
 
-    result = tab.data_store.model.root_item.to_json()
+    result = tab.model.root_item.to_json()
     assert result["arr"] == []
     assert result["obj"]["a"] == 1
     assert 10 in result["obj"].values()
@@ -168,14 +168,14 @@ def test_repeated_internal_moves_keep_model_serializable(qtbot):
     right = _idx(tab, 1)
 
     for _ in range(20):
-        a = tab.data_store.model.index(0, 0, left)
-        mime1 = tab.data_store.model.mimeData([a])
-        assert tab.data_store.model.dropMimeData(mime1, Qt.DropAction.MoveAction, 1, 0, right)
+        a = tab.model.index(0, 0, left)
+        mime1 = tab.model.mimeData([a])
+        assert tab.model.dropMimeData(mime1, Qt.DropAction.MoveAction, 1, 0, right)
 
-        x = tab.data_store.model.index(0, 0, right)
-        mime2 = tab.data_store.model.mimeData([x])
-        assert tab.data_store.model.dropMimeData(mime2, Qt.DropAction.MoveAction, 0, 0, left)
+        x = tab.model.index(0, 0, right)
+        mime2 = tab.model.mimeData([x])
+        assert tab.model.dropMimeData(mime2, Qt.DropAction.MoveAction, 0, 0, left)
 
     # Main invariant: no unnamed OBJECT children and stable full serialization.
-    snapshot = tab.data_store.model.root_item.to_json()
+    snapshot = tab.model.root_item.to_json()
     assert isinstance(snapshot, dict)

@@ -3,25 +3,27 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QModelIndex, Qt, Signal
+from PySide6.QtWidgets import QLineEdit, QWidget
 
-from documents import tab_commands, tab_editing, tab_init, tab_move_view_state, tab_tree_actions
+from documents import tab_init
+from documents.mutation_gateway import DocumentMutationGateway
+from documents.states.editing_controller import EditingController
+from documents.states.io_controller import IoController
+from documents.states.view_state import ViewState
 from documents.tab_appearance import JsonTabAppearanceController
-from documents.tab_data import JsonTabData
-from documents.tab_dependencies import JsonTabServices
+from documents.tab_dependencies import JsonTabHost, JsonTabServices
 from documents.tab_editability import JsonTabEditabilityController
-from documents.tab_io import save as tab_save
-from documents.tab_io import save_as as tab_save_as
-from documents.tab_io import snapshot as tab_snapshot
+from documents.tab_marker import JsonTabWidgetMarker
 from documents.tab_navigation import JsonTabNavigationController
-from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
-from documents.tab_protocols import JsonTabWidgetMarker
-from documents.tab_status import on_current_changed, size_hint_for_item
-from documents.tab_validation_view import JsonTabValidationViewController
+from documents.tab_validation import TabValidationController
+from documents.view_controller import ViewController
+from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
+from tree.model import JsonTreeModel
+from tree.view import JsonTreeView
 from undo.commands import _ChangeTypeCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _EditValueCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _InsertRowsCmd  # noqa: F401 — re-exported for test imports
@@ -29,21 +31,15 @@ from undo.commands import _RemoveRowsCmd  # noqa: F401 — re-exported for test 
 from undo.commands import _RenameCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _SortKeysCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _SwitchFieldCaseCmd  # noqa: F401 — re-exported for test imports
-from undo.commands import _MoveRowsCmd
-from undo.diff import DiffApplier
-from validation.index import IssueIndex
-from validation.issue import ValidationIssue
+from undo.commands import _MoveRowsCmd  # noqa: F401 — re-exported for test imports
 
 _DEFAULT_DATA = tab_init._DEFAULT_DATA
 
-# QUndoCommand.id() values for typed commands that support mergeWith().
-# Qt requires id() to fit in a signed 32-bit int (anything larger overflows
-# the C++ ``int`` return type and raises ``SystemError`` from PySide).
+# Typed command ids must fit in a signed 32-bit int for Qt.
 _CMD_ID_RENAME = 0x0E71_0001
 _CMD_ID_EDIT_VALUE = 0x0E71_0002
 
-# Time window in seconds during which two consecutive same-path edits
-# collapse into one undo entry. Tuned for keystroke-level typing.
+# Merge consecutive same-path edits within this time window.
 _MERGE_WINDOW_SECONDS = 0.5
 
 
@@ -51,14 +47,17 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     _appearance: JsonTabAppearanceController | None = None
     _navigation: JsonTabNavigationController | None = None
     _editability: JsonTabEditabilityController | None = None
-    _validation_view: JsonTabValidationViewController | None = None
+    _view_controller: ViewController | None = None
+
+    _io: IoController | None = None
+    _view_state: ViewState | None = None
+    _editing: EditingController | None = None
+    _validation: TabValidationController | None = None
+    _host: JsonTabHost | None = None
 
     dirtyChanged = Signal(bool)
     schemaChanged = Signal(object)
     validationChanged = Signal(object)
-
-    data_store: JsonTabData = None  # populated by tab_init.bootstrap
-    _diff_applier: DiffApplier = None
 
     def eventFilter(self, watched, event):  # type: ignore[override]
         navigation = self._navigation
@@ -83,8 +82,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     ):
         super().__init__(parent)
 
-        self._diff_applier = DiffApplier(self)
-
         tab_init.bootstrap(
             self,
             update_actions_callback=update_actions_callback,
@@ -99,309 +96,138 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
             services=services,
         )
 
-    def set_read_only(self, enabled: bool) -> None:
-        editability = self._editability
-        if editability is not None:
-            editability.set_read_only(enabled)
+    @property
+    def editability(self) -> JsonTabEditabilityController:
+        """Read-only/editable mode controller."""
+        assert self._editability is not None, "editability accessed before bootstrap"
+        return self._editability
 
     @property
-    def is_read_only(self) -> bool:
-        return self.data_store.is_read_only
+    def mutations(self) -> DocumentMutationGateway:
+        """Typed accessor for the document mutation gateway."""
+        return self._editing.mutations
+
+    @property
+    def io(self) -> IoController:
+        """Return the IO controller."""
+        return self._io
+
+    @property
+    def view_state(self) -> ViewState:
+        """Return the passive view state container."""
+        return self._view_state
+
+    @property
+    def editing(self) -> EditingController:
+        """Return the editing controller."""
+        return self._editing
+
+    @property
+    def validation(self) -> TabValidationController:
+        return self._validation
 
     @property
     def undo_stack(self):
-        return self.data_store.undo_stack
+        return self._editing.history.undo_stack
+
+    @property
+    def view(self) -> JsonTreeView:
+        """Return the underlying tree view."""
+        return self._view_state.view
+
+    @property
+    def view_controller(self) -> ViewController:
+        """Return the selection, expansion, and scroll controller."""
+        assert self._view_controller is not None, "view_controller accessed before bootstrap"
+        return self._view_controller
+
+    @property
+    def model(self) -> JsonTreeModel:
+        """Return the underlying tree model."""
+        return self._editing.model
+
+    def root_index(self) -> QModelIndex:
+        """Return the index used as the logical root for traversal."""
+        model = self._editing.model
+        if not model.show_root:
+            return QModelIndex()
+        return model.index(0, 0, QModelIndex())
+
+    def root_item(self) -> JsonTreeItem:
+        """Return the root tree item."""
+        return self._editing.model.root_item
+
+    def root_data(self) -> Any:
+        """Return a fresh JSON-serializable snapshot of the document root."""
+        return self._editing.model.root_item.to_json()
+
+    def row_count(self, parent: QModelIndex = QModelIndex()) -> int:
+        """Return the number of children directly under ``parent``."""
+        return self._editing.model.rowCount(parent)
+
+    def column_count(self) -> int:
+        """Return the number of model columns."""
+        return self._editing.model.columnCount()
+
+    @property
+    def zoom_pt(self) -> int:
+        """Per-tab editor font point-size override."""
+        return self._appearance.font_pt
+
+    @property
+    def search_edit(self) -> QLineEdit:
+        return self._view_state.search_edit
+
+    @property
+    def last_move_placed(self) -> list[tuple[tuple, int]]:
+        return self._editing.last_move_placed
+
+    @property
+    def affix_mru(self) -> AffixMRU:
+        return self._editing.affix_mru
 
     def closeEvent(self, event):  # type: ignore[override]
-        self.data_store.validation.release()
+        self._validation.release()
         super().closeEvent(event)
 
-    def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
-        validation_view = self._validation_view
-        return validation_view is not None and validation_view.goto_validation_issue(issue, edit=edit)
+    @property
+    def appearance(self) -> JsonTabAppearanceController:
+        """Theme / font / icon-size / key-column appearance controller.
 
-    def _severity_provider(self, model_path: tuple[int, ...]) -> str | None:
-        """Lazily queried by the model for VALIDATION_SEVERITY_ROLE."""
-        validation_view = self._validation_view
-        return validation_view.severity_provider(model_path) if validation_view is not None else None
-
-    def _on_validation_changed(self, _index: IssueIndex) -> None:
-        validation_view = self._validation_view
-        if validation_view is not None:
-            validation_view.on_validation_changed(_index)
-
-    def set_theme(self, theme: ThemeSpec, icon_provider: IconProvider | None = None) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_theme(theme, icon_provider)
-
-    def set_monospace_fields_enabled(self, enabled: bool) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_monospace_fields_enabled(enabled)
-
-    def set_regular_font_family(self, family: str) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_regular_font_family(family)
-
-    def set_monospace_font_family(self, family: str) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_monospace_font_family(family)
-
-    def set_editor_font_point_size(self, point_size: int) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_editor_font_point_size(point_size)
-
-    def apply_font_profile(self, profile) -> None:
-        """Aspect entry point called by ``FontController``.
-
-        Order matters: family must be set before point size so the column
-        scaler sees the final font width, and the monospace toggle must
-        come last because it triggers a viewport repaint that picks up
-        the freshly-installed delegate fonts.
+        Plan 21 O3 retired the 14 ``set_theme`` / ``apply_font_profile`` /
+        ``zoom_*`` / ``set_*_font_*`` / ``resize_key_columns`` /
+        ``_scale_columns_for_font`` / ``_set_font_pt`` /
+        ``_sync_icon_size_with_font`` / ``_on_model_reset`` forwarders on
+        ``JsonTab``; callers reach the behaviour through ``tab.appearance.*``.
         """
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.apply_font_profile(profile)
-
-    @staticmethod
-    def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
-        return proxy_to_source(index)
-
-    def _source_to_view(self, source_index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
-        return source_to_view(self, source_index)
-
-    def _apply_filter(self) -> None:
-        self.data_store.proxy.set_filter_text(self.data_store.search_edit.text())
-
-    # ── Public typed accessors (Stage 01 of getattr-elimination plan) ──────
-
-    def apply_filter(self) -> None:
-        """Re-apply the search filter to the proxy model."""
-        self._apply_filter()
+        assert self._appearance is not None, "appearance accessed before bootstrap"
+        return self._appearance
 
     def refresh_actions(self) -> None:
-        self.data_store._host.refresh_actions()
+        self._host.refresh_actions()
 
     def show_status(self, message: str, timeout_ms: int = 3000) -> None:
         """Publish *message* via the injected host."""
-        self.data_store._host.show_status_message(message, timeout_ms)
+        self._host.show_status_message(message, timeout_ms)
 
     def show_permanent_message(self, message: str) -> None:
-        self.data_store._host.show_permanent_message(message)
-
-    def _on_model_reset(self) -> None:
-        # Force-resize so a brand-new model always gets snug initial widths,
-        # regardless of whether the user had previously hand-resized those cols.
-        self.resize_key_columns(force=True)
-
-    def resize_key_columns(self, force: bool = False) -> None:
-        """Snap name/type columns to content width.
-
-        When *force* is False (the default), columns that the user has
-        manually resized (tracked in ``_user_sized_columns``) are left alone.
-        Pass ``force=True`` (e.g. on model reset) to override.
-        """
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.resize_key_columns(force=force)
-
-    def _scale_columns_for_font(self, old_pt: int, new_pt: int) -> None:
-        """Proportionally scale name/type column widths when the font changes.
-
-        Columns the user has hand-resized are left alone.  The value column
-        (col 2) is never touched because it is set to stretch.
-        """
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.scale_columns_for_font(old_pt, new_pt)
-
-    def _set_font_pt(self, pt: int) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.set_font_pt(pt)
-
-    def _sync_icon_size_with_font(self) -> None:
-        # Keep type-column icons visually in step with the active tree font.
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.sync_icon_size_with_font()
-
-    def zoom_in(self) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.zoom_in()
-
-    def zoom_out(self) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.zoom_out()
-
-    def zoom_reset(self) -> None:
-        appearance = self._appearance
-        if appearance is not None:
-            appearance.zoom_reset()
-
-    def _on_type_changed(self, item_index, lossy: bool) -> None:
-        tab_editing.on_type_changed(self, item_index, lossy)
-
-    def _reopen_value_editor(self, value_pindex: QPersistentModelIndex) -> None:
-        tab_editing.reopen_value_editor(self, value_pindex)
+        self._host.show_permanent_message(message)
 
     def edit_name_or_value_from_enter(self) -> None:
-        tab_editing.edit_name_or_value_from_enter(self)
-
-    def _open_active_type_combo_popup(self) -> None:
-        tab_editing.open_active_type_combo_popup(self)
-
-    def _set_dirty(self, dirty: bool) -> None:
-        self.data_store.io.set_dirty(dirty)
-
-    def _on_clean_changed(self, clean: bool) -> None:
-        self.data_store.io.on_clean_changed(clean)
+        self.editing.edit_name_or_value_from_enter()
 
     def display_name(self) -> str:
-        if self.data_store.file_path:
+        if self._io.file_path:
             # ``os.path.basename`` is platform-aware on POSIX (only "/") so we
             # also strip "\\" explicitly to handle Windows-style paths produced
             # by ``QFileDialog`` and similar APIs regardless of host OS.
-            name = os.path.basename(self.data_store.file_path.replace("\\", "/")) or "Untitled"
+            name = os.path.basename(self._io.file_path.replace("\\", "/")) or "Untitled"
         else:
             name = "Untitled"
-        return f"{name} *" if self.data_store.is_dirty else name
+        return f"{name} *" if self._io.dirty else name
 
     def save(self) -> bool:
-        return tab_save(self)
+        return self.io.save()
 
     def save_as(self, path: str | None = None) -> bool:
-        return tab_save_as(self, path=path)
-
-    def _snapshot(self) -> Any:
-        return tab_snapshot(self)
-
-    def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
-        return index_path(self, index)
-
-    def _index_from_path(self, path: tuple[int, ...]) -> QModelIndex:
-        return index_from_path(self, path)
-
-    def _qualified_name(self, index: QModelIndex) -> str:
-        return qualified_name(self, index)
-
-    def _size_hint_for_item(self, item: JsonTreeItem) -> str | None:
-        return size_hint_for_item(item)
-
-    def _on_current_changed(self, current: QModelIndex, _previous: QModelIndex) -> None:
-        on_current_changed(self, current, _previous)
-
-    def _collect_expanded_paths(self) -> list[tuple[int, ...]]:
-        return tab_move_view_state.collect_expanded_paths(self)
-
-    def _capture_move_view_state(self, sources: list) -> dict[str, Any]:
-        return tab_move_view_state.capture_move_view_state(self, sources)
-
-    def _apply_move_view_state(self, cmd: _MoveRowsCmd, *, undo: bool) -> None:
-        tab_move_view_state.apply_move_view_state(self, cmd, undo=undo)
-
-    def _on_undo_index_changed(self, new_index: int) -> None:
-        tab_move_view_state.on_undo_index_changed(self, new_index)
-
-    # ------------------------------------------------------------------
-    # Smart-restore diff helpers
-    # ------------------------------------------------------------------
-
-    def _diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool:
-        return self._diff_applier.apply(item, target, item_index)
-
-    # -- low-level mutators used by diff and typed commands --------------
-
-    def _emit_row_changed(self, item_index: QModelIndex) -> None:
-        self._diff_applier.emit_row_changed(item_index)
-
-    def _insert_typed_item(
-        self,
-        parent_item: JsonTreeItem,
-        parent_index: QModelIndex,
-        position: int,
-        value: Any,
-        name: str | int | None = None,
-    ) -> bool:
-        return self._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
-
-    def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
-        return self.data_store.mutations.commit_set_data(index, value, role)
-
-    # ------------------------------------------------------------------
-    # Typed-command public API (action/compensation, no full-tree snapshot)
-    # ------------------------------------------------------------------
-
-    def push_move_row(self, parent_index: QModelIndex, src: int, dst: int, *, label: str = "move row") -> bool:
-        return tab_commands.push_move_row(self, parent_index, src, dst, label=label)
-
-    def push_move_rows_anchor(
-        self,
-        sources: list,
-        anchor: "MoveAnchor",  # noqa: F821 — see tab_commands
-        *,
-        label: str = "move rows",
-    ) -> bool:
-        return tab_commands.push_move_rows_anchor(self, sources, anchor, label=label)
-
-    def push_move_rows(
-        self,
-        sources: list,
-        target_parent: QModelIndex,
-        target_row: int,
-        *,
-        label: str = "move rows",
-    ) -> bool:
-        return tab_commands.push_move_rows(self, sources, target_parent, target_row, label=label)
-
-    def _restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
-        tab_move_view_state.restore_selection_at_paths(self, placed)
-
-    def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
-        return tab_commands.push_rename(self, name_index, new_name, label=label)
-
-    def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
-        return tab_commands.push_edit_value(self, value_index, new_value, label=label)
-
-    def push_change_type(self, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
-        return tab_commands.push_change_type(self, type_index, new_type, label=label)
-
-    def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
-        return tab_commands.push_insert_rows(self, inserts, label=label, target_qname=target_qname)
-
-    def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
-        return tab_commands.push_remove_rows(self, indexes, label=label)
-
-    def push_sort_keys(self, index: QModelIndex, *, recursive: bool = False, label: str | None = None) -> bool:
-        return tab_commands.push_sort_keys(self, index, recursive=recursive, label=label)
-
-    def push_switch_field_case(
-        self,
-        renames: list[dict[str, Any]],
-        *,
-        label: str = "switch field case",
-        target_qname: str | None = None,
-    ) -> bool:
-        return tab_commands.push_switch_field_case(self, renames, label=label, target_qname=target_qname)
-
-    def _run_tree_action(
-        self,
-        success_message: str,
-        actions: set[tab_tree_actions.TreeAction],
-    ) -> None:
-        tab_tree_actions.run_tree_action(self, success_message, actions)
-
-    def insert_sibling_before(self) -> bool:
-        return tab_tree_actions.do_insert_sibling_before(self)
-
-    def insert_sibling_after(self) -> bool:
-        return tab_tree_actions.do_insert_sibling_after(self)
-
-    def insert_child(self) -> bool:
-        return tab_tree_actions.do_insert_child(self)
+        return self.io.save_as(path=path)

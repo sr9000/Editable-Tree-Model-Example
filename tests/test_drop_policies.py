@@ -14,7 +14,7 @@ def _make_tab(qtbot, data, show_root=False, status_cb=None) -> JsonTab:
 
 
 def _idx(tab: JsonTab, *path: int):
-    return tab._index_from_path(path)
+    return tab.view_controller.index_from_path(path)
 
 
 def _mime_without_source_paths(entries: list[dict]) -> QMimeData:
@@ -28,10 +28,10 @@ def test_can_drop_rejects_cycle_before_mutation(qtbot):
     tab = _make_tab(qtbot, {"outer": {"inner": {"leaf": 1}}})
     outer = _idx(tab, 0)
     inner = _idx(tab, 0, 0)
-    mime = tab.data_store.model.mimeData([outer])
+    mime = tab.model.mimeData([outer])
 
-    assert not tab.data_store.model.canDropMimeData(mime, Qt.DropAction.MoveAction, -1, -1, inner)
-    assert tab.data_store.model.root_item.to_json() == {"outer": {"inner": {"leaf": 1}}}
+    assert not tab.model.canDropMimeData(mime, Qt.DropAction.MoveAction, -1, -1, inner)
+    assert tab.model.root_item.to_json() == {"outer": {"inner": {"leaf": 1}}}
 
 
 def test_on_leaf_drop_bubbles_to_sibling_after(qtbot):
@@ -39,12 +39,12 @@ def test_on_leaf_drop_bubbles_to_sibling_after(qtbot):
     src = _idx(tab, 0)
     dst = _idx(tab, 1)
 
-    a = tab.data_store.model.index(0, 0, src)
-    x_leaf = tab.data_store.model.index(0, 0, dst)
-    mime = tab.data_store.model.mimeData([a])
+    a = tab.model.index(0, 0, src)
+    x_leaf = tab.model.index(0, 0, dst)
+    mime = tab.model.mimeData([a])
 
-    assert tab.data_store.model.dropMimeData(mime, Qt.DropAction.MoveAction, -1, -1, x_leaf)
-    assert tab.data_store.model.root_item.to_json() == {"src": {}, "dst": {"x": 0, "a": 1, "y": 2}}
+    assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, -1, -1, x_leaf)
+    assert tab.model.root_item.to_json() == {"src": {}, "dst": {"x": 0, "a": 1, "y": 2}}
 
 
 def test_move_action_requires_source_paths_but_copy_does_not(qtbot):
@@ -52,8 +52,8 @@ def test_move_action_requires_source_paths_but_copy_does_not(qtbot):
     dst = _idx(tab, 0)
     mime = _mime_without_source_paths([{"name": None, "value": 10}])
 
-    assert not tab.data_store.model.canDropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, dst)
-    assert tab.data_store.model.canDropMimeData(mime, Qt.DropAction.CopyAction, 0, 0, dst)
+    assert not tab.model.canDropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, dst)
+    assert tab.model.canDropMimeData(mime, Qt.DropAction.CopyAction, 0, 0, dst)
 
 
 def test_copy_vs_move_action_semantics(qtbot):
@@ -61,15 +61,15 @@ def test_copy_vs_move_action_semantics(qtbot):
     src = _idx(tab, 0)
     dst = _idx(tab, 1)
 
-    a = tab.data_store.model.index(0, 0, src)
-    mime_copy = tab.data_store.model.mimeData([a])
-    assert tab.data_store.model.dropMimeData(mime_copy, Qt.DropAction.CopyAction, 0, 0, dst)
-    assert tab.data_store.model.root_item.to_json() == {"src": {"a": 1, "b": 2}, "dst": {"a": 1}}
+    a = tab.model.index(0, 0, src)
+    mime_copy = tab.model.mimeData([a])
+    assert tab.model.dropMimeData(mime_copy, Qt.DropAction.CopyAction, 0, 0, dst)
+    assert tab.model.root_item.to_json() == {"src": {"a": 1, "b": 2}, "dst": {"a": 1}}
 
-    a_again = tab.data_store.model.index(0, 0, src)
-    mime_move = tab.data_store.model.mimeData([a_again])
-    assert tab.data_store.model.dropMimeData(mime_move, Qt.DropAction.MoveAction, 1, 0, dst)
-    assert tab.data_store.model.root_item.to_json() == {"src": {"b": 2}, "dst": {"a": 1, "a_2": 1}}
+    a_again = tab.model.index(0, 0, src)
+    mime_move = tab.model.mimeData([a_again])
+    assert tab.model.dropMimeData(mime_move, Qt.DropAction.MoveAction, 1, 0, dst)
+    assert tab.model.root_item.to_json() == {"src": {"b": 2}, "dst": {"a": 1, "a_2": 1}}
 
 
 def test_successful_drop_emits_status_message(qtbot):
@@ -82,9 +82,9 @@ def test_successful_drop_emits_status_message(qtbot):
     src = _idx(tab, 0)
     dst = _idx(tab, 1)
 
-    a = tab.data_store.model.index(0, 0, src)
-    mime = tab.data_store.model.mimeData([a])
-    assert tab.data_store.model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, dst)
+    a = tab.model.index(0, 0, src)
+    mime = tab.model.mimeData([a])
+    assert tab.model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, dst)
 
     assert messages
     assert messages[-1] == "Moved 1 row under $.dst"

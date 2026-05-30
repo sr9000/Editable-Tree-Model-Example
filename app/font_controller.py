@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import weakref
 from dataclasses import dataclass, replace
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from PySide6.QtCore import QObject, QSettings, Signal
 from PySide6.QtGui import QFont, QFontDatabase
@@ -58,7 +58,12 @@ class FontProfile:
 
 @runtime_checkable
 class FontProfileAware(Protocol):
-    def apply_font_profile(self, profile: FontProfile) -> None: ...  # pragma: no cover
+    # Plan 21 O3: the tab's font/theme behaviour moved onto its appearance
+    # controller, so a subscriber is "font aware" when it exposes
+    # ``appearance.apply_font_profile(profile)`` rather than a top-level
+    # ``apply_font_profile``.
+    @property
+    def appearance(self) -> Any: ...  # pragma: no cover
 
 
 class FontController(QObject):
@@ -193,7 +198,7 @@ class FontController(QObject):
     def _notify_one(self, target: object) -> None:
         if isinstance(target, FontProfileAware):
             try:
-                target.apply_font_profile(self._profile)
+                target.appearance.apply_font_profile(self._profile)
             except RuntimeError:
                 # Underlying C++ object was deleted between scheduling and now.
                 pass

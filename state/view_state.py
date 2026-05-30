@@ -3,6 +3,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QSettings, QSortFilterProxyModel
 
+from documents.document_protocol import Document
 from settings import APPLICATION_ID
 from state.qsettings_coercion import _coerce_int, _coerce_int_list, _coerce_path, _coerce_paths
 
@@ -68,20 +69,20 @@ def state_key(path: str) -> str:
     return f"view_state/{digest}"
 
 
-def save(tab) -> None:
-    if not tab.data_store.file_path:
+def save(tab: Document) -> None:
+    if not tab.io.file_path:
         return
 
     settings = QSettings(APPLICATION_ID, "view_state")
-    settings.beginGroup(state_key(tab.data_store.file_path))
+    settings.beginGroup(state_key(tab.io.file_path))
 
-    widths = [int(tab.data_store.view.columnWidth(column)) for column in range(tab.data_store.model.columnCount())]
-    expanded_paths = [list(path) for path in tab._collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
+    widths = tab.view_controller.column_widths()
+    expanded_paths = [list(path) for path in tab.editing.collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
 
-    current_index = tab.data_store.view.currentIndex()
-    current_path = list(tab._index_path(current_index)) if current_index.isValid() else []
+    current_path_tuple = tab.view_controller.current_path()
+    current_path = list(current_path_tuple) if current_path_tuple is not None else []
 
-    font_pt = int(tab.data_store._font_pt or tab.data_store.view.font().pointSize() or 10)
+    font_pt = int(tab.zoom_pt or tab.view.font().pointSize() or 10)
 
     settings.setValue("col_widths", widths)
     settings.setValue("expanded", expanded_paths)
@@ -90,12 +91,12 @@ def save(tab) -> None:
     settings.endGroup()
 
 
-def restore(tab) -> bool:
-    if not tab.data_store.file_path:
+def restore(tab: Document) -> bool:
+    if not tab.io.file_path:
         return False
 
     settings = QSettings(APPLICATION_ID, "view_state")
-    settings.beginGroup(state_key(tab.data_store.file_path))
+    settings.beginGroup(state_key(tab.io.file_path))
 
     raw_widths = settings.value("col_widths")
     raw_expanded = settings.value("expanded")
@@ -114,32 +115,18 @@ def restore(tab) -> bool:
         return False
 
     if font_pt is not None:
-        tab._set_font_pt(font_pt)
+        tab.appearance.set_font_pt(font_pt)
 
     if widths is not None:
-        for column, width in enumerate(widths[: tab.data_store.model.columnCount()]):
-            if width > 0:
-                tab.data_store.view.setColumnWidth(column, width)
-        # The persisted widths represent the user's last explicit preference;
-        # treat name (0) and type (1) columns as user-sized so zoom helpers
-        # won't snap them back to content width.
-        tab.data_store._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
+        tab.view_controller.set_column_widths(widths)
 
     if expanded is not None:
-        tab.data_store.view.collapseAll()
+        tab.view_controller.request_collapse_all()
         for path in expanded:
-            source_index = tab._index_from_path(path)
-            view_index = tab._source_to_view(source_index)
-            if view_index.isValid():
-                tab.data_store.view.expand(view_index)
+            tab.view_controller.request_expand(tuple(path))
 
     if current_path is not None:
-        source_index = tab._index_from_path(current_path)
-        current_index = tab._source_to_view(source_index)
-        if current_index.isValid():
-            # Always select column 0 when restoring row focus.
-            row_index = current_index.siblingAtColumn(0)
-            tab.data_store.view.setCurrentIndex(row_index)
+        tab.view_controller.request_select_paths([tuple(current_path)])
 
     return True
 

@@ -7,11 +7,7 @@ from units import counts, format_bytes
 
 
 def format_validation_status(issue_index) -> str:
-    """Return a short human-readable summary of *issue_index* for status bars.
-
-    Returns an empty string when there are no issues (caller should hide the
-    widget).  Example non-empty returns: ``"Validation: 3 errors · 1 warning"``.
-    """
+    """Return a short status-bar summary for ``issue_index``."""
     n = len(issue_index)
     if n == 0:
         return ""
@@ -40,14 +36,14 @@ def on_current_changed(tab, current: QModelIndex, _previous: QModelIndex) -> Non
         tab.show_permanent_message("")
         return
 
-    current = tab._proxy_to_source(current)
+    current = tab.view_controller.proxy_to_source(current)
     row0 = current.siblingAtColumn(0)
     if not row0.isValid():
         tab.show_permanent_message("")
         return
 
-    item = tab.data_store.model.get_item(row0)
-    breadcrumb = tab._qualified_name(row0)
+    item = tab.model.get_item(row0)
+    breadcrumb = tab.view_controller.qualified_name(row0)
     item_type = item.json_type.value
     size_hint = size_hint_for_item(item)
     extra = f", {size_hint}" if size_hint else ""

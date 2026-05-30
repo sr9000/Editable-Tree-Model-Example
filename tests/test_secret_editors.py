@@ -11,20 +11,17 @@ def test_secret_line_editor_is_password_with_toggle(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    src = tab.data_store.model.index(0, 2, QModelIndex())
-    idx = tab._source_to_view(src)
-    tab.data_store.view.setCurrentIndex(idx)
-    tab.data_store.view.edit(idx)
+    src = tab.model.index(0, 2, QModelIndex())
+    idx = tab.view_controller.source_to_view(src)
+    tab.view.setCurrentIndex(idx)
+    tab.view.edit(idx)
 
-    qtbot.waitUntil(
-        lambda: tab.data_store.view.findChild(QLineEdit) is not None
-        and tab.data_store.view.findChild(QPushButton) is not None
-    )
-    editor = tab.data_store.view.findChild(QLineEdit)
+    qtbot.waitUntil(lambda: tab.view.findChild(QLineEdit) is not None and tab.view.findChild(QPushButton) is not None)
+    editor = tab.view.findChild(QLineEdit)
     assert editor is not None
     assert editor.echoMode() == QLineEdit.EchoMode.Password
 
-    toggle = tab.data_store.view.findChild(QPushButton)
+    toggle = tab.view.findChild(QPushButton)
     assert toggle is not None
     assert toggle.text() == "Hidden"
     qtbot.mouseClick(toggle, Qt.MouseButton.LeftButton)
@@ -38,10 +35,10 @@ def test_secret_text_editor_masks_and_reveals(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    src = tab.data_store.model.index(0, 2, QModelIndex())
-    idx = tab._source_to_view(src)
-    tab.data_store.view.setCurrentIndex(idx)
-    tab.data_store.view.edit(idx)
+    src = tab.model.index(0, 2, QModelIndex())
+    idx = tab.view_controller.source_to_view(src)
+    tab.view.setCurrentIndex(idx)
+    tab.view.edit(idx)
 
     qtbot.waitUntil(lambda: tab.findChild(QMultilineDialog) is not None)
     dlg = tab.findChild(QMultilineDialog)
@@ -54,7 +51,7 @@ def test_secret_text_editor_masks_and_reveals(qtbot):
     assert ok is not None
     qtbot.mouseClick(ok, Qt.MouseButton.LeftButton)
 
-    src_after = tab.data_store.model.index(0, 2, QModelIndex())
+    src_after = tab.model.index(0, 2, QModelIndex())
     assert str(src_after.data(Qt.ItemDataRole.EditRole) or "") == "line1\nline2\nline3"
 
 
@@ -63,15 +60,15 @@ def test_secret_editor_closes_on_focus_out(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    src = tab.data_store.model.index(0, 2, QModelIndex())
-    idx = tab._source_to_view(src)
-    tab.data_store.view.setCurrentIndex(idx)
-    tab.data_store.view.edit(idx)
+    src = tab.model.index(0, 2, QModelIndex())
+    idx = tab.view_controller.source_to_view(src)
+    tab.view.setCurrentIndex(idx)
+    tab.view.edit(idx)
 
-    qtbot.waitUntil(lambda: tab.data_store.view.findChild(QLineEdit) is not None)
-    editor = tab.data_store.view.findChild(QLineEdit)
+    qtbot.waitUntil(lambda: tab.view.findChild(QLineEdit) is not None)
+    editor = tab.view.findChild(QLineEdit)
     assert editor is not None
 
     QApplication.sendEvent(editor, QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.MouseFocusReason))
 
-    qtbot.waitUntil(lambda: tab.data_store.view.state() != QAbstractItemView.State.EditingState)
+    qtbot.waitUntil(lambda: tab.view.state() != QAbstractItemView.State.EditingState)

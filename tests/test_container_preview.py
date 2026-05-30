@@ -51,14 +51,14 @@ def test_container_preview_works_through_tab_proxy(qtbot):
     tab = JsonTab(lambda *_: None, data={"obj": {"a": 1}, "arr": [1, 2]}, show_root=False)
     qtbot.addWidget(tab)
 
-    obj_value = tab.data_store.proxy.index(0, 2, QModelIndex())
-    arr_value = tab.data_store.proxy.index(1, 2, QModelIndex())
+    obj_value = tab.view_controller.proxy.index(0, 2, QModelIndex())
+    arr_value = tab.view_controller.proxy.index(1, 2, QModelIndex())
     option = QStyleOptionViewItem()
 
-    tab.data_store.value_delegate.initStyleOption(option, obj_value)
+    tab.view_controller.value_delegate.initStyleOption(option, obj_value)
     assert option.text == "{1 key}  a: 1"
 
-    tab.data_store.value_delegate.initStyleOption(option, arr_value)
+    tab.view_controller.value_delegate.initStyleOption(option, arr_value)
     assert option.text == "[2 items]  1, 2"
 
 
@@ -66,20 +66,20 @@ def test_container_preview_hidden_when_expanded_shows_meta_only(qtbot):
     tab = JsonTab(lambda *_: None, data={"obj": {"a": 1}, "arr": [1, 2]}, show_root=False)
     qtbot.addWidget(tab)
 
-    obj_name = tab.data_store.proxy.index(0, 0, QModelIndex())
-    arr_name = tab.data_store.proxy.index(1, 0, QModelIndex())
-    tab.data_store.view.expand(obj_name)
-    tab.data_store.view.expand(arr_name)
+    obj_name = tab.view_controller.proxy.index(0, 0, QModelIndex())
+    arr_name = tab.view_controller.proxy.index(1, 0, QModelIndex())
+    tab.view.expand(obj_name)
+    tab.view.expand(arr_name)
 
-    obj_value = tab.data_store.proxy.index(0, 2, QModelIndex())
-    arr_value = tab.data_store.proxy.index(1, 2, QModelIndex())
+    obj_value = tab.view_controller.proxy.index(0, 2, QModelIndex())
+    arr_value = tab.view_controller.proxy.index(1, 2, QModelIndex())
     option = QStyleOptionViewItem()
-    option.widget = tab.data_store.view
+    option.widget = tab.view
 
-    tab.data_store.value_delegate.initStyleOption(option, obj_value)
+    tab.view_controller.value_delegate.initStyleOption(option, obj_value)
     assert option.text == "{1 key}"
 
-    tab.data_store.value_delegate.initStyleOption(option, arr_value)
+    tab.view_controller.value_delegate.initStyleOption(option, arr_value)
     assert option.text == "[2 items]"
 
 
@@ -87,8 +87,8 @@ def test_percent_formatting_works_through_tab_proxy(qtbot):
     tab = JsonTab(lambda *_: None, data={"ratio": mpq("1/2")}, show_root=False)
     qtbot.addWidget(tab)
 
-    ratio_value = tab.data_store.proxy.index(0, 2, QModelIndex())
+    ratio_value = tab.view_controller.proxy.index(0, 2, QModelIndex())
     option = QStyleOptionViewItem()
-    tab.data_store.value_delegate.initStyleOption(option, ratio_value)
+    tab.view_controller.value_delegate.initStyleOption(option, ratio_value)
 
     assert option.text == "50%"

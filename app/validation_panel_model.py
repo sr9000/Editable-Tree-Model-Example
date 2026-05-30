@@ -5,13 +5,14 @@ from typing import Any, Protocol
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt
 
-from documents.tab_paths import index_from_path, proxy_to_source, qualified_name, source_to_view
 from validation.issue import ValidationIssue
 from validation.json_pointer import instance_path_to_model_path
 
 
 class ValidationPanelTabProtocol(Protocol):
-    data_store: Any
+    view_controller: Any
+
+    def root_data(self) -> Any: ...
 
 
 def _instance_path_to_json_path(instance_path: tuple[str | int, ...]) -> str:
@@ -40,13 +41,13 @@ class IssueListModel(QAbstractListModel):
 
     def set_tab(self, tab: ValidationPanelTabProtocol | None) -> None:
         self._tab = tab
-        self._root_data = tab.data_store.model.root_item.to_json() if tab is not None else None
+        self._root_data = tab.root_data() if tab is not None else None
         self._rebuild_display_cache()
 
     def set_issues(self, issues: Sequence[ValidationIssue]) -> None:
         self.beginResetModel()
         if self._tab is not None:
-            self._root_data = self._tab.data_store.model.root_item.to_json()
+            self._root_data = self._tab.root_data()
         self._issues = list(issues)
         self._rebuild_display_cache()
         self.endResetModel()
@@ -84,23 +85,23 @@ class IssueListModel(QAbstractListModel):
         if self._tab is not None:
             model_path = instance_path_to_model_path(self._root_data, issue.instance_path)
             if model_path is not None:
-                index = index_from_path(self._tab, model_path)
+                index = self._tab.view_controller.index_from_path(model_path)
                 if index.isValid():
-                    return qualified_name(self._tab, index)
+                    return self._tab.view_controller.qualified_name(index)
         return _instance_path_to_json_path(issue.instance_path)
 
     def find_row_for_view_index(self, view_index: "QModelIndex") -> int | None:
         """Return the first issue row whose instance_path resolves to *view_index*, or None."""
         if self._tab is None or not view_index.isValid():
             return None
-        src_index = proxy_to_source(view_index).siblingAtColumn(0)
+        src_index = self._tab.view_controller.proxy_to_source(view_index).siblingAtColumn(0)
         for row, issue in enumerate(self._issues):
             model_path = instance_path_to_model_path(self._root_data, issue.instance_path)
             if model_path is None:
                 continue
-            idx = index_from_path(self._tab, model_path)
+            idx = self._tab.view_controller.index_from_path(model_path)
             if not idx.isValid():
                 continue
-            if source_to_view(self._tab, idx.siblingAtColumn(0)) == view_index.siblingAtColumn(0):
+            if self._tab.view_controller.source_to_view(idx.siblingAtColumn(0)) == view_index.siblingAtColumn(0):
                 return row
         return None

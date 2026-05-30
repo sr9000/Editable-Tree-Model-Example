@@ -40,20 +40,20 @@ def _make_tab(qtbot, data, show_root) -> JsonTab:
 
 
 def _proxy_root(tab):
-    if tab.data_store.model.show_root:
-        return tab.data_store.proxy.index(0, 0, QModelIndex())
+    if tab.model.show_root:
+        return tab.view_controller.proxy.index(0, 0, QModelIndex())
     return QModelIndex()
 
 
 def _pidx(tab, path):
     idx = _proxy_root(tab)
     for r in path:
-        idx = tab.data_store.proxy.index(r, 0, idx)
+        idx = tab.view_controller.proxy.index(r, 0, idx)
     return idx
 
 
 def _select(tab, proxy_indexes):
-    sm = tab.data_store.view.selectionModel()
+    sm = tab.view.selectionModel()
     sel = QItemSelection()
     for pidx in proxy_indexes:
         sel.select(pidx, pidx)
@@ -63,9 +63,9 @@ def _select(tab, proxy_indexes):
 def _drop(tab, sel_paths, row, col, parent_path):
     sel = [_pidx(tab, p) for p in sel_paths]
     _select(tab, sel)
-    mime = tab.data_store.proxy.mimeData(sel)
+    mime = tab.view_controller.proxy.mimeData(sel)
     parent = _proxy_root(tab) if parent_path is None else _pidx(tab, parent_path)
-    return tab.data_store.proxy.dropMimeData(mime, Qt.DropAction.MoveAction, row, col, parent)
+    return tab.view_controller.proxy.dropMimeData(mime, Qt.DropAction.MoveAction, row, col, parent)
 
 
 def _enumerate_paths(item, prefix=()) -> list[tuple[tuple[int, ...], bool]]:
@@ -115,7 +115,7 @@ def _collect_leaf_primitives(value: Any) -> list[Any]:
 
 def _try_random_drop(tab, rng) -> str:
     """Make one random drop attempt. Returns a description for diagnostics."""
-    all_paths = _enumerate_paths(tab.data_store.model.root_item)
+    all_paths = _enumerate_paths(tab.model.root_item)
     if not all_paths:
         return "noop: empty tree"
 
@@ -130,7 +130,7 @@ def _try_random_drop(tab, rng) -> str:
 
     # Choose a target. Mix of indicator positions.
     targets = [p for (p, _c) in all_paths if p not in sources]
-    if not targets and not _enumerate_paths(tab.data_store.model.root_item):
+    if not targets and not _enumerate_paths(tab.model.root_item):
         return "noop: nowhere to drop"
 
     mode = rng.choice(["above", "below", "on", "viewport"])
@@ -187,7 +187,7 @@ FIXTURES: list[tuple[str, Any]] = [
 def test_property_random_drops_preserve_invariants(qtbot, fixture_name, initial, seed, show_root):
     rng = random.Random(seed ^ hash(fixture_name))
     tab = _make_tab(qtbot, initial, show_root)
-    initial_snap = tab.data_store.model.root_item.to_json()
+    initial_snap = tab.model.root_item.to_json()
     initial_leaves = sorted(repr(x) for x in _collect_leaf_primitives(initial_snap))
 
     history: list[str] = []
@@ -199,7 +199,7 @@ def test_property_random_drops_preserve_invariants(qtbot, fixture_name, initial,
         history.append(desc)
 
         # 1. Serializability.
-        snap = tab.data_store.model.root_item.to_json()
+        snap = tab.model.root_item.to_json()
         assert isinstance(
             snap, (dict, list)
         ), f"[{fixture_name}] root collapsed to {type(snap)} at step {step}\nhistory={history}"
@@ -212,18 +212,18 @@ def test_property_random_drops_preserve_invariants(qtbot, fixture_name, initial,
         )
 
         # 3. OBJECT key invariants.
-        _validate_object_names(tab.data_store.model.root_item)
+        _validate_object_names(tab.model.root_item)
 
     # 4. Undo back to the original.
-    while tab.data_store.undo_stack.canUndo():
-        tab.data_store.undo_stack.undo()
+    while tab.undo_stack.canUndo():
+        tab.undo_stack.undo()
     assert (
-        tab.data_store.model.root_item.to_json() == initial_snap
+        tab.model.root_item.to_json() == initial_snap
     ), f"[{fixture_name}] undo to depth 0 did not restore original\nhistory={history}"
 
     # And redo back to the final post-fuzz state must succeed without error.
-    while tab.data_store.undo_stack.canRedo():
-        tab.data_store.undo_stack.redo()
-    _validate_object_names(tab.data_store.model.root_item)
-    leaves_after_redo = sorted(repr(x) for x in _collect_leaf_primitives(tab.data_store.model.root_item.to_json()))
+    while tab.undo_stack.canRedo():
+        tab.undo_stack.redo()
+    _validate_object_names(tab.model.root_item)
+    leaves_after_redo = sorted(repr(x) for x in _collect_leaf_primitives(tab.model.root_item.to_json()))
     assert leaves_after_redo == initial_leaves

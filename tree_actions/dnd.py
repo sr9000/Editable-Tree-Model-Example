@@ -89,7 +89,7 @@ def _notify_drop(tab, action: Qt.DropAction, count: int, target_parent: QModelIn
         return
     noun = "row" if count == 1 else "rows"
     verb = "Copied" if action == Qt.DropAction.CopyAction else "Moved"
-    target_name = tab._qualified_name(target_parent)
+    target_name = tab.view_controller.qualified_name(target_parent)
     tab.show_status(f"{verb} {count} {noun} under {target_name}", 2000)
 
 
@@ -114,7 +114,7 @@ def handle_drop(view, model, mime, action: Qt.DropAction, row: int, column: int,
             # overridden ``startDrag`` skips Qt's default post-drag
             # ``clearOrRemove`` (which would otherwise delete the freshly
             # placed destination rows — the "disappearing item" bug).
-            moved = tab.data_store.mutations.push_move_rows(source_rows, target_parent, target_row, label="drag move")
+            moved = tab.mutations.push_move_rows(source_rows, target_parent, target_row, label="drag move")
             if moved and isinstance(view, JsonTreeView):
                 view.mark_drag_handled_internally()
             if moved:

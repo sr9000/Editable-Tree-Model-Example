@@ -24,15 +24,15 @@ def tab(_qapp):
 
 
 def test_tab_exposes_mutations_gateway(tab):
-    assert isinstance(tab.data_store.mutations, DocumentMutationGateway)
+    assert isinstance(tab.mutations, DocumentMutationGateway)
 
 
 def test_tab_exposes_history_facade(tab):
-    assert isinstance(tab.data_store.history, TabHistoryController)
-    assert tab.data_store.history.undo_stack is tab.data_store.undo_stack
+    assert isinstance(tab.editing.history, TabHistoryController)
+    assert tab.editing.history.undo_stack is tab.undo_stack
 
 
 def test_history_view_state_registration(tab):
-    tab.data_store.history.register_view_state(42, {"expanded_rel": []})
-    assert tab.data_store.history.view_state_for(42) == {"expanded_rel": []}
-    assert tab.data_store.history.view_state_for(99) is None
+    tab.editing.history.register_view_state(42, {"expanded_rel": []})
+    assert tab.editing.history.view_state_for(42) == {"expanded_rel": []}
+    assert tab.editing.history.view_state_for(99) is None

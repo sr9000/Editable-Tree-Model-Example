@@ -7,7 +7,6 @@ from PySide6.QtCore import QModelIndex, QSize, Qt
 from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
-from documents.tab_data import JsonTabData
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.model import JsonTreeModel
@@ -24,8 +23,8 @@ class FontProfileLike(Protocol):
 class JsonTabAppearanceController:
     """Own theme, font, icon-size and key-column appearance behavior."""
 
-    def __init__(self, data_store: JsonTabData) -> None:
-        self._data_store = data_store
+    def __init__(self, tab) -> None:
+        self._tab = tab
         self._theme: ThemeSpec | None = None
         self._icon_provider: IconProvider | None = None
         self._default_font_pt: int = 10
@@ -169,6 +168,10 @@ class JsonTabAppearanceController:
             self.set_monospace_font_family(profile.monospace_family)
         self.set_monospace_fields_enabled(profile.monospace_fields_enabled)
 
+    def on_model_reset(self) -> None:
+        # Reapply initial snug widths for a fresh model.
+        self.resize_key_columns(force=True)
+
     def resize_key_columns(self, force: bool = False) -> None:
         self._programmatic_column_resize = True
         try:
@@ -225,31 +228,31 @@ class JsonTabAppearanceController:
         self.scale_columns_for_font(old_pt, self._font_pt)
 
     def _require_view(self) -> JsonTreeView:
-        view = self._data_store.view
+        view = self._tab.view
         if view is None:
             raise RuntimeError("JsonTab view is not initialized")
         return view
 
     def _require_model(self) -> JsonTreeModel:
-        model = self._data_store.model
+        model = self._tab.model
         if model is None:
             raise RuntimeError("JsonTab model is not initialized")
         return model
 
     def _require_name_delegate(self) -> NameDelegate:
-        delegate = self._data_store.name_delegate
+        delegate = self._tab.view_state.name_delegate
         if delegate is None:
             raise RuntimeError("JsonTab name delegate is not initialized")
         return delegate
 
     def _require_type_delegate(self) -> JsonTypeDelegate:
-        delegate = self._data_store.type_delegate
+        delegate = self._tab.view_state.type_delegate
         if delegate is None:
             raise RuntimeError("JsonTab type delegate is not initialized")
         return delegate
 
     def _require_value_delegate(self) -> ValueDelegate:
-        delegate = self._data_store.value_delegate
+        delegate = self._tab.view_state.value_delegate
         if delegate is None:
             raise RuntimeError("JsonTab value delegate is not initialized")
         return delegate

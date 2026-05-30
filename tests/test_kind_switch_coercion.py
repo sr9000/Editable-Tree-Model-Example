@@ -531,13 +531,13 @@ def test_bytes_to_string_full_round_trip_through_item(qtbot):
     tab = JsonTab(lambda *_: None, data={"blob": bytes_b64})
     qtbot.addWidget(tab)
 
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.BYTES
 
-    type_idx = tab.data_store.model.index(0, 1, QModelIndex())
-    assert tab.push_change_type(type_idx, JsonType.STRING)
+    type_idx = tab.model.index(0, 1, QModelIndex())
+    assert tab.editing.push_change_type(type_idx, JsonType.STRING)
 
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.STRING
     assert item.value == "the answer is 42"
 
@@ -621,10 +621,10 @@ def test_number_to_affix_type_uses_mru_default_affix(qtbot):
     )
     qtbot.addWidget(tab)
 
-    type_idx = tab.data_store.model.index(1, 1, QModelIndex())
-    assert tab.push_change_type(type_idx, JsonType.INTEGER_CURRENCY)
+    type_idx = tab.model.index(1, 1, QModelIndex())
+    assert tab.editing.push_change_type(type_idx, JsonType.INTEGER_CURRENCY)
 
-    item = tab.data_store.model.get_item(tab.data_store.model.index(1, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(1, 0, QModelIndex()))
     assert isinstance(item.value, NumberAffix)
     assert item.value.affix == "$"
 
@@ -636,31 +636,31 @@ def test_affix_to_string_to_affix_undo_redo_round_trip(qtbot):
     tab = JsonTab(lambda *_: None, data={"v": original})
     qtbot.addWidget(tab)
 
-    type_idx = tab.data_store.model.index(0, 1, QModelIndex())
+    type_idx = tab.model.index(0, 1, QModelIndex())
 
-    assert tab.push_change_type(type_idx, JsonType.STRING)
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    assert tab.editing.push_change_type(type_idx, JsonType.STRING)
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.STRING
     assert item.value == "$10"
 
-    assert tab.push_change_type(type_idx, JsonType.INTEGER_UNITS)
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    assert tab.editing.push_change_type(type_idx, JsonType.INTEGER_UNITS)
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.INTEGER_UNITS
     assert item.value == NumberAffix(AffixKind.UNITS, "$", False, 10)
 
-    tab.data_store.undo_stack.undo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.STRING
     assert item.value == "$10"
 
-    tab.data_store.undo_stack.undo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.INTEGER_CURRENCY
     assert item.value == original
 
-    tab.data_store.undo_stack.redo()
-    tab.data_store.undo_stack.redo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.redo()
+    tab.undo_stack.redo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.INTEGER_UNITS
     assert item.value == NumberAffix(AffixKind.UNITS, "$", False, 10)
 

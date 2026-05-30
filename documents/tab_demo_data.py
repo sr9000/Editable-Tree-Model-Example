@@ -40,11 +40,10 @@ def build_demo_data() -> dict[str, Any]:
         "null": None,
         "color rgb": "#3498db",
         "color rgba": "#3498db80",
-        # Pseudo text types — content-derived labels that appear automatically
-        # when a string value is empty or whitespace-only.
-        "empty string": "",  # → EMPTY_STRING
-        "ws ascii": "   ",  # → WS_STRING (ASCII spaces only)
-        "ws unicode": " \u00a0 ",  # → WS_UNICODE (includes NBSP)
-        "ws multiline": "  \n  ",  # → WS_MULTILINE (whitespace + newline)
-        "ws text": " \u00a0\n ",  # → WS_TEXT  (non-ASCII WS + newline)
+        # Pseudo text types inferred from empty or whitespace-only strings.
+        "empty string": "",
+        "ws ascii": "   ",
+        "ws unicode": " \u00a0 ",
+        "ws multiline": "  \n  ",
+        "ws text": " \u00a0\n ",
     }

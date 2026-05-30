@@ -91,22 +91,22 @@ def test_rapid_mutations_collapse_to_one_revalidation(qtbot):
     }
     tab = JsonTab(lambda *_: None, data={"x": 1}, show_root=True)
     qtbot.addWidget(tab)
-    tab.data_store.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
+    tab.validation.set_schema(SchemaRef(path=None, inline=schema, origin="manual"))
 
-    tab.data_store.validation.set_auto_rescan(True)
+    tab.validation.set_auto_rescan(True)
 
     emission_count = [0]
     tab.validationChanged.connect(lambda _: emission_count.__setitem__(0, emission_count[0] + 1))
 
     # Perform 10 rapid push_rename mutations on the 'x' key at the doc level.
     # Use push_change_type to avoid no-op detection; alternate INTEGER / FLOAT.
-    doc_idx = tab.data_store.model.index(0, 0)
-    x_name_idx = tab.data_store.model.index(0, 0, doc_idx)
+    doc_idx = tab.model.index(0, 0)
+    x_name_idx = tab.model.index(0, 0, doc_idx)
     type_idx = x_name_idx.siblingAtColumn(1)
 
     types = [JsonType.FLOAT, JsonType.INTEGER] * 5
     for t in types:
-        tab.push_change_type(type_idx, t)
+        tab.editing.push_change_type(type_idx, t)
 
     # Wait 400 ms for the debounce to settle.
     qtbot.waitUntil(lambda: emission_count[0] >= 1, timeout=600)

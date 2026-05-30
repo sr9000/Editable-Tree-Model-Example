@@ -50,7 +50,7 @@ class JsonTypeDelegate(QStyledItemDelegate):
         self._edit_context: DelegateEditContext | None = edit_context
         # ``_interactive`` is set to ``True`` for the duration of an
         # interactive (user-driven) commit out of the type combo. The
-        # ``JsonTab._on_type_changed`` slot reads it to decide whether to
+        # ``EditingController.on_type_changed`` reads it to decide whether to
         # auto-reopen the value editor on the row whose type just changed.
         # Programmatic ``model.setData(...)`` calls bypass this delegate
         # entirely, so the flag stays ``False`` and no editor is reopened —
@@ -73,7 +73,7 @@ class JsonTypeDelegate(QStyledItemDelegate):
         """True while a user-driven type-combo commit is in flight.
 
         Stable, typed read of the otherwise-private ``_interactive``
-        backchannel that ``JsonTab._on_type_changed`` consults to decide
+        backchannel that ``EditingController.on_type_changed`` consults to decide
         whether to auto-reopen the value editor.
         """
         return self._interactive

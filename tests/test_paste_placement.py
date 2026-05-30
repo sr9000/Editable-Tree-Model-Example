@@ -16,9 +16,9 @@ def _select(view: QTreeView, idx) -> None:
 
 
 def _select_tab(tab: JsonTab, source_index) -> None:
-    view_idx = tab._source_to_view(source_index)
-    tab.data_store.view.setCurrentIndex(view_idx)
-    tab.data_store.view.selectionModel().select(
+    view_idx = tab.view_controller.source_to_view(source_index)
+    tab.view.setCurrentIndex(view_idx)
+    tab.view.selectionModel().select(
         view_idx, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows
     )
 
@@ -76,29 +76,29 @@ def test_paste_replace_value_swaps_subtree(qtbot):
     tab = JsonTab(lambda *_: None, data={"target": {"old": 1}})
     qtbot.addWidget(tab)
 
-    target = tab.data_store.model.index(0, 0, QModelIndex())
+    target = tab.model.index(0, 0, QModelIndex())
     _select_tab(tab, target)
 
     QApplication.clipboard().setText('{"new": [10, 20, 30]}')
-    assert paste_replace_value(tab.data_store.view)
-    assert tab.data_store.model.get_item(target).to_json() == [10, 20, 30]
+    assert paste_replace_value(tab.view)
+    assert tab.model.get_item(target).to_json() == [10, 20, 30]
 
     # Undo restores original subtree.
-    tab.data_store.undo_stack.undo()
-    assert tab.data_store.model.get_item(target).to_json() == {"old": 1}
+    tab.undo_stack.undo()
+    assert tab.model.get_item(target).to_json() == {"old": 1}
 
 
 def test_paste_replace_value_rejects_multiple_entries(qtbot):
     tab = JsonTab(lambda *_: None, data={"target": 1})
     qtbot.addWidget(tab)
 
-    target = tab.data_store.model.index(0, 0, QModelIndex())
+    target = tab.model.index(0, 0, QModelIndex())
     _select_tab(tab, target)
 
     QApplication.clipboard().setText('{"a": 1, "b": 2}')
     # Multi-entry clipboard ⇒ ambiguous replace; refuse.
-    assert not paste_replace_value(tab.data_store.view)
-    assert tab.data_store.model.get_item(target).to_json() == 1
+    assert not paste_replace_value(tab.view)
+    assert tab.model.get_item(target).to_json() == 1
 
 
 def test_has_clipboard_entries_reflects_clipboard(qtbot):

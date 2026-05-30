@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QMimeData, QModelIndex, QSettings, QTimer
+from PySide6.QtCore import QByteArray, QMimeData, QSettings, QTimer
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -28,7 +28,8 @@ from app.schema_tab_pool import SchemaTabPool
 from app.tab_lifecycle import TabLifecyclePresenter
 from app.theme_controller import ThemeController
 from app.validation_presenter import DockValidationPresenter
-from documents.tab import JsonTab
+from documents.document_protocol import Document
+from documents.tab_marker import JsonTabWidgetMarker
 from io_formats.load import load_file_with_format
 from mainwindow import Ui_MainWindow
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
@@ -77,7 +78,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setAcceptDrops(True)
         self._history_dialog: QDialog | None = None
         self._history_view: QUndoView | None = None
-        self._bound_undo_tab: JsonTab | None = None
+        self._bound_undo_tab: Document | None = None
         self._startup_window_mode: str = "normal"
         self._settings = QSettings(APPLICATION_ID, "app")
         # All font preferences (regular family, monospace family, editor
@@ -292,22 +293,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         self._open_path(yaml_filename)
 
-    def _current_tab(self) -> JsonTab | None:
+    def _current_tab(self) -> Document | None:
         tab = self.tabWidget.currentWidget()
-        return tab if isinstance(tab, JsonTab) else None
+        return tab if isinstance(tab, JsonTabWidgetMarker) else None
 
     def _current_view(self) -> QTreeView | None:
         tab = self._current_tab()
-        return tab.data_store.view if tab is not None else None
+        return tab.view if tab is not None else None
 
     def setup_connections(self):
         setup_main_window_connections(self)
 
-    def _theme_tabs(self) -> list[JsonTab]:
-        tabs: list[JsonTab] = []
+    def _theme_tabs(self) -> list[Document]:
+        tabs: list[Document] = []
         for i in range(self.tabWidget.count()):
             widget = self.tabWidget.widget(i)
-            if isinstance(widget, JsonTab):
+            if isinstance(widget, JsonTabWidgetMarker):
                 tabs.append(widget)
         return tabs
 
@@ -315,7 +316,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._theme = theme
         self._icon_provider = icon_provider
         for tab in self._theme_tabs():
-            tab.set_theme(theme, icon_provider)
+            tab.appearance.set_theme(theme, icon_provider)
 
     def _apply_theme(self, theme) -> None:
         self._theme_controller.apply_theme(theme)
@@ -336,19 +337,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _on_system_color_scheme_changed(self, *_args) -> None:
         self._theme_controller.on_system_color_scheme_changed(*_args)
 
-    def _bind_undo_signals(self, tab: JsonTab | None) -> None:
+    def _bind_undo_signals(self, tab: Document | None) -> None:
         bind_undo_signals(self, tab)
 
     def _on_tab_changed(self, _index: int) -> None:
         self._tab_lifecycle.on_tab_changed(_index)
 
-    def _refresh_tab_presentation(self, tab: JsonTab) -> None:
+    def _refresh_tab_presentation(self, tab: Document) -> None:
         self._tab_lifecycle.refresh_tab_presentation(tab)
 
-    def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> JsonTab | None:
+    def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> Document | None:
         return self._tab_lifecycle.add_tab(data=data, file_path=file_path, save_format=save_format)
 
-    def _on_tab_dirty(self, tab: JsonTab) -> None:
+    def _on_tab_dirty(self, tab: Document) -> None:
         self._tab_lifecycle.on_tab_dirty(tab)
 
     @property
@@ -377,26 +378,26 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.statusBar.showMessage(f"Opened: {resolved}", 2000)
         return True
 
-    def _save_tab(self, tab: JsonTab, *, save_as: bool = False) -> bool:
+    def _save_tab(self, tab: Document, *, save_as: bool = False) -> bool:
         from state.validation_settings import clear_schema_path
 
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
-        old_path = tab.data_store.file_path
+        old_path = tab.io.file_path
         ok = tab.save_as() if save_as else tab.save()
         if not ok:
             return False
-        if save_as and isinstance(old_path, str) and tab.data_store.file_path and old_path != tab.data_store.file_path:
+        if save_as and isinstance(old_path, str) and tab.io.file_path and old_path != tab.io.file_path:
             view_state.discard(old_path)
             clear_schema_path(Path(old_path))
         view_state.save(tab)
-        if tab.data_store.file_path:
-            push_recent(self, tab.data_store.file_path)
+        if tab.io.file_path:
+            push_recent(self, tab.io.file_path)
         self._on_tab_dirty(tab)
         return True
 
-    def _confirm_reload_dirty_tab(self, tab: JsonTab) -> str:
-        if not tab.data_store.is_dirty:
+    def _confirm_reload_dirty_tab(self, tab: Document) -> str:
+        if not tab.io.dirty:
             return "reload"
 
         name = tab.display_name().replace(" *", "")
@@ -419,7 +420,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return "overwrite"
         return "cancel"
 
-    def _reload_tab_from_path(self, tab: JsonTab, path: str) -> bool:
+    def _reload_tab_from_path(self, tab: Document, path: str) -> bool:
         resolved = str(Path(path).resolve())
         self.statusBar.showMessage(f"Reloading: {resolved}", 0)
         try:
@@ -429,23 +430,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QMessageBox.critical(self, "Reload failed", f"Could not reload {resolved}:\n{exc}")
             return False
 
-        root_index = (
-            tab.data_store.model.index(0, 0, QModelIndex()) if tab.data_store.model.show_root else QModelIndex()
-        )
-        root_item = tab.data_store.model.get_item(root_index)
-        changed = tab._diff_apply(root_item, data, root_index)
+        root_index = tab.root_index()
+        root_item = tab.root_item()
+        changed = tab.editing.diff_apply(root_item, data, root_index)
         if changed:
-            tab.data_store.undo_stack.clear()
-        tab.data_store.undo_stack.setClean()
-        tab.data_store.save_format = source_format
-        tab.data_store.file_path = resolved
-        tab.data_store.validation.revalidate()
+            tab.undo_stack.clear()
+        tab.undo_stack.setClean()
+        tab.io.save_format = source_format
+        tab.io.file_path = resolved
+        tab.validation.revalidate()
         self._refresh_tab_presentation(tab)
         self.update_actions()
         self.statusBar.showMessage(f"Reloaded: {resolved}", 2000)
         return True
 
-    def _confirm_close(self, tab: JsonTab, *, prompt_for_untitled_nonempty: bool = True) -> bool:
+    def _confirm_close(self, tab: Document, *, prompt_for_untitled_nonempty: bool = True) -> bool:
         return confirm_close(self, tab, prompt_for_untitled_nonempty=prompt_for_untitled_nonempty)
 
     def open_file_dialog(self) -> None:
@@ -473,14 +472,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def reload_from_disk(self) -> None:
         tab = self._current_tab()
-        if tab is None or tab.data_store.is_read_only or not tab.data_store.file_path:
+        if tab is None or tab.editability.is_read_only or not tab.io.file_path:
             return
         decision = self._confirm_reload_dirty_tab(tab)
         if decision == "cancel":
             return
         if decision == "overwrite" and not self._save_tab(tab, save_as=False):
             return
-        self._reload_tab_from_path(tab, tab.data_store.file_path)
+        self._reload_tab_from_path(tab, tab.io.file_path)
 
     def create_new_file(self):
         self._add_tab(data={}, file_path=None)
@@ -508,7 +507,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if tab is None:
             return
 
-        if not tab.insert_child():
+        if not tab.editing.do_insert_child():
             return
 
         self.update_actions()
@@ -518,7 +517,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if tab is None:
             return
 
-        if not tab.insert_sibling_before():
+        if not tab.editing.do_insert_sibling_before():
             return
 
         self.update_actions()
@@ -528,7 +527,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if tab is None:
             return
 
-        if not tab.insert_sibling_after():
+        if not tab.editing.do_insert_sibling_after():
             return
 
         self.update_actions()
@@ -588,7 +587,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def select_regular_font(self) -> None:
         tab = self._current_tab()
-        seed = QFont(tab.data_store.view.font()) if tab is not None else QFont(self.font())
+        seed = QFont(tab.view.font()) if tab is not None else QFont(self.font())
         if self.fonts.profile.regular_family:
             seed.setFamily(self.fonts.profile.regular_family)
         seed = self._normalize_font_for_dialog(seed)
@@ -613,20 +612,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def copy_current_file_path(self) -> None:
         """Put the absolute path of the current tab on the system clipboard."""
         tab = self._current_tab()
-        if tab is None or not tab.data_store.file_path:
+        if tab is None or not tab.io.file_path:
             self.statusBar.showMessage(self.tr("No file path to copy"), 2000)
             return
-        QApplication.clipboard().setText(tab.data_store.file_path)
-        self.statusBar.showMessage(self.tr("Copied: {path}").format(path=tab.data_store.file_path), 2000)
+        QApplication.clipboard().setText(tab.io.file_path)
+        self.statusBar.showMessage(self.tr("Copied: {path}").format(path=tab.io.file_path), 2000)
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._theme_controller.shutdown()
         for i in range(self.tabWidget.count() - 1, -1, -1):
             widget = self.tabWidget.widget(i)
-            if isinstance(widget, JsonTab) and not self._confirm_close(widget, prompt_for_untitled_nonempty=False):
+            if isinstance(widget, JsonTabWidgetMarker) and not self._confirm_close(
+                widget, prompt_for_untitled_nonempty=False
+            ):
                 event.ignore()
                 return
-            if isinstance(widget, JsonTab):
+            if isinstance(widget, JsonTabWidgetMarker):
                 view_state.save(widget)
         self._settings.setValue("window/geometry", self.saveGeometry())
         self._settings.setValue("window/fullscreen", self.isFullScreen())

@@ -5,14 +5,14 @@ from PySide6.QtGui import QShortcut
 from PySide6.QtWidgets import QApplication, QMenu
 
 from app.main_window import MainWindow
+from documents.states.editing_controller import TreeAction
 from documents.tab import JsonTab
-from documents.tab_tree_actions import TreeAction
 from tree_actions.context_menu import show_context_menu
 
 
 def _set_current_source_row(tab: JsonTab, source_index: QModelIndex) -> None:
-    view_index = tab._source_to_view(source_index)
-    sm = tab.data_store.view.selectionModel()
+    view_index = tab.view_controller.source_to_view(source_index)
+    sm = tab.view.selectionModel()
     sm.select(
         view_index,
         QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
@@ -28,7 +28,7 @@ def test_shortcuts_canary_triggers_every_tab_shortcut(qtbot):
     QApplication.processEvents()
 
     root_parent = QModelIndex()
-    first = tab.data_store.model.index(0, 0, root_parent)
+    first = tab.model.index(0, 0, root_parent)
     _set_current_source_row(tab, first)
 
     calls: list[set[TreeAction]] = []
@@ -36,7 +36,7 @@ def test_shortcuts_canary_triggers_every_tab_shortcut(qtbot):
     def _record(_message: str, actions: set[TreeAction]) -> None:
         calls.append(actions)
 
-    tab._run_tree_action = _record  # type: ignore[method-assign]
+    tab.editing.run_tree_action = _record  # type: ignore[method-assign]
     find_triggered: list[bool] = []
     tab._find_shortcut.activated.connect(lambda: find_triggered.append(True))
 
@@ -87,22 +87,22 @@ def test_delete_shortcut_not_ambiguous_and_deletes_once(qtbot):
         assert del_shortcuts == []
         assert win.rowRemoveAction.shortcut().toString() == "Del"
 
-        root = tab.data_store.model.index(0, 0, QModelIndex())
-        first = tab.data_store.model.index(0, 0, root)
+        root = tab.model.index(0, 0, QModelIndex())
+        first = tab.model.index(0, 0, root)
         _set_current_source_row(tab, first)
 
-        before = tab.data_store.model.root_item.to_json()
+        before = tab.model.root_item.to_json()
         win.rowRemoveAction.trigger()
         QApplication.processEvents()
 
-        after = tab.data_store.model.root_item.to_json()
+        after = tab.model.root_item.to_json()
         assert before == {"a": 1, "b": 2}
         assert after == {"b": 2}
     finally:
         for i in range(win.tabWidget.count()):
             maybe_tab = win.tabWidget.widget(i)
             if isinstance(maybe_tab, JsonTab):
-                maybe_tab.data_store.undo_stack.setClean()
+                maybe_tab.undo_stack.setClean()
         win.close()
         win.deleteLater()
         QApplication.processEvents()
@@ -112,12 +112,12 @@ def test_context_menu_shows_shortcuts_for_registered_actions(qtbot):
     tab = JsonTab(lambda *_: None, data={"obj": {"x": 1, "y": 2}, "tail": 3}, show_root=True)
     qtbot.addWidget(tab)
     tab.show()
-    tab.data_store.view.expandAll()
+    tab.view.expandAll()
     QApplication.processEvents()
 
-    nested = tab._index_from_path((0, 0))
+    nested = tab.view_controller.index_from_path((0, 0))
     _set_current_source_row(tab, nested)
-    position = tab.data_store.view.visualRect(tab._source_to_view(nested)).center()
+    position = tab.view.visualRect(tab.view_controller.source_to_view(nested)).center()
 
     seen: dict[str, str] = {}
 
@@ -129,7 +129,7 @@ def test_context_menu_shows_shortcuts_for_registered_actions(qtbot):
             elif action.text():
                 seen[action.text()] = action.shortcut().toString()
 
-    menu = show_context_menu(tab.data_store.view, position, execute=False)
+    menu = show_context_menu(tab.view, position, execute=False)
     assert menu is not None
     _collect(menu)
 
@@ -155,14 +155,14 @@ def test_main_menu_actions_are_disabled_when_inactive(qtbot):
 
         tab = win._add_tab(data={"a": 1}, file_path=None)
         assert tab is not None
-        tab.data_store.file_path = "/tmp/demo.json"
+        tab.io.file_path = "/tmp/demo.json"
         win._refresh_tab_presentation(tab)
         win.update_actions()
         assert not win.fileSaveAction.isEnabled()
         assert win.fileSaveAsAction.isEnabled()
         assert win.fileCopyPathAction.isEnabled()
 
-        assert tab.push_insert_rows(
+        assert tab.editing.push_insert_rows(
             [{"parent_path": (), "row": 0, "value": 2, "name": "b"}],
             label="mark dirty",
         )
@@ -172,7 +172,7 @@ def test_main_menu_actions_are_disabled_when_inactive(qtbot):
         for i in range(win.tabWidget.count()):
             maybe_tab = win.tabWidget.widget(i)
             if isinstance(maybe_tab, JsonTab):
-                maybe_tab.data_store.undo_stack.setClean()
+                maybe_tab.undo_stack.setClean()
         win.close()
         win.deleteLater()
         QApplication.processEvents()
@@ -185,7 +185,7 @@ def test_tab_tooltip_uses_full_path(qtbot):
         full_path = "/tmp/very/deep/path/data.json"
         tab = win._add_tab(data={"a": 1}, file_path=None)
         assert tab is not None
-        tab.data_store.file_path = full_path
+        tab.io.file_path = full_path
         win._refresh_tab_presentation(tab)
         index = win.tabWidget.indexOf(tab)
         assert index >= 0
@@ -194,7 +194,7 @@ def test_tab_tooltip_uses_full_path(qtbot):
         for i in range(win.tabWidget.count()):
             maybe_tab = win.tabWidget.widget(i)
             if isinstance(maybe_tab, JsonTab):
-                maybe_tab.data_store.undo_stack.setClean()
+                maybe_tab.undo_stack.setClean()
         win.close()
         win.deleteLater()
         QApplication.processEvents()

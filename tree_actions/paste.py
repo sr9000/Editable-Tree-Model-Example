@@ -102,13 +102,13 @@ def paste_entries_at(
                 name = None
             inserts.append(
                 {
-                    "parent_path": tab.data_store.mutations.index_path(parent_index),
+                    "parent_path": tab.mutations.index_path(parent_index),
                     "row": insert_pos + offset,
                     "value": entry["value"],
                     "name": name,
                 }
             )
-        ok = tab.data_store.mutations.push_insert_rows(inserts, label=label)
+        ok = tab.mutations.push_insert_rows(inserts, label=label)
         if ok and parent_index.isValid():
             tree_view.expand(_to_view_index(tree_view, parent_index))
         return ok
@@ -232,7 +232,9 @@ def paste_replace_value(tree_view: QTreeView) -> bool:
 
     tab = _tab_of(tree_view)
     if tab is not None:
-        return tab.data_store.mutations.push_edit_value(value_index, new_value, label="paste replace")
+        # Path-typed API (Phase H): pass the row's path; gateway picks the
+        # column-2 sibling internally.
+        return tab.mutations.push_edit_value_at(_index_path(row0), new_value, label="paste replace")
 
     return bool(model.setData(value_index, new_value, Qt.ItemDataRole.EditRole))
 
@@ -282,14 +284,14 @@ def paste_clones_at_targets(tree_view: QTreeView) -> bool:
     for target in selected:
         target_item = model.get_item(target)
         if target_item.json_type in (JsonType.OBJECT, JsonType.ARRAY):
-            targets.append((tab.data_store.mutations.index_path(target), model.rowCount(target)))
+            targets.append((tab.mutations.index_path(target), model.rowCount(target)))
         else:
-            targets.append((tab.data_store.mutations.index_path(target.parent()), target.row() + 1))
+            targets.append((tab.mutations.index_path(target.parent()), target.row() + 1))
     used_by_parent: dict[tuple[int, ...], set[str]] = {}
     inserts: list[dict[str, Any]] = []
     # Descending so earlier inserts in the same parent don't shift later positions.
     for parent_path, insert_pos in sorted(targets, key=lambda t: (t[0], t[1]), reverse=True):
-        parent_index = tab.data_store.mutations.index_from_path(parent_path)
+        parent_index = tab.mutations.index_from_path(parent_path)
         parent_item = model.get_item(parent_index)
         parent_is_object = parent_item.json_type is JsonType.OBJECT
         if parent_is_object and parent_path not in used_by_parent:
@@ -317,7 +319,7 @@ def paste_clones_at_targets(tree_view: QTreeView) -> bool:
 
     if not inserts:
         return False
-    return tab.data_store.mutations.push_insert_rows(inserts, label="paste at selection")
+    return tab.mutations.push_insert_rows(inserts, label="paste at selection")
 
 
 def paste_insert_after_zip(tree_view: QTreeView) -> bool:
@@ -363,7 +365,7 @@ def paste_insert_after_zip(tree_view: QTreeView) -> bool:
     inserts: list[dict[str, Any]] = []
     for target, entry in sorted(pairs, key=lambda p: _index_path(p[0]), reverse=True):
         parent = target.parent()
-        parent_path = tab.data_store.mutations.index_path(parent)
+        parent_path = tab.mutations.index_path(parent)
         parent_item = model.get_item(parent)
         parent_is_object = parent_item.json_type is JsonType.OBJECT
         if parent_is_object and parent_path not in used_by_parent:
@@ -387,7 +389,7 @@ def paste_insert_after_zip(tree_view: QTreeView) -> bool:
                 "name": name,
             }
         )
-    return tab.data_store.mutations.push_insert_rows(inserts, label="paste insert each")
+    return tab.mutations.push_insert_rows(inserts, label="paste insert each")
 
 
 def paste_replace_zip(tree_view: QTreeView) -> bool:
@@ -420,15 +422,15 @@ def paste_replace_zip(tree_view: QTreeView) -> bool:
                 changed = True
         return changed
 
-    tab.data_store.mutations.begin_macro("paste replace each (zip)")
+    tab.mutations.begin_macro("paste replace each (zip)")
     moved = 0
     try:
         for target, entry in zip(targets, entries):
-            value_index = model.index(target.row(), 2, target.parent())
-            if tab.data_store.mutations.push_edit_value(value_index, entry["value"], label="paste replace each"):
+            # Path-typed API (Phase H).
+            if tab.mutations.push_edit_value_at(_index_path(target), entry["value"], label="paste replace each"):
                 moved += 1
     finally:
-        tab.data_store.mutations.end_macro()
+        tab.mutations.end_macro()
     return moved > 0
 
 

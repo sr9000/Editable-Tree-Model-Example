@@ -133,7 +133,7 @@ def _search_is_active(tree_view: QTreeView) -> bool:
     tab = _find_enter_edit_target(tree_view)
     if tab is None:
         return False
-    return bool(tab.data_store.search_edit.text().strip())
+    return bool(tab.search_edit.text().strip())
 
 
 def _goto_row_and_clear_search(tree_view: QTreeView, clicked_index) -> bool:
@@ -154,19 +154,19 @@ def _goto_row_and_clear_search(tree_view: QTreeView, clicked_index) -> bool:
     if tab is None:
         return False
 
-    search_edit = tab.data_store.search_edit
+    search_edit = tab.search_edit
 
     if search_edit.text():
         search_edit.clear()
-        tab.apply_filter()
+        tab.view_controller.apply_filter()
 
-    idx = tab.data_store.mutations.index_from_path(source_path)
+    idx = tab.mutations.index_from_path(source_path)
     if not idx.isValid():
         return False
     source_target = idx.siblingAtColumn(target_col)
     if not source_target.isValid():
         source_target = idx.siblingAtColumn(0)
-    view_target = tab.data_store.mutations.source_to_view(source_target)
+    view_target = tab.mutations.source_to_view(source_target)
     if not view_target.isValid():
         return False
 
@@ -243,7 +243,7 @@ def _set_value_from_context(tree_view: QTreeView, value_index, value: str) -> bo
         return False
     tab = _find_enter_edit_target(tree_view)
     if tab is not None:
-        return bool(tab.data_store.mutations.commit_set_data(value_index, value, Qt.ItemDataRole.EditRole))
+        return bool(tab.mutations.commit_set_data(value_index, value, Qt.ItemDataRole.EditRole))
     model = value_index.model()
     if model is None:
         return False

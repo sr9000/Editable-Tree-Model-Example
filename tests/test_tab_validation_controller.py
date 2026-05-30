@@ -25,7 +25,7 @@ def _make_tab(data=None):
 def test_tab_exposes_validation_controller(_qapp):
     tab = _make_tab()
     try:
-        assert isinstance(tab.data_store.validation, TabValidationController)
+        assert isinstance(tab.validation, TabValidationController)
     finally:
         tab.deleteLater()
 
@@ -33,13 +33,13 @@ def test_tab_exposes_validation_controller(_qapp):
 def test_release_stops_timer_and_disconnects(_qapp):
     tab = _make_tab()
     try:
-        tab.data_store.validation.set_auto_rescan(True)
-        tab.data_store.validation.debounce_timer.start()  # arm it
-        assert tab.data_store.validation.debounce_timer.isActive()
-        tab.data_store.validation.release()
-        assert not tab.data_store.validation.debounce_timer.isActive()
+        tab.validation.set_auto_rescan(True)
+        tab.validation.debounce_timer.start()  # arm it
+        assert tab.validation.debounce_timer.isActive()
+        tab.validation.release()
+        assert not tab.validation.debounce_timer.isActive()
         # Idempotent.
-        tab.data_store.validation.release()
+        tab.validation.release()
     finally:
         tab.deleteLater()
 
@@ -51,10 +51,10 @@ def test_release_releases_schema_source(_qapp, tmp_path):
     tab = _make_tab()
     try:
         ref = SchemaRef(path=schema_path, inline=None, origin="manual")
-        tab.data_store.validation.set_schema(ref)
-        assert tab.data_store.validation.schema_source is not None
-        tab.data_store.validation.release()
-        assert tab.data_store.validation.schema_source is None
+        tab.validation.set_schema(ref)
+        assert tab.validation.schema_source is not None
+        tab.validation.release()
+        assert tab.validation.schema_source is None
     finally:
         tab.deleteLater()
 
@@ -64,7 +64,7 @@ def test_closed_tab_is_collectable(_qapp):
 
     tab = _make_tab()
     ref = weakref.ref(tab)
-    tab.data_store.validation.release()
+    tab.validation.release()
     tab.deleteLater()
     del tab
     QApplication.processEvents()
@@ -72,4 +72,4 @@ def test_closed_tab_is_collectable(_qapp):
     # The C++ side may still hold the object until the event loop spins again;
     # this assertion only verifies the timer is off, not C++ destruction.
     # The point of this test is that release() makes the tab safe to discard.
-    assert ref() is None or not ref().data_store.validation.debounce_timer.isActive()
+    assert ref() is None or not ref().validation.debounce_timer.isActive()

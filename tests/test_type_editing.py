@@ -143,14 +143,14 @@ def test_caps_lock_does_not_close_name_editor(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    name_index = tab.data_store.model.index(0, 0, QModelIndex())
+    name_index = tab.model.index(0, 0, QModelIndex())
     assert name_index.isValid()
-    view_index = tab._source_to_view(name_index)
-    tab.data_store.view.setCurrentIndex(view_index)
-    tab.data_store.view.edit(view_index)
+    view_index = tab.view_controller.source_to_view(name_index)
+    tab.view.setCurrentIndex(view_index)
+    tab.view.edit(view_index)
 
-    qtbot.waitUntil(lambda: tab.data_store.view.findChild(QLineEdit) is not None)
-    editor = tab.data_store.view.findChild(QLineEdit)
+    qtbot.waitUntil(lambda: tab.view.findChild(QLineEdit) is not None)
+    editor = tab.view.findChild(QLineEdit)
     assert editor is not None
 
     # 1. A real CapsLock keypress must not close the editor.
@@ -158,16 +158,16 @@ def test_caps_lock_does_not_close_name_editor(qtbot):
     QApplication.sendEvent(editor, press)
     release = QKeyEvent(QEvent.Type.KeyRelease, Qt.Key.Key_CapsLock, Qt.KeyboardModifier.NoModifier)
     QApplication.sendEvent(editor, release)
-    assert tab.data_store.view.state() == QAbstractItemView.State.EditingState
+    assert tab.view.state() == QAbstractItemView.State.EditingState
 
     # 2. A layout-switch-style FocusOut (xkb-bound CapsLock) must also be ignored.
     focus_out = QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.ActiveWindowFocusReason)
     QApplication.sendEvent(editor, focus_out)
-    assert tab.data_store.view.state() == QAbstractItemView.State.EditingState
+    assert tab.view.state() == QAbstractItemView.State.EditingState
 
     other_focus_out = QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.OtherFocusReason)
     QApplication.sendEvent(editor, other_focus_out)
-    assert tab.data_store.view.state() == QAbstractItemView.State.EditingState
+    assert tab.view.state() == QAbstractItemView.State.EditingState
 
 
 def test_enter_starts_editing_name_or_value(qtbot):
@@ -175,15 +175,15 @@ def test_enter_starts_editing_name_or_value(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_name = tab.data_store.model.index(0, 0, QModelIndex())
-    view_name = tab._source_to_view(source_name)
-    tab.data_store.view.setCurrentIndex(view_name)
-    tab.data_store.view.setFocus()
+    source_name = tab.model.index(0, 0, QModelIndex())
+    view_name = tab.view_controller.source_to_view(source_name)
+    tab.view.setCurrentIndex(view_name)
+    tab.view.setFocus()
 
-    qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Return)
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Return)
 
-    qtbot.waitUntil(lambda: tab.data_store.view.state() == QAbstractItemView.State.EditingState)
-    assert tab.data_store.view.currentIndex().column() == 0
+    qtbot.waitUntil(lambda: tab.view.state() == QAbstractItemView.State.EditingState)
+    assert tab.view.currentIndex().column() == 0
 
 
 @pytest.mark.parametrize("enter_key", [Qt.Key.Key_Return, Qt.Key.Key_Enter])
@@ -192,16 +192,16 @@ def test_enter_from_type_column_opens_type_combobox(qtbot, enter_key):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_type = tab.data_store.model.index(0, 1, QModelIndex())
-    view_type = tab._source_to_view(source_type)
-    tab.data_store.view.setCurrentIndex(view_type)
-    tab.data_store.view.setFocus()
+    source_type = tab.model.index(0, 1, QModelIndex())
+    view_type = tab.view_controller.source_to_view(source_type)
+    tab.view.setCurrentIndex(view_type)
+    tab.view.setFocus()
 
-    qtbot.keyClick(tab.data_store.view.viewport(), enter_key)
+    qtbot.keyClick(tab.view.viewport(), enter_key)
 
-    qtbot.waitUntil(lambda: tab.data_store.view.state() == QAbstractItemView.State.EditingState)
-    assert tab.data_store.view.currentIndex().column() == 1
-    qtbot.waitUntil(lambda: tab.data_store.view.findChild(QComboBox) is not None)
+    qtbot.waitUntil(lambda: tab.view.state() == QAbstractItemView.State.EditingState)
+    assert tab.view.currentIndex().column() == 1
+    qtbot.waitUntil(lambda: tab.view.findChild(QComboBox) is not None)
 
 
 def test_type_cell_icon_hidden_while_type_combobox_active(qtbot):
@@ -209,15 +209,15 @@ def test_type_cell_icon_hidden_while_type_combobox_active(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_type = tab.data_store.model.index(0, 1, QModelIndex())
-    view_type = tab._source_to_view(source_type)
-    tab.data_store.view.setCurrentIndex(view_type)
-    tab.data_store.view.edit(view_type)
+    source_type = tab.model.index(0, 1, QModelIndex())
+    view_type = tab.view_controller.source_to_view(source_type)
+    tab.view.setCurrentIndex(view_type)
+    tab.view.edit(view_type)
 
-    qtbot.waitUntil(lambda: tab.data_store.view.findChild(QComboBox) is not None)
+    qtbot.waitUntil(lambda: tab.view.findChild(QComboBox) is not None)
 
     option = QStyleOptionViewItem()
-    tab.data_store.type_delegate.initStyleOption(option, view_type)
+    tab.view_controller.type_delegate.initStyleOption(option, view_type)
     assert option.icon.isNull()
 
 
@@ -226,19 +226,19 @@ def test_arrow_left_right_moves_between_columns(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_name = tab.data_store.model.index(0, 0, QModelIndex())
-    view_name = tab._source_to_view(source_name)
-    tab.data_store.view.setCurrentIndex(view_name)
-    tab.data_store.view.setFocus()
+    source_name = tab.model.index(0, 0, QModelIndex())
+    view_name = tab.view_controller.source_to_view(source_name)
+    tab.view.setCurrentIndex(view_name)
+    tab.view.setFocus()
 
-    qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Right)
-    assert tab.data_store.view.currentIndex().column() == 1
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Right)
+    assert tab.view.currentIndex().column() == 1
 
-    qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Right)
-    assert tab.data_store.view.currentIndex().column() == 2
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Right)
+    assert tab.view.currentIndex().column() == 2
 
-    qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Left)
-    assert tab.data_store.view.currentIndex().column() == 1
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Left)
+    assert tab.view.currentIndex().column() == 1
 
 
 def test_arrow_up_down_moves_between_rows(qtbot):
@@ -246,18 +246,18 @@ def test_arrow_up_down_moves_between_rows(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_mid_value = tab.data_store.model.index(1, 2, QModelIndex())
-    view_mid_value = tab._source_to_view(source_mid_value)
-    tab.data_store.view.setCurrentIndex(view_mid_value)
-    tab.data_store.view.setFocus()
+    source_mid_value = tab.model.index(1, 2, QModelIndex())
+    view_mid_value = tab.view_controller.source_to_view(source_mid_value)
+    tab.view.setCurrentIndex(view_mid_value)
+    tab.view.setFocus()
 
-    qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Down)
-    assert tab.data_store.view.currentIndex().row() == 2
-    assert tab.data_store.view.currentIndex().column() == 2
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Down)
+    assert tab.view.currentIndex().row() == 2
+    assert tab.view.currentIndex().column() == 2
 
-    qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Up)
-    assert tab.data_store.view.currentIndex().row() == 1
-    assert tab.data_store.view.currentIndex().column() == 2
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Up)
+    assert tab.view.currentIndex().row() == 1
+    assert tab.view.currentIndex().column() == 2
 
 
 def test_arrow_left_right_do_not_expand_or_collapse_rows(qtbot):
@@ -265,21 +265,21 @@ def test_arrow_left_right_do_not_expand_or_collapse_rows(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_obj_name = tab.data_store.model.index(0, 0, QModelIndex())
-    view_obj_name = tab._source_to_view(source_obj_name)
-    tab.data_store.view.collapse(view_obj_name)
-    assert not tab.data_store.view.isExpanded(view_obj_name)
+    source_obj_name = tab.model.index(0, 0, QModelIndex())
+    view_obj_name = tab.view_controller.source_to_view(source_obj_name)
+    tab.view.collapse(view_obj_name)
+    assert not tab.view.isExpanded(view_obj_name)
 
-    tab.data_store.view.setCurrentIndex(view_obj_name)
-    tab.data_store.view.setFocus()
+    tab.view.setCurrentIndex(view_obj_name)
+    tab.view.setFocus()
 
-    qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Right)
-    assert tab.data_store.view.currentIndex().column() == 1
-    assert not tab.data_store.view.isExpanded(view_obj_name)
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Right)
+    assert tab.view.currentIndex().column() == 1
+    assert not tab.view.isExpanded(view_obj_name)
 
-    qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Left)
-    assert tab.data_store.view.currentIndex().column() == 0
-    assert not tab.data_store.view.isExpanded(view_obj_name)
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Left)
+    assert tab.view.currentIndex().column() == 0
+    assert not tab.view.isExpanded(view_obj_name)
 
 
 def test_space_toggles_expand_and_collapse_current_row(qtbot):
@@ -287,21 +287,21 @@ def test_space_toggles_expand_and_collapse_current_row(qtbot):
     qtbot.addWidget(tab)
     tab.show()
 
-    source_obj_type = tab.data_store.model.index(0, 1, QModelIndex())
-    view_obj_type = tab._source_to_view(source_obj_type)
+    source_obj_type = tab.model.index(0, 1, QModelIndex())
+    view_obj_type = tab.view_controller.source_to_view(source_obj_type)
     view_obj_name = view_obj_type.siblingAtColumn(0)
 
-    tab.data_store.view.collapse(view_obj_name)
-    assert not tab.data_store.view.isExpanded(view_obj_name)
+    tab.view.collapse(view_obj_name)
+    assert not tab.view.isExpanded(view_obj_name)
 
-    tab.data_store.view.setCurrentIndex(view_obj_type)
-    tab.data_store.view.setFocus()
+    tab.view.setCurrentIndex(view_obj_type)
+    tab.view.setFocus()
 
-    qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Space)
-    assert tab.data_store.view.isExpanded(view_obj_name)
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Space)
+    assert tab.view.isExpanded(view_obj_name)
 
-    qtbot.keyClick(tab.data_store.view.viewport(), Qt.Key.Key_Space)
-    assert not tab.data_store.view.isExpanded(view_obj_name)
+    qtbot.keyClick(tab.view.viewport(), Qt.Key.Key_Space)
+    assert not tab.view.isExpanded(view_obj_name)
 
 
 # All 16 text-family transitions: only STRING<->UNICODE and MULTILINE<->TEXT
@@ -389,19 +389,19 @@ def test_json_type_delegate_preselects_and_commits(qtbot):
 def test_bool_to_string_undo_redo(qtbot):
     tab = JsonTab(lambda *_: None, data={"flag": True})
     qtbot.addWidget(tab)
-    type_idx = tab.data_store.model.index(0, 1, QModelIndex())
+    type_idx = tab.model.index(0, 1, QModelIndex())
 
-    tab.push_change_type(type_idx, JsonType.STRING)
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.editing.push_change_type(type_idx, JsonType.STRING)
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.value == "true"
 
-    tab.data_store.undo_stack.undo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.BOOLEAN
     assert item.value is True
 
-    tab.data_store.undo_stack.redo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.redo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.value == "true"
 
 
@@ -412,23 +412,23 @@ def test_bytes_to_zlib_undo_redo(qtbot):
     qtbot.addWidget(tab)
 
     # The model infers BYTES type from the b64 string on load.
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.BYTES
 
-    type_idx = tab.data_store.model.index(0, 1, QModelIndex())
-    tab.push_change_type(type_idx, JsonType.ZLIB)
+    type_idx = tab.model.index(0, 1, QModelIndex())
+    tab.editing.push_change_type(type_idx, JsonType.ZLIB)
 
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.ZLIB
     assert decode_bytes(item.value, JsonType.ZLIB) == raw
 
-    tab.data_store.undo_stack.undo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.undo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.BYTES
     assert decode_bytes(item.value, JsonType.BYTES) == raw
 
-    tab.data_store.undo_stack.redo()
-    item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
+    tab.undo_stack.redo()
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.ZLIB
     assert decode_bytes(item.value, JsonType.ZLIB) == raw
 
@@ -437,24 +437,24 @@ def test_array_to_object_undo_redo(qtbot):
     tab = JsonTab(lambda *_: None, data={"arr": [1, 2, 3]})
     qtbot.addWidget(tab)
 
-    arr_idx = tab.data_store.model.index(0, 0, QModelIndex())
-    type_idx = tab.data_store.model.index(0, 1, QModelIndex())
+    arr_idx = tab.model.index(0, 0, QModelIndex())
+    type_idx = tab.model.index(0, 1, QModelIndex())
 
-    tab.push_change_type(type_idx, JsonType.OBJECT)
-    item = tab.data_store.model.get_item(arr_idx)
+    tab.editing.push_change_type(type_idx, JsonType.OBJECT)
+    item = tab.model.get_item(arr_idx)
     assert item.json_type is JsonType.OBJECT
     assert item.child_count() == 3
     assert [c.name for c in item.child_items] == ["item1", "item2", "item3"]
 
-    tab.data_store.undo_stack.undo()
-    item = tab.data_store.model.get_item(arr_idx)
+    tab.undo_stack.undo()
+    item = tab.model.get_item(arr_idx)
     assert item.json_type is JsonType.ARRAY
     assert item.child_count() == 3
     assert all(c.name is None for c in item.child_items)
     assert [c.value for c in item.child_items] == [1, 2, 3]
 
-    tab.data_store.undo_stack.redo()
-    item = tab.data_store.model.get_item(arr_idx)
+    tab.undo_stack.redo()
+    item = tab.model.get_item(arr_idx)
     assert item.json_type is JsonType.OBJECT
     assert [c.name for c in item.child_items] == ["item1", "item2", "item3"]
 

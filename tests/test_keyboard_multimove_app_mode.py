@@ -23,31 +23,31 @@ def _make_tab(qtbot, data) -> JsonTab:
     qtbot.addWidget(tab)
     # Mirror the real app: the MainWindow constructs the tab with show_root=True
     # and SelectItems behaviour comes from documents/tab_setup.py.
-    assert tab.data_store.view.selectionBehavior() == QAbstractItemView.SelectionBehavior.SelectItems
+    assert tab.view.selectionBehavior() == QAbstractItemView.SelectionBehavior.SelectItems
     return tab
 
 
 def _idx(tab: JsonTab, *path: int):
-    return tab._index_from_path(path)
+    return tab.view_controller.index_from_path(path)
 
 
 def _select_items(tab: JsonTab, *source_indexes) -> None:
     """Select indexes one cell at a time (NoUpdate-friendly), matching how
     Ctrl+Click builds a selection in the live app under SelectItems."""
-    sm = tab.data_store.view.selectionModel()
+    sm = tab.view.selectionModel()
     first, *rest = source_indexes
-    first_view = tab._source_to_view(first)
+    first_view = tab.view_controller.source_to_view(first)
     sm.select(first_view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
     sm.setCurrentIndex(first_view, QItemSelectionModel.SelectionFlag.NoUpdate)
     for idx in rest:
-        vi = tab._source_to_view(idx)
+        vi = tab.view_controller.source_to_view(idx)
         sm.select(vi, QItemSelectionModel.SelectionFlag.Select)
 
 
 def _selected_names(tab: JsonTab) -> list[str]:
     """Return the names of all top-level selected source rows, in path order."""
-    rows = top_level_source_rows(tab.data_store.view)
-    return [tab.data_store.model.get_item(r).name for r in rows]
+    rows = top_level_source_rows(tab.view)
+    return [tab.model.get_item(r).name for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -58,36 +58,36 @@ def _selected_names(tab: JsonTab) -> list[str]:
 def test_alt_up_moves_block_under_select_items_behaviour(qtbot):
     """Two adjacent siblings selected via SelectItems → Alt+Up must move both."""
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3, "d": 4})
-    before = copy.deepcopy(tab.data_store.model.root_item.to_json())
-    before_count = tab.data_store.undo_stack.count()
+    before = copy.deepcopy(tab.model.root_item.to_json())
+    before_count = tab.undo_stack.count()
 
     b = _idx(tab, 1)
     c = _idx(tab, 2)
     _select_items(tab, b, c)
 
-    assert move_selection_up(tab.data_store.view)
+    assert move_selection_up(tab.view)
     # Both b and c must climb past a in a single undo step.
-    assert list(tab.data_store.model.root_item.to_json().keys()) == ["b", "c", "a", "d"]
-    assert tab.data_store.undo_stack.count() == before_count + 1
-    tab.data_store.undo_stack.undo()
-    assert tab.data_store.model.root_item.to_json() == before
+    assert list(tab.model.root_item.to_json().keys()) == ["b", "c", "a", "d"]
+    assert tab.undo_stack.count() == before_count + 1
+    tab.undo_stack.undo()
+    assert tab.model.root_item.to_json() == before
 
 
 def test_alt_down_moves_block_under_select_items_behaviour(qtbot):
     """Two adjacent siblings selected via SelectItems → Alt+Down must move both."""
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3, "d": 4})
-    before = copy.deepcopy(tab.data_store.model.root_item.to_json())
-    before_count = tab.data_store.undo_stack.count()
+    before = copy.deepcopy(tab.model.root_item.to_json())
+    before_count = tab.undo_stack.count()
 
     b = _idx(tab, 1)
     c = _idx(tab, 2)
     _select_items(tab, b, c)
 
-    assert move_selection_down(tab.data_store.view)
-    assert list(tab.data_store.model.root_item.to_json().keys()) == ["a", "d", "b", "c"]
-    assert tab.data_store.undo_stack.count() == before_count + 1
-    tab.data_store.undo_stack.undo()
-    assert tab.data_store.model.root_item.to_json() == before
+    assert move_selection_down(tab.view)
+    assert list(tab.model.root_item.to_json().keys()) == ["a", "d", "b", "c"]
+    assert tab.undo_stack.count() == before_count + 1
+    tab.undo_stack.undo()
+    assert tab.model.root_item.to_json() == before
 
 
 def test_alt_up_block_when_user_selects_value_column_cells(qtbot):
@@ -95,17 +95,17 @@ def test_alt_up_block_when_user_selects_value_column_cells(qtbot):
     All selected cells share rows but live in column 2 — the move helper
     must still treat them as full-row selections."""
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3, "d": 4})
-    before = copy.deepcopy(tab.data_store.model.root_item.to_json())
+    before = copy.deepcopy(tab.model.root_item.to_json())
 
     # Click the value column (column 2) for rows "b" and "c".
-    b_val = tab.data_store.model.index(1, 2)
-    c_val = tab.data_store.model.index(2, 2)
+    b_val = tab.model.index(1, 2)
+    c_val = tab.model.index(2, 2)
     _select_items(tab, b_val, c_val)
 
-    assert move_selection_up(tab.data_store.view)
-    assert list(tab.data_store.model.root_item.to_json().keys()) == ["b", "c", "a", "d"]
-    tab.data_store.undo_stack.undo()
-    assert tab.data_store.model.root_item.to_json() == before
+    assert move_selection_up(tab.view)
+    assert list(tab.model.root_item.to_json().keys()) == ["b", "c", "a", "d"]
+    tab.undo_stack.undo()
+    assert tab.model.root_item.to_json() == before
 
 
 # ---------------------------------------------------------------------------
@@ -121,8 +121,8 @@ def test_selection_preserved_after_alt_up_same_parent(qtbot):
     c = _idx(tab, 2)
     _select_items(tab, b, c)
 
-    assert move_selection_up(tab.data_store.view)
-    assert list(tab.data_store.model.root_item.to_json().keys()) == ["b", "c", "a", "d"]
+    assert move_selection_up(tab.view)
+    assert list(tab.model.root_item.to_json().keys()) == ["b", "c", "a", "d"]
     # b and c should still be selected at their new positions.
     assert set(_selected_names(tab)) == {"b", "c"}
 
@@ -135,8 +135,8 @@ def test_selection_preserved_after_alt_down_same_parent(qtbot):
     c = _idx(tab, 2)
     _select_items(tab, b, c)
 
-    assert move_selection_down(tab.data_store.view)
-    assert list(tab.data_store.model.root_item.to_json().keys()) == ["a", "d", "b", "c"]
+    assert move_selection_down(tab.view)
+    assert list(tab.model.root_item.to_json().keys()) == ["a", "d", "b", "c"]
     assert set(_selected_names(tab)) == {"b", "c"}
 
 
@@ -147,9 +147,9 @@ def test_selection_preserved_after_bubble_up(qtbot):
     x = _idx(tab, 0, 0)
     _select_items(tab, x)
 
-    assert move_selection_up(tab.data_store.view)
+    assert move_selection_up(tab.view)
     # x should now be a root-level sibling before obj.
-    root_keys = list(tab.data_store.model.root_item.to_json().keys())
+    root_keys = list(tab.model.root_item.to_json().keys())
     assert root_keys[0] == "x"
     assert set(_selected_names(tab)) == {"x"}
 
@@ -162,8 +162,8 @@ def test_selection_preserved_after_multi_parent_fallback(qtbot):
     right_y = _idx(tab, 1, 1)  # "y" at row 1 inside "right"
     _select_items(tab, left_b, right_y)
 
-    assert move_selection_up(tab.data_store.view)
-    assert tab.data_store.model.root_item.to_json() == {
+    assert move_selection_up(tab.view)
+    assert tab.model.root_item.to_json() == {
         "left": {"b": 2, "a": 1, "c": 3},
         "right": {"y": 5, "x": 4, "z": 6},
     }

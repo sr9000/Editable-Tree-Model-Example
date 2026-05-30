@@ -6,8 +6,6 @@ from enum import IntEnum
 from PySide6.QtCore import QEvent, QModelIndex, QObject, Qt
 from PySide6.QtGui import QKeyEvent
 
-from documents.tab_data import JsonTabData
-
 
 class NavigationKey(IntEnum):
     LEFT = int(Qt.Key.Key_Left)
@@ -24,15 +22,15 @@ class NavigationKey(IntEnum):
 
 
 class JsonTabNavigationController:
-    """Tree-view keyboard navigation owned by a ``JsonTab`` instance."""
+    """Keyboard navigation helper for a tab tree view."""
 
-    def __init__(self, data_store: JsonTabData, edit_name_or_value_from_enter: Callable[[], None]) -> None:
-        self._data_store = data_store
+    def __init__(self, tab, edit_name_or_value_from_enter: Callable[[], None]) -> None:
+        self._tab = tab
         self._edit_name_or_value_from_enter = edit_name_or_value_from_enter
 
     def handle_event_filter(self, watched: QObject | None, event: QEvent) -> bool:
-        """Return ``True`` when a tree-view keyboard event was consumed."""
-        view = self._data_store.view
+        """Return ``True`` when a keyboard event is consumed."""
+        view = self._tab.view
         if view is not None and watched in (view, view.viewport()):
             if event.type() != QEvent.Type.KeyPress or not isinstance(event, QKeyEvent):
                 return False
@@ -48,7 +46,7 @@ class JsonTabNavigationController:
         return False
 
     def toggle_current_row_expansion_with_space(self) -> None:
-        view = self._data_store.view
+        view = self._tab.view
         if view is None:
             return
         current = view.currentIndex()
@@ -60,14 +58,14 @@ class JsonTabNavigationController:
         view.setExpanded(row_anchor, not view.isExpanded(row_anchor))
 
     def handle_arrow_navigation(self, key: int | Qt.Key, modifiers: Qt.KeyboardModifier) -> bool:
-        """Use arrows for cell navigation; never expand/collapse rows."""
+        """Use arrows for cell navigation without expanding or collapsing rows."""
         if modifiers != Qt.KeyboardModifier.NoModifier:
             return False
         navigation_key = NavigationKey.from_qt_key(key)
         if navigation_key is None:
             return False
 
-        view = self._data_store.view
+        view = self._tab.view
         if view is None:
             return True
 

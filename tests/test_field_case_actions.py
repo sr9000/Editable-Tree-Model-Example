@@ -16,13 +16,16 @@ def _make_tab(qtbot, data, *, show_root: bool = False) -> JsonTab:
 
 
 def _select_rows(tab: JsonTab, *paths: tuple[int, ...]) -> None:
-    sm = tab.data_store.view.selectionModel()
+    sm = tab.view.selectionModel()
     first, *rest = paths
-    first_view = tab._source_to_view(tab._index_from_path(first))
+    first_view = tab.view_controller.source_to_view(tab.view_controller.index_from_path(first))
     sm.select(first_view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
     sm.setCurrentIndex(first_view, QItemSelectionModel.SelectionFlag.NoUpdate)
     for path in rest:
-        sm.select(tab._source_to_view(tab._index_from_path(path)), QItemSelectionModel.SelectionFlag.Select)
+        sm.select(
+            tab.view_controller.source_to_view(tab.view_controller.index_from_path(path)),
+            QItemSelectionModel.SelectionFlag.Select,
+        )
 
 
 def test_convert_field_name_variants():
@@ -65,53 +68,53 @@ def test_switch_selection_case_non_recursive(qtbot):
     tab = _make_tab(qtbot, {"outerNode": {"innerKey": 1}, "tailValue": 2})
     _select_rows(tab, (0,))
 
-    assert switch_selection_case(tab.data_store.view, "snake_case", recursive=False)
-    assert tab.data_store.model.root_item.to_json() == {"outer_node": {"innerKey": 1}, "tailValue": 2}
+    assert switch_selection_case(tab.view, "snake_case", recursive=False)
+    assert tab.model.root_item.to_json() == {"outer_node": {"innerKey": 1}, "tailValue": 2}
 
 
 def test_switch_selection_case_recursive(qtbot):
     tab = _make_tab(qtbot, {"outerNode": {"innerKey": 1}, "tailValue": 2})
     _select_rows(tab, (0,))
 
-    assert switch_selection_case(tab.data_store.view, "snake_case", recursive=True)
-    assert tab.data_store.model.root_item.to_json() == {"outer_node": {"inner_key": 1}, "tailValue": 2}
+    assert switch_selection_case(tab.view, "snake_case", recursive=True)
+    assert tab.model.root_item.to_json() == {"outer_node": {"inner_key": 1}, "tailValue": 2}
 
 
 def test_switch_document_case_undo_redo_and_typed_command(qtbot):
     tab = _make_tab(qtbot, {"myKey": {"innerKey": 1}, "Another-Key": 2})
-    before = tab.data_store.model.root_item.to_json()
+    before = tab.model.root_item.to_json()
 
-    assert switch_document_case(tab.data_store.view, "PascalCase")
-    after = tab.data_store.model.root_item.to_json()
+    assert switch_document_case(tab.view, "PascalCase")
+    after = tab.model.root_item.to_json()
     assert after == {"MyKey": {"InnerKey": 1}, "AnotherKey": 2}
 
-    cmd = tab.data_store.undo_stack.command(tab.data_store.undo_stack.count() - 1)
+    cmd = tab.undo_stack.command(tab.undo_stack.count() - 1)
     assert isinstance(cmd, _SwitchFieldCaseCmd)
 
-    tab.data_store.undo_stack.undo()
-    assert tab.data_store.model.root_item.to_json() == before
-    tab.data_store.undo_stack.redo()
-    assert tab.data_store.model.root_item.to_json() == after
+    tab.undo_stack.undo()
+    assert tab.model.root_item.to_json() == before
+    tab.undo_stack.redo()
+    assert tab.model.root_item.to_json() == after
 
 
 def test_switch_document_case_rejects_name_collision(qtbot):
     tab = _make_tab(qtbot, {"myKey": 1, "my_key": 2})
-    before = tab.data_store.model.root_item.to_json()
-    count_before = tab.data_store.undo_stack.count()
+    before = tab.model.root_item.to_json()
+    count_before = tab.undo_stack.count()
 
-    assert not switch_document_case(tab.data_store.view, "snake_case")
-    assert tab.data_store.model.root_item.to_json() == before
-    assert tab.data_store.undo_stack.count() == count_before
+    assert not switch_document_case(tab.view, "snake_case")
+    assert tab.model.root_item.to_json() == before
+    assert tab.undo_stack.count() == count_before
 
 
 def test_context_menu_contains_switch_case_submenus(qtbot):
     tab = _make_tab(qtbot, {"obj": {"xKey": 1}, "tailValue": 3}, show_root=True)
-    tab.data_store.view.expandAll()
+    tab.view.expandAll()
     _select_rows(tab, (0, 0))
 
-    nested = tab._index_from_path((0, 0))
-    position = tab.data_store.view.visualRect(tab._source_to_view(nested)).center()
-    menu = show_context_menu(tab.data_store.view, position, execute=False)
+    nested = tab.view_controller.index_from_path((0, 0))
+    position = tab.view.visualRect(tab.view_controller.source_to_view(nested)).center()
+    menu = show_context_menu(tab.view, position, execute=False)
 
     top_titles = [action.text() for action in menu.actions() if action.text()]
     assert "Switch Case" in top_titles

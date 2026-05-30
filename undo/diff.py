@@ -47,9 +47,9 @@ class DiffApplier:
         if item_index.isValid():
             row = item_index.row()
             parent = item_index.parent()
-            top = self._tab.data_store.model.index(row, 0, parent)
-            bot = self._tab.data_store.model.index(row, 2, parent)
-            self._tab.data_store.model.dataChanged.emit(
+            top = self._tab.model.index(row, 0, parent)
+            bot = self._tab.model.index(row, 2, parent)
+            self._tab.model.dataChanged.emit(
                 top,
                 bot,
                 [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole],
@@ -58,10 +58,10 @@ class DiffApplier:
     def clear_children(self, item: JsonTreeItem, item_index: QModelIndex) -> None:
         n = len(item.child_items)
         if n > 0:
-            self._tab.data_store.model.beginRemoveRows(item_index, 0, n - 1)
+            self._tab.model.beginRemoveRows(item_index, 0, n - 1)
             item.child_items.clear()
             item.mark_children_dirty()
-            self._tab.data_store.model.endRemoveRows()
+            self._tab.model.endRemoveRows()
 
     def convert_container(
         self,
@@ -79,11 +79,11 @@ class DiffApplier:
         else:
             pairs = [(None, v) for v in value]
         if pairs:
-            self._tab.data_store.model.beginInsertRows(item_index, 0, len(pairs) - 1)
+            self._tab.model.beginInsertRows(item_index, 0, len(pairs) - 1)
             for name, v in pairs:
                 item.child_items.append(JsonTreeItem(item, v, name))
             item.mark_children_dirty()
-            self._tab.data_store.model.endInsertRows()
+            self._tab.model.endInsertRows()
         self.emit_row_changed(item_index)
 
     def convert_to_leaf(self, item: JsonTreeItem, item_index: QModelIndex, target: Any) -> None:
@@ -101,10 +101,10 @@ class DiffApplier:
         name: str | int | None = None,
     ) -> bool:
         new_item = JsonTreeItem(parent_item, value, name)
-        self._tab.data_store.model.beginInsertRows(parent_index, position, position)
+        self._tab.model.beginInsertRows(parent_index, position, position)
         parent_item.child_items.insert(position, new_item)
         parent_item.mark_children_dirty()
-        self._tab.data_store.model.endInsertRows()
+        self._tab.model.endInsertRows()
         return True
 
     def diff_object(self, item: JsonTreeItem, target_dict: dict, item_index: QModelIndex) -> bool:
@@ -113,7 +113,7 @@ class DiffApplier:
 
         for i in range(len(item.child_items) - 1, -1, -1):
             if item.child_items[i].name not in target_name_set:
-                self._tab.data_store.model.removeRow(i, item_index)
+                self._tab.model.removeRow(i, item_index)
 
         for target_pos, target_name in enumerate(target_names):
             target_value = target_dict[target_name]
@@ -130,9 +130,9 @@ class DiffApplier:
                 self.insert_typed_item(item, item_index, target_pos, target_value, name=target_name)
                 continue
             if cur_pos != target_pos:
-                self._tab.data_store.model.move_row(item_index, cur_pos, target_pos)
+                self._tab.model.move_row(item_index, cur_pos, target_pos)
             child = item.child_items[target_pos]
-            child_index = self._tab.data_store.model.index(target_pos, 0, item_index)
+            child_index = self._tab.model.index(target_pos, 0, item_index)
             self.apply(child, target_value, child_index)
         return True
 
@@ -141,7 +141,7 @@ class DiffApplier:
 
         while len(item.child_items) > target_len:
             last = len(item.child_items) - 1
-            self._tab.data_store.model.removeRow(last, item_index)
+            self._tab.model.removeRow(last, item_index)
 
         for pos in range(target_len):
             target_value = target_list[pos]
@@ -149,6 +149,6 @@ class DiffApplier:
                 self.insert_typed_item(item, item_index, pos, target_value, name=None)
                 continue
             child = item.child_items[pos]
-            child_index = self._tab.data_store.model.index(pos, 0, item_index)
+            child_index = self._tab.model.index(pos, 0, item_index)
             self.apply(child, target_value, child_index)
         return True

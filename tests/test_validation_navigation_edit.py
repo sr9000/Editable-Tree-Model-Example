@@ -16,7 +16,7 @@ def test_goto_validation_issue_edit_targets_value_column_for_leaf(qtbot):
     tab = JsonTab(lambda *_: None, data={"a": {"b": "oops"}}, show_root=True)
     qtbot.addWidget(tab)
 
-    tab.data_store.validation.set_schema(
+    tab.validation.set_schema(
         SchemaRef(
             path=None,
             inline={
@@ -31,13 +31,13 @@ def test_goto_validation_issue_edit_targets_value_column_for_leaf(qtbot):
             origin="manual",
         )
     )
-    issue = tab.data_store.issue_index.all_issues()[0]
+    issue = tab.validation.issue_index.all_issues()[0]
 
-    assert tab.goto_validation_issue(issue, edit=True)
+    assert tab.validation.goto_validation_issue(issue, edit=True)
 
-    current = tab._proxy_to_source(tab.data_store.view.currentIndex())
+    current = tab.view_controller.proxy_to_source(tab.view.currentIndex())
     assert current.isValid()
-    assert tab._qualified_name(current.siblingAtColumn(0)).endswith(".a.b")
+    assert tab.view_controller.qualified_name(current.siblingAtColumn(0)).endswith(".a.b")
     assert current.column() == 2
 
 
@@ -46,7 +46,7 @@ def test_goto_validation_issue_edit_ignores_container_value_cell(qtbot):
     tab = JsonTab(lambda *_: None, data={"a": {"b": 1}}, show_root=True)
     qtbot.addWidget(tab)
 
-    tab.data_store.validation.set_schema(
+    tab.validation.set_schema(
         SchemaRef(
             path=None,
             inline={
@@ -58,11 +58,11 @@ def test_goto_validation_issue_edit_ignores_container_value_cell(qtbot):
             origin="manual",
         )
     )
-    issue = tab.data_store.issue_index.all_issues()[0]
+    issue = tab.validation.issue_index.all_issues()[0]
 
-    assert tab.goto_validation_issue(issue, edit=True)
+    assert tab.validation.goto_validation_issue(issue, edit=True)
 
-    current = tab._proxy_to_source(tab.data_store.view.currentIndex())
+    current = tab.view_controller.proxy_to_source(tab.view.currentIndex())
     assert current.isValid()
-    assert tab._qualified_name(current.siblingAtColumn(0)).endswith(".a")
+    assert tab.view_controller.qualified_name(current.siblingAtColumn(0)).endswith(".a")
     assert current.column() == 0

@@ -1,11 +1,4 @@
-"""Tab-scoped validation controller.
-
-Owns the schema reference/inline payload, the issue index, the auto-rescan
-debounce timer, and the registry binding for the host tab.  All Qt
-connections it creates are torn down by ``release()``; the host tab's
-``closeEvent`` invokes ``release()`` so file watchers, registry
-ref-counts, and timers do not leak.
-"""
+"""Per-tab schema and validation controller."""
 
 from __future__ import annotations
 
@@ -13,7 +6,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import QObject, QTimer
+from PySide6.QtCore import QItemSelectionModel, QModelIndex, QObject, Qt, QTimer
+from PySide6.QtWidgets import QAbstractItemView
 
 from io_formats.detect import SAVE_FORMAT_YAML_MULTI
 from tree.model_roles import VALIDATION_SEVERITY_ROLE
@@ -21,6 +15,7 @@ from validation import get_schema_registry
 from validation._sanitize import to_jsonschema_input
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
+from validation.json_pointer import instance_path_to_model_path
 from validation.schema_registry import SchemaSource
 from validation.schema_source import SchemaRef, discover_schema, load_schema
 from validation.validator import validate_document
@@ -28,11 +23,7 @@ from validation.yaml_validate import validate_yaml_documents
 
 
 class TabValidationController(QObject):
-    """Validation/schema state for a single JsonTab.
-
-    The controller is parented to the tab (Qt parent), the debounce timer
-    is parented to the controller — so destruction cascades cleanly.
-    """
+    """Own schema state, issue tracking, and revalidation for one tab."""
 
     def __init__(
         self,
@@ -55,13 +46,11 @@ class TabValidationController(QObject):
         self._issue_index = IssueIndex([], initial_data)
         self._auto_rescan: bool = False
 
-        # ── debounce timer ────────────────────────────────────────────────
         self.debounce_timer = QTimer(self)
         self.debounce_timer.setSingleShot(True)
         self.debounce_timer.setInterval(250)
         self.debounce_timer.timeout.connect(self.revalidate)
 
-        # Connections kept alive so we can disconnect them on release().
         self._model_conns = [
             self._model.dataChanged.connect(self._on_data_changed_mutation),
             self._model.rowsInserted.connect(self._schedule_debounced_revalidation),
@@ -72,7 +61,6 @@ class TabValidationController(QObject):
         get_schema_registry().schemaReloaded.connect(self._on_registry_schema_reloaded)
         self._released = False
 
-    # ----- read-only views ----------------------------------------------
     @property
     def schema_ref(self) -> SchemaRef:
         return self._schema_ref
@@ -93,12 +81,11 @@ class TabValidationController(QObject):
     def auto_rescan(self) -> bool:
         return self._auto_rescan
 
-    # ----- initialisation ------------------------------------------------
     def init_state(self, model_data: Any, *, doc_path: Path | None = None) -> None:
         from state.validation_settings import _is_url, read_schema_ref_str
 
-        if doc_path is None and self._tab.data_store.file_path:
-            doc_path = Path(self._tab.data_store.file_path).expanduser().resolve()
+        if doc_path is None and self._tab.io.file_path:
+            doc_path = Path(self._tab.io.file_path).expanduser().resolve()
         ref = discover_schema(doc_path, model_data)
 
         if ref.origin == "none" and doc_path is not None:
@@ -120,7 +107,6 @@ class TabValidationController(QObject):
 
         self.set_schema(ref)
 
-    # ----- schema mutators ----------------------------------------------
     def set_schema(self, ref: SchemaRef) -> None:
         self._swap_source(SchemaSource.from_ref(ref), ref)
 
@@ -131,7 +117,7 @@ class TabValidationController(QObject):
         self.set_schema(SchemaRef(path=None, inline=None, origin="none"))
 
     def set_schema_view_source(self, source: SchemaSource | None) -> None:
-        """Tag this tab as representing *source* for navigation/pool reuse."""
+        """Mark this tab as the active source view for a schema."""
         self._schema_source = source
         self._schema_ref = (
             source.as_ref(origin="manual") if source is not None else SchemaRef(path=None, inline=None, origin="none")
@@ -156,13 +142,12 @@ class TabValidationController(QObject):
         self._on_schema_changed(self._schema_ref)
         self.revalidate()
 
-    # ----- revalidation --------------------------------------------------
     def revalidate(self) -> None:
         root_data = self._model.root_item.to_json()
         issues: list[ValidationIssue] = []
         if self._schema is not None:
             sanitized = to_jsonschema_input(root_data)
-            if self._tab.data_store.save_format == SAVE_FORMAT_YAML_MULTI and isinstance(sanitized, list):
+            if self._tab.io.save_format == SAVE_FORMAT_YAML_MULTI and isinstance(sanitized, list):
                 issues = validate_yaml_documents(sanitized, self._schema)
             else:
                 issues = validate_document(sanitized, self._schema)
@@ -193,19 +178,14 @@ class TabValidationController(QObject):
         if source == self._schema_source:
             self.revalidate()
 
-    # ----- severity provider lookup -------------------------------------
     def severity_for(self, model_path: tuple[int, ...]) -> str | None:
         exact = self._issue_index.severity_at(model_path)
         if exact is not None:
             return exact
         return self._issue_index.ancestor_severity(model_path)
 
-    # ----- teardown ------------------------------------------------------
     def release(self) -> None:
-        """Stop the timer, release the schema source, disconnect all slots.
-
-        Safe to call multiple times.  Invoked by ``JsonTab.closeEvent``.
-        """
+        """Disconnect signals, stop timers, and release schema state."""
         if self._released:
             return
         self._released = True
@@ -231,6 +211,66 @@ class TabValidationController(QObject):
                 sig.disconnect(slot)
             except (RuntimeError, TypeError):
                 pass
+
+    _SELECT_ROW_FLAGS = QItemSelectionModel.SelectionFlag(
+        QItemSelectionModel.SelectionFlag.ClearAndSelect.value | QItemSelectionModel.SelectionFlag.Rows.value
+    )
+    _EDITABLE_ITEM_FLAG = Qt.ItemFlag.ItemIsEditable.value
+
+    def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = False) -> bool:
+        root_data = self._tab.model.root_item.to_json()
+        model_path = instance_path_to_model_path(root_data, issue.instance_path)
+        if model_path is None:
+            self._tab.show_status("Validation issue path no longer exists", 2000)
+            return False
+        source_row = self._tab.view_controller.index_from_path(model_path)
+        if not source_row.isValid():
+            self._tab.show_status("Validation issue path no longer exists", 2000)
+            return False
+        source_row = source_row.siblingAtColumn(0)
+        view_row = self._tab.view_controller.source_to_view(source_row)
+        if not view_row.isValid():
+            self._tab.show_status("Validation issue path no longer exists", 2000)
+            return False
+        selection_model = self._tab.view_state.view.selectionModel()
+        if selection_model is not None:
+            selection_model.select(view_row, self._SELECT_ROW_FLAGS)
+            selection_model.setCurrentIndex(view_row, QItemSelectionModel.SelectionFlag.NoUpdate)
+        view = self._tab.view_state.view
+        view.setCurrentIndex(view_row)
+        view.scrollTo(view_row, QAbstractItemView.ScrollHint.PositionAtCenter)
+        if not edit:
+            return True
+        source_value = source_row.siblingAtColumn(2)
+        if not source_value.isValid():
+            return True
+        if not (self._tab.model.flags(source_value).value & self._EDITABLE_ITEM_FLAG):
+            return True
+        view_value = self._tab.view_controller.source_to_view(source_value)
+        if not view_value.isValid():
+            return True
+        view.setCurrentIndex(view_value)
+        view.edit(view_value)
+        return True
+
+    def severity_provider(self, model_path: tuple[int, ...]) -> str | None:
+        return self.severity_for(model_path)
+
+    def on_validation_changed(self, _index: IssueIndex) -> None:
+        """Emit recursive dataChanged so all visible rows repaint their badges."""
+
+        def emit_ranges(parent: QModelIndex) -> None:
+            model = self._tab.model
+            rows = model.rowCount(parent)
+            if rows <= 0:
+                return
+            top_left = model.index(0, 0, parent)
+            bottom_right = model.index(rows - 1, model.columnCount(parent) - 1, parent)
+            model.dataChanged.emit(top_left, bottom_right, [VALIDATION_SEVERITY_ROLE])
+            for row in range(rows):
+                emit_ranges(model.index(row, 0, parent))
+
+        emit_ranges(QModelIndex())
 
 
 __all__ = ["TabValidationController"]
