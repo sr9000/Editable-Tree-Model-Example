@@ -26,15 +26,15 @@ def test_tab_exposes_io_controller(_qapp):
         tab.deleteLater()
 
 
-def test_dirty_signal_propagates_through_facade(_qapp):
+def test_dirty_signal_propagates_through_io_controller(_qapp):
     tab = JsonTab(update_actions_callback=lambda: None, data={"a": 1})
     try:
         events: list[bool] = []
         tab.dirtyChanged.connect(events.append)
-        tab._set_dirty(True)
+        tab.io.set_dirty(True)
         assert events == [True]
         assert tab.io.dirty is True
-        tab._set_dirty(False)
+        tab.io.set_dirty(False)
         assert events == [True, False]
     finally:
         tab.deleteLater()

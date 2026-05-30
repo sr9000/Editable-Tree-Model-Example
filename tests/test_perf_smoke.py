@@ -138,16 +138,16 @@ def test_duplicate_then_undo_redo_on_big_array(qtbot):
     tab.view.setCurrentIndex(v_inner)
     tab.view.selectionModel().select(v_inner, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
-    before = tab._snapshot()
+    before = tab.io.snapshot()
     assert duplicate_selection(tab.view)
-    after = tab._snapshot()
+    after = tab.io.snapshot()
     assert after != before
 
     tab.undo_stack.undo()
-    assert tab._snapshot() == before
+    assert tab.io.snapshot() == before
 
     tab.undo_stack.redo()
-    assert tab._snapshot() == after
+    assert tab.io.snapshot() == after
 
 
 def test_expansion_preserved_across_undo_redo(qtbot):

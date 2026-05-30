@@ -56,7 +56,7 @@ def _ordered_repr(value):
 
 
 def _state(tab: JsonTab):
-    return _ordered_repr(tab._snapshot())
+    return _ordered_repr(tab.io.snapshot())
 
 
 def _gather_types(tab: JsonTab) -> set[JsonType]:

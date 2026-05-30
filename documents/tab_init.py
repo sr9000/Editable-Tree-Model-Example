@@ -112,7 +112,7 @@ def bootstrap(
     tab.validationChanged.connect(tab.validation.on_validation_changed)
     init_validation_state(tab, model_data)
 
-    tab.undo_stack.cleanChanged.connect(tab._on_clean_changed)
+    tab.undo_stack.cleanChanged.connect(tab.io.on_clean_changed)
     tab.undo_stack.indexChanged.connect(tab.editing.on_undo_index_changed)
     tab.undo_stack.setClean()
-    tab._set_dirty(False)
+    tab.io.set_dirty(False)

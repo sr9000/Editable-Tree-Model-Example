@@ -160,7 +160,7 @@ def test_no_routine_action_pushes_full_document_snapshot(qtbot):
     name_idx = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
     assert tab.editing.commit_set_data(name_idx, "renamed", Qt.ItemDataRole.EditRole)
 
-    full_root_json = tab._snapshot()
+    full_root_json = tab.io.snapshot()
     full_size = _deep_size(full_root_json)
 
     for i in range(tab.undo_stack.count()):
@@ -192,7 +192,7 @@ def test_delete_inner_stores_only_removed_subtree(qtbot):
     # Removed subtree is one tiny inner dict.
     assert rec["value"] == {"k": 1500, "v": "item-1500"}
 
-    full_size = _deep_size(tab._snapshot())
+    full_size = _deep_size(tab.io.snapshot())
     cmd_size = _deep_size(cmd.__dict__)
     assert cmd_size < full_size // 100, f"_RemoveRowsCmd state {cmd_size} bytes vs root {full_size} bytes"
 

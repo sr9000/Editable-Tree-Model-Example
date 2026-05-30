@@ -217,12 +217,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     def edit_name_or_value_from_enter(self) -> None:
         self.editing.edit_name_or_value_from_enter()
 
-    def _set_dirty(self, dirty: bool) -> None:
-        self._io.set_dirty(dirty)
-
-    def _on_clean_changed(self, clean: bool) -> None:
-        self._io.on_clean_changed(clean)
-
     def display_name(self) -> str:
         if self._io.file_path:
             # ``os.path.basename`` is platform-aware on POSIX (only "/") so we
@@ -238,9 +232,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
 
     def save_as(self, path: str | None = None) -> bool:
         return self.io.save_as(path=path)
-
-    def _snapshot(self) -> Any:
-        return self.io.snapshot()
 
     def _size_hint_for_item(self, item: JsonTreeItem) -> str | None:
         return size_hint_for_item(item)

@@ -43,5 +43,5 @@ def test_display_name_untitled_when_no_path(tab, file_path):
 
 def test_display_name_appends_dirty_marker(tab):
     tab.io.file_path = "C:\\Users\\me\\data.json"
-    tab._set_dirty(True)
+    tab.io.set_dirty(True)
     assert tab.display_name() == "data.json *"
