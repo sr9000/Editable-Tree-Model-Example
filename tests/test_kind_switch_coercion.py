@@ -535,7 +535,7 @@ def test_bytes_to_string_full_round_trip_through_item(qtbot):
     assert item.json_type is JsonType.BYTES
 
     type_idx = tab.data_store.model.index(0, 1, QModelIndex())
-    assert tab.push_change_type(type_idx, JsonType.STRING)
+    assert tab.editing.push_change_type(type_idx, JsonType.STRING)
 
     item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.STRING
@@ -622,7 +622,7 @@ def test_number_to_affix_type_uses_mru_default_affix(qtbot):
     qtbot.addWidget(tab)
 
     type_idx = tab.data_store.model.index(1, 1, QModelIndex())
-    assert tab.push_change_type(type_idx, JsonType.INTEGER_CURRENCY)
+    assert tab.editing.push_change_type(type_idx, JsonType.INTEGER_CURRENCY)
 
     item = tab.data_store.model.get_item(tab.data_store.model.index(1, 0, QModelIndex()))
     assert isinstance(item.value, NumberAffix)
@@ -638,12 +638,12 @@ def test_affix_to_string_to_affix_undo_redo_round_trip(qtbot):
 
     type_idx = tab.data_store.model.index(0, 1, QModelIndex())
 
-    assert tab.push_change_type(type_idx, JsonType.STRING)
+    assert tab.editing.push_change_type(type_idx, JsonType.STRING)
     item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.STRING
     assert item.value == "$10"
 
-    assert tab.push_change_type(type_idx, JsonType.INTEGER_UNITS)
+    assert tab.editing.push_change_type(type_idx, JsonType.INTEGER_UNITS)
     item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.INTEGER_UNITS
     assert item.value == NumberAffix(AffixKind.UNITS, "$", False, 10)

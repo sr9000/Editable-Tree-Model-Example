@@ -88,7 +88,7 @@ def test_close_cancels_if_user_cancels(qtbot, monkeypatch):
         assert tab is not None
         # Make dirty
         idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
-        tab.push_edit_value(idx.siblingAtColumn(2), 99, label="dirty")
+        tab.editing.push_edit_value(idx.siblingAtColumn(2), 99, label="dirty")
         assert tab.data_store.is_dirty
 
         win.close_current_tab()
@@ -143,7 +143,7 @@ def test_close_nonempty_untitled_tab_prompts_and_cancel_keeps_tab(qtbot, monkeyp
         tab = win._add_tab(data={"k": 1})
         assert tab is not None
         idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
-        tab.push_edit_value(idx.siblingAtColumn(2), 2, label="dirty")
+        tab.editing.push_edit_value(idx.siblingAtColumn(2), 2, label="dirty")
         win.close_current_tab()
         assert _tab_count(win) == 1
     finally:
@@ -158,7 +158,7 @@ def test_close_nonempty_untitled_tab_save_uses_save_as(qtbot, monkeypatch):
         tab = win._add_tab(data={"k": 1})
         assert tab is not None
         idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
-        tab.push_edit_value(idx.siblingAtColumn(2), 2, label="dirty")
+        tab.editing.push_edit_value(idx.siblingAtColumn(2), 2, label="dirty")
         calls = {"save_as": []}
 
         def _fake_save(tab, *, save_as=False):
@@ -265,7 +265,7 @@ def test_reopen_after_discard_does_not_resurrect_dirty_data(qtbot, monkeypatch, 
 
         # Make tab dirty
         first_row = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
-        tab.push_edit_value(first_row.siblingAtColumn(2), "dirty_value", label="dirty")
+        tab.editing.push_edit_value(first_row.siblingAtColumn(2), "dirty_value", label="dirty")
         assert tab.data_store.is_dirty
 
         win.close_current_tab()  # User chose Discard

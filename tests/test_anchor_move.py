@@ -69,7 +69,7 @@ def test_anchor_move_same_parent_forward_block(qtbot):
     f = tab.data_store.model.index(5, 0, QModelIndex())
 
     anchor = anchor_before_index(f, tab)
-    assert tab.push_move_rows_anchor([c, d], anchor, label="move")
+    assert tab.editing.push_move_rows_anchor([c, d], anchor, label="move")
     assert _keys(tab) == ["a", "b", "e", "c", "d", "f"]
 
     assert tab.data_store.undo_stack.count() == 1
@@ -91,7 +91,7 @@ def test_anchor_move_same_parent_backward_block(qtbot):
     h = tab.data_store.model.index(7, 0, QModelIndex())
 
     anchor = anchor_before_index(c, tab)
-    assert tab.push_move_rows_anchor([f, h], anchor, label="move")
+    assert tab.editing.push_move_rows_anchor([f, h], anchor, label="move")
     assert _keys(tab) == ["a", "b", "f", "h", "c", "d", "e", "g"]
 
     tab.data_store.undo_stack.undo()
@@ -119,7 +119,7 @@ def test_anchor_move_cross_parent(qtbot):
     ax = tab.data_store.model.index(0, 0, a_idx)
     by = tab.data_store.model.index(0, 0, b_idx)
 
-    assert tab.push_move_rows_anchor([ax, by], anchor_at_end(c_idx, tab), label="move into c")
+    assert tab.editing.push_move_rows_anchor([ax, by], anchor_at_end(c_idx, tab), label="move into c")
 
     a_after = tab.data_store.model.get_item(a_idx).to_json()
     assert "x" not in a_after and a_after == {"a2": 20}
@@ -150,7 +150,7 @@ def test_anchor_move_preserves_item_identity(qtbot):
 
     # Move "b" to before "a" (i.e. before row 0)
     a_idx = tab.data_store.model.index(0, 0, QModelIndex())
-    assert tab.push_move_rows_anchor([b_src_idx], anchor_before_index(a_idx, tab), label="move")
+    assert tab.editing.push_move_rows_anchor([b_src_idx], anchor_before_index(a_idx, tab), label="move")
 
     # Locate "b" at its new row 0 — must be the SAME instance.
     b_idx_after = tab.data_store.model.index(0, 0, QModelIndex())
@@ -175,9 +175,9 @@ def test_anchor_move_cycle_guard(qtbot):
 
     count = tab.data_store.undo_stack.count()
     # Move "top" into "deep" — cycle
-    assert tab.push_move_rows_anchor([top_idx], anchor_at_end(deep_idx, tab), label="cycle") is False
+    assert tab.editing.push_move_rows_anchor([top_idx], anchor_at_end(deep_idx, tab), label="cycle") is False
     # Move "nest" into "nest" — degenerate cycle
-    assert tab.push_move_rows_anchor([nest_idx], anchor_at_end(nest_idx, tab), label="cycle") is False
+    assert tab.editing.push_move_rows_anchor([nest_idx], anchor_at_end(nest_idx, tab), label="cycle") is False
     assert tab.data_store.undo_stack.count() == count
     assert tab.data_store.model.root_item.to_json() == before
 
@@ -197,7 +197,7 @@ def test_anchor_move_no_op_guard_same_position(qtbot):
     a = tab.data_store.model.index(0, 0, QModelIndex())
     b = tab.data_store.model.index(1, 0, QModelIndex())
     # "a" → before "b" — but "a" is already immediately before "b". No-op.
-    assert tab.push_move_rows_anchor([a], anchor_before_index(b, tab), label="noop") is False
+    assert tab.editing.push_move_rows_anchor([a], anchor_before_index(b, tab), label="noop") is False
     assert tab.data_store.undo_stack.count() == before_count
     assert tab.data_store.model.root_item.to_json() == before
 
@@ -208,7 +208,7 @@ def test_anchor_move_no_op_guard_at_end(qtbot):
     before_count = tab.data_store.undo_stack.count()
 
     c = tab.data_store.model.index(2, 0, QModelIndex())
-    assert tab.push_move_rows_anchor([c], anchor_at_end(QModelIndex(), tab), label="noop") is False
+    assert tab.editing.push_move_rows_anchor([c], anchor_at_end(QModelIndex(), tab), label="noop") is False
     assert tab.data_store.undo_stack.count() == before_count
 
 
@@ -222,7 +222,7 @@ def test_legacy_push_move_rows_signature_still_works(qtbot):
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6})
     c = tab.data_store.model.index(2, 0, QModelIndex())
     d = tab.data_store.model.index(3, 0, QModelIndex())
-    assert tab.push_move_rows([c, d], QModelIndex(), 5)
+    assert tab.editing.push_move_rows([c, d], QModelIndex(), 5)
     assert _keys(tab) == ["a", "b", "e", "c", "d", "f"]
     tab.data_store.undo_stack.undo()
     assert _keys(tab) == ["a", "b", "c", "d", "e", "f"]

@@ -58,7 +58,7 @@ def test_undo_redo_commit_set_data(qtbot):
     value_idx = tab.data_store.model.index(0, 2, QModelIndex())
     before = tab.data_store.model.root_item.to_json()
 
-    assert tab.commit_set_data(value_idx, "changed", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(value_idx, "changed", Qt.ItemDataRole.EditRole)
     assert tab.data_store.model.root_item.to_json() != before
 
     tab.data_store.undo_stack.undo()
@@ -123,7 +123,7 @@ def test_undo_command_text_includes_path_and_timestamp(qtbot):
 
     # Edit value of "answer" -> label should mention `$.answer` and `edit value`.
     answer_value = tab.data_store.model.index(1, 2, QModelIndex())
-    assert tab.commit_set_data(answer_value, 999, Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(answer_value, 999, Qt.ItemDataRole.EditRole)
     text = tab.data_store.undo_stack.command(tab.data_store.undo_stack.count() - 1).text()
     assert re.match(r"^\[\d{2}:\d{2}:\d{2}\] edit value @ \$\.answer$", text), text
 
@@ -135,6 +135,6 @@ def test_undo_command_text_includes_path_and_timestamp(qtbot):
 
     # Rename a row -> label should say `rename`.
     name_idx = tab.data_store.model.index(0, 0, QModelIndex())
-    assert tab.commit_set_data(name_idx, "renamed-question", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(name_idx, "renamed-question", Qt.ItemDataRole.EditRole)
     text3 = tab.data_store.undo_stack.command(tab.data_store.undo_stack.count() - 1).text()
     assert re.match(r"^\[\d{2}:\d{2}:\d{2}\] rename @ \$\.question$", text3), text3

@@ -162,7 +162,7 @@ def test_main_menu_actions_are_disabled_when_inactive(qtbot):
         assert win.fileSaveAsAction.isEnabled()
         assert win.fileCopyPathAction.isEnabled()
 
-        assert tab.push_insert_rows(
+        assert tab.editing.push_insert_rows(
             [{"parent_path": (), "row": 0, "value": 2, "name": "b"}],
             label="mark dirty",
         )

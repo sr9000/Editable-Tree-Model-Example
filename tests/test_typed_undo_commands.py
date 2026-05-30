@@ -46,15 +46,19 @@ def test_commit_set_data_uses_typed_commands(qtbot):
     qtbot.addWidget(tab)
 
     # Edit value (column 2).
-    assert tab.commit_set_data(tab.data_store.model.index(1, 2, QModelIndex()), 999, Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(tab.data_store.model.index(1, 2, QModelIndex()), 999, Qt.ItemDataRole.EditRole)
     assert isinstance(_last_command(tab), _EditValueCmd)
 
     # Rename (column 0).
-    assert tab.commit_set_data(tab.data_store.model.index(0, 0, QModelIndex()), "renamed", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(
+        tab.data_store.model.index(0, 0, QModelIndex()), "renamed", Qt.ItemDataRole.EditRole
+    )
     assert isinstance(_last_command(tab), _RenameCmd)
 
     # Change type (column 1).
-    assert tab.commit_set_data(tab.data_store.model.index(1, 1, QModelIndex()), "string", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(
+        tab.data_store.model.index(1, 1, QModelIndex()), "string", Qt.ItemDataRole.EditRole
+    )
     assert isinstance(_last_command(tab), _ChangeTypeCmd)
 
 
@@ -123,7 +127,7 @@ def test_tree_actions_use_typed_commands(qtbot):
     assert insert_child_current(view)
     # Rename it so the sort reorders.
     new_child = model.index(0, 0, obj_idx)
-    assert tab.commit_set_data(new_child, "zzz", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(new_child, "zzz", Qt.ItemDataRole.EditRole)
     _select_row0(tab, obj_row)
     assert sort_selection_keys(view, recursive=False)
     assert isinstance(_last_command(tab), _SortKeysCmd)
@@ -149,7 +153,7 @@ def test_large_leaf_edit_does_not_store_full_document(qtbot):
     tab.data_store.model.endResetModel()
 
     target_idx = tab.data_store.model.index(7, 2, QModelIndex())
-    assert tab.commit_set_data(target_idx, "after", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(target_idx, "after", Qt.ItemDataRole.EditRole)
 
     cmd = _last_command(tab)
     assert isinstance(cmd, _EditValueCmd)
@@ -205,7 +209,7 @@ def test_sort_stores_sorted_subtree_only(qtbot):
     _select_row0(tab, obj_row)
     assert insert_child_current(tab.view)
     new_child = tab.data_store.model.index(0, 0, obj_idx)
-    assert tab.commit_set_data(new_child, "zzz", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(new_child, "zzz", Qt.ItemDataRole.EditRole)
 
     _select_row0(tab, obj_row)
     assert sort_selection_keys(tab.view, recursive=False)

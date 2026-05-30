@@ -106,7 +106,7 @@ def test_rapid_mutations_collapse_to_one_revalidation(qtbot):
 
     types = [JsonType.FLOAT, JsonType.INTEGER] * 5
     for t in types:
-        tab.push_change_type(type_idx, t)
+        tab.editing.push_change_type(type_idx, t)
 
     # Wait 400 ms for the debounce to settle.
     qtbot.waitUntil(lambda: emission_count[0] >= 1, timeout=600)

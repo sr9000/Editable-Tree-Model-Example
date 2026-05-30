@@ -57,7 +57,7 @@ def test_reload_from_disk_discard_reloads_disk_state(qtbot, tmp_path, monkeypatc
 
         a_name = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
         a_value = a_name.siblingAtColumn(2)
-        assert tab.push_edit_value(a_value, 99, label="dirty")
+        assert tab.editing.push_edit_value(a_value, 99, label="dirty")
         assert tab.data_store.is_dirty
 
         def _choose_discard(box):
@@ -101,7 +101,7 @@ def test_reload_from_disk_cancel_keeps_current_state(qtbot, tmp_path, monkeypatc
 
         a_name = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
         a_value = a_name.siblingAtColumn(2)
-        assert tab.push_edit_value(a_value, 99, label="dirty")
+        assert tab.editing.push_edit_value(a_value, 99, label="dirty")
         assert tab.data_store.is_dirty
 
         _write_json(doc, {"a": 2})
@@ -141,7 +141,7 @@ def test_reload_from_disk_overwrite_saves_then_reloads(qtbot, tmp_path, monkeypa
 
         a_name = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
         a_value = a_name.siblingAtColumn(2)
-        assert tab.push_edit_value(a_value, 99, label="dirty")
+        assert tab.editing.push_edit_value(a_value, 99, label="dirty")
         assert tab.data_store.is_dirty
 
         def _choose_overwrite(box):

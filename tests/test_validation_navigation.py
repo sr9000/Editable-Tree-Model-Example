@@ -78,7 +78,7 @@ def test_stale_issue_path_is_reported_without_changing_selection(qtbot):
     a_idx = tab.data_store.model.index(0, 0, root)
     b_idx = tab.data_store.model.index(0, 0, a_idx)
     assert b_idx.isValid()
-    assert tab.push_remove_rows([b_idx])
+    assert tab.editing.push_remove_rows([b_idx])
 
     sentinel = tab.view_controller.source_to_view(a_idx)
     tab.view.setCurrentIndex(sentinel)

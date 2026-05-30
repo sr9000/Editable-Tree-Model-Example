@@ -28,7 +28,7 @@ def _make_big_tab(qtbot, *, fanout: int = 200) -> JsonTab:
             arr_value_idx = tab.data_store.model.index(r, 2, QModelIndex())
             break
     assert arr_value_idx is not None
-    assert tab.commit_set_data(arr_value_idx, big_array, Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(arr_value_idx, big_array, Qt.ItemDataRole.EditRole)
     return tab
 
 
@@ -119,7 +119,7 @@ def test_no_op_set_data_does_not_push(qtbot):
     inner_value = tab.data_store.model.index(0, 2, arr_idx)
     same = tab.data_store.model.get_item(inner_value).to_json()
     # Setting the same value must not push.
-    assert not tab.commit_set_data(inner_value, same, Qt.ItemDataRole.EditRole)
+    assert not tab.editing.commit_set_data(inner_value, same, Qt.ItemDataRole.EditRole)
     assert tab.data_store.undo_stack.count() == initial_count
 
 
@@ -179,7 +179,7 @@ def test_expansion_preserved_across_undo_redo(qtbot):
     # Edit a leaf inside the array — sibling expansion must survive
     # the resulting commit + the subsequent undo + redo.
     inner_v = tab.data_store.model.index(10, 2, arr_idx)
-    assert tab.commit_set_data(inner_v, {"k": 99, "v": "edited"}, Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(inner_v, {"k": 99, "v": "edited"}, Qt.ItemDataRole.EditRole)
 
     # Re-fetch indexes (model identity may shift after restore-then-redo).
     obj_idx = None

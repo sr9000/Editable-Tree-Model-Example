@@ -119,14 +119,20 @@ def test_undo_redo_comprehensive_scenario(qtbot):
     # 1. Edit a value: commit_set_data on a value column (column 2).
     # NOTE: re-fetch indexes immediately before each step in case earlier
     # actions (or undo/redo replay) shift positions.
-    commit_step(lambda: tab.commit_set_data(model.index(1, 2, QModelIndex()), 1234567890, Qt.ItemDataRole.EditRole))
+    commit_step(
+        lambda: tab.editing.commit_set_data(model.index(1, 2, QModelIndex()), 1234567890, Qt.ItemDataRole.EditRole)
+    )
 
     # 2. Change a type: commit_set_data on the type column (column 1).
-    commit_step(lambda: tab.commit_set_data(model.index(1, 1, QModelIndex()), "string", Qt.ItemDataRole.EditRole))
+    commit_step(
+        lambda: tab.editing.commit_set_data(model.index(1, 1, QModelIndex()), "string", Qt.ItemDataRole.EditRole)
+    )
 
     # 3. Edit a name: commit_set_data on the name column (column 0).
     commit_step(
-        lambda: tab.commit_set_data(model.index(1, 0, QModelIndex()), "answer-renamed", Qt.ItemDataRole.EditRole)
+        lambda: tab.editing.commit_set_data(
+            model.index(1, 0, QModelIndex()), "answer-renamed", Qt.ItemDataRole.EditRole
+        )
     )
 
     # 4. Move up.
@@ -162,7 +168,7 @@ def test_undo_redo_comprehensive_scenario(qtbot):
 
     # 11. Rename the just-inserted child so that sort will reorder.
     obj_idx = model.index(obj_row, 0, QModelIndex())
-    commit_step(lambda: tab.commit_set_data(model.index(0, 0, obj_idx), "zzz", Qt.ItemDataRole.EditRole))
+    commit_step(lambda: tab.editing.commit_set_data(model.index(0, 0, obj_idx), "zzz", Qt.ItemDataRole.EditRole))
 
     # 12. Sort keys on the object (now: ["zzz", "key"] -> ["key", "zzz"]).
     obj_idx = model.index(obj_row, 0, QModelIndex())

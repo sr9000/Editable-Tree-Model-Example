@@ -27,7 +27,7 @@ def qapp():
 
 
 def _make_dirty(tab) -> None:
-    assert tab.push_insert_rows(
+    assert tab.editing.push_insert_rows(
         [
             {
                 "parent_path": (),
@@ -155,11 +155,11 @@ def test_json_tab_shows_special_root_and_allows_root_type_change(qapp):
         assert tab.data_store.model.data(root) == "<root>"
 
         root_type = tab.data_store.model.index(0, 1, QModelIndex())
-        assert tab.commit_set_data(root_type, JsonType.ARRAY)
+        assert tab.editing.commit_set_data(root_type, JsonType.ARRAY)
         # Phase-3: OBJECT→ARRAY preserves children (names dropped, values kept)
         assert tab.data_store.model.root_item.to_json() == [1]
 
-        assert tab.commit_set_data(root_type, JsonType.OBJECT)
+        assert tab.editing.commit_set_data(root_type, JsonType.OBJECT)
         # Phase-3: ARRAY→OBJECT preserves children (names assigned item1, item2, …)
         assert tab.data_store.model.root_item.to_json() == {"item1": 1}
     finally:
@@ -170,7 +170,7 @@ def test_sort_keys_on_root_object(qapp):
     tab = JsonTab(lambda *_args, **_kwargs: None, data={"z": 1, "a": 2}, show_root=True)
     try:
         root = tab.data_store.model.index(0, 0, QModelIndex())
-        assert tab.push_sort_keys(root)
+        assert tab.editing.push_sort_keys(root)
         assert list(tab.data_store.model.root_item.to_json().keys()) == ["a", "z"]
     finally:
         tab.deleteLater()

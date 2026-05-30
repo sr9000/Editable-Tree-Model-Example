@@ -69,7 +69,7 @@ def test_auto_rescan_on_value_edit_triggers_revalidation(qtbot):
     val_name_idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0))
     type_idx = val_name_idx.siblingAtColumn(1)
     with qtbot.waitSignal(tab.validationChanged, timeout=500):
-        tab.push_change_type(type_idx, JsonType.STRING)
+        tab.editing.push_change_type(type_idx, JsonType.STRING)
 
     assert len(tab.data_store.issue_index) > 0, "should detect schema violation after auto-rescan"
     assert dock.model.rowCount() > 0, "dock list should reflect new issues"
@@ -89,7 +89,7 @@ def test_auto_rescan_off_mutation_does_not_trigger_revalidation(qtbot):
 
     val_name_idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0))
     type_idx = val_name_idx.siblingAtColumn(1)
-    tab.push_change_type(type_idx, JsonType.STRING)
+    tab.editing.push_change_type(type_idx, JsonType.STRING)
 
     # Allow up to 400 ms for any spurious revalidation to fire.
     qtbot.wait(400)
@@ -110,7 +110,7 @@ def test_rescan_now_updates_issues_when_auto_rescan_off(qtbot):
 
     val_name_idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0))
     type_idx = val_name_idx.siblingAtColumn(1)
-    tab.push_change_type(type_idx, JsonType.STRING)
+    tab.editing.push_change_type(type_idx, JsonType.STRING)
 
     assert len(tab.data_store.issue_index) == 0, "pre-condition: stale"
 

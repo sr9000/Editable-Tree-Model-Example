@@ -46,9 +46,9 @@ def test_consecutive_edits_to_same_path_merge(qtbot):
     value_idx = tab.data_store.model.index(answer_row, 2, QModelIndex())
 
     before = tab.data_store.undo_stack.count()
-    assert tab.commit_set_data(value_idx, 100, Qt.ItemDataRole.EditRole)
-    assert tab.commit_set_data(value_idx, 101, Qt.ItemDataRole.EditRole)
-    assert tab.commit_set_data(value_idx, 102, Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(value_idx, 100, Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(value_idx, 101, Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(value_idx, 102, Qt.ItemDataRole.EditRole)
     assert tab.data_store.undo_stack.count() - before == 1, "consecutive same-path edits should merge"
 
     tab.data_store.undo_stack.undo()
@@ -67,9 +67,9 @@ def test_edits_outside_merge_window_do_not_merge(qtbot, monkeypatch):
     monkeypatch.setattr("time.monotonic", lambda: fake_t[0])
 
     before = tab.data_store.undo_stack.count()
-    assert tab.commit_set_data(value_idx, 100, Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(value_idx, 100, Qt.ItemDataRole.EditRole)
     fake_t[0] += _MERGE_WINDOW_SECONDS + 0.1
-    assert tab.commit_set_data(value_idx, 101, Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(value_idx, 101, Qt.ItemDataRole.EditRole)
     assert tab.data_store.undo_stack.count() - before == 2
 
 
@@ -79,8 +79,8 @@ def test_rename_commands_merge(qtbot):
     name_idx = tab.data_store.model.index(0, 0, QModelIndex())
 
     before = tab.data_store.undo_stack.count()
-    assert tab.commit_set_data(name_idx, "first", Qt.ItemDataRole.EditRole)
-    assert tab.commit_set_data(name_idx, "second", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(name_idx, "first", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(name_idx, "second", Qt.ItemDataRole.EditRole)
     assert tab.data_store.undo_stack.count() - before == 1
     assert tab.data_store.model.get_item(name_idx).name == "second"
 

@@ -432,7 +432,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         root_index = tab.root_index()
         root_item = tab.root_item()
-        changed = tab._diff_apply(root_item, data, root_index)
+        changed = tab.editing.diff_apply(root_item, data, root_index)
         if changed:
             tab.undo_stack.clear()
         tab.undo_stack.setClean()
@@ -507,7 +507,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if tab is None:
             return
 
-        if not tab.insert_child():
+        if not tab.editing.do_insert_child():
             return
 
         self.update_actions()
@@ -517,7 +517,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if tab is None:
             return
 
-        if not tab.insert_sibling_before():
+        if not tab.editing.do_insert_sibling_before():
             return
 
         self.update_actions()
@@ -527,7 +527,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if tab is None:
             return
 
-        if not tab.insert_sibling_after():
+        if not tab.editing.do_insert_sibling_after():
             return
 
         self.update_actions()

@@ -77,7 +77,7 @@ def save(tab: Document) -> None:
     settings.beginGroup(state_key(tab.io.file_path))
 
     widths = tab.view_controller.column_widths()
-    expanded_paths = [list(path) for path in tab._collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
+    expanded_paths = [list(path) for path in tab.editing.collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
 
     current_path_tuple = tab.view_controller.current_path()
     current_path = list(current_path_tuple) if current_path_tuple is not None else []

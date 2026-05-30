@@ -115,8 +115,10 @@ class Document(Protocol):
     def goto_validation_issue(self, issue: ValidationIssue, *, edit: bool = ...) -> bool: ...
 
     # =========================================================
-    # Mutation gateway  (axis: editing)
+    # Editing axis  (controller: EditingController)
     # =========================================================
+    @property
+    def editing(self) -> "EditingController": ...
     @property
     def mutations(self) -> DocumentMutationGateway: ...
     @property
@@ -135,25 +137,8 @@ class Document(Protocol):
     def root_data(self) -> Any: ...
     def row_count(self, parent: QModelIndex = ...) -> int: ...
 
-    # Tree-action entry points (one keystroke ⇒ one undo).
-    def insert_sibling_before(self) -> bool: ...
-    def insert_sibling_after(self) -> bool: ...
-    def insert_child(self) -> bool: ...
+    # Edit-from-Enter entry point (wired by the navigation controller).
     def edit_name_or_value_from_enter(self) -> None: ...
-
-    # Low-level diff / insert primitives still reached by ``undo/``.
-    # Plan 21 Phase N5 retires these as ``EditingController`` methods.
-    def _diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool: ...
-    def _emit_row_changed(self, item_index: QModelIndex) -> None: ...
-    def _insert_typed_item(
-        self,
-        parent_item: JsonTreeItem,
-        parent_index: QModelIndex,
-        position: int,
-        value: Any,
-        name: str | int | None = ...,
-    ) -> bool: ...
-    def _restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None: ...
 
     # =========================================================
     # View / viewport  (axis: view)
@@ -167,11 +152,11 @@ class Document(Protocol):
 
     def resize_key_columns(self, force: bool = ...) -> None: ...
 
-    # Selection-restore helper still reached by ``state/``.  The proxy /
-    # source / path helpers, the search filter and the column-width
-    # snapshot/restore now live on ``ViewController`` (Plan 21 M3) and
-    # are reached via ``tab.view_controller.*``.
-    def _collect_expanded_paths(self) -> list[tuple[int, ...]]: ...
+    # The proxy / source / path helpers, the search filter, the
+    # column-width snapshot/restore and the expanded-paths collector
+    # live on ``ViewController`` (Plan 21 M3) / ``EditingController``
+    # (Plan 21 N6) and are reached via ``tab.view_controller.*`` /
+    # ``tab.editing.*``.
 
     # =========================================================
     # Appearance / editability  (cross-cutting controllers)

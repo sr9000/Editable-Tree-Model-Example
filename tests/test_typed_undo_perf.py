@@ -127,7 +127,7 @@ def test_leaf_edit_undo_redo_is_constant_time_on_huge_array(qtbot):
     # Edit the value of an inner element's "v" field.
     inner_obj = tab.data_store.model.index(1234, 0, QModelIndex())
     v_value = tab.data_store.model.index(1, 2, inner_obj)
-    assert tab.commit_set_data(v_value, "PATCHED", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(v_value, "PATCHED", Qt.ItemDataRole.EditRole)
     cmd = tab.data_store.undo_stack.command(tab.data_store.undo_stack.count() - 1)
     assert isinstance(cmd, _EditValueCmd)
 
@@ -156,9 +156,9 @@ def test_no_routine_action_pushes_full_document_snapshot(qtbot):
     _select_row0(tab, 200)
     assert delete_selection(tab.view)
     leaf_v = tab.data_store.model.index(1, 2, tab.data_store.model.index(300, 0, QModelIndex()))
-    assert tab.commit_set_data(leaf_v, "tagged", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(leaf_v, "tagged", Qt.ItemDataRole.EditRole)
     name_idx = tab.data_store.model.index(0, 0, tab.data_store.model.index(0, 0, QModelIndex()))
-    assert tab.commit_set_data(name_idx, "renamed", Qt.ItemDataRole.EditRole)
+    assert tab.editing.commit_set_data(name_idx, "renamed", Qt.ItemDataRole.EditRole)
 
     full_root_json = tab._snapshot()
     full_size = _deep_size(full_root_json)

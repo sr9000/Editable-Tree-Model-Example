@@ -18,7 +18,7 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Callable
 
-from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex, QPersistentModelIndex, Qt, QTimer
+from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex, QObject, QPersistentModelIndex, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QComboBox
 
 from documents.mutation_gateway import DocumentMutationGateway
@@ -90,7 +90,7 @@ _ACTIONS: tuple[tuple[TreeAction, Callable[..., bool]], ...] = (
 )
 
 
-class EditingController:
+class EditingController(QObject):
     """Per-tab editing controller.
 
     Owns the tree model, mutation gateway, undo-history controller, affix
@@ -100,6 +100,7 @@ class EditingController:
     """
 
     def __init__(self, tab) -> None:
+        super().__init__(tab)
         self._tab = tab
         self.model: JsonTreeModel | None = None
         self.mutations: DocumentMutationGateway | None = None
@@ -196,14 +197,14 @@ class EditingController:
                     return False
 
         # Build the command.
-        move_view_state = tab._capture_move_view_state(sources)
+        move_view_state = self.capture_move_view_state(sources)
         target_qname = tab.view_controller.qualified_name(model.index(sources[0].row(), 0, sources[0].parent()))
         cmd = _MoveRowsCmd(tab, self.make_label(label, target_qname), source_paths, source_names, anchor)
         tab.data_store.undo_stack.push(cmd)
         tab.data_store._move_view_state_by_cmd_id[id(cmd)] = move_view_state
         # Expose placed paths for action-layer post-hooks (esp. macros).
         tab.data_store._last_move_placed = cmd.placed_paths
-        tab._apply_move_view_state(cmd, undo=False)
+        self.apply_move_view_state(cmd, undo=False)
         return True
 
     def push_move_rows(
