@@ -2,7 +2,7 @@
 
 This module publishes a *stable seam* on top of the current ``JsonTab`` API.
 External callers (``tree_actions``, ``undo``, ``app``) should go through
-``tab.data_store.mutations.*`` so that the underlying implementation can move out of
+``tab.mutations.*`` so that the underlying implementation can move out of
 ``JsonTab`` in a later commit without churning every call site.
 
 For Phase 0 every method here simply delegates back to the existing
@@ -100,7 +100,7 @@ class DocumentMutationGateway:
         row_index = self.index_from_path(row_path)
         if not row_index.isValid():
             return False
-        model = self._tab.data_store.model
+        model = self._tab.model
         value_index = model.index(row_index.row(), 2, row_index.parent())
         return self._tab.editing.push_edit_value(value_index, new_value, label=label)
 

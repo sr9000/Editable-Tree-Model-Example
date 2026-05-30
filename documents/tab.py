@@ -12,7 +12,6 @@ from documents.states.editing_controller import EditingController, TreeAction
 from documents.states.io_controller import IoController
 from documents.states.view_state import ViewState
 from documents.tab_appearance import JsonTabAppearanceController
-from documents.tab_data import JsonTabData
 from documents.tab_dependencies import JsonTabHost, JsonTabServices
 from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_marker import JsonTabWidgetMarker
@@ -54,9 +53,10 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     _editability: JsonTabEditabilityController | None = None
     _view_controller: ViewController | None = None
 
-    # Plan 21 P1: the six controllers + host now live directly on JsonTab.
-    # ``data_store`` (below) is a thin forwarder onto these attributes,
-    # retained only until Plan 21 P2/P3 retire the ``data_store.*`` reach-in.
+    # Plan 21 P3: the six controllers + host live directly on JsonTab.
+    # ``JsonTabData`` / ``tab.data_store`` have been deleted; callers reach
+    # each axis through ``tab.io`` / ``tab.view_state`` / ``tab.editing`` /
+    # ``tab.validation`` / ``tab.appearance`` / ``tab.editability``.
     _io: IoController | None = None
     _view_state: ViewState | None = None
     _editing: EditingController | None = None
@@ -66,8 +66,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     dirtyChanged = Signal(bool)
     schemaChanged = Signal(object)
     validationChanged = Signal(object)
-
-    data_store: JsonTabData = None  # populated by tab_init.bootstrap
 
     def eventFilter(self, watched, event):  # type: ignore[override]
         navigation = self._navigation
@@ -124,47 +122,45 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         Replaces ``tab.data_store.mutations`` for external callers; see
         ``plans/20-decouple-jsontab.md`` Phase B.
         """
-        return self.data_store.mutations
+        return self._editing.mutations
 
     # -- Phase I (I5): direct substate accessors -------------------
     # ``JsonTab directly composes the four states.``  These read-only
-    # properties expose each substate object so callers inside
-    # ``documents/`` can grab a whole axis instead of dereferencing
-    # individual ``data_store.<attr>`` fields.  External callers
-    # continue to use the per-attribute typed forwards above.
+    # properties expose each substate / controller object so callers
+    # inside ``documents/`` can grab a whole axis directly.  Plan 21 P3
+    # removed ``JsonTabData``; the controllers now live on JsonTab as
+    # ``_io`` / ``_view_state`` / ``_editing`` / ``_validation``.
     @property
-    def io(self):
-        """The :class:`documents.states.io_controller.IoController` substate."""
-        return self.data_store.io
+    def io(self) -> IoController:
+        """The :class:`documents.states.io_controller.IoController`."""
+        return self._io
 
     @property
-    def view_state(self):
+    def view_state(self) -> ViewState:
         """The :class:`documents.states.view_state.ViewState` substate."""
-        return self.data_store.view_state
+        return self._view_state
 
     @property
-    def editing_state(self):
-        """The :class:`documents.states.editing_controller.EditingController` substate."""
-        return self.data_store.editing_state
+    def editing_state(self) -> EditingController:
+        """The :class:`documents.states.editing_controller.EditingController`."""
+        return self._editing
 
     @property
-    def editing(self):
+    def editing(self) -> EditingController:
         """The :class:`documents.states.editing_controller.EditingController`.
 
         Active controller owning the editing axis (tree model, mutation
         gateway, undo history, affix MRU, last-move cache) and the typed
         ``push_*`` command behaviour; see Plan 21 Phase N.
         """
-        return self.data_store.editing_state
+        return self._editing
 
     @property
-    def validation_state(self):
-        """The :class:`documents.states.validation_state.ValidationState` substate.
-
-        Same object as :attr:`validation`; the alias name matches the
+    def validation_state(self) -> TabValidationController:
+        """Same object as :attr:`validation`; the alias name matches the
         I1-I4 ``*State`` naming scheme.
         """
-        return self.data_store.validation
+        return self._validation
 
     # -- Phase C: typed file-state accessors ---------------------
     # Plan 21 L3 retired the per-attribute ``file_path`` / ``save_format``
@@ -176,11 +172,11 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     # the ValidationController (``tab.validation.schema_source`` etc.).
     @property
     def validation(self) -> TabValidationController:
-        return self.data_store.validation
+        return self._validation
 
     @property
     def undo_stack(self):
-        return self.data_store.undo_stack
+        return self._editing.history.undo_stack
 
     @property
     def view(self) -> JsonTreeView:
@@ -189,7 +185,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         Replaces ``tab.data_store.view`` for external callers; see
         ``plans/20-decouple-jsontab.md`` Phase D.
         """
-        return self.data_store.view
+        return self._view_state.view
 
     @property
     def view_controller(self) -> ViewController:
@@ -209,16 +205,9 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         """Typed accessor for the underlying tree model.
 
         Replaces ``tab.data_store.model`` for external callers; see
-        ``plans/20-decouple-jsontab.md`` Phase E (E-light). For the
-        17 non-``undo/`` sites that only needed structural reads,
-        prefer the narrow helpers below (Phase E, E2): :meth:`root_data`,
-        :meth:`root_index`, :meth:`root_item`, :meth:`row_count`,
-        :meth:`column_count`. Raw ``.model`` access remains the right
-        tool for ``undo/`` where the full ``QAbstractItemModel`` API
-        is genuinely needed; Phase H will retire those last usages
-        through the path-based mutation gateway.
+        ``plans/20-decouple-jsontab.md`` Phase E (E-light).
         """
-        return self.data_store.model
+        return self._editing.model
 
     # -- Phase E (E2): narrow read helpers covering the structural /
     # data-read intents identified in reports/model_access_audit.md.
@@ -233,54 +222,50 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         :meth:`JsonTreeModel.get_item` maps the invalid index to the
         real ``root_item``.
         """
-        model = self.data_store.model
+        model = self._editing.model
         if not model.show_root:
             return QModelIndex()
         return model.index(0, 0, QModelIndex())
 
     def root_item(self) -> JsonTreeItem:
         """Return the root :class:`JsonTreeItem` of the document tree."""
-        return self.data_store.model.root_item
+        return self._editing.model.root_item
 
     def root_data(self) -> Any:
         """Return a fresh JSON-serialisable snapshot of the document root."""
-        return self.data_store.model.root_item.to_json()
+        return self._editing.model.root_item.to_json()
 
     def row_count(self, parent: QModelIndex = QModelIndex()) -> int:
         """Number of children directly under ``parent``."""
-        return self.data_store.model.rowCount(parent)
+        return self._editing.model.rowCount(parent)
 
     def column_count(self) -> int:
         """Number of columns in the document model (Name / Type / Value)."""
-        return self.data_store.model.columnCount()
+        return self._editing.model.columnCount()
 
     # -- Phase E (E2/E3): viewport + zoom helpers consolidating the
     # last bits of underscore-prefixed reach-in from state/view_state.py.
     @property
     def zoom_pt(self) -> int:
         """Per-tab editor font point-size override (0 ⇒ inherit global)."""
-        return self.data_store._font_pt
+        return self._appearance.font_pt
 
     # -- Phase F long tail (F4 / F5): typed accessors for residual
     # state still leaked into tree_actions/, app/, undo/.
     @property
     def search_edit(self) -> QLineEdit:
-        return self.data_store.search_edit
+        return self._view_state.search_edit
 
     @property
     def last_move_placed(self) -> list[tuple[tuple, int]]:
-        return self.data_store.last_move_placed
-
-    @property
-    def last_move_placed(self) -> list[tuple[tuple, int]]:
-        return self.data_store.last_move_placed
+        return self._editing.last_move_placed
 
     @property
     def affix_mru(self) -> AffixMRU:
-        return self.data_store.affix_mru
+        return self._editing.affix_mru
 
     def closeEvent(self, event):  # type: ignore[override]
-        self.data_store.validation.release()
+        self._validation.release()
         super().closeEvent(event)
 
     @property
@@ -297,14 +282,14 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         return self._appearance
 
     def refresh_actions(self) -> None:
-        self.data_store._host.refresh_actions()
+        self._host.refresh_actions()
 
     def show_status(self, message: str, timeout_ms: int = 3000) -> None:
         """Publish *message* via the injected host."""
-        self.data_store._host.show_status_message(message, timeout_ms)
+        self._host.show_status_message(message, timeout_ms)
 
     def show_permanent_message(self, message: str) -> None:
-        self.data_store._host.show_permanent_message(message)
+        self._host.show_permanent_message(message)
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
         self.editing.on_type_changed(item_index, lossy)
@@ -319,20 +304,20 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         self.editing.open_active_type_combo_popup()
 
     def _set_dirty(self, dirty: bool) -> None:
-        self.data_store.io.set_dirty(dirty)
+        self._io.set_dirty(dirty)
 
     def _on_clean_changed(self, clean: bool) -> None:
-        self.data_store.io.on_clean_changed(clean)
+        self._io.on_clean_changed(clean)
 
     def display_name(self) -> str:
-        if self.data_store.file_path:
+        if self._io.file_path:
             # ``os.path.basename`` is platform-aware on POSIX (only "/") so we
             # also strip "\\" explicitly to handle Windows-style paths produced
             # by ``QFileDialog`` and similar APIs regardless of host OS.
-            name = os.path.basename(self.data_store.file_path.replace("\\", "/")) or "Untitled"
+            name = os.path.basename(self._io.file_path.replace("\\", "/")) or "Untitled"
         else:
             name = "Untitled"
-        return f"{name} *" if self.data_store.is_dirty else name
+        return f"{name} *" if self._io.dirty else name
 
     def save(self) -> bool:
         return self.io.save()

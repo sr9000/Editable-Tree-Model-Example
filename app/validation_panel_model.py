@@ -10,7 +10,6 @@ from validation.json_pointer import instance_path_to_model_path
 
 
 class ValidationPanelTabProtocol(Protocol):
-    data_store: Any
     view_controller: Any
 
     def root_data(self) -> Any: ...

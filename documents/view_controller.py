@@ -80,41 +80,41 @@ class ViewController(QObject):
     @property
     def widget(self):
         """The underlying :class:`tree.view.JsonTreeView`."""
-        return self._tab.data_store.view
+        return self._tab.view_state.view
 
     @property
     def proxy(self):
         """The :class:`tree_filter_proxy.TreeFilterProxy` wrapping the model."""
-        return self._tab.data_store.proxy
+        return self._tab.view_state.proxy
 
     @property
     def search_edit(self):
         """The search/filter ``QLineEdit``."""
-        return self._tab.data_store.search_edit
+        return self._tab.view_state.search_edit
 
     @property
     def ui(self):
         """The generated ``Ui_JsonTab`` form object."""
-        return self._tab.data_store.ui
+        return self._tab.view_state.ui
 
     @property
     def name_delegate(self):
         """Column-0 (name) item delegate."""
-        return self._tab.data_store.name_delegate
+        return self._tab.view_state.name_delegate
 
     @property
     def type_delegate(self):
         """Column-1 (type) item delegate."""
-        return self._tab.data_store.type_delegate
+        return self._tab.view_state.type_delegate
 
     @property
     def value_delegate(self):
         """Column-2 (value) item delegate."""
-        return self._tab.data_store.value_delegate
+        return self._tab.view_state.value_delegate
 
     @property
     def _model(self):
-        return self._tab.data_store.model
+        return self._tab.model
 
     # ------------------------------------------------------------------
     # Search filter
@@ -122,11 +122,11 @@ class ViewController(QObject):
 
     def set_filter_text(self, text: str) -> None:
         """Push *text* straight to the proxy filter."""
-        self._tab.data_store.proxy.set_filter_text(text)
+        self._tab.view_state.proxy.set_filter_text(text)
 
     def apply_filter(self) -> None:
         """Re-apply the search edit's current text to the proxy filter."""
-        self._tab.data_store.proxy.set_filter_text(self._tab.data_store.search_edit.text())
+        self._tab.view_state.proxy.set_filter_text(self._tab.view_state.search_edit.text())
 
     # ------------------------------------------------------------------
     # Column widths (snapshot / restore for persisted view state)
@@ -134,8 +134,8 @@ class ViewController(QObject):
 
     def column_widths(self) -> list[int]:
         """Snapshot the current widths of every model column from the view."""
-        view = self._tab.data_store.view
-        model = self._tab.data_store.model
+        view = self._tab.view_state.view
+        model = self._tab.model
         return [int(view.columnWidth(c)) for c in range(model.columnCount())]
 
     def set_column_widths(self, widths: list[int]) -> None:
@@ -147,13 +147,12 @@ class ViewController(QObject):
         not snap them back to content width. This is the inverse of
         :meth:`column_widths`.
         """
-        store = self._tab.data_store
-        model = store.model
-        view = store.view
+        model = self._tab.model
+        view = self._tab.view_state.view
         for column, width in enumerate(widths[: model.columnCount()]):
             if width > 0:
                 view.setColumnWidth(column, width)
-        store._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
+        self._tab.appearance.user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
 
     # ------------------------------------------------------------------
     # Proxy <-> source <-> view index mapping (was documents/tab_paths.py)
@@ -169,7 +168,7 @@ class ViewController(QObject):
 
     def source_to_view(self, source_index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
         src = QModelIndex(source_index) if isinstance(source_index, QPersistentModelIndex) else source_index
-        model = self._tab.data_store.view.model()
+        model = self._tab.view_state.view.model()
         if isinstance(model, QSortFilterProxyModel):
             return model.mapFromSource(src)
         return src
@@ -191,7 +190,7 @@ class ViewController(QObject):
         index = self.proxy_to_source(index)
         if not index.isValid():
             return ()
-        model = self._tab.data_store.model
+        model = self._tab.model
         root_item = model.root_item
         if model.get_item(index) is root_item:
             return ()
@@ -206,7 +205,7 @@ class ViewController(QObject):
         """Inverse of :meth:`index_path` — walk *path* starting at root_item."""
         if path is None:
             return QModelIndex()
-        model = self._tab.data_store.model
+        model = self._tab.model
         if model.show_root:
             root_idx = model.index(0, 0, QModelIndex())
             if not path:
@@ -230,7 +229,7 @@ class ViewController(QObject):
         index = self.proxy_to_source(index)
         if not index.isValid():
             return "$"
-        model = self._tab.data_store.model
+        model = self._tab.model
         item = model.get_item(index)
         if item is model.root_item:
             return "$"

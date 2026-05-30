@@ -46,7 +46,7 @@ def on_current_changed(tab, current: QModelIndex, _previous: QModelIndex) -> Non
         tab.show_permanent_message("")
         return
 
-    item = tab.data_store.model.get_item(row0)
+    item = tab.model.get_item(row0)
     breadcrumb = tab.view_controller.qualified_name(row0)
     item_type = item.json_type.value
     size_hint = size_hint_for_item(item)

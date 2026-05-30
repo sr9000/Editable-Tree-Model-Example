@@ -127,15 +127,15 @@ class EditingController(QObject):
         label: str = "move row",
     ) -> bool:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if src == dst:
             return False
-        parent_item = tab.data_store.model.get_item(parent_index)
+        parent_item = tab.model.get_item(parent_index)
         n = parent_item.child_count()
         if not (0 <= src < n and 0 <= dst < n):
             return False
-        source_idx = tab.data_store.model.index(src, 0, parent_index)
+        source_idx = tab.model.index(src, 0, parent_index)
         # push_move_rows uses pre-pop target_row; dst is post-pop.
         # Forward move (src < dst): removing src shifts later rows down by 1,
         # so pre-pop target = dst + 1 to land at the same final position.
@@ -161,12 +161,12 @@ class EditingController(QObject):
         from tree_actions.anchors import anchor_is_cycle, anchor_is_no_op, resolve_anchor_insert_row
 
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if not sources:
             return False
 
-        model = tab.data_store.model
+        model = tab.model
         # Snapshot every source's (parent_path, row) BEFORE any mutation.
         source_paths: list[tuple[tuple, int]] = []
         source_names: list[Any] = []
@@ -200,10 +200,10 @@ class EditingController(QObject):
         move_view_state = self.capture_move_view_state(sources)
         target_qname = tab.view_controller.qualified_name(model.index(sources[0].row(), 0, sources[0].parent()))
         cmd = _MoveRowsCmd(tab, self.make_label(label, target_qname), source_paths, source_names, anchor)
-        tab.data_store.undo_stack.push(cmd)
-        tab.data_store._move_view_state_by_cmd_id[id(cmd)] = move_view_state
+        tab.undo_stack.push(cmd)
+        tab.editing.history._move_view_state_by_cmd_id[id(cmd)] = move_view_state
         # Expose placed paths for action-layer post-hooks (esp. macros).
-        tab.data_store._last_move_placed = cmd.placed_paths
+        tab.editing.last_move_placed = cmd.placed_paths
         self.apply_move_view_state(cmd, undo=False)
         return True
 
@@ -220,7 +220,7 @@ class EditingController(QObject):
         from tree_actions.anchors import pre_pop_target_row_to_anchor
 
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if not sources:
             return False
@@ -229,11 +229,11 @@ class EditingController(QObject):
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if not name_index.isValid() or name_index.column() != 0:
             return False
-        item = tab.data_store.model.get_item(name_index)
+        item = tab.model.get_item(name_index)
         if not isinstance(new_name, str):
             return False
         candidate = new_name.strip()
@@ -249,17 +249,17 @@ class EditingController(QObject):
         cmd = _RenameCmd(
             tab, self.make_label(label, target_qname), tab.view_controller.index_path(name_index), item.name, candidate
         )
-        tab.data_store.undo_stack.push(cmd)
+        tab.undo_stack.push(cmd)
         return True
 
     def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if not value_index.isValid() or value_index.column() != 2:
             return False
-        name_idx = tab.data_store.model.index(value_index.row(), 0, value_index.parent())
-        item = tab.data_store.model.get_item(name_idx)
+        name_idx = tab.model.index(value_index.row(), 0, value_index.parent())
+        item = tab.model.get_item(name_idx)
         old_subtree = item.to_json()
         # Honour explicit_type strict coercion when the type was pinned.
         if item.explicit_type and item.json_type not in (JsonType.OBJECT, JsonType.ARRAY):
@@ -276,12 +276,12 @@ class EditingController(QObject):
         cmd = _EditValueCmd(
             tab, self.make_label(label, target_qname), tab.view_controller.index_path(name_idx), old_subtree, applied
         )
-        tab.data_store.undo_stack.push(cmd)
+        tab.undo_stack.push(cmd)
         return True
 
     def push_change_type(self, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if not type_index.isValid() or type_index.column() != 1:
             return False
@@ -289,8 +289,8 @@ class EditingController(QObject):
             target_type = new_type if isinstance(new_type, JsonType) else JsonType(str(new_type))
         except ValueError:
             return False
-        name_idx = tab.data_store.model.index(type_index.row(), 0, type_index.parent())
-        item = tab.data_store.model.get_item(name_idx)
+        name_idx = tab.model.index(type_index.row(), 0, type_index.parent())
+        item = tab.model.get_item(name_idx)
         if item.json_type is target_type:
             return False
         warn_fraction_loss = would_drop_fraction_on_type_change(item, target_type)
@@ -307,7 +307,7 @@ class EditingController(QObject):
             old_type,
             target_type,
         )
-        tab.data_store.undo_stack.push(cmd)
+        tab.undo_stack.push(cmd)
         if warn_fraction_loss:
             tab.show_status("Fractional part discarded during float-to-integer conversion", 3000)
         return True
@@ -321,7 +321,7 @@ class EditingController(QObject):
     ) -> bool:
         """``inserts`` is a list of ``{parent_path, row, value, name}``."""
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if not inserts:
             return False
@@ -331,20 +331,20 @@ class EditingController(QObject):
             else tab.view_controller.qualified_name(tab.view_controller.index_from_path(inserts[0]["parent_path"]))
         )
         cmd = _InsertRowsCmd(tab, self.make_label(label, qname), inserts)
-        tab.data_store.undo_stack.push(cmd)
+        tab.undo_stack.push(cmd)
         return True
 
     def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if not indexes:
             return False
         ordered = sorted(indexes, key=lambda i: (tab.view_controller.index_path(i.parent()), i.row()), reverse=True)
         removals = []
         for idx in ordered:
-            row0 = tab.data_store.model.index(idx.row(), 0, idx.parent())
-            item = tab.data_store.model.get_item(row0)
+            row0 = tab.model.index(idx.row(), 0, idx.parent())
+            item = tab.model.get_item(row0)
             removals.append(
                 {
                     "parent_path": tab.view_controller.index_path(idx.parent()),
@@ -355,7 +355,7 @@ class EditingController(QObject):
             )
         target_qname = tab.view_controller.qualified_name(ordered[0])
         cmd = _RemoveRowsCmd(tab, self.make_label(label, target_qname), removals)
-        tab.data_store.undo_stack.push(cmd)
+        tab.undo_stack.push(cmd)
         return True
 
     def push_sort_keys(
@@ -366,11 +366,11 @@ class EditingController(QObject):
         label: str | None = None,
     ) -> bool:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if not index.isValid():
             return False
-        item = tab.data_store.model.get_item(index)
+        item = tab.model.get_item(index)
         if item.json_type is not JsonType.OBJECT:
             return False
         old_subtree = item.to_json()
@@ -381,7 +381,7 @@ class EditingController(QObject):
         cmd = _SortKeysCmd(
             tab, self.make_label(text, target_qname), tab.view_controller.index_path(index), old_subtree, recursive
         )
-        tab.data_store.undo_stack.push(cmd)
+        tab.undo_stack.push(cmd)
         return True
 
     def push_switch_field_case(
@@ -392,7 +392,7 @@ class EditingController(QObject):
         target_qname: str | None = None,
     ) -> bool:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
         if not renames:
             return False
@@ -411,7 +411,7 @@ class EditingController(QObject):
             idx = tab.view_controller.index_from_path(path)
             if not idx.isValid():
                 continue
-            item = tab.data_store.model.get_item(idx)
+            item = tab.model.get_item(idx)
             if item.name != old_name:
                 continue
             parent = item.parent_item
@@ -426,7 +426,7 @@ class EditingController(QObject):
         # Preflight: reject operations that would create duplicate sibling names.
         for parent_path, updates in by_parent.items():
             parent_index = tab.view_controller.index_from_path(parent_path)
-            parent_item = tab.data_store.model.get_item(parent_index)
+            parent_item = tab.model.get_item(parent_index)
             final_names: list[str] = []
             for row, child in enumerate(parent_item.child_items):
                 if not isinstance(child.name, str):
@@ -438,7 +438,7 @@ class EditingController(QObject):
         first_index = tab.view_controller.index_from_path(normalized[0]["path"])
         qname = target_qname if target_qname is not None else tab.view_controller.qualified_name(first_index)
         cmd = _SwitchFieldCaseCmd(tab, self.make_label(label, qname), normalized)
-        tab.data_store.undo_stack.push(cmd)
+        tab.undo_stack.push(cmd)
         return True
 
     # ------------------------------------------------------------------
@@ -451,8 +451,8 @@ class EditingController(QObject):
         # closes any persistent inline editor that might have been open on the
         # value cell.  We additionally close it explicitly so the row is in a
         # clean state before any auto-reopen below.
-        value_index = tab.data_store.model.index(item_index.row(), 2, item_index.parent())
-        tab.data_store.view.closePersistentEditor(tab.view_controller.source_to_view(value_index))
+        value_index = tab.model.index(item_index.row(), 2, item_index.parent())
+        tab.view_state.view.closePersistentEditor(tab.view_controller.source_to_view(value_index))
 
         if lossy:
             tab.show_status("Type change dropped existing child nodes", 3000)
@@ -463,7 +463,7 @@ class EditingController(QObject):
         # ``_interactive`` stays ``False`` and we avoid the spurious
         # "edit: editing failed" warning that
         # ``tests/test_smoke_mainwindow.py`` regression-tests.
-        if not tab.data_store.type_delegate.interactive:
+        if not tab.view_state.type_delegate.interactive:
             return
         if not value_index.isValid():
             return
@@ -480,14 +480,14 @@ class EditingController(QObject):
         value_index = QModelIndex(value_pindex) if isinstance(value_pindex, QPersistentModelIndex) else value_pindex
         if not value_index.isValid():
             return
-        flags = tab.data_store.model.flags(value_index)
+        flags = tab.model.flags(value_index)
         if not (flags & Qt.ItemFlag.ItemIsEditable):
             return
         view_index = tab.view_controller.source_to_view(value_index)
         if not view_index.isValid():
             return
-        tab.data_store.view.setCurrentIndex(view_index)
-        tab.data_store.view.edit(view_index)
+        tab.view_state.view.setCurrentIndex(view_index)
+        tab.view_state.view.edit(view_index)
 
     def edit_name_or_value_from_enter(self) -> None:
         """Start editing from Enter with type-column support.
@@ -496,15 +496,15 @@ class EditingController(QObject):
         - Type column: open the inline type combobox editor.
         """
         tab = self._tab
-        if tab.data_store.view.state() == QAbstractItemView.State.EditingState:
+        if tab.view_state.view.state() == QAbstractItemView.State.EditingState:
             return
-        current = tab.data_store.view.currentIndex()
+        current = tab.view_state.view.currentIndex()
         if not current.isValid():
             return
 
         if current.column() == 1:
-            if tab.data_store.view.model().flags(current) & Qt.ItemFlag.ItemIsEditable:
-                tab.data_store.view.edit(current)
+            if tab.view_state.view.model().flags(current) & Qt.ItemFlag.ItemIsEditable:
+                tab.view_state.view.edit(current)
                 QTimer.singleShot(0, self.open_active_type_combo_popup)
             return
 
@@ -513,20 +513,20 @@ class EditingController(QObject):
             candidates.append(current)
         candidates.extend((current.siblingAtColumn(2), current.siblingAtColumn(0)))
 
-        model = tab.data_store.view.model()
+        model = tab.view_state.view.model()
         for idx in candidates:
             if not idx.isValid():
                 continue
             if not (model.flags(idx) & Qt.ItemFlag.ItemIsEditable):
                 continue
-            tab.data_store.view.setCurrentIndex(idx)
-            tab.data_store.view.edit(idx)
+            tab.view_state.view.setCurrentIndex(idx)
+            tab.view_state.view.edit(idx)
             return
 
     def open_active_type_combo_popup(self) -> None:
         tab = self._tab
-        for combo in tab.data_store.view.findChildren(QComboBox):
-            if combo.parent() is tab.data_store.view.viewport() and combo.isVisible():
+        for combo in tab.view_state.view.findChildren(QComboBox):
+            if combo.parent() is tab.view_state.view.viewport() and combo.isVisible():
                 combo.showPopup()
                 return
 
@@ -540,12 +540,12 @@ class EditingController(QObject):
         paths: list[tuple[int, ...]] = []
 
         def visit(parent_index: QModelIndex) -> None:
-            for r in range(tab.data_store.model.rowCount(parent_index)):
-                child = tab.data_store.model.index(r, 0, parent_index)
+            for r in range(tab.model.rowCount(parent_index)):
+                child = tab.model.index(r, 0, parent_index)
                 if not child.isValid():
                     continue
                 view_child = tab.view_controller.source_to_view(child)
-                if tab.data_store.view.isExpanded(view_child):
+                if tab.view_state.view.isExpanded(view_child):
                     paths.append(tab.view_controller.index_path(child))
                     visit(child)
 
@@ -556,22 +556,22 @@ class EditingController(QObject):
         tab = self._tab
         roots_state: dict[tuple[tuple[int, ...], int], dict[str, Any]] = {}
         for idx in sources:
-            row0 = tab.data_store.model.index(idx.row(), 0, idx.parent())
+            row0 = tab.model.index(idx.row(), 0, idx.parent())
             if not row0.isValid():
                 continue
             key = (tab.view_controller.index_path(row0.parent()), row0.row())
             view_idx = tab.view_controller.source_to_view(row0)
             roots_state[key] = {
-                "expanded_root": bool(view_idx.isValid() and tab.data_store.view.isExpanded(view_idx)),
-                "expanded_rel": list(iter_expanded_relative_paths(tab.data_store.view, row0)),
+                "expanded_root": bool(view_idx.isValid() and tab.view_state.view.isExpanded(view_idx)),
+                "expanded_rel": list(iter_expanded_relative_paths(tab.view_state.view, row0)),
             }
 
         selected_paths = [
-            tab.view_controller.index_path(idx) for idx in selected_source_rows(tab.data_store.view) if idx.isValid()
+            tab.view_controller.index_path(idx) for idx in selected_source_rows(tab.view_state.view) if idx.isValid()
         ]
-        current_src = tab.view_controller.proxy_to_source(tab.data_store.view.currentIndex())
+        current_src = tab.view_controller.proxy_to_source(tab.view_state.view.currentIndex())
         if current_src.isValid():
-            current_src = tab.data_store.model.index(current_src.row(), 0, current_src.parent())
+            current_src = tab.model.index(current_src.row(), 0, current_src.parent())
         current_path = tab.view_controller.index_path(current_src) if current_src.isValid() else None
         return {
             "roots": roots_state,
@@ -597,13 +597,13 @@ class EditingController(QObject):
                 continue
             target_parent_path, target_row = target_root
             target_parent = tab.view_controller.index_from_path(target_parent_path)
-            target_index = tab.data_store.model.index(target_row, 0, target_parent)
+            target_index = tab.model.index(target_row, 0, target_parent)
             if not target_index.isValid():
                 continue
             target_view = tab.view_controller.source_to_view(target_index)
             if target_view.isValid():
-                tab.data_store.view.setExpanded(target_view, bool(state.get("expanded_root", False)))
-            apply_expanded_relative_paths(tab.data_store.view, target_index, state.get("expanded_rel", []))
+                tab.view_state.view.setExpanded(target_view, bool(state.get("expanded_root", False)))
+            apply_expanded_relative_paths(tab.view_state.view, target_index, state.get("expanded_rel", []))
 
     def _restore_selection_paths(
         self,
@@ -611,7 +611,7 @@ class EditingController(QObject):
         current_path: tuple[int, ...] | None,
     ) -> None:
         tab = self._tab
-        sm = tab.data_store.view.selectionModel()
+        sm = tab.view_state.view.selectionModel()
         if sm is None:
             return
         selection = QItemSelection()
@@ -642,14 +642,14 @@ class EditingController(QObject):
         tab = self._tab
         if not placed:
             return
-        sm = tab.data_store.view.selectionModel()
+        sm = tab.view_state.view.selectionModel()
         if sm is None:
             return
         selection = QItemSelection()
         first_view_idx = None
         for parent_path, row in placed:
             p = tab.view_controller.index_from_path(parent_path)
-            src_idx = tab.data_store.model.index(row, 0, p)
+            src_idx = tab.model.index(row, 0, p)
             view_idx = tab.view_controller.source_to_view(src_idx)
             if view_idx.isValid():
                 selection.select(view_idx, view_idx)
@@ -664,7 +664,7 @@ class EditingController(QObject):
 
     def apply_move_view_state(self, cmd: _MoveRowsCmd, *, undo: bool) -> None:
         tab = self._tab
-        state = tab.data_store._move_view_state_by_cmd_id.get(id(cmd))
+        state = tab.editing.history._move_view_state_by_cmd_id.get(id(cmd))
         if state is None:
             return
         roots_state = state.get("roots", {})
@@ -679,21 +679,21 @@ class EditingController(QObject):
 
     def on_undo_index_changed(self, new_index: int) -> None:
         tab = self._tab
-        old_index = tab.data_store._last_undo_index
+        old_index = tab.editing.history.last_undo_index
         if new_index == old_index:
             return
 
         if new_index > old_index:
             for i in range(old_index, new_index):
-                cmd = tab.data_store.undo_stack.command(i)
-                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in tab.data_store._move_view_state_by_cmd_id:
+                cmd = tab.undo_stack.command(i)
+                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in tab.editing.history._move_view_state_by_cmd_id:
                     self.apply_move_view_state(cmd, undo=False)
         else:
             for i in range(old_index - 1, new_index - 1, -1):
-                cmd = tab.data_store.undo_stack.command(i)
-                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in tab.data_store._move_view_state_by_cmd_id:
+                cmd = tab.undo_stack.command(i)
+                if isinstance(cmd, _MoveRowsCmd) and id(cmd) in tab.editing.history._move_view_state_by_cmd_id:
                     self.apply_move_view_state(cmd, undo=True)
-        tab.data_store._last_undo_index = new_index
+        tab.editing.history.last_undo_index = new_index
 
     # ------------------------------------------------------------------
     # Tree-mutation action dispatch (was tab_tree_actions.py)
@@ -701,9 +701,9 @@ class EditingController(QObject):
 
     def run_tree_action(self, success_message: str, actions: set[TreeAction]) -> None:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return
-        view = tab.data_store.view
+        view = tab.view_state.view
         for tree_action, action in _ACTIONS:
             if tree_action in actions:
                 if action(view):
@@ -712,21 +712,21 @@ class EditingController(QObject):
 
     def do_insert_sibling_before(self) -> bool:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
-        return insert_sibling_before(tab.data_store.view)
+        return insert_sibling_before(tab.view_state.view)
 
     def do_insert_sibling_after(self) -> bool:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
-        return insert_sibling_after(tab.data_store.view)
+        return insert_sibling_after(tab.view_state.view)
 
     def do_insert_child(self) -> bool:
         tab = self._tab
-        if tab.data_store.is_read_only:
+        if tab.editability.is_read_only:
             return False
-        return insert_child_current(tab.data_store.view)
+        return insert_child_current(tab.view_state.view)
 
     # ------------------------------------------------------------------
     # Smart-restore diff + low-level insert primitives (was on JsonTab)
@@ -752,7 +752,7 @@ class EditingController(QObject):
         return self._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
-        return self._tab.data_store.mutations.commit_set_data(index, value, role)
+        return self._tab.mutations.commit_set_data(index, value, role)
 
 
 __all__ = ["EditingController", "TreeAction"]

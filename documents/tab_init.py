@@ -15,7 +15,6 @@ from documents.states.io_controller import IoController
 from documents.states.validation_state import ValidationState
 from documents.states.view_state import ViewState
 from documents.tab_appearance import JsonTabAppearanceController
-from documents.tab_data import JsonTabData
 from documents.tab_demo_data import build_demo_data
 from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_services
 from documents.tab_editability import JsonTabEditabilityController
@@ -53,14 +52,11 @@ def bootstrap(
 ) -> None:
     """Populate *tab* with controllers, model, view, delegates and validation."""
 
-    tab.data_store = JsonTabData(tab)
     tab._view_state = ViewState()
-    tab.data_store.editing_state = EditingController(tab)
-    tab._appearance = JsonTabAppearanceController(tab.data_store)
-    tab.data_store.appearance = tab._appearance
-    tab._navigation = JsonTabNavigationController(tab.data_store, tab.edit_name_or_value_from_enter)
-    tab._editability = JsonTabEditabilityController(tab.data_store)
-    tab.data_store.editability = tab._editability
+    tab._editing = EditingController(tab)
+    tab._appearance = JsonTabAppearanceController(tab)
+    tab._navigation = JsonTabNavigationController(tab, tab.edit_name_or_value_from_enter)
+    tab._editability = JsonTabEditabilityController(tab)
 
     resolved_services = services or build_legacy_json_tab_services(
         update_actions_callback=update_actions_callback,
@@ -76,7 +72,7 @@ def bootstrap(
             icon_provider=icon_provider if icon_provider is not None else services.icon_provider,
         )
 
-    tab.data_store._host = resolved_services.host
+    tab._host = resolved_services.host
     tab._appearance.initialize(resolved_services.theme, resolved_services.icon_provider)
 
     init_layout(tab)
@@ -88,27 +84,27 @@ def bootstrap(
     else:
         model_data = data if data is not None else {}
 
-    tab.data_store.affix_mru = AffixMRU()
+    tab._editing.affix_mru = AffixMRU()
 
-    tab.data_store.io = IoController(tab, file_path=file_path, save_format=save_format)
-    tab.data_store.io.dirtyChanged.connect(tab.dirtyChanged.emit)
+    tab._io = IoController(tab, file_path=file_path, save_format=save_format)
+    tab._io.dirtyChanged.connect(tab.dirtyChanged.emit)
 
     init_model(tab, model_data, show_root=show_root)
 
-    tab.data_store.history = TabHistoryController(tab)
-    tab.data_store.affix_mru.bootstrap_from_tree(tab.data_store.model.root_item)
-    tab.data_store.mutations = DocumentMutationGateway(tab)
+    tab._editing.history = TabHistoryController(tab)
+    tab._editing.affix_mru.bootstrap_from_tree(tab.model.root_item)
+    tab._editing.mutations = DocumentMutationGateway(tab)
 
-    tab.data_store.validation = ValidationState(
+    tab._validation = ValidationState(
         tab,
-        tab.data_store.model,
+        tab.model,
         on_schema_changed=lambda ref: tab.schemaChanged.emit(ref),
         on_validation_changed=lambda idx: tab.validationChanged.emit(idx),
         initial_data=model_data,
     )
 
     init_delegates_and_connections(tab)
-    tab.appearance.set_monospace_fields_enabled(tab.data_store._monospace_fields_enabled)
+    tab.appearance.set_monospace_fields_enabled(tab.appearance.monospace_fields_enabled)
     init_shortcuts(tab)
     init_search_filter(tab)
 
@@ -120,11 +116,11 @@ def bootstrap(
     view_controller.viewportRequested.connect(view_controller.apply_request)
     # Plug the severity provider before init_validation_state so the first
     # revalidate() → dataChanged repaint already has the provider ready.
-    tab.data_store.model.set_issue_index_provider(tab.validation.severity_provider)
+    tab.model.set_issue_index_provider(tab.validation.severity_provider)
     tab.validationChanged.connect(tab.validation.on_validation_changed)
     init_validation_state(tab, model_data)
 
-    tab.data_store.undo_stack.cleanChanged.connect(tab._on_clean_changed)
-    tab.data_store.undo_stack.indexChanged.connect(tab.editing.on_undo_index_changed)
-    tab.data_store.undo_stack.setClean()
+    tab.undo_stack.cleanChanged.connect(tab._on_clean_changed)
+    tab.undo_stack.indexChanged.connect(tab.editing.on_undo_index_changed)
+    tab.undo_stack.setClean()
     tab._set_dirty(False)

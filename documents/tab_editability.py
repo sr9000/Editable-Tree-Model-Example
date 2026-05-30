@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QAbstractItemView
 
-from documents.tab_data import JsonTabData
 from tree.model import JsonTreeModel
 from tree.view import JsonTreeView
 
@@ -10,8 +9,8 @@ from tree.view import JsonTreeView
 class JsonTabEditabilityController:
     """Own read-only/editable view state for a JsonTab."""
 
-    def __init__(self, data_store: JsonTabData) -> None:
-        self._data_store = data_store
+    def __init__(self, tab) -> None:
+        self._tab = tab
         self._read_only: bool = False
         self._captured_edit_triggers: QAbstractItemView.EditTrigger | None = None
         self._captured_drag_enabled: bool = True
@@ -53,13 +52,13 @@ class JsonTabEditabilityController:
             view.setDragDropMode(self._captured_drag_drop_mode)
 
     def _require_view(self) -> JsonTreeView:
-        view = self._data_store.view
+        view = self._tab.view
         if view is None:
             raise RuntimeError("JsonTab view is not initialized")
         return view
 
     def _require_model(self) -> JsonTreeModel:
-        model = self._data_store.model
+        model = self._tab.model
         if model is None:
             raise RuntimeError("JsonTab model is not initialized")
         return model
