@@ -51,6 +51,7 @@ from PySide6.QtGui import QUndoStack
 from PySide6.QtWidgets import QLineEdit
 
 from documents.mutation_gateway import DocumentMutationGateway
+from documents.states.io_controller import IoController
 from documents.tab_validation import TabValidationController
 from documents.view_controller import DocumentView
 from state.affix_mru import AffixMRU
@@ -90,12 +91,12 @@ class Document(Protocol):
     # =========================================================
     # Identity / file state  (axis: io)
     # =========================================================
+    # Plan 21 L3: file path, save format and dirty flag are reached
+    # through the IoController (``tab.io.file_path`` / ``.save_format`` /
+    # ``.dirty``).  The former top-level ``file_path`` / ``save_format`` /
+    # ``is_dirty`` forwards on JsonTab were dropped in this step.
     @property
-    def file_path(self) -> str | None: ...
-    @property
-    def save_format(self) -> str | None: ...
-    @property
-    def is_dirty(self) -> bool: ...
+    def io(self) -> IoController: ...
     def display_name(self) -> str: ...
     def save(self) -> bool: ...
     def save_as(self, path: str | None = ...) -> bool: ...

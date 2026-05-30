@@ -13,7 +13,7 @@ def _has_meaningful_data(tab) -> bool:
 
 
 def confirm_close(window, tab, *, prompt_for_untitled_nonempty: bool = True) -> bool:
-    if prompt_for_untitled_nonempty and not tab.file_path and _has_meaningful_data(tab):
+    if prompt_for_untitled_nonempty and not tab.io.file_path and _has_meaningful_data(tab):
         choice = QMessageBox.question(
             window,
             "Unsaved untitled tab",
@@ -27,7 +27,7 @@ def confirm_close(window, tab, *, prompt_for_untitled_nonempty: bool = True) -> 
             return window._save_tab(tab, save_as=True)
         return True
 
-    if not tab.is_dirty:
+    if not tab.io.dirty:
         return True
     choice = QMessageBox.question(
         window,

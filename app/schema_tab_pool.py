@@ -140,7 +140,7 @@ class SchemaTabPool(QObject):
             widget = window.tabWidget.widget(i)
             if not isinstance(widget, JsonTabWidgetMarker):
                 continue
-            if widget.file_path and str(Path(widget.file_path).expanduser().resolve()) == resolved:
+            if widget.io.file_path and str(Path(widget.io.file_path).expanduser().resolve()) == resolved:
                 return widget
         return None
 

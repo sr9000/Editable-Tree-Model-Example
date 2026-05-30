@@ -130,8 +130,8 @@ class DockValidationPresenter(QObject):
         tab = self._win._current_tab()
         if tab is None:
             return
-        if tab.file_path:
-            clear_schema_path(Path(tab.file_path))
+        if tab.io.file_path:
+            clear_schema_path(Path(tab.io.file_path))
         tab.validation.clear_schema()
 
     def on_attach_schema_requested(self) -> None:
@@ -139,7 +139,7 @@ class DockValidationPresenter(QObject):
         tab = win._current_tab()
         if tab is None:
             return
-        source = AttachSchemaDialog.ask(win, start_dir=tab.file_path or "")
+        source = AttachSchemaDialog.ask(win, start_dir=tab.io.file_path or "")
         if source is None:
             return
         self.attach_schema_source(source)
@@ -161,8 +161,8 @@ class DockValidationPresenter(QObject):
             return
 
         tab.validation.set_schema_from_source(source)
-        if tab.file_path:
-            write_schema_ref_str(Path(tab.file_path), source.key)
+        if tab.io.file_path:
+            write_schema_ref_str(Path(tab.io.file_path), source.key)
         win.statusBar.showMessage(win.tr("Schema attached: {name}").format(name=source.display), 2000)
 
     def on_reload_schema_requested(self) -> None:

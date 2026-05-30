@@ -152,28 +152,9 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         return self.data_store.validation
 
     # -- Phase C: typed file-state accessors ---------------------
-    # Forward to JsonTabData so external callers (app/, undo/,
-    # tree_actions/, state/) stop reaching into tab.data_store.
-    @property
-    def file_path(self) -> str | None:
-        return self.data_store.file_path
-
-    @file_path.setter
-    def file_path(self, value: str | None) -> None:
-        self.data_store.file_path = value
-
-    @property
-    def save_format(self) -> str | None:
-        return self.data_store.save_format
-
-    @save_format.setter
-    def save_format(self, value: str | None) -> None:
-        self.data_store.save_format = value
-
-    @property
-    def is_dirty(self) -> bool:
-        return self.data_store.is_dirty
-
+    # Plan 21 L3 retired the per-attribute ``file_path`` / ``save_format``
+    # / ``is_dirty`` forwards; external callers reach those through the
+    # IoController (``tab.io.file_path`` / ``.save_format`` / ``.dirty``).
     @property
     def schema_source(self):
         return self.data_store.schema_source
