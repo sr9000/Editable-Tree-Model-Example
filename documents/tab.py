@@ -6,7 +6,7 @@ from typing import Any, Callable
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
 from PySide6.QtWidgets import QLineEdit, QWidget
 
-from documents import tab_editing, tab_init, tab_move_view_state, tab_tree_actions
+from documents import tab_init, tab_move_view_state, tab_tree_actions
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
@@ -395,16 +395,16 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
             appearance.zoom_reset()
 
     def _on_type_changed(self, item_index, lossy: bool) -> None:
-        tab_editing.on_type_changed(self, item_index, lossy)
+        self.editing.on_type_changed(item_index, lossy)
 
     def _reopen_value_editor(self, value_pindex: QPersistentModelIndex) -> None:
-        tab_editing.reopen_value_editor(self, value_pindex)
+        self.editing.reopen_value_editor(value_pindex)
 
     def edit_name_or_value_from_enter(self) -> None:
-        tab_editing.edit_name_or_value_from_enter(self)
+        self.editing.edit_name_or_value_from_enter()
 
     def _open_active_type_combo_popup(self) -> None:
-        tab_editing.open_active_type_combo_popup(self)
+        self.editing.open_active_type_combo_popup()
 
     def _set_dirty(self, dirty: bool) -> None:
         self.data_store.io.set_dirty(dirty)
