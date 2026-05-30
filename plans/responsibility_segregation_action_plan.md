@@ -1,31 +1,5 @@
 # Responsibility segregation — focused action plan
 
-**Date:** 2026-05-30
-**Author:** architecture review (follow-up to `repo_responsibility_segregation_review.md`)
-**Method:** read of the *current* tree (not `repo-map.md`, which has drifted), plus
-import-graph tracing for every module called out below.
-**Status:** plan only — owner-approved decisions baked in (see §6). No code moved yet.
-
-**Approved decisions (2026-05-30):**
-
-- Editor widget packages may be renamed/restructured freely, **but each stays a
-  self-hosted, app-agnostic QWidget** (no coupling to `app/`, `documents/`, or
-  `tree/`). They are reusable widgets that happen to live in this repo.
-- Dialogs: **first extract a `.ui` schema** for each hand-built dialog, **then**
-  reorganize into `app/dialogs/` (app workflows) and `editors/windowed/` (value
-  editors).
-- `model_actions.py`: **delete** and retarget its two tests onto
-  `tree_actions/structure.py`.
-- Generated UI (`mainwindow.py`, `documents/json_tab_ui.py`): **move to a
-  top-level `ui/`** and update the `Makefile` `pyside6-uic` paths.
-
-This report is deliberately **operational**, not strategic. The earlier review
-(`repo_responsibility_segregation_review.md`) made the high-level case. This one
-names the exact files to move, merge, or delete, with the import evidence behind
-each call, so the work can be executed as discrete PRs.
-
----
-
 ## 0. TL;DR — what is actually wrong
 
 The package layout has three concrete segregation failures that you can fix
