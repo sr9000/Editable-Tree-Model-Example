@@ -1,33 +1,12 @@
-"""EditingState -- per-tab editing substate.
+"""EditingState -- back-compat alias for :class:`EditingController`.
 
-Per Plan 20 Phase I (I3): groups the tree model, mutation gateway,
-undo-history controller, affix MRU and move-view caches that a
-:class:`documents.tab.JsonTab` uses to mediate edits.
-
-This is a passive container.  The owned objects are still constructed
-in :mod:`documents.tab_init` / :mod:`documents.tab_setup` and reach
-the substate through :class:`JsonTabData`'s forwarding properties.
+Plan 21 Phase N (N1) promoted the editing axis from a passive substate
+to an active controller.  The substate name is retained as an alias so
+existing references keep working until the Plan 21 closeout.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
-from documents.mutation_gateway import DocumentMutationGateway
-from documents.tab_history import TabHistoryController
-from state.affix_mru import AffixMRU
-from tree.model import JsonTreeModel
-
-
-@dataclass
-class EditingState:
-    """Per-tab editing substate."""
-
-    model: JsonTreeModel | None = None
-    mutations: DocumentMutationGateway | None = None
-    affix_mru: AffixMRU | None = None
-    history: TabHistoryController | None = None
-    last_move_placed: list[tuple[tuple[int, ...], int]] = field(default_factory=list)
-
+from documents.states.editing_controller import EditingController as EditingState
 
 __all__ = ["EditingState"]

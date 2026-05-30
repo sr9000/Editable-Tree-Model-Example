@@ -34,7 +34,7 @@ from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from documents.json_tab_ui import Ui_JsonTab
 from documents.mutation_gateway import DocumentMutationGateway
-from documents.states.editing_state import EditingState
+from documents.states.editing_controller import EditingController
 from documents.states.io_controller import IoController
 from documents.states.validation_state import ValidationState
 from documents.states.view_state import ViewState
@@ -87,7 +87,7 @@ class JsonTabData:
 
     # ----- The four substates + two cross-cutting controllers --------------
     view_state: ViewState = field(default_factory=ViewState)
-    editing_state: EditingState = field(default_factory=EditingState)
+    editing_state: EditingController | None = None
     io: IoController | None = None
     validation: ValidationState | None = None
     editability: EditabilityFacadeProtocol | None = None
@@ -167,7 +167,7 @@ class JsonTabData:
     # ----- EditingState forwards (read+write) ------------------------------
     @property
     def model(self) -> JsonTreeModel | None:
-        return self.editing_state.model
+        return self.editing_state.model if self.editing_state is not None else None
 
     @model.setter
     def model(self, value: JsonTreeModel | None) -> None:
@@ -175,7 +175,7 @@ class JsonTabData:
 
     @property
     def mutations(self) -> DocumentMutationGateway | None:
-        return self.editing_state.mutations
+        return self.editing_state.mutations if self.editing_state is not None else None
 
     @mutations.setter
     def mutations(self, value: DocumentMutationGateway | None) -> None:
@@ -183,7 +183,7 @@ class JsonTabData:
 
     @property
     def affix_mru(self) -> AffixMRU | None:
-        return self.editing_state.affix_mru
+        return self.editing_state.affix_mru if self.editing_state is not None else None
 
     @affix_mru.setter
     def affix_mru(self, value: AffixMRU | None) -> None:
@@ -191,7 +191,7 @@ class JsonTabData:
 
     @property
     def history(self) -> TabHistoryController | None:
-        return self.editing_state.history
+        return self.editing_state.history if self.editing_state is not None else None
 
     @history.setter
     def history(self, value: TabHistoryController | None) -> None:

@@ -6,7 +6,7 @@ from typing import Any, Callable
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
 from PySide6.QtWidgets import QLineEdit, QWidget
 
-from documents import tab_commands, tab_editing, tab_init, tab_move_view_state, tab_tree_actions
+from documents import tab_editing, tab_init, tab_move_view_state, tab_tree_actions
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_appearance import JsonTabAppearanceController
 from documents.tab_data import JsonTabData
@@ -138,7 +138,17 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
 
     @property
     def editing_state(self):
-        """The :class:`documents.states.editing_state.EditingState` substate."""
+        """The :class:`documents.states.editing_controller.EditingController` substate."""
+        return self.data_store.editing_state
+
+    @property
+    def editing(self):
+        """The :class:`documents.states.editing_controller.EditingController`.
+
+        Active controller owning the editing axis (tree model, mutation
+        gateway, undo history, affix MRU, last-move cache) and the typed
+        ``push_*`` command behaviour; see Plan 21 Phase N.
+        """
         return self.data_store.editing_state
 
     @property
@@ -469,16 +479,16 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     # ------------------------------------------------------------------
 
     def push_move_row(self, parent_index: QModelIndex, src: int, dst: int, *, label: str = "move row") -> bool:
-        return tab_commands.push_move_row(self, parent_index, src, dst, label=label)
+        return self.editing.push_move_row(parent_index, src, dst, label=label)
 
     def push_move_rows_anchor(
         self,
         sources: list,
-        anchor: "MoveAnchor",  # noqa: F821 — see tab_commands
+        anchor: "MoveAnchor",  # noqa: F821 — see editing_controller
         *,
         label: str = "move rows",
     ) -> bool:
-        return tab_commands.push_move_rows_anchor(self, sources, anchor, label=label)
+        return self.editing.push_move_rows_anchor(sources, anchor, label=label)
 
     def push_move_rows(
         self,
@@ -488,28 +498,28 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         *,
         label: str = "move rows",
     ) -> bool:
-        return tab_commands.push_move_rows(self, sources, target_parent, target_row, label=label)
+        return self.editing.push_move_rows(sources, target_parent, target_row, label=label)
 
     def _restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
         tab_move_view_state.restore_selection_at_paths(self, placed)
 
     def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
-        return tab_commands.push_rename(self, name_index, new_name, label=label)
+        return self.editing.push_rename(name_index, new_name, label=label)
 
     def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
-        return tab_commands.push_edit_value(self, value_index, new_value, label=label)
+        return self.editing.push_edit_value(value_index, new_value, label=label)
 
     def push_change_type(self, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
-        return tab_commands.push_change_type(self, type_index, new_type, label=label)
+        return self.editing.push_change_type(type_index, new_type, label=label)
 
     def push_insert_rows(self, inserts: list, *, label: str = "insert", target_qname: str | None = None) -> bool:
-        return tab_commands.push_insert_rows(self, inserts, label=label, target_qname=target_qname)
+        return self.editing.push_insert_rows(inserts, label=label, target_qname=target_qname)
 
     def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
-        return tab_commands.push_remove_rows(self, indexes, label=label)
+        return self.editing.push_remove_rows(indexes, label=label)
 
     def push_sort_keys(self, index: QModelIndex, *, recursive: bool = False, label: str | None = None) -> bool:
-        return tab_commands.push_sort_keys(self, index, recursive=recursive, label=label)
+        return self.editing.push_sort_keys(index, recursive=recursive, label=label)
 
     def push_switch_field_case(
         self,
@@ -518,7 +528,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         label: str = "switch field case",
         target_qname: str | None = None,
     ) -> bool:
-        return tab_commands.push_switch_field_case(self, renames, label=label, target_qname=target_qname)
+        return self.editing.push_switch_field_case(renames, label=label, target_qname=target_qname)
 
     def _run_tree_action(
         self,

@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from documents.mutation_gateway import DocumentMutationGateway
+from documents.states.editing_controller import EditingController
 from documents.states.io_controller import IoController
 from documents.states.validation_state import ValidationState
 from documents.tab_appearance import JsonTabAppearanceController
@@ -53,6 +54,7 @@ def bootstrap(
     """Populate *tab* with controllers, model, view, delegates and validation."""
 
     tab.data_store = JsonTabData()
+    tab.data_store.editing_state = EditingController(tab)
     tab._appearance = JsonTabAppearanceController(tab.data_store)
     tab.data_store.appearance = tab._appearance
     tab._navigation = JsonTabNavigationController(tab.data_store, tab.edit_name_or_value_from_enter)
