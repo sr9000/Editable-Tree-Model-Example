@@ -14,11 +14,10 @@ from documents.tab_dependencies import JsonTabServices
 from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_marker import JsonTabWidgetMarker
 from documents.tab_navigation import JsonTabNavigationController
-from documents.tab_paths import index_from_path, index_path, proxy_to_source, qualified_name, source_to_view
 from documents.tab_status import on_current_changed, size_hint_for_item
 from documents.tab_validation import TabValidationController
 from documents.tab_validation_view import JsonTabValidationViewController
-from documents.view_controller import DocumentView
+from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
@@ -55,7 +54,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     _navigation: JsonTabNavigationController | None = None
     _editability: JsonTabEditabilityController | None = None
     _validation_view: JsonTabValidationViewController | None = None
-    _view_controller: DocumentView | None = None
+    _view_controller: ViewController | None = None
 
     dirtyChanged = Signal(bool)
     schemaChanged = Signal(object)
@@ -181,13 +180,14 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         return self.data_store.view
 
     @property
-    def view_controller(self) -> DocumentView:
+    def view_controller(self) -> ViewController:
         """Selection / expansion / scroll controller for the tree view.
 
         Created by :func:`documents.tab_init.bootstrap`. External callers
         should prefer this over :attr:`view` whenever the underlying
         operation is selection-, expansion-, or scroll-related; see
-        ``plans/20-decouple-jsontab.md`` Phase D (D1).
+        ``plans/20-decouple-jsontab.md`` Phase D (D1) and
+        ``plans/21-promote-substates-to-controllers.md`` Phase M (M1).
         """
         assert self._view_controller is not None, "view_controller accessed before bootstrap"
         return self._view_controller
@@ -347,13 +347,13 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
 
     @staticmethod
     def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
-        return proxy_to_source(index)
+        return ViewController.proxy_to_source(index)
 
     def _source_to_view(self, source_index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
-        return source_to_view(self, source_index)
+        return self.view_controller.source_to_view(source_index)
 
     def _apply_filter(self) -> None:
-        self.data_store.proxy.set_filter_text(self.data_store.search_edit.text())
+        self.view_controller.apply_filter()
 
     # ── Public typed accessors (Stage 01 of getattr-elimination plan) ──────
 
@@ -461,13 +461,13 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         return self.io.snapshot()
 
     def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
-        return index_path(self, index)
+        return self.view_controller.index_path(index)
 
     def _index_from_path(self, path: tuple[int, ...]) -> QModelIndex:
-        return index_from_path(self, path)
+        return self.view_controller.index_from_path(path)
 
     def _qualified_name(self, index: QModelIndex) -> str:
-        return qualified_name(self, index)
+        return self.view_controller.qualified_name(index)
 
     def _size_hint_for_item(self, item: JsonTreeItem) -> str | None:
         return size_hint_for_item(item)

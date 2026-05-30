@@ -53,7 +53,7 @@ from PySide6.QtWidgets import QLineEdit
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.states.io_controller import IoController
 from documents.tab_validation import TabValidationController
-from documents.view_controller import DocumentView
+from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
@@ -161,7 +161,7 @@ class Document(Protocol):
     @property
     def view(self) -> JsonTreeView: ...
     @property
-    def view_controller(self) -> DocumentView: ...
+    def view_controller(self) -> ViewController: ...
     @property
     def search_edit(self) -> QLineEdit: ...
 

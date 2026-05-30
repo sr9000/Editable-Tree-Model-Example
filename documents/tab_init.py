@@ -28,7 +28,7 @@ from documents.tab_setup import (
     init_validation_state,
 )
 from documents.tab_validation_view import JsonTabValidationViewController
-from documents.view_controller import DocumentView
+from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
@@ -113,7 +113,7 @@ def bootstrap(
     # Phase D: viewport controller. Created after the QTreeView exists
     # (init_layout) and after the proxy/model are wired (init_model)
     # because apply_request resolves source-paths through the proxy.
-    view_controller = DocumentView(tab)
+    view_controller = ViewController(tab)
     tab._view_controller = view_controller
     view_controller.viewportRequested.connect(view_controller.apply_request)
     # Plug the severity provider before init_validation_state so the first

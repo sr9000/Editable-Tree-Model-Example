@@ -1,23 +1,32 @@
-"""Viewport controller for a :class:`documents.tab.JsonTab`.
+"""View controller for a :class:`documents.tab.JsonTab`.
 
 Centralises selection / expansion / scroll reads and writes for one
 ``JsonTreeView`` so callers outside ``documents/`` never touch the
 QTreeView directly. Writes are buffered through the
-:attr:`DocumentView.viewportRequested` signal so non-Qt-aware
+:attr:`ViewController.viewportRequested` signal so non-Qt-aware
 producers (notably undo command implementations) can ask the viewport
 to act without importing or holding references to the widget itself.
 
-See ``plans/20-decouple-jsontab.md`` Phase D (D1).
+Plan 21 Phase M promoted this from the selection-only ``DocumentView``
+into a full ``ViewController`` that also owns the proxy/source path
+helpers (formerly ``documents.tab_paths``) and the search-filter glue.
+
+See ``plans/20-decouple-jsontab.md`` Phase D (D1) and
+``plans/21-promote-substates-to-controllers.md`` Phase M (M1).
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, QObject, Signal
+from typing import Any
+
+from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Signal
+
+from tree.types import JsonType
 
 # Note: the constructor's ``tab`` parameter is documented to be a
 # ``documents.tab.JsonTab`` but is not statically typed here because
 # importing JsonTab eagerly would create a circular import (JsonTab
-# itself imports DocumentView).
+# itself imports ViewController).
 
 
 # Kind tags carried by ``viewportRequested``. Kept as module-level
@@ -32,7 +41,7 @@ KIND_COLLAPSE_ALL = "collapse_all"
 KIND_SCROLL_TO = "scroll"
 
 
-class DocumentView(QObject):
+class ViewController(QObject):
     """Selection / expansion / scroll controller for one ``JsonTreeView``.
 
     Reads (``current_path``, ``selected_paths``, ``has_current``) are
@@ -64,6 +73,139 @@ class DocumentView(QObject):
         self._tab = tab
 
     # ------------------------------------------------------------------
+    # Widget accessors (the view axis owns the QTreeView / proxy / search
+    # edit; storage still lives on ``ViewState`` until Phase P).
+    # ------------------------------------------------------------------
+
+    @property
+    def widget(self):
+        """The underlying :class:`tree.view.JsonTreeView`."""
+        return self._tab.data_store.view
+
+    @property
+    def proxy(self):
+        """The :class:`tree_filter_proxy.TreeFilterProxy` wrapping the model."""
+        return self._tab.data_store.proxy
+
+    @property
+    def search_edit(self):
+        """The search/filter ``QLineEdit``."""
+        return self._tab.data_store.search_edit
+
+    @property
+    def _model(self):
+        return self._tab.data_store.model
+
+    # ------------------------------------------------------------------
+    # Search filter
+    # ------------------------------------------------------------------
+
+    def set_filter_text(self, text: str) -> None:
+        """Push *text* straight to the proxy filter."""
+        self._tab.data_store.proxy.set_filter_text(text)
+
+    def apply_filter(self) -> None:
+        """Re-apply the search edit's current text to the proxy filter."""
+        self._tab.data_store.proxy.set_filter_text(self._tab.data_store.search_edit.text())
+
+    # ------------------------------------------------------------------
+    # Proxy <-> source <-> view index mapping (was documents/tab_paths.py)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
+        src = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
+        model = src.model()
+        if isinstance(model, QSortFilterProxyModel):
+            return model.mapToSource(src)
+        return src
+
+    def source_to_view(self, source_index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
+        src = QModelIndex(source_index) if isinstance(source_index, QPersistentModelIndex) else source_index
+        model = self._tab.data_store.view.model()
+        if isinstance(model, QSortFilterProxyModel):
+            return model.mapFromSource(src)
+        return src
+
+    def index_path(self, index: QModelIndex) -> tuple[int, ...]:
+        """Return a stable, parent-relative path for *index*.
+
+        Convention: paths are **always relative to ``root_item``** — the
+        synthetic root row that ``show_root=True`` exposes is implicit and
+        NEVER appears in returned paths. So:
+
+        - ``root_item`` itself → ``()``
+        - first child of root_item → ``(0,)``
+        - grand-child at root_item.child(2).child(1) → ``(2, 1)``
+
+        This convention matches :meth:`index_from_path`, which always starts
+        its walk at ``root_item`` (regardless of ``show_root``).
+        """
+        index = self.proxy_to_source(index)
+        if not index.isValid():
+            return ()
+        model = self._tab.data_store.model
+        root_item = model.root_item
+        if model.get_item(index) is root_item:
+            return ()
+        path: list[int] = []
+        cursor = index
+        while cursor.isValid() and model.get_item(cursor) is not root_item:
+            path.append(cursor.row())
+            cursor = cursor.parent()
+        return tuple(reversed(path))
+
+    def index_from_path(self, path: tuple[int | None, ...] | None) -> QModelIndex:
+        """Inverse of :meth:`index_path` — walk *path* starting at root_item."""
+        if path is None:
+            return QModelIndex()
+        model = self._tab.data_store.model
+        if model.show_root:
+            root_idx = model.index(0, 0, QModelIndex())
+            if not path:
+                return root_idx
+            idx = root_idx
+        else:
+            if not path:
+                return QModelIndex()
+            idx = QModelIndex()
+        for row in path:
+            if not isinstance(row, int) or row < 0:
+                return QModelIndex()
+            nxt = model.index(row, 0, idx)
+            if not nxt.isValid():
+                return QModelIndex()
+            idx = nxt
+        return idx
+
+    def qualified_name(self, index: QModelIndex) -> str:
+        """Return a JSON-style qualified path of *index* (e.g. ``$.foo.bar[2].baz``)."""
+        index = self.proxy_to_source(index)
+        if not index.isValid():
+            return "$"
+        model = self._tab.data_store.model
+        item = model.get_item(index)
+        if item is model.root_item:
+            return "$"
+        chain: list[tuple[JsonType | None, Any]] = []
+        cursor = model.index(index.row(), 0, index.parent())
+        while cursor.isValid():
+            item = model.get_item(cursor)
+            parent_item = item.parent() if item is not None else None
+            parent_type = parent_item.json_type if parent_item is not None else None
+            chain.append((parent_type, item))
+            cursor = cursor.parent()
+        chain.reverse()
+        parts: list[str] = ["$"]
+        for parent_type, item in chain:
+            if parent_type is JsonType.ARRAY:
+                parts.append(f"[{item.row()}]")
+            else:
+                name = item.name if isinstance(item.name, str) and item.name else "<no name>"
+                parts.append(f".{name}")
+        return "".join(parts)
+
+    # ------------------------------------------------------------------
     # Reads
     # ------------------------------------------------------------------
 
@@ -80,7 +222,7 @@ class DocumentView(QObject):
         idx = sm.currentIndex()
         if not idx.isValid():
             return None
-        return self._tab._index_path(idx)
+        return self.index_path(idx)
 
     def selected_paths(self) -> list[tuple[int, ...]]:
         """Return distinct paths for every selected row, preserving order."""
@@ -92,7 +234,7 @@ class DocumentView(QObject):
         for idx in sm.selectedRows(0):
             if not idx.isValid():
                 continue
-            path = self._tab._index_path(idx)
+            path = self.index_path(idx)
             if path in seen:
                 continue
             seen.add(path)
@@ -159,7 +301,7 @@ class DocumentView(QObject):
         # programming error rather than a runtime concern.
 
     def _path_to_view_index(self, path: tuple[int, ...]) -> QModelIndex:
-        source_index = self._tab._index_from_path(path)
+        source_index = self.index_from_path(path)
         if not source_index.isValid():
             return QModelIndex()
         return self._tab.mutations.source_to_view(source_index)
