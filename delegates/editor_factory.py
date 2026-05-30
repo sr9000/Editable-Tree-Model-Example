@@ -18,8 +18,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from datetime_editor.better_dt_editor import BetterDateTimeEditor
-from datetime_editor.enums import DateTimeCategory
 from delegates.base import _CapsLockSafeLineEdit
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.color_codec import color_to_html, parse_color
@@ -30,6 +28,8 @@ from delegates.number_affix_delegate import (
     normalize_affix_value,
     validate_affix_value,
 )
+from editors.inline.datetime.better_dt_editor import BetterDateTimeEditor
+from editors.inline.datetime.enums import DateTimeCategory
 from editors.windowed.hex_dialog import QHexDialog
 from editors.windowed.multiline_dialog import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox

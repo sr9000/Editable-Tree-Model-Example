@@ -2,7 +2,6 @@ from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelInde
 from PySide6.QtGui import QFont, QFontDatabase, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QStyle, QStyleOptionViewItem, QTreeView, QWidget
 
-from datetime_editor.enums import DateTimeCategory
 from delegates.base import _TextEditorDelegateBase, paint_editor_underlay
 from delegates.color_codec import parse_color
 from delegates.edit_context import DefaultEditContext, DelegateEditContext
@@ -14,6 +13,7 @@ from delegates.editor_factory import (
 )
 from delegates.validation_badge import draw_severity_badge
 from delegates.value_formatting import _apply_type_style, format_default, format_with_type
+from editors.inline.datetime.enums import DateTimeCategory
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem

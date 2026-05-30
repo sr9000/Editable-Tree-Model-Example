@@ -8,8 +8,8 @@ from typing import Any
 import gmpy2
 from gmpy2 import mpq
 
-from datetime_editor.enums import DateTimeCategory
-from datetime_editor.regex import parse_datetime_text
+from editors.inline.datetime.enums import DateTimeCategory
+from editors.inline.datetime.regex import parse_datetime_text
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.stubs import (
     stub_bytes_raw,
