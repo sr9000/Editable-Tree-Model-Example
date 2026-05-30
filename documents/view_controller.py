@@ -129,6 +129,33 @@ class ViewController(QObject):
         self._tab.data_store.proxy.set_filter_text(self._tab.data_store.search_edit.text())
 
     # ------------------------------------------------------------------
+    # Column widths (snapshot / restore for persisted view state)
+    # ------------------------------------------------------------------
+
+    def column_widths(self) -> list[int]:
+        """Snapshot the current widths of every model column from the view."""
+        view = self._tab.data_store.view
+        model = self._tab.data_store.model
+        return [int(view.columnWidth(c)) for c in range(model.columnCount())]
+
+    def set_column_widths(self, widths: list[int]) -> None:
+        """Restore previously-snapshotted column widths.
+
+        Positive values are written through to the tree view; the name
+        (column 0) and type (column 1) columns are additionally marked
+        as *user-sized* so subsequent zoom or content-resize passes do
+        not snap them back to content width. This is the inverse of
+        :meth:`column_widths`.
+        """
+        store = self._tab.data_store
+        model = store.model
+        view = store.view
+        for column, width in enumerate(widths[: model.columnCount()]):
+            if width > 0:
+                view.setColumnWidth(column, width)
+        store._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
+
+    # ------------------------------------------------------------------
     # Proxy <-> source <-> view index mapping (was documents/tab_paths.py)
     # ------------------------------------------------------------------
 

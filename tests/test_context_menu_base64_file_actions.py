@@ -18,14 +18,14 @@ def _make_tab(qtbot, data) -> JsonTab:
 
 def _select_value_cell(tab: JsonTab, path: tuple[int, ...]) -> None:
     sm = tab.view.selectionModel()
-    src = tab._index_from_path(path).siblingAtColumn(2)
-    view = tab._source_to_view(src)
+    src = tab.view_controller.index_from_path(path).siblingAtColumn(2)
+    view = tab.view_controller.source_to_view(src)
     sm.select(view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
     sm.setCurrentIndex(view, QItemSelectionModel.SelectionFlag.NoUpdate)
 
 
 def _value_at(tab: JsonTab, path: tuple[int, ...]) -> str:
-    return str(tab.data_store.model.get_item(tab._index_from_path(path)).value)
+    return str(tab.data_store.model.get_item(tab.view_controller.index_from_path(path)).value)
 
 
 def test_attach_base64_from_file_replaces_value(qtbot, tmp_path, monkeypatch):

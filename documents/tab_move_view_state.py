@@ -30,9 +30,9 @@ def collect_expanded_paths(tab: "JsonTab") -> list[tuple[int, ...]]:
             child = tab.data_store.model.index(r, 0, parent_index)
             if not child.isValid():
                 continue
-            view_child = tab._source_to_view(child)
+            view_child = tab.view_controller.source_to_view(child)
             if tab.data_store.view.isExpanded(view_child):
-                paths.append(tab._index_path(child))
+                paths.append(tab.view_controller.index_path(child))
                 visit(child)
 
     visit(QModelIndex())
@@ -45,18 +45,20 @@ def capture_move_view_state(tab: "JsonTab", sources: list) -> dict[str, Any]:
         row0 = tab.data_store.model.index(idx.row(), 0, idx.parent())
         if not row0.isValid():
             continue
-        key = (tab._index_path(row0.parent()), row0.row())
-        view_idx = tab._source_to_view(row0)
+        key = (tab.view_controller.index_path(row0.parent()), row0.row())
+        view_idx = tab.view_controller.source_to_view(row0)
         roots_state[key] = {
             "expanded_root": bool(view_idx.isValid() and tab.data_store.view.isExpanded(view_idx)),
             "expanded_rel": list(iter_expanded_relative_paths(tab.data_store.view, row0)),
         }
 
-    selected_paths = [tab._index_path(idx) for idx in selected_source_rows(tab.data_store.view) if idx.isValid()]
-    current_src = tab._proxy_to_source(tab.data_store.view.currentIndex())
+    selected_paths = [
+        tab.view_controller.index_path(idx) for idx in selected_source_rows(tab.data_store.view) if idx.isValid()
+    ]
+    current_src = tab.view_controller.proxy_to_source(tab.data_store.view.currentIndex())
     if current_src.isValid():
         current_src = tab.data_store.model.index(current_src.row(), 0, current_src.parent())
-    current_path = tab._index_path(current_src) if current_src.isValid() else None
+    current_path = tab.view_controller.index_path(current_src) if current_src.isValid() else None
     return {
         "roots": roots_state,
         "selection_before": selected_paths,
@@ -80,11 +82,11 @@ def _apply_relative_expansion_mapping(
         if state is None:
             continue
         target_parent_path, target_row = target_root
-        target_parent = tab._index_from_path(target_parent_path)
+        target_parent = tab.view_controller.index_from_path(target_parent_path)
         target_index = tab.data_store.model.index(target_row, 0, target_parent)
         if not target_index.isValid():
             continue
-        target_view = tab._source_to_view(target_index)
+        target_view = tab.view_controller.source_to_view(target_index)
         if target_view.isValid():
             tab.data_store.view.setExpanded(target_view, bool(state.get("expanded_root", False)))
         apply_expanded_relative_paths(tab.data_store.view, target_index, state.get("expanded_rel", []))
@@ -101,8 +103,8 @@ def _restore_selection_paths(
     selection = QItemSelection()
     first_view_idx = None
     for path in paths:
-        src_idx = tab._index_from_path(path)
-        view_idx = tab._source_to_view(src_idx)
+        src_idx = tab.view_controller.index_from_path(path)
+        view_idx = tab.view_controller.source_to_view(src_idx)
         if not view_idx.isValid():
             continue
         selection.select(view_idx, view_idx)
@@ -113,8 +115,8 @@ def _restore_selection_paths(
         QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
     )
     if current_path is not None:
-        src_current = tab._index_from_path(current_path)
-        view_current = tab._source_to_view(src_current)
+        src_current = tab.view_controller.index_from_path(current_path)
+        view_current = tab.view_controller.source_to_view(src_current)
         if view_current.isValid():
             sm.setCurrentIndex(view_current, QItemSelectionModel.SelectionFlag.NoUpdate)
             return
@@ -137,9 +139,9 @@ def restore_selection_at_paths(tab: "JsonTab", placed: list[tuple[tuple, int]]) 
     selection = QItemSelection()
     first_view_idx = None
     for parent_path, row in placed:
-        p = tab._index_from_path(parent_path)
+        p = tab.view_controller.index_from_path(parent_path)
         src_idx = tab.data_store.model.index(row, 0, p)
-        view_idx = tab._source_to_view(src_idx)
+        view_idx = tab.view_controller.source_to_view(src_idx)
         if view_idx.isValid():
             selection.select(view_idx, view_idx)
             if first_view_idx is None:

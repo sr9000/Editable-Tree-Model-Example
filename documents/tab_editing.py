@@ -16,7 +16,7 @@ def on_type_changed(tab: "JsonTab", item_index, lossy: bool) -> None:
     # We additionally close it explicitly so the row is in a clean state before
     # any auto-reopen below.
     value_index = tab.data_store.model.index(item_index.row(), 2, item_index.parent())
-    tab.data_store.view.closePersistentEditor(tab._source_to_view(value_index))
+    tab.data_store.view.closePersistentEditor(tab.view_controller.source_to_view(value_index))
 
     if lossy:
         tab.show_status("Type change dropped existing child nodes", 3000)
@@ -46,7 +46,7 @@ def reopen_value_editor(tab: "JsonTab", value_pindex: QPersistentModelIndex) -> 
     flags = tab.data_store.model.flags(value_index)
     if not (flags & Qt.ItemFlag.ItemIsEditable):
         return
-    view_index = tab._source_to_view(value_index)
+    view_index = tab.view_controller.source_to_view(value_index)
     if not view_index.isValid():
         return
     tab.data_store.view.setCurrentIndex(view_index)

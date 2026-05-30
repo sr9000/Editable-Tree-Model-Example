@@ -89,7 +89,7 @@ def _notify_drop(tab, action: Qt.DropAction, count: int, target_parent: QModelIn
         return
     noun = "row" if count == 1 else "rows"
     verb = "Copied" if action == Qt.DropAction.CopyAction else "Moved"
-    target_name = tab._qualified_name(target_parent)
+    target_name = tab.view_controller.qualified_name(target_parent)
     tab.show_status(f"{verb} {count} {noun} under {target_name}", 2000)
 
 

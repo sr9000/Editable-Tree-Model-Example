@@ -32,7 +32,7 @@ from tree_actions.structure import (
 
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:
     source_index = tab.data_store.model.index(row, 0, parent)
-    idx = tab._source_to_view(source_index)
+    idx = tab.view_controller.source_to_view(source_index)
     tab.view.setCurrentIndex(idx)
     tab.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
@@ -243,7 +243,7 @@ def test_insert_child_on_empty_root_container(qtbot):
     qtbot.addWidget(tab)
 
     root_src = tab.data_store.model.index(0, 0, QModelIndex())
-    root_view = tab._source_to_view(root_src)
+    root_view = tab.view_controller.source_to_view(root_src)
     tab.view.setCurrentIndex(root_view)
     tab.view.selectionModel().select(root_view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 

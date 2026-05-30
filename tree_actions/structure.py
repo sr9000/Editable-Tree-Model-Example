@@ -195,7 +195,7 @@ def duplicate_selection(tree_view: QTreeView) -> bool:
                 }
             )
             if first_source_qname is None:
-                first_source_qname = tab._qualified_name(row0)
+                first_source_qname = tab.view_controller.qualified_name(row0)
         return tab.mutations.push_insert_rows(inserts, label="duplicate", target_qname=first_source_qname)
 
     changed = False

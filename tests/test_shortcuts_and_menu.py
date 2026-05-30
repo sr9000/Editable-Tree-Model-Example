@@ -11,7 +11,7 @@ from tree_actions.context_menu import show_context_menu
 
 
 def _set_current_source_row(tab: JsonTab, source_index: QModelIndex) -> None:
-    view_index = tab._source_to_view(source_index)
+    view_index = tab.view_controller.source_to_view(source_index)
     sm = tab.view.selectionModel()
     sm.select(
         view_index,
@@ -115,9 +115,9 @@ def test_context_menu_shows_shortcuts_for_registered_actions(qtbot):
     tab.view.expandAll()
     QApplication.processEvents()
 
-    nested = tab._index_from_path((0, 0))
+    nested = tab.view_controller.index_from_path((0, 0))
     _set_current_source_row(tab, nested)
-    position = tab.view.visualRect(tab._source_to_view(nested)).center()
+    position = tab.view.visualRect(tab.view_controller.source_to_view(nested)).center()
 
     seen: dict[str, str] = {}
 

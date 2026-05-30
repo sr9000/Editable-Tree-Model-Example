@@ -46,12 +46,12 @@ def _select_rows(view: QTreeView, *indexes) -> None:
 
 def _select_tab(tab: JsonTab, *source_indexes) -> None:
     first, *rest = source_indexes
-    vi = tab._source_to_view(first)
+    vi = tab.view_controller.source_to_view(first)
     sm = tab.view.selectionModel()
     sm.select(vi, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows)
     sm.setCurrentIndex(vi, QItemSelectionModel.SelectionFlag.NoUpdate)
     for src in rest:
-        vi = tab._source_to_view(src)
+        vi = tab.view_controller.source_to_view(src)
         sm.select(vi, QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
 
 
@@ -164,7 +164,7 @@ def test_copy_paste_roundtrip_disjoint_selection(qtbot):
     # Select the "target" array and paste into it as children
     target = tab.data_store.model.index(3, 0, QModelIndex())
     _select_tab(tab, target)
-    tab.view.expand(tab._source_to_view(target))
+    tab.view.expand(tab.view_controller.source_to_view(target))
 
     assert paste_from_clipboard(tab.view)
 

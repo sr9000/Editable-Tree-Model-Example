@@ -28,7 +28,7 @@ def _make_tab(qtbot, data) -> JsonTab:
 
 
 def _idx(tab: JsonTab, *path: int) -> QModelIndex:
-    return tab._index_from_path(path)
+    return tab.view_controller.index_from_path(path)
 
 
 def _keys(tab: JsonTab) -> list:

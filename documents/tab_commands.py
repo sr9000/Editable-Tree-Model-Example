@@ -87,7 +87,7 @@ def push_move_rows_anchor(
     source_names: list[Any] = []
     for idx in sources:
         row0 = model.index(idx.row(), 0, idx.parent())
-        source_paths.append((tab._index_path(row0.parent()), row0.row()))
+        source_paths.append((tab.view_controller.index_path(row0.parent()), row0.row()))
         source_names.append(model.get_item(row0).name)
 
     # Cycle guard.
@@ -103,7 +103,7 @@ def push_move_rows_anchor(
         resolve_anchor_insert_row(model, tab, anchor, source_paths)
         same_parent_sources = sorted(r for p, r in source_paths if p == anchor.parent_path)
         if same_parent_sources:
-            parent_index = tab._index_from_path(anchor.parent_path)
+            parent_index = tab.view_controller.index_from_path(anchor.parent_path)
             parent_count = model.rowCount(parent_index)
             last_src = same_parent_sources[-1]
             is_contiguous = all(b - a == 1 for a, b in zip(same_parent_sources, same_parent_sources[1:]))
@@ -113,7 +113,7 @@ def push_move_rows_anchor(
 
     # Build the command.
     move_view_state = tab._capture_move_view_state(sources)
-    target_qname = tab._qualified_name(model.index(sources[0].row(), 0, sources[0].parent()))
+    target_qname = tab.view_controller.qualified_name(model.index(sources[0].row(), 0, sources[0].parent()))
     cmd = _MoveRowsCmd(tab, make_label(label, target_qname), source_paths, source_names, anchor)
     tab.data_store.undo_stack.push(cmd)
     tab.data_store._move_view_state_by_cmd_id[id(cmd)] = move_view_state
@@ -160,8 +160,10 @@ def push_rename(tab: "JsonTab", name_index: QModelIndex, new_name: Any, *, label
         siblings = {c.name for c in item.parent_item.child_items if c is not item and isinstance(c.name, str)}
         if candidate in siblings:
             return False
-    target_qname = tab._qualified_name(name_index)
-    cmd = _RenameCmd(tab, make_label(label, target_qname), tab._index_path(name_index), item.name, candidate)
+    target_qname = tab.view_controller.qualified_name(name_index)
+    cmd = _RenameCmd(
+        tab, make_label(label, target_qname), tab.view_controller.index_path(name_index), item.name, candidate
+    )
     tab.data_store.undo_stack.push(cmd)
     return True
 
@@ -185,8 +187,10 @@ def push_edit_value(tab: "JsonTab", value_index: QModelIndex, new_value: Any, *,
     # No-op detection on the affected subtree (subset comparison).
     if old_subtree == applied and isinstance(applied, type(old_subtree)):
         return False
-    target_qname = tab._qualified_name(name_idx)
-    cmd = _EditValueCmd(tab, make_label(label, target_qname), tab._index_path(name_idx), old_subtree, applied)
+    target_qname = tab.view_controller.qualified_name(name_idx)
+    cmd = _EditValueCmd(
+        tab, make_label(label, target_qname), tab.view_controller.index_path(name_idx), old_subtree, applied
+    )
     tab.data_store.undo_stack.push(cmd)
     return True
 
@@ -208,11 +212,11 @@ def push_change_type(tab: "JsonTab", type_index: QModelIndex, new_type: Any, *, 
     old_subtree = item.to_json()
     old_explicit = item.explicit_type
     old_type = item.json_type
-    target_qname = tab._qualified_name(name_idx)
+    target_qname = tab.view_controller.qualified_name(name_idx)
     cmd = _ChangeTypeCmd(
         tab,
         make_label(label, target_qname),
-        tab._index_path(name_idx),
+        tab.view_controller.index_path(name_idx),
         old_subtree,
         old_explicit,
         old_type,
@@ -239,7 +243,7 @@ def push_insert_rows(
     qname = (
         target_qname
         if target_qname is not None
-        else tab._qualified_name(tab._index_from_path(inserts[0]["parent_path"]))
+        else tab.view_controller.qualified_name(tab.view_controller.index_from_path(inserts[0]["parent_path"]))
     )
     cmd = _InsertRowsCmd(tab, make_label(label, qname), inserts)
     tab.data_store.undo_stack.push(cmd)
@@ -251,20 +255,20 @@ def push_remove_rows(tab: "JsonTab", indexes: list, *, label: str = "delete") ->
         return False
     if not indexes:
         return False
-    ordered = sorted(indexes, key=lambda i: (tab._index_path(i.parent()), i.row()), reverse=True)
+    ordered = sorted(indexes, key=lambda i: (tab.view_controller.index_path(i.parent()), i.row()), reverse=True)
     removals = []
     for idx in ordered:
         row0 = tab.data_store.model.index(idx.row(), 0, idx.parent())
         item = tab.data_store.model.get_item(row0)
         removals.append(
             {
-                "parent_path": tab._index_path(idx.parent()),
+                "parent_path": tab.view_controller.index_path(idx.parent()),
                 "row": idx.row(),
                 "name": item.name,
                 "value": item.to_json(),
             }
         )
-    target_qname = tab._qualified_name(ordered[0])
+    target_qname = tab.view_controller.qualified_name(ordered[0])
     cmd = _RemoveRowsCmd(tab, make_label(label, target_qname), removals)
     tab.data_store.undo_stack.push(cmd)
     return True
@@ -287,9 +291,11 @@ def push_sort_keys(
     old_subtree = item.to_json()
     if not recursive and list(old_subtree.keys()) == sorted(old_subtree.keys()):
         return False
-    target_qname = tab._qualified_name(index)
+    target_qname = tab.view_controller.qualified_name(index)
     text = label if label is not None else ("sort keys recursive" if recursive else "sort keys")
-    cmd = _SortKeysCmd(tab, make_label(text, target_qname), tab._index_path(index), old_subtree, recursive)
+    cmd = _SortKeysCmd(
+        tab, make_label(text, target_qname), tab.view_controller.index_path(index), old_subtree, recursive
+    )
     tab.data_store.undo_stack.push(cmd)
     return True
 
@@ -317,7 +323,7 @@ def push_switch_field_case(
             continue
         if old_name == new_name:
             continue
-        idx = tab._index_from_path(path)
+        idx = tab.view_controller.index_from_path(path)
         if not idx.isValid():
             continue
         item = tab.data_store.model.get_item(idx)
@@ -334,7 +340,7 @@ def push_switch_field_case(
 
     # Preflight: reject operations that would create duplicate sibling names.
     for parent_path, updates in by_parent.items():
-        parent_index = tab._index_from_path(parent_path)
+        parent_index = tab.view_controller.index_from_path(parent_path)
         parent_item = tab.data_store.model.get_item(parent_index)
         final_names: list[str] = []
         for row, child in enumerate(parent_item.child_items):
@@ -344,8 +350,8 @@ def push_switch_field_case(
         if len(set(final_names)) != len(final_names):
             return False
 
-    first_index = tab._index_from_path(normalized[0]["path"])
-    qname = target_qname if target_qname is not None else tab._qualified_name(first_index)
+    first_index = tab.view_controller.index_from_path(normalized[0]["path"])
+    qname = target_qname if target_qname is not None else tab.view_controller.qualified_name(first_index)
     cmd = _SwitchFieldCaseCmd(tab, make_label(label, qname), normalized)
     tab.data_store.undo_stack.push(cmd)
     return True

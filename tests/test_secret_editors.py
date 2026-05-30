@@ -12,7 +12,7 @@ def test_secret_line_editor_is_password_with_toggle(qtbot):
     tab.show()
 
     src = tab.data_store.model.index(0, 2, QModelIndex())
-    idx = tab._source_to_view(src)
+    idx = tab.view_controller.source_to_view(src)
     tab.view.setCurrentIndex(idx)
     tab.view.edit(idx)
 
@@ -36,7 +36,7 @@ def test_secret_text_editor_masks_and_reveals(qtbot):
     tab.show()
 
     src = tab.data_store.model.index(0, 2, QModelIndex())
-    idx = tab._source_to_view(src)
+    idx = tab.view_controller.source_to_view(src)
     tab.view.setCurrentIndex(idx)
     tab.view.edit(idx)
 
@@ -61,7 +61,7 @@ def test_secret_editor_closes_on_focus_out(qtbot):
     tab.show()
 
     src = tab.data_store.model.index(0, 2, QModelIndex())
-    idx = tab._source_to_view(src)
+    idx = tab.view_controller.source_to_view(src)
     tab.view.setCurrentIndex(idx)
     tab.view.edit(idx)
 

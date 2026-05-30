@@ -42,9 +42,9 @@ def test_issue_activation_selects_and_centers_offending_row(qtbot):
     window.validation_dock.issueActivated.emit(issue, False)
     app.processEvents()
 
-    current = tab._proxy_to_source(tab.view.currentIndex())
+    current = tab.view_controller.proxy_to_source(tab.view.currentIndex())
     assert current.isValid()
-    assert tab._qualified_name(current.siblingAtColumn(0)).endswith(".a.b")
+    assert tab.view_controller.qualified_name(current.siblingAtColumn(0)).endswith(".a.b")
     assert ".a.b" in window.statusBar.currentMessage()
 
 
@@ -80,7 +80,7 @@ def test_stale_issue_path_is_reported_without_changing_selection(qtbot):
     assert b_idx.isValid()
     assert tab.push_remove_rows([b_idx])
 
-    sentinel = tab._source_to_view(a_idx)
+    sentinel = tab.view_controller.source_to_view(a_idx)
     tab.view.setCurrentIndex(sentinel)
     before = tab.view.currentIndex()
 
@@ -144,7 +144,7 @@ def test_go_to_schema_rule_works_for_url_backed_in_memory_schema(qtbot, monkeypa
     assert schema_tab is first_schema_tab
     assert window.tabWidget.count() == before_count + 1
 
-    current = schema_tab._proxy_to_source(schema_tab.view.currentIndex())
+    current = schema_tab.view_controller.proxy_to_source(schema_tab.view.currentIndex())
     assert current.isValid()
     assert schema_tab.data_store.model._index_path(current) == instance_path_to_model_path(schema, issue.schema_path)
 

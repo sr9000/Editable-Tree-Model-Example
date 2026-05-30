@@ -13,7 +13,7 @@ def test_view_menu_expand_collapse_toggles_expansion(qtbot):
     assert tab is not None
 
     root = tab.data_store.model.index(0, 0, QModelIndex())
-    root_view = tab._source_to_view(root)
+    root_view = tab.view_controller.source_to_view(root)
 
     win.viewCollapseAllAction.trigger()
     assert not tab.view.isExpanded(root_view)

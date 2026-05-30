@@ -40,14 +40,14 @@ def on_current_changed(tab, current: QModelIndex, _previous: QModelIndex) -> Non
         tab.show_permanent_message("")
         return
 
-    current = tab._proxy_to_source(current)
+    current = tab.view_controller.proxy_to_source(current)
     row0 = current.siblingAtColumn(0)
     if not row0.isValid():
         tab.show_permanent_message("")
         return
 
     item = tab.data_store.model.get_item(row0)
-    breadcrumb = tab._qualified_name(row0)
+    breadcrumb = tab.view_controller.qualified_name(row0)
     item_type = item.json_type.value
     size_hint = size_hint_for_item(item)
     extra = f", {size_hint}" if size_hint else ""

@@ -30,7 +30,7 @@ def _make_huge_array_tab(qtbot, *, n: int) -> JsonTab:
 
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:
     source_index = tab.data_store.model.index(row, 0, parent)
-    idx = tab._source_to_view(source_index)
+    idx = tab.view_controller.source_to_view(source_index)
     tab.view.setCurrentIndex(idx)
     tab.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 

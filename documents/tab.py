@@ -249,29 +249,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         """Per-tab editor font point-size override (0 ⇒ inherit global)."""
         return self.data_store._font_pt
 
-    def column_widths(self) -> list[int]:
-        """Snapshot the current widths of every model column from the view."""
-        view = self.data_store.view
-        model = self.data_store.model
-        return [int(view.columnWidth(c)) for c in range(model.columnCount())]
-
-    def set_column_widths(self, widths: list[int]) -> None:
-        """Restore previously-snapshotted column widths.
-
-        Positive values are written through to the tree view; the name
-        (column 0) and type (column 1) columns are additionally marked
-        as *user-sized* so subsequent zoom or content-resize passes do
-        not snap them back to content width. This is the inverse of
-        :meth:`column_widths`.
-        """
-        store = self.data_store
-        model = store.model
-        view = store.view
-        for column, width in enumerate(widths[: model.columnCount()]):
-            if width > 0:
-                view.setColumnWidth(column, width)
-        store._user_sized_columns.update(c for c in (0, 1) if c < len(widths) and widths[c] > 0)
-
     # -- Phase F long tail (F4 / F5): typed accessors for residual
     # state still leaked into tree_actions/, app/, undo/.
     @property
@@ -344,22 +321,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         appearance = self._appearance
         if appearance is not None:
             appearance.apply_font_profile(profile)
-
-    @staticmethod
-    def _proxy_to_source(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
-        return ViewController.proxy_to_source(index)
-
-    def _source_to_view(self, source_index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
-        return self.view_controller.source_to_view(source_index)
-
-    def _apply_filter(self) -> None:
-        self.view_controller.apply_filter()
-
-    # ── Public typed accessors (Stage 01 of getattr-elimination plan) ──────
-
-    def apply_filter(self) -> None:
-        """Re-apply the search filter to the proxy model."""
-        self._apply_filter()
 
     def refresh_actions(self) -> None:
         self.data_store._host.refresh_actions()
@@ -459,15 +420,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
 
     def _snapshot(self) -> Any:
         return self.io.snapshot()
-
-    def _index_path(self, index: QModelIndex) -> tuple[int, ...]:
-        return self.view_controller.index_path(index)
-
-    def _index_from_path(self, path: tuple[int, ...]) -> QModelIndex:
-        return self.view_controller.index_from_path(path)
-
-    def _qualified_name(self, index: QModelIndex) -> str:
-        return self.view_controller.qualified_name(index)
 
     def _size_hint_for_item(self, item: JsonTreeItem) -> str | None:
         return size_hint_for_item(item)

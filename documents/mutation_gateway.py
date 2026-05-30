@@ -49,7 +49,7 @@ class DocumentMutationGateway:
         if role != Qt.ItemDataRole.EditRole or not index.isValid():
             return False
         idx = QModelIndex(index) if isinstance(index, QPersistentModelIndex) else index
-        idx = tab._proxy_to_source(idx)
+        idx = tab.view_controller.proxy_to_source(idx)
         col = idx.column()
         if col == 0:
             return tab.push_rename(idx, value)
@@ -134,13 +134,13 @@ class DocumentMutationGateway:
 
     # ----- path / view helpers (read-only) -------------------------------
     def index_path(self, index: QModelIndex) -> tuple[int, ...]:
-        return self._tab._index_path(index)
+        return self._tab.view_controller.index_path(index)
 
     def index_from_path(self, path: tuple[int, ...]) -> QModelIndex:
-        return self._tab._index_from_path(path)
+        return self._tab.view_controller.index_from_path(path)
 
     def source_to_view(self, source_index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
-        return self._tab._source_to_view(source_index)
+        return self._tab.view_controller.source_to_view(source_index)
 
 
 __all__ = ["DocumentMutationGateway"]

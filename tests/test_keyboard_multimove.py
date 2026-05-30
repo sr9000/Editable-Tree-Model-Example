@@ -22,20 +22,20 @@ def _make_tab(qtbot, data, *, show_root: bool = False) -> JsonTab:
 
 
 def _idx(tab: JsonTab, *path: int):
-    return tab._index_from_path(path)
+    return tab.view_controller.index_from_path(path)
 
 
 def _select_source_rows(tab: JsonTab, *source_indexes) -> None:
     first, *rest = source_indexes
     sm = tab.view.selectionModel()
-    first_view = tab._source_to_view(first)
+    first_view = tab.view_controller.source_to_view(first)
     sm.select(
         first_view,
         QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
     )
     sm.setCurrentIndex(first_view, QItemSelectionModel.SelectionFlag.NoUpdate)
     for idx in rest:
-        vi = tab._source_to_view(idx)
+        vi = tab.view_controller.source_to_view(idx)
         sm.select(vi, QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
 
 

@@ -33,7 +33,7 @@ def _make_big_tab(qtbot, *, fanout: int = 200) -> JsonTab:
 
 
 def _view_idx(tab: JsonTab, source_index: QModelIndex) -> QModelIndex:
-    return tab._source_to_view(source_index)
+    return tab.view_controller.source_to_view(source_index)
 
 
 def test_row_index_is_o1_per_call(qtbot):

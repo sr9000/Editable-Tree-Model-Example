@@ -18,17 +18,17 @@ def _make_tab(qtbot, data) -> JsonTab:
 def _select_value_cells(tab: JsonTab, *paths: tuple[int, ...]) -> None:
     sm = tab.view.selectionModel()
     first, *rest = paths
-    first_src = tab._index_from_path(first).siblingAtColumn(2)
-    first_view = tab._source_to_view(first_src)
+    first_src = tab.view_controller.index_from_path(first).siblingAtColumn(2)
+    first_view = tab.view_controller.source_to_view(first_src)
     sm.select(first_view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
     sm.setCurrentIndex(first_view, QItemSelectionModel.SelectionFlag.NoUpdate)
     for path in rest:
-        src = tab._index_from_path(path).siblingAtColumn(2)
-        sm.select(tab._source_to_view(src), QItemSelectionModel.SelectionFlag.Select)
+        src = tab.view_controller.index_from_path(path).siblingAtColumn(2)
+        sm.select(tab.view_controller.source_to_view(src), QItemSelectionModel.SelectionFlag.Select)
 
 
 def _selected_paths(tab: JsonTab) -> set[tuple[int, ...]]:
-    return {tab._index_path(idx) for idx in selected_source_rows(tab.view)}
+    return {tab.view_controller.index_path(idx) for idx in selected_source_rows(tab.view)}
 
 
 def _root_values(tab: JsonTab) -> list:
@@ -39,7 +39,7 @@ def test_context_menu_prepare_preserves_selection_when_clicking_selected_value_c
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3})
     _select_value_cells(tab, (0,), (2,))
 
-    clicked = tab._source_to_view(tab._index_from_path((0,)).siblingAtColumn(2))
+    clicked = tab.view_controller.source_to_view(tab.view_controller.index_from_path((0,)).siblingAtColumn(2))
     _prepare_context_selection(tab.view, clicked)
 
     assert _selected_paths(tab) == {(0,), (2,)}
@@ -49,7 +49,7 @@ def test_context_menu_prepare_resets_selection_when_clicking_unselected_row(qtbo
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3})
     _select_value_cells(tab, (0,), (1,))
 
-    clicked = tab._source_to_view(tab._index_from_path((2,)).siblingAtColumn(2))
+    clicked = tab.view_controller.source_to_view(tab.view_controller.index_from_path((2,)).siblingAtColumn(2))
     _prepare_context_selection(tab.view, clicked)
 
     assert _selected_paths(tab) == {(2,)}
@@ -59,7 +59,7 @@ def test_context_paste_action_uses_preserved_multiselect(qtbot):
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3})
     _select_value_cells(tab, (0,), (2,))
 
-    clicked = tab._source_to_view(tab._index_from_path((0,)).siblingAtColumn(2))
+    clicked = tab.view_controller.source_to_view(tab.view_controller.index_from_path((0,)).siblingAtColumn(2))
     _prepare_context_selection(tab.view, clicked)
 
     QApplication.clipboard().setText("99")

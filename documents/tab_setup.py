@@ -226,5 +226,5 @@ def init_search_filter(tab: "JsonTab") -> None:
     tab._filter_timer = QTimer(tab)
     tab._filter_timer.setSingleShot(True)
     tab._filter_timer.setInterval(300)
-    tab._filter_timer.timeout.connect(tab._apply_filter)
+    tab._filter_timer.timeout.connect(lambda: tab.view_controller.apply_filter())
     tab.data_store.search_edit.textChanged.connect(lambda _text: tab._filter_timer.start())

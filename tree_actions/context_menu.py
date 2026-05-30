@@ -158,7 +158,7 @@ def _goto_row_and_clear_search(tree_view: QTreeView, clicked_index) -> bool:
 
     if search_edit.text():
         search_edit.clear()
-        tab.apply_filter()
+        tab.view_controller.apply_filter()
 
     idx = tab.mutations.index_from_path(source_path)
     if not idx.isValid():

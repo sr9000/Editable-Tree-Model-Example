@@ -14,7 +14,7 @@ def _make_tab(qtbot, data, show_root=False, status_cb=None) -> JsonTab:
 
 
 def _idx(tab: JsonTab, *path: int):
-    return tab._index_from_path(path)
+    return tab.view_controller.index_from_path(path)
 
 
 def _mime_without_source_paths(entries: list[dict]) -> QMimeData:

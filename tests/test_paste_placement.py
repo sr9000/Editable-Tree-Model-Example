@@ -16,7 +16,7 @@ def _select(view: QTreeView, idx) -> None:
 
 
 def _select_tab(tab: JsonTab, source_index) -> None:
-    view_idx = tab._source_to_view(source_index)
+    view_idx = tab.view_controller.source_to_view(source_index)
     tab.view.setCurrentIndex(view_idx)
     tab.view.selectionModel().select(
         view_idx, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows

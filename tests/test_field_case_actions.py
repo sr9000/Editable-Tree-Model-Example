@@ -18,11 +18,14 @@ def _make_tab(qtbot, data, *, show_root: bool = False) -> JsonTab:
 def _select_rows(tab: JsonTab, *paths: tuple[int, ...]) -> None:
     sm = tab.view.selectionModel()
     first, *rest = paths
-    first_view = tab._source_to_view(tab._index_from_path(first))
+    first_view = tab.view_controller.source_to_view(tab.view_controller.index_from_path(first))
     sm.select(first_view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
     sm.setCurrentIndex(first_view, QItemSelectionModel.SelectionFlag.NoUpdate)
     for path in rest:
-        sm.select(tab._source_to_view(tab._index_from_path(path)), QItemSelectionModel.SelectionFlag.Select)
+        sm.select(
+            tab.view_controller.source_to_view(tab.view_controller.index_from_path(path)),
+            QItemSelectionModel.SelectionFlag.Select,
+        )
 
 
 def test_convert_field_name_variants():
@@ -109,8 +112,8 @@ def test_context_menu_contains_switch_case_submenus(qtbot):
     tab.view.expandAll()
     _select_rows(tab, (0, 0))
 
-    nested = tab._index_from_path((0, 0))
-    position = tab.view.visualRect(tab._source_to_view(nested)).center()
+    nested = tab.view_controller.index_from_path((0, 0))
+    position = tab.view.visualRect(tab.view_controller.source_to_view(nested)).center()
     menu = show_context_menu(tab.view, position, execute=False)
 
     top_titles = [action.text() for action in menu.actions() if action.text()]

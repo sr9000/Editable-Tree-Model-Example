@@ -27,13 +27,13 @@ class JsonTabValidationViewController:
             self._tab.show_status("Validation issue path no longer exists", 2000)
             return False
 
-        source_row = self._tab._index_from_path(model_path)
+        source_row = self._tab.view_controller.index_from_path(model_path)
         if not source_row.isValid():
             self._tab.show_status("Validation issue path no longer exists", 2000)
             return False
 
         source_row = source_row.siblingAtColumn(0)
-        view_row = self._tab._source_to_view(source_row)
+        view_row = self._tab.view_controller.source_to_view(source_row)
         if not view_row.isValid():
             self._tab.show_status("Validation issue path no longer exists", 2000)
             return False
@@ -56,7 +56,7 @@ class JsonTabValidationViewController:
         if not (self._tab.data_store.model.flags(source_value).value & _EDITABLE_ITEM_FLAG):
             return True
 
-        view_value = self._tab._source_to_view(source_value)
+        view_value = self._tab.view_controller.source_to_view(source_value)
         if not view_value.isValid():
             return True
         view.setCurrentIndex(view_value)

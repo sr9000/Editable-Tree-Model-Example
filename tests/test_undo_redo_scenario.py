@@ -32,7 +32,7 @@ from tree_actions.structure import (
 
 def _select(tab: JsonTab, index: QModelIndex) -> None:
     sel = tab.view.selectionModel()
-    view_index = tab._source_to_view(index)
+    view_index = tab.view_controller.source_to_view(index)
     tab.view.setCurrentIndex(view_index)
     sel.select(view_index, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 

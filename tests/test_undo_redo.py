@@ -7,7 +7,7 @@ from tree_actions.structure import delete_selection, move_selection_down, move_s
 
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:
     source_index = tab.data_store.model.index(row, 0, parent)
-    idx = tab._source_to_view(source_index)
+    idx = tab.view_controller.source_to_view(source_index)
     tab.view.setCurrentIndex(idx)
     tab.view.selectionModel().select(idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
@@ -35,7 +35,7 @@ def test_undo_redo_paste(qtbot):
 
     before = tab.data_store.model.root_item.to_json()
     idx = tab.data_store.model.index(0, 0, QModelIndex())
-    view_idx = tab._source_to_view(idx)
+    view_idx = tab.view_controller.source_to_view(idx)
     tab.view.setCurrentIndex(view_idx)
     tab.view.selectionModel().select(view_idx, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 

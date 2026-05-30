@@ -12,7 +12,7 @@ def _make_tab(qtbot, data) -> JsonTab:
 
 
 def _idx(tab: JsonTab, *path: int):
-    return tab._index_from_path(path)
+    return tab.view_controller.index_from_path(path)
 
 
 def test_internal_drag_drop_move_and_single_undo(qtbot):

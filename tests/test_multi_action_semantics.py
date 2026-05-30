@@ -36,17 +36,17 @@ def _make_tab(qtbot, data) -> JsonTab:
 
 
 def _idx(tab: JsonTab, *path: int) -> QModelIndex:
-    return tab._index_from_path(path)
+    return tab.view_controller.index_from_path(path)
 
 
 def _select_items(tab: JsonTab, *source_indexes) -> None:
     sm = tab.view.selectionModel()
     first, *rest = source_indexes
-    first_view = tab._source_to_view(first)
+    first_view = tab.view_controller.source_to_view(first)
     sm.select(first_view, QItemSelectionModel.SelectionFlag.ClearAndSelect)
     sm.setCurrentIndex(first_view, QItemSelectionModel.SelectionFlag.NoUpdate)
     for idx in rest:
-        sm.select(tab._source_to_view(idx), QItemSelectionModel.SelectionFlag.Select)
+        sm.select(tab.view_controller.source_to_view(idx), QItemSelectionModel.SelectionFlag.Select)
 
 
 def _root_values(tab: JsonTab) -> list:
@@ -83,7 +83,7 @@ def test_deepest_selected_rows_drops_ancestors_when_descendants_present(qtbot):
     _select_items(tab, a, ax, b)
     deepest = deepest_selected_rows(tab.view)
     # "a" is dropped because "a.x" is selected; "b" stays (no descendants in selection).
-    paths = {tab._index_path(idx) for idx in deepest}
+    paths = {tab.view_controller.index_path(idx) for idx in deepest}
     assert paths == {(0, 0), (1,)}
 
 

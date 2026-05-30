@@ -76,7 +76,7 @@ def save(tab: Document) -> None:
     settings = QSettings(APPLICATION_ID, "view_state")
     settings.beginGroup(state_key(tab.io.file_path))
 
-    widths = tab.column_widths()
+    widths = tab.view_controller.column_widths()
     expanded_paths = [list(path) for path in tab._collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
 
     current_path_tuple = tab.view_controller.current_path()
@@ -118,7 +118,7 @@ def restore(tab: Document) -> bool:
         tab._set_font_pt(font_pt)
 
     if widths is not None:
-        tab.set_column_widths(widths)
+        tab.view_controller.set_column_widths(widths)
 
     if expanded is not None:
         tab.view_controller.request_collapse_all()

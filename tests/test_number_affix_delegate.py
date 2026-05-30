@@ -18,15 +18,17 @@ def test_currency_affix_editor_commit(qtbot):
 
     index = _value_index(tab)
     editor = tab.view_controller.value_delegate.createEditor(
-        tab.view, QStyleOptionViewItem(), tab._source_to_view(index)
+        tab.view, QStyleOptionViewItem(), tab.view_controller.source_to_view(index)
     )
     assert isinstance(editor, AffixCompositeEditor)
-    tab.view_controller.value_delegate.setEditorData(editor, tab._source_to_view(index))
+    tab.view_controller.value_delegate.setEditorData(editor, tab.view_controller.source_to_view(index))
 
     editor.affix_combo.setCurrentText("$")
     editor.number_editor.setValue(1234)
     editor.space_button.setChecked(True)
-    tab.view_controller.value_delegate.setModelData(editor, tab.data_store.model, tab._source_to_view(index))
+    tab.view_controller.value_delegate.setModelData(
+        editor, tab.data_store.model, tab.view_controller.source_to_view(index)
+    )
 
     item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
     assert item.value == NumberAffix(AffixKind.CURRENCY, "$", True, 1234)
@@ -38,15 +40,17 @@ def test_units_affix_editor_commit_float(qtbot):
 
     index = _value_index(tab)
     editor = tab.view_controller.value_delegate.createEditor(
-        tab.view, QStyleOptionViewItem(), tab._source_to_view(index)
+        tab.view, QStyleOptionViewItem(), tab.view_controller.source_to_view(index)
     )
     assert isinstance(editor, AffixCompositeEditor)
-    tab.view_controller.value_delegate.setEditorData(editor, tab._source_to_view(index))
+    tab.view_controller.value_delegate.setEditorData(editor, tab.view_controller.source_to_view(index))
 
     editor.affix_combo.setCurrentText("%")
     editor.number_editor.setValue(mpq("1999/20"))
     editor.space_button.setChecked(False)
-    tab.view_controller.value_delegate.setModelData(editor, tab.data_store.model, tab._source_to_view(index))
+    tab.view_controller.value_delegate.setModelData(
+        editor, tab.data_store.model, tab.view_controller.source_to_view(index)
+    )
 
     item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
     assert item.value == NumberAffix(AffixKind.UNITS, "%", False, mpq("1999/20"))
@@ -60,12 +64,14 @@ def test_invalid_affix_refuses_commit(qtbot):
     original = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex())).value
 
     editor = tab.view_controller.value_delegate.createEditor(
-        tab.view, QStyleOptionViewItem(), tab._source_to_view(index)
+        tab.view, QStyleOptionViewItem(), tab.view_controller.source_to_view(index)
     )
     assert isinstance(editor, AffixCompositeEditor)
     editor.affix_combo.setCurrentText("")
     editor.number_editor.setValue(10)
-    tab.view_controller.value_delegate.setModelData(editor, tab.data_store.model, tab._source_to_view(index))
+    tab.view_controller.value_delegate.setModelData(
+        editor, tab.data_store.model, tab.view_controller.source_to_view(index)
+    )
 
     item = tab.data_store.model.get_item(tab.data_store.model.index(0, 0, QModelIndex()))
     assert editor.property("invalid") is True
@@ -80,6 +86,6 @@ def test_empty_affix_type_switch_paints_without_raising(qtbot):
     assert tab.data_store.model.setData(type_index, JsonType.INTEGER_CURRENCY)
 
     option = QStyleOptionViewItem()
-    tab.view_controller.value_delegate.initStyleOption(option, tab._source_to_view(_value_index(tab)))
+    tab.view_controller.value_delegate.initStyleOption(option, tab.view_controller.source_to_view(_value_index(tab)))
 
     assert option.text == "1234"

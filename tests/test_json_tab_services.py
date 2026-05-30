@@ -43,7 +43,7 @@ def test_json_tab_accepts_service_bundle_and_uses_ui_layout(qtbot):
     assert host.status_messages[-1] == ("hello", 250)
 
     foo_index = tab.data_store.model.index(0, 0, QModelIndex())
-    tab.view.setCurrentIndex(tab._source_to_view(foo_index))
+    tab.view.setCurrentIndex(tab.view_controller.source_to_view(foo_index))
     assert host.permanent_messages[-1] == "$.foo  (string, 3 chars)"
 
     before = host.refresh_calls

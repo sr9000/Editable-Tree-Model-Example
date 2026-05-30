@@ -28,8 +28,8 @@ def _restore_color_scheme():
 
 def _current_source_path(tab) -> tuple[int, ...]:
     current_view = tab.view.currentIndex()
-    source = tab._proxy_to_source(current_view)
-    return tab._index_path(source)
+    source = tab.view_controller.proxy_to_source(current_view)
+    return tab.view_controller.index_path(source)
 
 
 def test_switching_theme_preserves_undo_expansion_and_selection(qtbot, tmp_path, monkeypatch):
@@ -48,9 +48,9 @@ def test_switching_theme_preserves_undo_expansion_and_selection(qtbot, tmp_path,
     b = tab.data_store.model.index(0, 0, a)
     leaf = tab.data_store.model.index(1, 0, b)
 
-    tab.view.expand(tab._source_to_view(root))
-    tab.view.expand(tab._source_to_view(a))
-    tab.view.setCurrentIndex(tab._source_to_view(leaf))
+    tab.view.expand(tab.view_controller.source_to_view(root))
+    tab.view.expand(tab.view_controller.source_to_view(a))
+    tab.view.setCurrentIndex(tab.view_controller.source_to_view(leaf))
 
     type_idx = tab.data_store.model.index(1, 1, b)
     assert tab.data_store.model.setData(type_idx, "string", Qt.ItemDataRole.EditRole)

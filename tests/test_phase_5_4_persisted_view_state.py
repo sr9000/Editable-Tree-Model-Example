@@ -46,9 +46,9 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     leaf = tab.data_store.model.index(1, 0, bar)
 
     tab.view.collapseAll()
-    tab.view.expand(tab._source_to_view(root))
-    tab.view.expand(tab._source_to_view(foo))
-    tab.view.setCurrentIndex(tab._source_to_view(leaf))
+    tab.view.expand(tab.view_controller.source_to_view(root))
+    tab.view.expand(tab.view_controller.source_to_view(foo))
+    tab.view.setCurrentIndex(tab.view_controller.source_to_view(leaf))
 
     tab.zoom_in()
     tab.zoom_in()
@@ -75,10 +75,10 @@ def test_view_state_save_restore_roundtrip(tmp_path, monkeypatch, qtbot):
     bar2 = restored.data_store.model.index(0, 0, foo2)
     leaf2 = restored.data_store.model.index(1, 0, bar2)
 
-    assert restored.view.isExpanded(restored._source_to_view(root2))
-    assert restored.view.isExpanded(restored._source_to_view(foo2))
-    assert not restored.view.isExpanded(restored._source_to_view(bar2))
-    assert restored.view.currentIndex() == restored._source_to_view(leaf2)
+    assert restored.view.isExpanded(restored.view_controller.source_to_view(root2))
+    assert restored.view.isExpanded(restored.view_controller.source_to_view(foo2))
+    assert not restored.view.isExpanded(restored.view_controller.source_to_view(bar2))
+    assert restored.view.currentIndex() == restored.view_controller.source_to_view(leaf2)
     assert restored.view.font().pointSize() == saved_font_pt
 
 
