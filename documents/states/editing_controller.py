@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum, auto
-from typing import Any, Callable
+from typing import Any
 
 from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex, QObject, QPersistentModelIndex, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QComboBox
@@ -12,26 +11,18 @@ from PySide6.QtWidgets import QAbstractItemView, QComboBox
 from documents.mutation_gateway import DocumentMutationGateway
 from documents.tab_history import TabHistoryController
 from documents.tab_number_types import would_drop_fraction_on_type_change
+from documents.states.editing.tree_actions import ACTIONS as _ACTIONS
+from documents.states.editing.tree_actions import TreeAction
 from state.affix_mru import AffixMRU
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
 from tree.types import JsonType
-from tree_actions.clipboard import copy_selection
-from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
 from tree_actions.selection import selected_source_rows
 from tree_actions.structure import (
-    cut_selection,
-    delete_selection,
-    duplicate_selection,
     insert_child_current,
     insert_sibling_after,
     insert_sibling_before,
-    move_selection_down,
-    move_selection_out_down,
-    move_selection_out_up,
-    move_selection_up,
-    sort_selection_keys,
 )
 from undo.commands import (
     _ChangeTypeCmd,
@@ -45,36 +36,6 @@ from undo.commands import (
 )
 from undo.diff import DiffApplier
 
-
-class TreeAction(Enum):
-    COPY_ONLY = auto()
-    CUT = auto()
-    PASTE = auto()
-    PASTE_ZIP = auto()
-    REPLACE_ZIP = auto()
-    DELETE = auto()
-    DUPLICATE = auto()
-    MOVE_UP = auto()
-    MOVE_DOWN = auto()
-    MOVE_OUT_UP = auto()
-    MOVE_OUT_DOWN = auto()
-    SORT_KEYS = auto()
-
-
-_ACTIONS: tuple[tuple[TreeAction, Callable[..., bool]], ...] = (
-    (TreeAction.COPY_ONLY, copy_selection),
-    (TreeAction.CUT, cut_selection),
-    (TreeAction.PASTE, paste_auto),
-    (TreeAction.PASTE_ZIP, paste_insert_after_zip),
-    (TreeAction.REPLACE_ZIP, paste_replace_zip),
-    (TreeAction.DELETE, delete_selection),
-    (TreeAction.DUPLICATE, duplicate_selection),
-    (TreeAction.MOVE_UP, move_selection_up),
-    (TreeAction.MOVE_DOWN, move_selection_down),
-    (TreeAction.MOVE_OUT_UP, move_selection_out_up),
-    (TreeAction.MOVE_OUT_DOWN, move_selection_out_down),
-    (TreeAction.SORT_KEYS, lambda view: sort_selection_keys(view, recursive=False)),
-)
 
 
 class EditingController(QObject):
