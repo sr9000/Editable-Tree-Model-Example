@@ -33,7 +33,6 @@ from undo.commands import _RenameCmd  # noqa: F401 — re-exported for test impo
 from undo.commands import _SortKeysCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _SwitchFieldCaseCmd  # noqa: F401 — re-exported for test imports
 from undo.commands import _MoveRowsCmd
-from undo.diff import DiffApplier
 from validation.index import IssueIndex
 from validation.issue import ValidationIssue
 
@@ -62,7 +61,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     validationChanged = Signal(object)
 
     data_store: JsonTabData = None  # populated by tab_init.bootstrap
-    _diff_applier: DiffApplier = None
 
     def eventFilter(self, watched, event):  # type: ignore[override]
         navigation = self._navigation
@@ -86,8 +84,6 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         services: JsonTabServices | None = None,
     ):
         super().__init__(parent)
-
-        self._diff_applier = DiffApplier(self)
 
         tab_init.bootstrap(
             self,
@@ -455,12 +451,12 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     # ------------------------------------------------------------------
 
     def _diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool:
-        return self._diff_applier.apply(item, target, item_index)
+        return self.editing.diff_apply(item, target, item_index)
 
     # -- low-level mutators used by diff and typed commands --------------
 
     def _emit_row_changed(self, item_index: QModelIndex) -> None:
-        self._diff_applier.emit_row_changed(item_index)
+        self.editing.emit_row_changed(item_index)
 
     def _insert_typed_item(
         self,
@@ -470,10 +466,10 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         value: Any,
         name: str | int | None = None,
     ) -> bool:
-        return self._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
+        return self.editing.insert_typed_item(parent_item, parent_index, position, value, name=name)
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
-        return self.data_store.mutations.commit_set_data(index, value, role)
+        return self.editing.commit_set_data(index, value, role)
 
     # ------------------------------------------------------------------
     # Typed-command public API (action/compensation, no full-tree snapshot)

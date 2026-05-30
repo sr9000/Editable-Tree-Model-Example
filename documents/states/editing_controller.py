@@ -26,6 +26,7 @@ from documents.tab_history import TabHistoryController
 from documents.tab_number_types import would_drop_fraction_on_type_change
 from state.affix_mru import AffixMRU
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
+from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
 from tree.types import JsonType
 from tree_actions.clipboard import copy_selection
@@ -54,6 +55,7 @@ from undo.commands import (
     _SortKeysCmd,
     _SwitchFieldCaseCmd,
 )
+from undo.diff import DiffApplier
 
 
 class TreeAction(Enum):
@@ -104,6 +106,7 @@ class EditingController:
         self.affix_mru: AffixMRU | None = None
         self.history: TabHistoryController | None = None
         self.last_move_placed: list[tuple[tuple[int, ...], int]] = []
+        self._diff_applier = DiffApplier(tab)
 
     # ------------------------------------------------------------------
     # Typed-command push helpers (formerly documents/tab_commands.py)
@@ -723,6 +726,32 @@ class EditingController:
         if tab.data_store.is_read_only:
             return False
         return insert_child_current(tab.data_store.view)
+
+    # ------------------------------------------------------------------
+    # Smart-restore diff + low-level insert primitives (was on JsonTab)
+    # ------------------------------------------------------------------
+    @property
+    def diff_applier(self) -> DiffApplier:
+        return self._diff_applier
+
+    def diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool:
+        return self._diff_applier.apply(item, target, item_index)
+
+    def emit_row_changed(self, item_index: QModelIndex) -> None:
+        self._diff_applier.emit_row_changed(item_index)
+
+    def insert_typed_item(
+        self,
+        parent_item: JsonTreeItem,
+        parent_index: QModelIndex,
+        position: int,
+        value: Any,
+        name: str | int | None = None,
+    ) -> bool:
+        return self._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
+
+    def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
+        return self._tab.data_store.mutations.commit_set_data(index, value, role)
 
 
 __all__ = ["EditingController", "TreeAction"]
