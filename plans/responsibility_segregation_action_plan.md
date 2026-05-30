@@ -7,6 +7,7 @@ import-graph tracing for every module called out below.
 **Status:** plan only — owner-approved decisions baked in (see §6). No code moved yet.
 
 **Approved decisions (2026-05-30):**
+
 - Editor widget packages may be renamed/restructured freely, **but each stays a
   self-hosted, app-agnostic QWidget** (no coupling to `app/`, `documents/`, or
   `tree/`). They are reusable widgets that happen to live in this repo.
@@ -50,14 +51,14 @@ Everything at repo root that is not an entry point (`main.py`) or genuine
 project-level config (`settings.py`, `pytest.ini`, `Makefile`, …) is a homing
 failure. Evidence is from a full-repo import grep.
 
-| File | LOC | Importers (non-test) | Verdict |
-|---|---|---|---|
-| `header_view_editor.py` | 79 | **none** (only self-references) | **DELETE** — dead code |
-| `model_actions.py` | 162 | **none** — tests only | **DELETE** — retarget tests onto `tree_actions/structure.py` |
-| `tree_filter_proxy.py` | 53 | `documents/states/view_state.py` | **MOVE** → `tree/filter_proxy.py` |
-| `qmultiline_editor.py` | 280 | `dialogs/qmultiline_dlg.py` | **MOVE** → editor-widget package (see §2) |
-| `mainwindow.py` | 175 | `app/main_window.py` (generated UI) | **MOVE** → top-level `ui/` (it is `pyside6-uic` output) |
-| `settings.py` | 57 | many (`SECRET_*`, `*_LIMIT_*`, `APPLICATION_ID`) | **KEEP/RENAME** → `app_config.py`; strip dead enums (§5) |
+| File                    | LOC | Importers (non-test)                             | Verdict                                                      |
+|-------------------------|-----|--------------------------------------------------|--------------------------------------------------------------|
+| `header_view_editor.py` | 79  | **none** (only self-references)                  | **DELETE** — dead code                                       |
+| `model_actions.py`      | 162 | **none** — tests only                            | **DELETE** — retarget tests onto `tree_actions/structure.py` |
+| `tree_filter_proxy.py`  | 53  | `documents/states/view_state.py`                 | **MOVE** → `tree/filter_proxy.py`                            |
+| `qmultiline_editor.py`  | 280 | `dialogs/qmultiline_dlg.py`                      | **MOVE** → editor-widget package (see §2)                    |
+| `mainwindow.py`         | 175 | `app/main_window.py` (generated UI)              | **MOVE** → top-level `ui/` (it is `pyside6-uic` output)      |
+| `settings.py`           | 57  | many (`SECRET_*`, `*_LIMIT_*`, `APPLICATION_ID`) | **KEEP/RENAME** → `app_config.py`; strip dead enums (§5)     |
 
 ### 1.1 `header_view_editor.py` — delete
 
@@ -97,18 +98,18 @@ This is the largest segregation win and the one explicitly requested. Today the
 value-editor widgets are spread across **six** locations with no inline/windowed
 distinction:
 
-| Location | What it holds | Inline / Windowed |
-|---|---|---|
-| `qbigint_spinbox/__init__.py` (271) | `QBigIntSpinBox` | inline |
-| `qmpq_spinbox/__init__.py` (295) | `QMpqSpinBox` | inline |
-| `datetime_editor/` (784) | `BetterDateTimeEditor` + validator/regex/enums | inline |
-| `delegates/number_affix_delegate.py` (153) | `AffixCompositeEditor` | inline |
-| `delegates/editor_factory.py` (485) | `_SecretLineEdit`, plus **all dispatch** | inline + dispatch |
-| `delegates/base.py` | `_CapsLockSafeLineEdit` | inline |
-| `qmultiline_editor.py` (280, root) | `QMultilineEditor` widget | windowed (content) |
-| `qhexedit/` (1745) | hex-editor widget + chunks/commands/colors | windowed (content) |
-| `dialogs/qmultiline_dlg.py` (126) | `QMultilineDialog` wrapper | **windowed** |
-| `dialogs/qhexedit_dlg.py` (137) | `QHexDialog` wrapper | **windowed** |
+| Location                                   | What it holds                                  | Inline / Windowed  |
+|--------------------------------------------|------------------------------------------------|--------------------|
+| `qbigint_spinbox/__init__.py` (271)        | `QBigIntSpinBox`                               | inline             |
+| `qmpq_spinbox/__init__.py` (295)           | `QMpqSpinBox`                                  | inline             |
+| `datetime_editor/` (784)                   | `BetterDateTimeEditor` + validator/regex/enums | inline             |
+| `delegates/number_affix_delegate.py` (153) | `AffixCompositeEditor`                         | inline             |
+| `delegates/editor_factory.py` (485)        | `_SecretLineEdit`, plus **all dispatch**       | inline + dispatch  |
+| `delegates/base.py`                        | `_CapsLockSafeLineEdit`                        | inline             |
+| `qmultiline_editor.py` (280, root)         | `QMultilineEditor` widget                      | windowed (content) |
+| `qhexedit/` (1745)                         | hex-editor widget + chunks/commands/colors     | windowed (content) |
+| `dialogs/qmultiline_dlg.py` (126)          | `QMultilineDialog` wrapper                     | **windowed**       |
+| `dialogs/qhexedit_dlg.py` (137)            | `QHexDialog` wrapper                           | **windowed**       |
 
 `delegates/editor_factory.py::create_value_editor` is the dispatcher. Tracing its
 `match item.json_type` shows the inline/windowed split cleanly:
@@ -273,12 +274,12 @@ the prior review (its §5.5) already covers and should stay a separate effort.
 
 ## 5. Dead / unwired code to delete
 
-| Item | Evidence | Action |
-|---|---|---|
-| `header_view_editor.py` (whole file) | no importers | delete |
-| `settings.IntegerInfo` / `FloatInfo` / `MultiLineInfo` / `SingleLineInfo` | defined, **zero references** repo-wide | delete or wire (these look like stubs for the "numeric/multiline preview" wishlist in `todo-n-fixme.md`) |
-| `documents/tab_demo_data.py` legacy seed | `todo-n-fixme.md` line 99; only bare-`JsonTab()` test paths | delete once those tests pass explicit `data=` |
-| `model_actions.py` (whole file) | test-only | delete after §1.2 |
+| Item                                                                      | Evidence                                                    | Action                                                                                                   |
+|---------------------------------------------------------------------------|-------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `header_view_editor.py` (whole file)                                      | no importers                                                | delete                                                                                                   |
+| `settings.IntegerInfo` / `FloatInfo` / `MultiLineInfo` / `SingleLineInfo` | defined, **zero references** repo-wide                      | delete or wire (these look like stubs for the "numeric/multiline preview" wishlist in `todo-n-fixme.md`) |
+| `documents/tab_demo_data.py` legacy seed                                  | `todo-n-fixme.md` line 99; only bare-`JsonTab()` test paths | delete once those tests pass explicit `data=`                                                            |
+| `model_actions.py` (whole file)                                           | test-only                                                   | delete after §1.2                                                                                        |
 
 ---
 
