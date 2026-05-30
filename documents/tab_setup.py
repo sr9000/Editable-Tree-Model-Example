@@ -12,6 +12,7 @@ from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from documents.json_tab_ui import Ui_JsonTab
 from documents.states.editing_controller import TreeAction
+from documents.tab_status import on_current_changed
 from tree.model import JsonTreeModel
 from tree_actions.context_menu import show_context_menu
 from tree_filter_proxy import TreeFilterProxy
@@ -139,7 +140,9 @@ def init_delegates_and_connections(tab: "JsonTab") -> None:
         tab.refresh_actions()
 
     tab.view_state.view.selectionModel().selectionChanged.connect(_refresh_actions)
-    tab.view_state.view.selectionModel().currentChanged.connect(tab._on_current_changed)
+    tab.view_state.view.selectionModel().currentChanged.connect(
+        lambda current, previous: on_current_changed(tab, current, previous)
+    )
     tab.model.typeChanged.connect(tab.editing.on_type_changed)
     tab.view_state.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
     tab.view_state.view.customContextMenuRequested.connect(functools.partial(show_context_menu, tab.view_state.view))

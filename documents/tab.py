@@ -16,7 +16,6 @@ from documents.tab_dependencies import JsonTabHost, JsonTabServices
 from documents.tab_editability import JsonTabEditabilityController
 from documents.tab_marker import JsonTabWidgetMarker
 from documents.tab_navigation import JsonTabNavigationController
-from documents.tab_status import on_current_changed, size_hint_for_item
 from documents.tab_validation import TabValidationController
 from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
@@ -232,9 +231,3 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
 
     def save_as(self, path: str | None = None) -> bool:
         return self.io.save_as(path=path)
-
-    def _size_hint_for_item(self, item: JsonTreeItem) -> str | None:
-        return size_hint_for_item(item)
-
-    def _on_current_changed(self, current: QModelIndex, _previous: QModelIndex) -> None:
-        on_current_changed(self, current, _previous)
