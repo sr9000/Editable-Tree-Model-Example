@@ -10,7 +10,16 @@ from PySide6.QtCore import QModelIndex
 from documents.tab_number_types import would_drop_fraction_on_type_change
 from tree.types import JsonType
 from tree_actions.anchors import anchor_is_cycle, anchor_is_no_op, pre_pop_target_row_to_anchor, resolve_anchor_insert_row
-from undo.commands import _ChangeTypeCmd, _EditValueCmd, _MoveRowsCmd, _RenameCmd
+from undo.commands import (
+    _ChangeTypeCmd,
+    _EditValueCmd,
+    _InsertRowsCmd,
+    _MoveRowsCmd,
+    _RemoveRowsCmd,
+    _RenameCmd,
+    _SortKeysCmd,
+    _SwitchFieldCaseCmd,
+)
 
 
 class CommandDispatcher:
@@ -202,6 +211,133 @@ class CommandDispatcher:
         tab.undo_stack.push(cmd)
         if warn_fraction_loss:
             tab.show_status("Fractional part discarded during float-to-integer conversion", 3000)
+        return True
+
+    def push_insert_rows(
+        self,
+        inserts: list,
+        *,
+        label: str = "insert",
+        target_qname: str | None = None,
+    ) -> bool:
+        """Insert rows described by ``{parent_path, row, value, name}`` records."""
+        tab = self._tab
+        if tab.editability.is_read_only:
+            return False
+        if not inserts:
+            return False
+        qname = (
+            target_qname
+            if target_qname is not None
+            else tab.view_controller.qualified_name(tab.view_controller.index_from_path(inserts[0]["parent_path"]))
+        )
+        cmd = _InsertRowsCmd(tab, self.make_label(label, qname), inserts)
+        tab.undo_stack.push(cmd)
+        return True
+
+    def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
+        tab = self._tab
+        if tab.editability.is_read_only:
+            return False
+        if not indexes:
+            return False
+        ordered = sorted(indexes, key=lambda i: (tab.view_controller.index_path(i.parent()), i.row()), reverse=True)
+        removals = []
+        for idx in ordered:
+            row0 = tab.model.index(idx.row(), 0, idx.parent())
+            item = tab.model.get_item(row0)
+            removals.append(
+                {
+                    "parent_path": tab.view_controller.index_path(idx.parent()),
+                    "row": idx.row(),
+                    "name": item.name,
+                    "value": item.to_json(),
+                }
+            )
+        target_qname = tab.view_controller.qualified_name(ordered[0])
+        cmd = _RemoveRowsCmd(tab, self.make_label(label, target_qname), removals)
+        tab.undo_stack.push(cmd)
+        return True
+
+    def push_sort_keys(
+        self,
+        index: QModelIndex,
+        *,
+        recursive: bool = False,
+        label: str | None = None,
+    ) -> bool:
+        tab = self._tab
+        if tab.editability.is_read_only:
+            return False
+        if not index.isValid():
+            return False
+        item = tab.model.get_item(index)
+        if item.json_type is not JsonType.OBJECT:
+            return False
+        old_subtree = item.to_json()
+        if not recursive and list(old_subtree.keys()) == sorted(old_subtree.keys()):
+            return False
+        target_qname = tab.view_controller.qualified_name(index)
+        text = label if label is not None else ("sort keys recursive" if recursive else "sort keys")
+        cmd = _SortKeysCmd(tab, self.make_label(text, target_qname), tab.view_controller.index_path(index), old_subtree, recursive)
+        tab.undo_stack.push(cmd)
+        return True
+
+    def push_switch_field_case(
+        self,
+        renames: list[dict[str, Any]],
+        *,
+        label: str = "switch field case",
+        target_qname: str | None = None,
+    ) -> bool:
+        tab = self._tab
+        if tab.editability.is_read_only:
+            return False
+        if not renames:
+            return False
+
+        normalized: list[dict[str, Any]] = []
+        by_parent: dict[tuple[int, ...], dict[int, str]] = {}
+
+        for rec in renames:
+            path = tuple(rec.get("path", ()))
+            old_name = rec.get("old_name")
+            new_name = rec.get("new_name")
+            if not path or not isinstance(old_name, str) or not isinstance(new_name, str):
+                continue
+            if old_name == new_name:
+                continue
+            idx = tab.view_controller.index_from_path(path)
+            if not idx.isValid():
+                continue
+            item = tab.model.get_item(idx)
+            if item.name != old_name:
+                continue
+            parent = item.parent_item
+            if parent is None or parent.json_type is not JsonType.OBJECT:
+                continue
+            normalized.append({"path": path, "old_name": old_name, "new_name": new_name})
+            by_parent.setdefault(path[:-1], {})[path[-1]] = new_name
+
+        if not normalized:
+            return False
+
+        # Preflight: reject operations that would create duplicate sibling names.
+        for parent_path, updates in by_parent.items():
+            parent_index = tab.view_controller.index_from_path(parent_path)
+            parent_item = tab.model.get_item(parent_index)
+            final_names: list[str] = []
+            for row, child in enumerate(parent_item.child_items):
+                if not isinstance(child.name, str):
+                    continue
+                final_names.append(updates.get(row, child.name))
+            if len(set(final_names)) != len(final_names):
+                return False
+
+        first_index = tab.view_controller.index_from_path(normalized[0]["path"])
+        qname = target_qname if target_qname is not None else tab.view_controller.qualified_name(first_index)
+        cmd = _SwitchFieldCaseCmd(tab, self.make_label(label, qname), normalized)
+        tab.undo_stack.push(cmd)
         return True
 
 
