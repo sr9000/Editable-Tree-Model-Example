@@ -6,7 +6,6 @@ from PySide6.QtCore import QSettings
 
 from settings import APPLICATION_ID
 from state.validation_settings import _RECENT_SCHEMAS_KEY
-from validation.schema_types import SchemaSource
 
 RECENT_SCHEMAS_CAP = 12
 
@@ -20,6 +19,8 @@ def _serialize(source: SchemaSource) -> str:
 
 
 def _deserialize(raw: object) -> SchemaSource | None:
+    from validation.schema_types import SchemaSource
+
     if not isinstance(raw, str):
         return None
     kind, sep, payload = raw.partition(":")

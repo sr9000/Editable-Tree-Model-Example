@@ -19,8 +19,8 @@ from PySide6.QtCore import QByteArray, QObject, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QLabel, QMenu
 
+from app.dialogs.attach_schema_dlg import AttachSchemaDialog
 from app.validation_dock import ValidationDock
-from dialogs.attach_schema_dlg import AttachSchemaDialog
 from state.recent_schemas import recent_schemas
 from validation.schema_registry import SchemaSource, get_schema_registry, open_in_browser
 

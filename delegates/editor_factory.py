@@ -30,8 +30,8 @@ from delegates.number_affix_delegate import (
     normalize_affix_value,
     validate_affix_value,
 )
-from dialogs.qhexedit_dlg import QHexDialog
-from dialogs.qmultiline_dlg import QMultilineDialog
+from editors.windowed.hex_dialog import QHexDialog
+from editors.windowed.multiline_dialog import QMultilineDialog
 from qbigint_spinbox import QBigIntSpinBox
 from qmpq_spinbox import QMpqSpinBox
 from settings import SECRET_HIDE_ON_FOCUS_OUT
