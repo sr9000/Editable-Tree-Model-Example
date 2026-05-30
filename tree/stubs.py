@@ -66,6 +66,7 @@ _FAMOUS_PHRASES = (
     "Houston, we have a problem.",
     "Veni, vidi, vici.",
     "Cogito, ergo sum.",
+    "EGO SUM LEX!",
     "E pluribus unum.",
     "Carpe diem.",
 )
