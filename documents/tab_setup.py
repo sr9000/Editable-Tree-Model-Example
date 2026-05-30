@@ -15,7 +15,7 @@ from documents.states.editing_controller import TreeAction
 from documents.tab_status import on_current_changed
 from tree.model import JsonTreeModel
 from tree_actions.context_menu import show_context_menu
-from tree_filter_proxy import TreeFilterProxy
+from tree.filter_proxy import TreeFilterProxy
 from units import counts, format_bytes
 
 

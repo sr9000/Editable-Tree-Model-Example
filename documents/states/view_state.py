@@ -11,7 +11,7 @@ from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from documents.json_tab_ui import Ui_JsonTab
 from tree.view import JsonTreeView
-from tree_filter_proxy import TreeFilterProxy
+from tree.filter_proxy import TreeFilterProxy
 
 
 @dataclass

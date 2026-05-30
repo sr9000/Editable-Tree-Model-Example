@@ -1,7 +1,7 @@
 from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QTreeView
 
-from model_actions import (
+from tree_actions.structure import (
     action_duplicate,
     action_insert_row_after,
     action_insert_row_before,
