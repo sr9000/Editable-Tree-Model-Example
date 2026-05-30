@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
+from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtWidgets import QLineEdit, QWidget
 
 from documents import tab_init
@@ -214,17 +214,8 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     def show_permanent_message(self, message: str) -> None:
         self._host.show_permanent_message(message)
 
-    def _on_type_changed(self, item_index, lossy: bool) -> None:
-        self.editing.on_type_changed(item_index, lossy)
-
-    def _reopen_value_editor(self, value_pindex: QPersistentModelIndex) -> None:
-        self.editing.reopen_value_editor(value_pindex)
-
     def edit_name_or_value_from_enter(self) -> None:
         self.editing.edit_name_or_value_from_enter()
-
-    def _open_active_type_combo_popup(self) -> None:
-        self.editing.open_active_type_combo_popup()
 
     def _set_dirty(self, dirty: bool) -> None:
         self._io.set_dirty(dirty)

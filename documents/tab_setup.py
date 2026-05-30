@@ -140,7 +140,7 @@ def init_delegates_and_connections(tab: "JsonTab") -> None:
 
     tab.view_state.view.selectionModel().selectionChanged.connect(_refresh_actions)
     tab.view_state.view.selectionModel().currentChanged.connect(tab._on_current_changed)
-    tab.model.typeChanged.connect(tab._on_type_changed)
+    tab.model.typeChanged.connect(tab.editing.on_type_changed)
     tab.view_state.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
     tab.view_state.view.customContextMenuRequested.connect(functools.partial(show_context_menu, tab.view_state.view))
 
