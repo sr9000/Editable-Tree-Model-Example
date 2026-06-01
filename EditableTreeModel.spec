@@ -9,6 +9,7 @@ Build with:
 import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import (
+    collect_all,
     collect_submodules,
     copy_metadata,
 )
@@ -86,11 +87,27 @@ hiddenimports += [
     "_yaml",
     "tzdata",
 ]
+
+# ---------------------------------------------------------------------------
+# numpy / pandas need a *full* collection. NumPy 2.x relocated its C-extension
+# internals under `numpy._core` (e.g. `numpy._core._exceptions`,
+# `numpy._core._multiarray_umath`). PyInstaller's static analysis misses these
+# dynamically-imported submodules and their compiled `.so`/`.pyd` payloads,
+# which causes a runtime `ModuleNotFoundError: No module named
+# 'numpy._core._exceptions'` followed by pandas failing to import numpy.
+# `collect_all` gathers submodules + binaries + data files for each package.
+binaries = []
+for _pkg in ("numpy", "pandas"):
+    _pkg_datas, _pkg_binaries, _pkg_hidden = collect_all(_pkg)
+    datas += _pkg_datas
+    binaries += _pkg_binaries
+    hiddenimports += _pkg_hidden
+
 block_cipher = None
 a = Analysis(
     [ENTRY_SCRIPT],
     pathex=[str(Path(SPECPATH))],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
