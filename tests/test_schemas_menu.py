@@ -32,7 +32,7 @@ def test_schemas_menu_recent_entries_show_local_and_url_labels(qtbot, tmp_path):
 
     window = MainWindow(yaml_filename="")
     qtbot.addWidget(window)
-    window._rebuild_schemas_menu()
+    window._dock_validation.rebuild_schemas_menu()
 
     labels = [action.text() for action in window._schemas_recent_menu.actions()]
     assert labels == [f"🌐 {url_source.display}", f"📂 {local_source.display}"]
@@ -52,7 +52,7 @@ def test_schemas_menu_recent_url_opens_read_only_tab_and_disables_edit_actions(q
     qtbot.addWidget(window)
     window.create_new_file()
 
-    window._rebuild_schemas_menu()
+    window._dock_validation.rebuild_schemas_menu()
     actions = window._schemas_recent_menu.actions()
     assert len(actions) == 1
 
@@ -73,7 +73,7 @@ def test_schemas_menu_recent_url_opens_read_only_tab_and_disables_edit_actions(q
     assert not window.rowInsertAfterAction.isEnabled()
     assert not window.rowRemoveAction.isEnabled()
 
-    window._rebuild_schemas_menu()
+    window._dock_validation.rebuild_schemas_menu()
     window._schemas_copy_path_action.trigger()
     assert QApplication.clipboard().text() == url_source.key
 

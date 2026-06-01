@@ -42,10 +42,10 @@ meaningful work remains. Format:
 
 ## Low priority — hygiene & dead code (audit §6)
 
-- [ ] [hygiene] Remove deprecated shims `_closed_tabs_stack` /
+- [x] [hygiene] Remove deprecated shims `_closed_tabs_stack` /
   `_MAX_CLOSED_TABS` and the no-op stubs `_setup_validation_dock` /
-  `_setup_schemas_menu` once tests migrate.
-  — `app/main_window.py:200-204,356-358`
+  `_setup_schemas_menu` — tests and production code now call the
+  underlying presenters directly.
 - [ ] [hygiene] Rename underscore-prefixed helpers re-exported across
   `tree_actions/` (`_resolve_model`, `_to_source_index`, …) — they
   are a shared internal API, not module-private.

@@ -197,58 +197,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         event.ignore()
 
-    def _setup_validation_dock(self) -> None:  # pragma: no cover - retained for back-compat
-        return
-
-    def _setup_schemas_menu(self) -> None:  # pragma: no cover - retained for back-compat
-        return
-
-    def _rebuild_schemas_menu(self) -> None:
-        self._dock_validation.rebuild_schemas_menu()
-
-    def _on_go_to_schema_rule_requested(self, issue) -> None:
-        self._dock_validation.on_go_to_schema_rule_requested(issue)
-
-    # ── Edit-warning-limits + secret-prefixes presenter shims (Phase 3.2) ─
-
-    @property
-    def _limits_menu(self):
-        return self._app_settings.limits_menu
-
-    @property
-    def _limit_string_action(self):
-        return self._app_settings.limit_string_action
-
-    @property
-    def _limit_multiline_action(self):
-        return self._app_settings.limit_multiline_action
-
-    @property
-    def _limit_binary_action(self):
-        return self._app_settings.limit_binary_action
-
-    @property
-    def _limit_attach_action(self):
-        return self._app_settings.limit_attach_action
-
-    @property
-    def _secret_prefixes_action(self):
-        return self._app_settings.secret_prefixes_action
-
-    def _refresh_edit_limits_menu_entries(self) -> None:
-        self._app_settings.refresh_edit_limits_menu_entries()
-
-    def _bind_validation_status(self, tab) -> None:
-        self._dock_validation.bind_validation_status(tab)
-
-    def _on_tab_validation_changed(self, issue_index) -> None:
-        self._dock_validation.on_tab_validation_changed(issue_index)
-
-    # ─────────────────────────────────────────────────────────────────────
-
-    def _on_validation_issue_activated(self, issue, *, edit: bool = False) -> None:
-        self._dock_validation.on_validation_issue_activated(issue, edit=edit)
-
     def _setup_monospace_action(self) -> None:
         self.viewMonospaceFieldsAction = QAction("Monospace Names && Values", self)
         self.viewMonospaceFieldsAction.setCheckable(True)
@@ -351,15 +299,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _on_tab_dirty(self, tab: Document) -> None:
         self._tab_lifecycle.on_tab_dirty(tab)
-
-    @property
-    def _closed_tabs_stack(self) -> list[dict]:
-        # Deprecated: presenter now owns the stack. Kept for tests/back-compat.
-        return self._tab_lifecycle.closed_tabs_stack
-
-    @property
-    def _MAX_CLOSED_TABS(self) -> int:  # noqa: N802 — deprecated shim
-        return TabLifecyclePresenter.MAX_CLOSED_TABS
 
     def _open_path(self, path: str) -> bool:
         resolved = str(Path(path).resolve())

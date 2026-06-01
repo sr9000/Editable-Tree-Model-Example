@@ -2,8 +2,7 @@
 
 Wraps the File-menu "Edit Warning Limits" submenu and the "Secret word
 prefixes..." dialog action. The presenter owns the QAction/QMenu instances;
-``MainWindow`` exposes them via forwarding properties for backward-compatible
-test access (``win._limit_string_action`` etc.).
+tests access them directly via ``win._app_settings.limit_string_action`` etc.
 """
 
 from __future__ import annotations

@@ -127,7 +127,7 @@ def test_go_to_schema_rule_works_for_url_backed_in_memory_schema(qtbot, monkeypa
     assert issue.schema_path == ("properties", "age", "minimum")
 
     before_count = window.tabWidget.count()
-    window._on_go_to_schema_rule_requested(issue)
+    window._dock_validation.on_go_to_schema_rule_requested(issue)
     app.processEvents()
 
     first_schema_tab = window._current_tab()
@@ -137,7 +137,7 @@ def test_go_to_schema_rule_works_for_url_backed_in_memory_schema(qtbot, monkeypa
     assert first_schema_tab.editability.is_read_only
     assert window.tabWidget.count() == before_count + 1
 
-    window._on_go_to_schema_rule_requested(issue)
+    window._dock_validation.on_go_to_schema_rule_requested(issue)
     app.processEvents()
 
     schema_tab = window._current_tab()
@@ -177,7 +177,7 @@ def test_go_to_schema_rule_focuses_existing_file_backed_schema_tab(qtbot, tmp_pa
     window.tabWidget.setCurrentWidget(tab)
     before_count = window.tabWidget.count()
 
-    window._on_go_to_schema_rule_requested(issue)
+    window._dock_validation.on_go_to_schema_rule_requested(issue)
     app.processEvents()
 
     assert window.tabWidget.count() == before_count

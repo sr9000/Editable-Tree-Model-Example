@@ -1,9 +1,7 @@
 """Presenter for tab add/close/reopen lifecycle (kill-gods Phase 3.1).
 
-Owns the ``_closed_tabs_stack`` and the add/close/reopen flows that used to
-live directly on ``MainWindow``. ``MainWindow`` retains thin wrappers and a
-deprecated ``_closed_tabs_stack`` property pointing at this presenter for
-backwards compatibility with the existing test suite.
+Owns the ``closed_tabs_stack`` and the add/close/reopen flows that used to
+live directly on ``MainWindow``.
 
 The presenter receives the Designer-generated ``QTabWidget`` (which stays
 owned by ``MainWindow``) plus a reference to the window so it can reach the
@@ -38,7 +36,7 @@ class _MainWindowJsonTabHost:
 
 
 class TabLifecyclePresenter(QObject):
-    """Owns ``_closed_tabs_stack`` and add/close/reopen flows for ``MainWindow``."""
+    """Owns ``closed_tabs_stack`` and add/close/reopen flows for ``MainWindow``."""
 
     MAX_CLOSED_TABS = 10
 
@@ -117,7 +115,7 @@ class TabLifecyclePresenter(QObject):
         win = self._win
         tab = win._current_tab()
         win._bind_undo_signals(tab)
-        win._bind_validation_status(tab)
+        win._dock_validation.bind_validation_status(tab)
         win.validation_dock.attach_tab(tab)
         if tab is not None:
             tab.appearance.resize_key_columns()
@@ -181,7 +179,7 @@ class TabLifecyclePresenter(QObject):
         win.update_actions()
         current = win._current_tab()
         win._bind_undo_signals(current)
-        win._bind_validation_status(current)
+        win._dock_validation.bind_validation_status(current)
         win.validation_dock.attach_tab(current)
 
     # ── reopen ────────────────────────────────────────────────────────────

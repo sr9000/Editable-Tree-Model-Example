@@ -33,10 +33,10 @@ def test_file_menu_limit_actions_persist_updates(qtbot, monkeypatch):
 
     monkeypatch.setattr("app.app_settings.QInputDialog.getInt", _pick)
 
-    win._limit_string_action.trigger()
-    win._limit_multiline_action.trigger()
-    win._limit_binary_action.trigger()
-    win._limit_attach_action.trigger()
+    win._app_settings.limit_string_action.trigger()
+    win._app_settings.limit_multiline_action.trigger()
+    win._app_settings.limit_binary_action.trigger()
+    win._app_settings.limit_attach_action.trigger()
 
     assert get_string_edit_warning_limit_chars() == 111
     assert get_multiline_edit_warning_limit_chars() == 222
@@ -53,18 +53,18 @@ def test_file_menu_limit_actions_restore_after_restart(qtbot):
 
     first = MainWindow(yaml_filename="")
     qtbot.addWidget(first)
-    first._refresh_edit_limits_menu_entries()
-    assert "1.00K" in first._limit_string_action.text()
-    assert "2.00K" in first._limit_multiline_action.text()
-    assert "KiB" in first._limit_binary_action.text()
-    assert "KiB" in first._limit_attach_action.text()
+    first._app_settings.refresh_edit_limits_menu_entries()
+    assert "1.00K" in first._app_settings.limit_string_action.text()
+    assert "2.00K" in first._app_settings.limit_multiline_action.text()
+    assert "KiB" in first._app_settings.limit_binary_action.text()
+    assert "KiB" in first._app_settings.limit_attach_action.text()
     first.close()
     first.deleteLater()
 
     second = MainWindow(yaml_filename="")
     qtbot.addWidget(second)
-    second._refresh_edit_limits_menu_entries()
-    assert "1.00K" in second._limit_string_action.text()
-    assert "2.00K" in second._limit_multiline_action.text()
-    assert "KiB" in second._limit_binary_action.text()
-    assert "KiB" in second._limit_attach_action.text()
+    second._app_settings.refresh_edit_limits_menu_entries()
+    assert "1.00K" in second._app_settings.limit_string_action.text()
+    assert "2.00K" in second._app_settings.limit_multiline_action.text()
+    assert "KiB" in second._app_settings.limit_binary_action.text()
+    assert "KiB" in second._app_settings.limit_attach_action.text()

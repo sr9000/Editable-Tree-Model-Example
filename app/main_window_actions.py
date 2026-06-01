@@ -57,7 +57,7 @@ def update_actions(window):
     window.fileReloadAction.setEnabled(has_tab and can_edit and bool(tab.io.file_path))
     window.fileCopyPathAction.setEnabled(bool(tab and tab.io.file_path))
     window.fileCloseTabAction.setEnabled(has_tab)
-    window.fileReopenTabAction.setEnabled(bool(window._closed_tabs_stack))
+    window.fileReopenTabAction.setEnabled(bool(window._tab_lifecycle.closed_tabs_stack))
     window.rowInsertAction.setEnabled(has_valid_index and can_edit)
     window.rowInsertAfterAction.setEnabled(has_valid_index and can_edit)
     window.rowRemoveAction.setEnabled(has_valid_index and can_edit)

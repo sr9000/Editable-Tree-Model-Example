@@ -25,7 +25,7 @@ def test_rebuild_schemas_menu_shim_delegates(qtbot):
     qtbot.addWidget(win)
     try:
         # Should not raise; rebuilds the menu with the current state.
-        win._rebuild_schemas_menu()
+        win._dock_validation.rebuild_schemas_menu()
         actions = win.schemasMenu.actions()
         assert len(actions) >= 3  # attach, recent submenu, ...
     finally:

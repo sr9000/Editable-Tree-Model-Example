@@ -198,9 +198,10 @@ active refactor plan (`plans/refactor-tree-upward-imports.md`).
 
 ### Dead / deprecated code (audit Low)
 
-- `app/main_window.py` — `_closed_tabs_stack` / `_MAX_CLOSED_TABS`
+- ~~`app/main_window.py` — `_closed_tabs_stack` / `_MAX_CLOSED_TABS`
   deprecated shims; `_setup_validation_dock` / `_setup_schemas_menu`
-  no-op stubs retained for test back-compat.
+  no-op stubs retained for test back-compat.~~ **Removed** — callers
+  now use the underlying presenters directly.
 - `tree_actions/selection.py` — underscore-prefixed helpers
   (`_resolve_model`, `_to_source_index`, …) re-exported across sibling
   modules; misleading at package scope.
@@ -275,6 +276,4 @@ the last architectural inversion and closing QA gaps:
 3. **Medium** — split `tree_actions/structure.py`, extract a
    file-operation presenter from `MainWindow`, narrow
    `IoController.save()`.
-4. **Low** — delete the deprecated shims / no-op stubs, rename the
-   underscore-prefixed cross-module helpers, add a `Document`-protocol
-   conformance check.
+4. **Low** — rename the underscore-prefixed cross-module helpers, add a `Document`-protocol conformance check.

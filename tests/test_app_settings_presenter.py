@@ -20,10 +20,10 @@ def test_main_window_exposes_presenter(qtbot):
     qtbot.addWidget(win)
     try:
         assert isinstance(win._app_settings, AppSettingsPresenter)
-        # Forwarding shims point at presenter-owned objects.
-        assert win._limits_menu is win._app_settings.limits_menu
-        assert win._limit_string_action is win._app_settings.limit_string_action
-        assert win._secret_prefixes_action is win._app_settings.secret_prefixes_action
+        # Presenter-owned objects are directly accessible.
+        assert win._app_settings.limits_menu is not None
+        assert win._app_settings.limit_string_action is not None
+        assert win._app_settings.secret_prefixes_action is not None
     finally:
         win.close()
         win.deleteLater()
@@ -35,9 +35,9 @@ def test_presenter_refresh_updates_action_label(qtbot):
     win = MainWindow(yaml_filename="")
     qtbot.addWidget(win)
     try:
-        win._refresh_edit_limits_menu_entries()
+        win._app_settings.refresh_edit_limits_menu_entries()
         assert get_string_edit_warning_limit_chars() == 4096
-        assert "chars" in win._limit_string_action.text()
+        assert "chars" in win._app_settings.limit_string_action.text()
     finally:
         win.close()
         win.deleteLater()
