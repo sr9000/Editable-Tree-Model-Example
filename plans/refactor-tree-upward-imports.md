@@ -49,10 +49,11 @@ tree/  →  (nothing above it)
 editors/, delegates/  →  core/       # consume the shared code downward
 ```
 
-CI gate to add: extend the existing import-direction checks (alongside
-`make check-editors-isolation`) with a `make check-tree-isolation` that
-forbids `tree/` importing `app/`, `documents/`, `editors/`,
-`delegates/`, `state/`, `validation/`.
+CI gate to add: mirror the existing `.githooks/_check_editors_isolation.sh`
+(a bash script run by both `make check-editors-isolation` **and**
+`.githooks/pre-commit-ci`) with a new `.githooks/_check_tree_isolation.sh`
+that forbids `tree/` importing `app/`, `documents/`, `editors/`,
+`delegates/`, `state/`, `validation/`. See Step 4 for exact wiring.
 
 ---
 
@@ -91,10 +92,24 @@ encode/decode helpers — a **storage concern**, not presentation.
    and the 1 `color_codec` import in `tree/item_coercion.py` with eager
    top-level imports from the new location (lazy was only needed to dodge
    the circular dependency, which now disappears).
-3. Repoint `delegates/formatting/value_formatting.py` and any other
-   `delegates/` / `editors/` consumers to the new location (keep a thin
-   re-export shim in `delegates/formatting/__init__.py` for one release
-   if external callers exist).
+3. Repoint the **other production consumers** — verified 2026-06-01,
+   all import from the *submodule* (`delegates.formatting.bytes_codec`
+   / `color_codec`), so a package-level `__init__.py` re-export shim is
+   **not** sufficient. Either repoint each import directly (preferred)
+   or leave thin submodule-level re-export shims at
+   `delegates/formatting/bytes_codec.py` / `color_codec.py`:
+   - `delegates/formatting/value_formatting.py` (`decode_bytes`)
+   - `delegates/value.py` (`parse_color`)
+   - `editors/factory.py` (`decode_bytes`, `encode_bytes`,
+     `color_to_html`, `parse_color`)
+   - `tree_actions/context_menu.py` (`decode_bytes`, `encode_bytes`)
+   - `documents/controllers/status.py` (`decode_bytes`)
+   - test consumers: `tests/test_value_delegate_theme.py`,
+     `tests/test_kind_switch_coercion.py`, `tests/test_type_editing.py`
+   > Bonus: moving the codecs down also fixes the `editors/factory.py`
+   > → `delegates/` import direction the audit flagged as "acceptable"
+   > in §1.3 — the factory can then import codecs from the new
+   > data-layer location instead of reaching sideways into `delegates/`.
 4. Run bytes/zlib/gzip + color + coercion suites.
 
 **Affected:** `tree/item_coercion.py`, `delegates/formatting/*`, new
@@ -130,12 +145,24 @@ new `core/secret_names.py`.
 
 ### Step 4 — Add the import-direction gate
 
-1. Add `scripts/check_tree_isolation.py` (mirror
-   `check-editors-isolation`): fail if any `tree/*.py` imports `app`,
-   `documents`, `editors`, `delegates`, `state`, or `validation`.
-2. Wire `make check-tree-isolation` into `make gate`.
-3. Update `ai-memory/repo-map.md` §3 invariants to document the new rule
-   and the `core/` package.
+Mirror the existing editors-isolation mechanism exactly (it is a bash
+script, **not** a Python script under `scripts/`):
+
+1. Add `.githooks/_check_tree_isolation.sh` (copy/adapt
+   `.githooks/_check_editors_isolation.sh`): fail if any `tree/*.py`
+   imports `app`, `documents`, `editors`, `delegates`, `state`, or
+   `validation`.
+2. Add a `check-tree-isolation` target to the `Makefile` that runs
+   `bash .githooks/_check_tree_isolation.sh`, and add it to the `.PHONY`
+   line.
+3. Invoke it from `.githooks/pre-commit-ci` (append a block next to the
+   existing `_check_editors_isolation.sh` call) so it runs inside
+   `make check-no-reflection` and therefore inside `make gate`
+   (`gate: lint check-no-reflection test`). Do **not** edit the `gate`
+   recipe directly.
+4. Update `ai-memory/repo-map.md` §3 invariants and §11 commands to
+   document the new rule, the `core/` (and/or `tree/codecs/`) package,
+   and the new target.
 
 ---
 
@@ -154,7 +181,8 @@ new `core/secret_names.py`.
 
 - [ ] `grep -rn "from editors\|from delegates\|from state\|from validation" tree/`
       returns nothing.
-- [ ] `make check-tree-isolation` passes and is part of `make gate`.
+- [ ] `make check-tree-isolation` passes, and the check also runs inside
+      `make check-no-reflection` / `make gate` via `.githooks/pre-commit-ci`.
 - [ ] All previously passing suites still pass (1124 collected).
 - [ ] `repo-map.md` documents `core/` and the tree-isolation rule.
 - [ ] Audit table in §2 of the report is fully resolved (0 upward
