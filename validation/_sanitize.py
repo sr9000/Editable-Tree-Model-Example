@@ -13,6 +13,10 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
 
+from pandas import Timestamp
+
+from core.datetime_parsing.nano_time import NanoTime
+
 _log = logging.getLogger(__name__)
 
 
@@ -26,8 +30,10 @@ def to_jsonschema_input(value: Any, *, _lossy: list[bool] | None = None) -> Any:
     - ``gmpy2.mpz``  → ``int``
     - ``Fraction``   → ``float``
     - ``Decimal``    → ``float``
+    - ``pandas.Timestamp`` → ISO-format string (checked before datetime — subclass!)
     - ``datetime``   → ISO-format string  (``datetime`` before ``date`` — subclass!)
     - ``date``       → ISO-format string
+    - ``NanoTime``   → ISO-format string
     - ``time``       → ISO-format string
     - ``bytes`` / ``bytearray`` → Base64-encoded ASCII string
     - ``dict``       → recursively coerced mapping
@@ -81,10 +87,14 @@ def _coerce(value: Any, lossy: list[bool]) -> Any:  # noqa: PLR0911
     if isinstance(value, Decimal):
         return float(value)
 
-    # ── temporal (datetime before date — subclass order matters) ─────────
+    # ── temporal (Timestamp before datetime — subclass order matters) ─────
+    if isinstance(value, Timestamp):
+        return value.isoformat()
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, NanoTime):
         return value.isoformat()
     if isinstance(value, time):
         return value.isoformat()

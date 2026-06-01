@@ -1,9 +1,11 @@
-from datetime import date, datetime, time, timezone
+from datetime import date, timezone
 
+from pandas import Timestamp
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import QLineEdit
 
 from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
 
 from .validator import DateTimeValidator
@@ -16,17 +18,17 @@ class DateTimeEditor(QLineEdit):
       - date only       "YYYY-MM-DD"                       (year, month, day)
     Time Only:
       - time only                  "hh:mm:ss"              (hour, minute, second)
-      - time+ms                    "hh:mm:ss.123456"       (hour, minute, second, microsecond)
+      - time+ns                    "hh:mm:ss.123456789"    (hour, minute, second, nanosecond)
     Date Time:
       - datetime        "YYYY-MM-DD hh:mm:ss"              (year, month, day, hour, minute, second)
       - tdatetime       "YYYY-MM-DDThh:mm:ss"              (year, month, day, hour, minute, second)
-      - datetime+ms     "YYYY-MM-DD hh:mm:ss.123456"       (year, month, day, hour, minute, second, microsecond)
-      - tdatetime+ms    "YYYY-MM-DDThh:mm:ss.123456"       (year, month, day, hour, minute, second, microsecond)
+      - datetime+ns     "YYYY-MM-DD hh:mm:ss.123456789"    (year, month, day, hour, minute, second, nanosecond)
+      - tdatetime+ns    "YYYY-MM-DDThh:mm:ss.123456789"    (year, month, day, hour, minute, second, nanosecond)
     Date Time with TZ info:
       - datetime+tz     "YYYY-MM-DD hh:mm:ss+hh:mm"        (year, month, day, hour, minute, second, timezone offset ([+-]HH:MM))
       - tdatetime+tz    "YYYY-MM-DDThh:mm:ss+hh:mm"        (year, month, day, hour, minute, second, timezone offset ([+-]HH:MM))
-      - datetime+ms+tz  "YYYY-MM-DD hh:mm:ss.123456+hh:mm" (year, month, day, hour, minute, second, microsecond, timezone offset ([+-]HH:MM))
-      - tdatetime+ms+tz "YYYY-MM-DDThh:mm:ss.123456+hh:mm" (year, month, day, hour, minute, second, microsecond, timezone offset ([+-]HH:MM))
+      - datetime+ns+tz  "YYYY-MM-DD hh:mm:ss.123456789+hh:mm" (year, month, day, hour, minute, second, nanosecond, timezone offset ([+-]HH:MM))
+      - tdatetime+ns+tz "YYYY-MM-DDThh:mm:ss.123456789+hh:mm" (year, month, day, hour, minute, second, nanosecond, timezone offset ([+-]HH:MM))
     """
 
     valueChanged = Signal(object)
@@ -44,7 +46,7 @@ class DateTimeEditor(QLineEdit):
 
     @staticmethod
     def get_category(value):
-        if isinstance(value, datetime):
+        if isinstance(value, Timestamp):
             if value.tzinfo:
                 if value.tzinfo == timezone.utc:
                     return DateTimeCategory.DateTimeUTC
@@ -52,7 +54,7 @@ class DateTimeEditor(QLineEdit):
             return DateTimeCategory.DateTime
         elif isinstance(value, date):
             return DateTimeCategory.Date
-        elif isinstance(value, time):
+        elif isinstance(value, NanoTime):
             return DateTimeCategory.Time
         return None
 

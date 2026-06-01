@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from gmpy2 import mpq
+from pandas import Timestamp
 from PySide6.QtGui import QBrush, QPalette
 from PySide6.QtWidgets import QStyleOptionViewItem
 
@@ -174,8 +175,8 @@ def format_with_type(value, json_type: JsonType | None, *, item=None, show_previ
 
     if json_type is JsonType.DATETIMEUTC and isinstance(value, str):
         try:
-            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-            dt = (dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)
+            dt = Timestamp(value.replace("Z", "+00:00"))
+            dt = dt.tz_localize("UTC") if dt.tzinfo is None else dt.tz_convert("UTC")
             if dt.microsecond:
                 return dt.isoformat(timespec="microseconds").replace("+00:00", "Z")
             if dt.second:

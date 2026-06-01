@@ -1,17 +1,18 @@
 import re
-from datetime import date, time, timezone
+from datetime import date, timezone
 
 from dateutil.parser import isoparse
 
 from .enums import DateTimeCategory
+from .nano_time import NanoTime
 
 DATETIME_RE = re.compile(
     r"^("
     r"\d{4}-\d{2}-\d{2}"  # Date: YYYY-MM-DD
-    r"|\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?"  # Time: hh:mm[:ss[.123456]]
+    r"|\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?"  # Time: hh:mm[:ss[.123456789]]
     r"|"  # DateTime:
     r"\d{4}-\d{2}-\d{2}[T _]"  #  YYYY-MM-DD(T _)
-    r"\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?"  # hh:mm[:ss[.123456]]
+    r"\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?"  # hh:mm[:ss[.123456789]]
     r"(Z|[+-]\d{2}:\d{2})?"  # [Z|(+-)hh:mm]
     ")$",
     re.IGNORECASE,
@@ -26,7 +27,7 @@ SEPARATOR_RE = re.compile(r"[T _]", re.IGNORECASE)
 #   matching inputs like ':34' or interpreting '25:00' with an empty hour.
 PARTIAL_DATETIME_RE = re.compile(
     r"^(?:(?P<year>\d{0,4})(?=-|[T _]|$)(?:-(?P<month>\d{0,2})(?:-(?P<day>\d{0,2}))?)?)?"
-    r"(?:(?P<separator>[T _])?(?P<hour>\d{1,2})?(?::(?P<minute>\d{0,2})(?::(?P<second>\d{0,2}))?)?(?:\.(?P<microsecond>\d*))?)?"
+    r"(?:(?P<separator>[T _])?(?P<hour>\d{1,2})?(?::(?P<minute>\d{0,2})(?::(?P<second>\d{0,2}))?)?(?:\.(?P<subsecond>\d{0,9}))?)?"
     r"(?:(?P<tz_sign>[+-])(?P<tz_hour>\d{0,2})(?::(?P<tz_minute>\d{0,2}))?|(?P<utc>Z))?$",
     re.IGNORECASE,
 )
@@ -43,33 +44,37 @@ def parse_datetime_text(text: str, category=None):
                 return date.fromisoformat(text)
 
             case DateTimeCategory.Time:
-                return time.fromisoformat(text)
+                return NanoTime.fromisoformat(text)
 
             case DateTimeCategory.DateTime:
                 assert SEPARATOR_RE.search(text)
+                from core.datetime_parsing.compat import to_timestamp
 
-                dt = isoparse(text)
-                assert dt.tzinfo is None
-
-                return dt
+                # pd.Timestamp doesn't accept underscore separator; replace with T
+                normalized = SEPARATOR_RE.sub("T", text)
+                ts = to_timestamp(normalized)
+                assert ts.tzinfo is None
+                return ts
 
             case DateTimeCategory.DateTimeWithTZ:
                 assert SEPARATOR_RE.search(text)
                 assert not text.upper().endswith("Z")
+                from core.datetime_parsing.compat import to_timestamp
 
-                dt = isoparse(text)
-                assert dt.tzinfo is not None
-
-                return dt
+                normalized = SEPARATOR_RE.sub("T", text)
+                ts = to_timestamp(normalized)
+                assert ts.tzinfo is not None
+                return ts
 
             case DateTimeCategory.DateTimeUTC:
                 assert SEPARATOR_RE.search(text)
                 assert text.upper().endswith("Z")
+                from core.datetime_parsing.compat import to_timestamp
 
-                dt = isoparse(text)
-                assert dt.tzinfo is not None
-
-                return dt.astimezone(timezone.utc)
+                normalized = SEPARATOR_RE.sub("T", text)
+                ts = to_timestamp(normalized)
+                assert ts.tzinfo is not None
+                return ts.tz_localize(None).tz_localize("UTC")
 
             case _ if category is not None:
                 return None
@@ -77,7 +82,7 @@ def parse_datetime_text(text: str, category=None):
         return None
 
     try:
-        return time.fromisoformat(text)
+        return NanoTime.fromisoformat(text)
     except:
         pass
 
@@ -87,6 +92,8 @@ def parse_datetime_text(text: str, category=None):
         pass
 
     try:
-        return isoparse(text)
+        from core.datetime_parsing.compat import to_timestamp
+
+        return to_timestamp(text)
     except:
         return None

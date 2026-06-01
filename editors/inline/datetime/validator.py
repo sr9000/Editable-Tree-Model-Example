@@ -39,9 +39,9 @@ class DateTimeValidator(QValidator):
             case DateTimeCategory.Date:
                 only_allowed = {"year", "month", "day"}
             case DateTimeCategory.Time:
-                only_allowed = {"hour", "minute", "second", "microsecond"}
+                only_allowed = {"hour", "minute", "second", "subsecond"}
             case DateTimeCategory.DateTime:
-                only_allowed = {"year", "month", "day", "separator", "hour", "minute", "second", "microsecond"}
+                only_allowed = {"year", "month", "day", "separator", "hour", "minute", "second", "subsecond"}
             case DateTimeCategory.DateTimeUTC:
                 only_allowed = {
                     "year",
@@ -51,7 +51,7 @@ class DateTimeValidator(QValidator):
                     "hour",
                     "minute",
                     "second",
-                    "microsecond",
+                    "subsecond",
                     "utc",
                 }
             case _:
@@ -63,7 +63,7 @@ class DateTimeValidator(QValidator):
                     "hour",
                     "minute",
                     "second",
-                    "microsecond",
+                    "subsecond",
                     "tz_sign",
                     "tz_hour",
                     "tz_minute",
@@ -84,7 +84,7 @@ class DateTimeValidator(QValidator):
         minute = parts.get("minute")
         second = parts.get("second")
 
-        microsecond = parts.get("microsecond")
+        subsecond = parts.get("subsecond")
         tz_sign = parts.get("tz_sign")
         tz_hour = parts.get("tz_hour")
         tz_minute = parts.get("tz_minute")
@@ -110,7 +110,7 @@ class DateTimeValidator(QValidator):
             return QValidator.State.Invalid
         if second and int(second) > 59:
             return QValidator.State.Invalid
-        if microsecond and int(microsecond) > 999999:
+        if subsecond and int(subsecond) > 999999999:
             return QValidator.State.Invalid
 
         if tz_sign not in ("+", "-", None):

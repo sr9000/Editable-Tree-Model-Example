@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
+from pandas import Timestamp
 from PySide6.QtCore import QModelIndex
 
 from documents.controllers.number_types import would_drop_fraction_on_type_change
@@ -34,7 +34,7 @@ class CommandDispatcher:
 
     @staticmethod
     def make_label(text: str, target_qname: str) -> str:
-        timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
+        timestamp = Timestamp.now().tz_localize(None).strftime("%H:%M:%S")
         return f"[{timestamp}] {text} @ {target_qname}"
 
     def push_move_row(

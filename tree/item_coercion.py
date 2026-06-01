@@ -7,8 +7,10 @@ from typing import Any
 
 import gmpy2
 from gmpy2 import mpq
+from pandas import Timestamp
 
 from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
@@ -56,14 +58,15 @@ def _bytes_to_printable_string(raw: bytes) -> str | None:
 
 def _now_for_type(json_type: JsonType) -> str:
     """Return a sensible 'now' ISO string for the given temporal type."""
-    now = datetime.datetime.now(tz=datetime.timezone.utc).astimezone()
+    now = Timestamp.now(tz="UTC").tz_convert(None).tz_localize(datetime.timezone.utc).to_pydatetime().astimezone()
     match json_type:
         case JsonType.DATE:
             return now.date().isoformat()
         case JsonType.TIME:
-            return now.time().replace(microsecond=0).isoformat(timespec="minutes")
+            return NanoTime(hour=now.hour, minute=now.minute).isoformat(timespec="minutes")
         case JsonType.DATETIME:
-            return now.replace(microsecond=0, tzinfo=None).isoformat(timespec="minutes")
+            naive = now.replace(microsecond=0, tzinfo=None)
+            return naive.isoformat(sep=" ", timespec="minutes")
         case JsonType.DATETIMEZONE:
             return now.replace(microsecond=0).isoformat(timespec="seconds")
         case JsonType.DATETIMEUTC:
@@ -76,8 +79,8 @@ def _now_for_type(json_type: JsonType) -> str:
     raise ValueError(f"Unsupported temporal JsonType: {json_type}")
 
 
-def _timespec_for_clock(second: int, microsecond: int) -> str:
-    if microsecond:
+def _timespec_for_clock(second: int, subsecond: int) -> str:
+    if subsecond:
         return "microseconds"
     if second:
         return "seconds"
@@ -110,8 +113,15 @@ def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None
     TIME is seconds since day start.
     """
 
-    def _seconds_since_midnight(t: datetime.time) -> mpq:
-        return mpq(t.hour * 3600 + t.minute * 60 + t.second) + mpq(t.microsecond, 1_000_000)
+    def _seconds_since_midnight(t: NanoTime) -> mpq:
+        return mpq(t.hour * 3600 + t.minute * 60 + t.second) + mpq(t.nanosecond, 1_000_000_000)
+
+    # Timestamp must be checked before datetime (it's a subclass)
+    if isinstance(value, Timestamp):
+        dt = value.to_pydatetime()
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
 
     if isinstance(value, datetime.datetime):
         dt = value if value.tzinfo is not None else value.replace(tzinfo=datetime.timezone.utc)
@@ -121,7 +131,7 @@ def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None
         dt = datetime.datetime(value.year, value.month, value.day, tzinfo=datetime.timezone.utc)
         return mpq(int(dt.timestamp()))
 
-    if isinstance(value, datetime.time):
+    if isinstance(value, NanoTime):
         return _seconds_since_midnight(value)
 
     if isinstance(value, str) and value:
@@ -144,13 +154,15 @@ def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None
             parsed = parse_datetime_text(raw, category)
             if parsed is None:
                 continue
-            if isinstance(parsed, datetime.datetime):
-                dt = parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=datetime.timezone.utc)
+            if isinstance(parsed, Timestamp):
+                dt = parsed.to_pydatetime()
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
                 return mpq(int(dt.timestamp() * 1_000_000), 1_000_000)
             if isinstance(parsed, datetime.date):
                 dt = datetime.datetime(parsed.year, parsed.month, parsed.day, tzinfo=datetime.timezone.utc)
                 return mpq(int(dt.timestamp()))
-            if isinstance(parsed, datetime.time):
+            if isinstance(parsed, NanoTime):
                 return _seconds_since_midnight(parsed)
     return None
 
@@ -158,23 +170,43 @@ def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None
 def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
     """Convert *value* to a canonical ISO string for *json_type*.
 
-    Handles Python date/time/datetime objects, int epoch seconds (≥ 10^12 →
+    Handles Python date/Timestamp/NanoTime objects, int epoch seconds (≥ 10^12 →
     milliseconds), and ISO strings.  Returns ``None`` when the value cannot
     be sensibly mapped to *json_type*.
     """
-    # datetime must be tested before date (bool ⊂ int but fine here)
+    # Timestamp must be tested before datetime (subclass)
+    if isinstance(value, Timestamp):
+        match json_type:
+            case JsonType.DATE:
+                return value.date().isoformat()
+            case JsonType.TIME:
+                t = NanoTime(
+                    hour=value.hour, minute=value.minute, second=value.second, nanosecond=value.microsecond * 1000
+                )
+                return t.isoformat(timespec=_timespec_for_clock(t.second, t.nanosecond))
+            case JsonType.DATETIME:
+                naive = value.tz_localize(None) if value.tzinfo is not None else value
+                return naive.isoformat(sep=" ", timespec=_timespec_for_clock(naive.second, naive.microsecond))
+            case JsonType.DATETIMEZONE:
+                aware = value if value.tzinfo is not None else value.tz_localize("UTC")
+                return aware.isoformat(timespec=_timespec_for_clock(aware.second, aware.microsecond))
+            case JsonType.DATETIMEUTC:
+                utc = (value if value.tzinfo is not None else value.tz_localize("UTC")).tz_convert("UTC")
+                return utc.isoformat(timespec=_timespec_for_clock(utc.second, utc.microsecond)).replace("+00:00", "Z")
+        return None
+
     if isinstance(value, datetime.datetime):
         match json_type:
             case JsonType.DATE:
                 return value.date().isoformat()
             case JsonType.TIME:
-                t = value.time()
-                return t.replace(microsecond=t.microsecond).isoformat(
-                    timespec=_timespec_for_clock(t.second, t.microsecond)
+                t = NanoTime(
+                    hour=value.hour, minute=value.minute, second=value.second, nanosecond=value.microsecond * 1000
                 )
+                return t.isoformat(timespec=_timespec_for_clock(t.second, t.nanosecond))
             case JsonType.DATETIME:
                 naive = value.replace(tzinfo=None)
-                return naive.isoformat(timespec=_timespec_for_clock(naive.second, naive.microsecond))
+                return naive.isoformat(sep=" ", timespec=_timespec_for_clock(naive.second, naive.microsecond))
             case JsonType.DATETIMEZONE:
                 if value.tzinfo is None:
                     value = value.replace(tzinfo=datetime.timezone.utc)
@@ -191,7 +223,7 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
             case JsonType.DATE:
                 return value.isoformat()
             case JsonType.DATETIME:
-                return datetime.datetime(value.year, value.month, value.day).isoformat(timespec="minutes")
+                return datetime.datetime(value.year, value.month, value.day).isoformat(sep=" ", timespec="minutes")
             case JsonType.DATETIMEZONE:
                 return datetime.datetime(value.year, value.month, value.day, tzinfo=datetime.timezone.utc).isoformat(
                     timespec="seconds"
@@ -204,9 +236,9 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
                 )
         return None
 
-    if isinstance(value, datetime.time):
+    if isinstance(value, NanoTime):
         if json_type is JsonType.TIME:
-            return value.isoformat(timespec=_timespec_for_clock(value.second, value.microsecond))
+            return value.isoformat(timespec=_timespec_for_clock(value.second, value.nanosecond))
         return None
 
     # Number → Unix epoch seconds (DATE/DATETIME/DATETIMEZONE) or seconds since
@@ -224,15 +256,15 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
             if not (0.0 <= numeric < 24 * 60 * 60):
                 return None
             whole_seconds = int(numeric)
-            micros = int(round((numeric - whole_seconds) * 1_000_000))
-            if micros >= 1_000_000:
+            nanos = int(round((numeric - whole_seconds) * 1_000_000_000))
+            if nanos >= 1_000_000_000:
                 whole_seconds += 1
-                micros -= 1_000_000
+                nanos -= 1_000_000_000
             if whole_seconds >= 24 * 60 * 60:
                 return None
             hour, rem = divmod(whole_seconds, 3600)
             minute, second = divmod(rem, 60)
-            parsed_time = datetime.time(hour=hour, minute=minute, second=second, microsecond=micros)
+            parsed_time = NanoTime(hour=hour, minute=minute, second=second, nanosecond=nanos)
             return _try_parse_temporal(json_type, parsed_time)
 
         ts = numeric / 1000.0 if isinstance(value, int) and abs(value) >= 10**12 else numeric
@@ -254,7 +286,7 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
 
         # Try time first (time strings are not valid datetime strings)
         try:
-            return _try_parse_temporal(json_type, datetime.time.fromisoformat(raw))
+            return _try_parse_temporal(json_type, NanoTime.fromisoformat(raw))
         except ValueError:
             pass
         # dateutil handles full datetime/date/tz strings

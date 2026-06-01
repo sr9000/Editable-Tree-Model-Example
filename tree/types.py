@@ -3,13 +3,15 @@ import gzip
 import logging
 import re
 import zlib
-from datetime import date, datetime, time, timezone
+from datetime import date, timezone
 from enum import StrEnum
 from typing import Any
 
 import gmpy2
+from pandas import Timestamp
 
 from core.datetime_parsing import parse_datetime_text
+from core.datetime_parsing.nano_time import NanoTime
 from settings import NUMBER_AFFIX_MAX_LEN
 from units.number_affix import AffixKind, NumberAffix, parse_number_affix
 
@@ -163,13 +165,13 @@ def parse_json_type(value: Any) -> "JsonType":
             try:
                 val = parse_datetime_text(s)
                 match val:
-                    case datetime(tzinfo=None):
+                    case Timestamp(tzinfo=None):
                         return JsonType.DATETIME
-                    case datetime():
+                    case Timestamp():
                         if s.strip().upper().endswith("Z") and val.utcoffset() == timezone.utc.utcoffset(None):
                             return JsonType.DATETIMEUTC
                         return JsonType.DATETIMEZONE
-                    case time():
+                    case NanoTime():
                         return JsonType.TIME
                     case date():
                         return JsonType.DATE

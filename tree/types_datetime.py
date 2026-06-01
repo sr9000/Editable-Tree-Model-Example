@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import date, datetime, time, timezone
 from typing import Any
 
+from pandas import Timestamp
+
+from core.datetime_parsing.nano_time import NanoTime
 from tree.types import JsonType
 
 
@@ -40,62 +43,68 @@ def convert_datetime(value: Any, src: JsonType, dst: JsonType) -> Any:
         if dst is JsonType.DATE:
             return value
         if dst is JsonType.TIME:
-            return base.time()
+            return NanoTime(hour=base.hour, minute=base.minute, second=base.second)
         if dst is JsonType.DATETIME:
-            return base
+            return Timestamp(base)
         if dst is JsonType.DATETIMEZONE:
-            return base.replace(tzinfo=timezone.utc)
-        return base.replace(tzinfo=timezone.utc)
+            return Timestamp(base.replace(tzinfo=timezone.utc))
+        return Timestamp(base.replace(tzinfo=timezone.utc))
 
     if src is JsonType.TIME:
-        if not isinstance(value, time):
-            raise ValueError("TIME conversion expects datetime.time")
-        base = datetime.combine(date.today(), value)
+        if not isinstance(value, NanoTime):
+            raise ValueError("TIME conversion expects NanoTime")
+        base = datetime.combine(date.today(), time(value.hour, value.minute, value.second, value.nanosecond // 1000))
         if dst is JsonType.DATE:
             return base.date()
         if dst is JsonType.TIME:
             return value
         if dst is JsonType.DATETIME:
-            return base.replace(tzinfo=None)
+            return Timestamp(base.replace(tzinfo=None))
         if dst is JsonType.DATETIMEZONE:
-            return base.replace(tzinfo=timezone.utc)
-        return base.replace(tzinfo=timezone.utc)
+            return Timestamp(base.replace(tzinfo=timezone.utc))
+        return Timestamp(base.replace(tzinfo=timezone.utc))
 
-    if not isinstance(value, datetime):
-        raise ValueError("DATETIME conversion expects datetime.datetime")
+    if not isinstance(value, Timestamp):
+        raise ValueError("DATETIME conversion expects pandas.Timestamp")
 
     if src is JsonType.DATETIME:
-        naive = value.replace(tzinfo=None)
+        naive = value.tz_localize(None) if value.tzinfo is not None else value
         if dst is JsonType.DATE:
             return naive.date()
         if dst is JsonType.TIME:
-            return naive.time()
+            return NanoTime(
+                hour=naive.hour, minute=naive.minute, second=naive.second, nanosecond=naive.microsecond * 1000
+            )
         if dst is JsonType.DATETIME:
             return naive
         if dst in {JsonType.DATETIMEZONE, JsonType.DATETIMEUTC}:
-            return naive.replace(tzinfo=timezone.utc)
+            return naive.tz_localize("UTC")
 
     if src is JsonType.DATETIMEZONE:
-        aware = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+        aware = value if value.tzinfo is not None else value.tz_localize("UTC")
         if dst is JsonType.DATE:
             return aware.date()
         if dst is JsonType.TIME:
-            return aware.time()
+            return NanoTime(
+                hour=aware.hour, minute=aware.minute, second=aware.second, nanosecond=aware.microsecond * 1000
+            )
         if dst is JsonType.DATETIME:
-            return aware.replace(tzinfo=None)
+            return aware.tz_localize(None)
         if dst is JsonType.DATETIMEZONE:
             return aware
         if dst is JsonType.DATETIMEUTC:
-            return aware.astimezone(timezone.utc)
+            return aware.tz_convert("UTC")
 
     if src is JsonType.DATETIMEUTC:
-        aware = (value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)
+        aware = (value if value.tzinfo is not None else value.tz_localize("UTC")).tz_convert("UTC")
         if dst is JsonType.DATE:
             return aware.date()
         if dst is JsonType.TIME:
-            return aware.time()
+            return NanoTime(
+                hour=aware.hour, minute=aware.minute, second=aware.second, nanosecond=aware.microsecond * 1000
+            )
         if dst is JsonType.DATETIME:
-            return aware.replace(tzinfo=None)
+            return aware.tz_localize(None)
         if dst is JsonType.DATETIMEZONE:
             return aware
         if dst is JsonType.DATETIMEUTC:
