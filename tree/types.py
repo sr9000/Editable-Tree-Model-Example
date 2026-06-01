@@ -9,7 +9,7 @@ from typing import Any
 
 import gmpy2
 
-from editors.inline.datetime import parse_datetime_text
+from core.datetime_parsing import parse_datetime_text
 from settings import NUMBER_AFFIX_MAX_LEN
 from units.number_affix import AffixKind, NumberAffix, parse_number_affix
 
