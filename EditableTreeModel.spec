@@ -60,6 +60,8 @@ for dist in (
     "python-dateutil",
     "six",
     "tzdata",
+    "numpy",
+    "pandas",
 ):
     try:
         datas += copy_metadata(dist)
