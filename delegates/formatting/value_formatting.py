@@ -177,6 +177,8 @@ def format_with_type(value, json_type: JsonType | None, *, item=None, show_previ
         try:
             dt = Timestamp(value.replace("Z", "+00:00"))
             dt = dt.tz_localize("UTC") if dt.tzinfo is None else dt.tz_convert("UTC")
+            if dt.nanosecond:
+                return dt.isoformat(timespec="nanoseconds").replace("+00:00", "Z")
             if dt.microsecond:
                 return dt.isoformat(timespec="microseconds").replace("+00:00", "Z")
             if dt.second:

@@ -1,8 +1,7 @@
 """Thin adapter layer for datetime type construction.
 
 Centralizes ``pandas.Timestamp`` / ``NanoTime`` / ``datetime.date``
-construction so callers don't import pandas directly.  The pandas
-import is deferred to first use to avoid the ~0.5–1.0 s startup cost.
+construction so callers don't import pandas directly.
 """
 
 from __future__ import annotations
@@ -10,23 +9,11 @@ from __future__ import annotations
 from datetime import date, datetime, time, timezone
 from typing import Any, Union
 
+import pandas as pd
+
 from core.datetime_parsing.nano_time import NanoTime
 
-# Lazy pandas import — only loaded when first needed.
-_pd = None
-
-
-def _pandas():
-    global _pd
-    if _pd is None:
-        import pandas as _pandas_mod
-
-        _pd = _pandas_mod
-    return _pd
-
-
-# Type alias for the three temporal storage types used after migration.
-TemporalValue = Union[date, NanoTime, "pandas.Timestamp"]
+TemporalValue = Union[date, NanoTime, pd.Timestamp]
 
 
 def to_timestamp(value: Any) -> Any:
@@ -35,7 +22,6 @@ def to_timestamp(value: Any) -> Any:
     Accepts ISO strings, ``datetime.datetime``, or existing
     ``pandas.Timestamp`` objects.
     """
-    pd = _pandas()
     if isinstance(value, pd.Timestamp):
         return value
     if isinstance(value, datetime):
@@ -77,7 +63,6 @@ def to_date(value: Any) -> date:
 
 def isoformat(value: Any, category: Any = None) -> str:
     """Format *value* as an ISO string, dispatching by runtime type."""
-    pd = _pandas()
     if isinstance(value, pd.Timestamp):
         if category is not None and category.name == "DateTimeUTC":
             return (
