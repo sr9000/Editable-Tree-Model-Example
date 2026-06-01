@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import binascii
 import zlib
-from typing import Protocol
 
 from gmpy2 import mpq
 from PySide6.QtCore import QEvent, QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Qt
@@ -28,6 +27,7 @@ from delegates.number_affix_delegate import (
     normalize_affix_value,
     validate_affix_value,
 )
+from editors.context import EditorContextProtocol, ValueDelegateProtocol
 from editors.inline.bigint_spinbox import QBigIntSpinBox
 from editors.inline.datetime.better_dt_editor import BetterDateTimeEditor
 from editors.inline.datetime.enums import DateTimeCategory
@@ -39,39 +39,7 @@ from state.edit_limits import get_multiline_edit_warning_limit_chars, get_string
 from tree.item import JsonTreeItem
 from tree.types import TEXT_LINE_FAMILY, TEXT_MULTI_FAMILY, JsonType
 
-
-class ValueDelegateProtocol(Protocol):
-    _secret_watchers: dict[QWidget, "_SecretEditorWatcher"]
-
-    def _context_for(self, host) -> "EditorContextProtocol": ...
-
-    def _finalize_secret_editor(self, editor: QWidget, index: QPersistentModelIndex) -> None: ...
-
-    def _apply_monospace_font(self, font: QFont) -> QFont: ...
-
-    def _mark_editor_open(self, index: QModelIndex | QPersistentModelIndex) -> None: ...
-
-
-class EditorContextProtocol(Protocol):
-    def commit(self, index: QModelIndex, value, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole): ...
-
-    def notify_status(self, message: str, timeout_ms: int = 0) -> None: ...
-
-    def confirm_large_binary_edit(self, parent, payload_size: int) -> bool: ...
-
-    def confirm_large_text_edit(
-        self,
-        parent,
-        *,
-        text_len: int,
-        limit: int,
-        title: str,
-        kind: str,
-    ) -> bool: ...
-
-    def affix_mru(self): ...
-
-    def icon_provider(self): ...
+__all__ = ["EditorContextProtocol", "ValueDelegateProtocol"]
 
 
 class _SecretLineEdit(QWidget):
