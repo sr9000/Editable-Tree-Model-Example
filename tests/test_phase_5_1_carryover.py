@@ -14,9 +14,10 @@ import base64
 from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem, QWidget
 
-from documents.tab import _CMD_ID_EDIT_VALUE, _CMD_ID_RENAME, _MERGE_WINDOW_SECONDS, JsonTab
+from documents.tab import JsonTab
 from settings import BINARY_EDIT_WARNING_LIMIT_BYTES
 from tree.types import JsonType
+from undo.commands import _CMD_ID_EDIT_VALUE, _CMD_ID_RENAME, _MERGE_WINDOW_SECONDS
 
 
 def _row_named(tab: JsonTab, name: str) -> int | None:
@@ -141,7 +142,7 @@ def test_large_bytes_manual_edit_warns_and_can_cancel(qtbot, monkeypatch):
         opened.append("opened")
 
     monkeypatch.setattr("delegates.edit_context.QMessageBox.warning", _warn)
-    monkeypatch.setattr("dialogs.qhexedit_dlg.QHexDialog.open", _open)
+    monkeypatch.setattr("editors.windowed.hex_dialog.QHexDialog.open", _open)
 
     delegate = tab.view_controller.value_delegate
     parent = QWidget(tab)
@@ -177,7 +178,7 @@ def test_large_bytes_manual_edit_warns_and_opens_on_confirm(qtbot, monkeypatch):
         opened.append("opened")
 
     monkeypatch.setattr("delegates.edit_context.QMessageBox.warning", _warn)
-    monkeypatch.setattr("dialogs.qhexedit_dlg.QHexDialog.open", _open)
+    monkeypatch.setattr("editors.windowed.hex_dialog.QHexDialog.open", _open)
 
     delegate = tab.view_controller.value_delegate
     parent = QWidget(tab)
@@ -198,7 +199,7 @@ def test_large_string_manual_edit_warns_and_can_cancel(qtbot, monkeypatch):
     item = tab.model.get_item(name_idx)
     item._apply_typed_value(JsonType.STRING, "x" * 200)
 
-    monkeypatch.setattr("delegates.editor_factory.get_string_edit_warning_limit_chars", lambda: 100)
+    monkeypatch.setattr("editors.factory.get_string_edit_warning_limit_chars", lambda: 100)
 
     warned: list[str] = []
 
@@ -225,7 +226,7 @@ def test_large_multiline_manual_edit_warns_and_opens_on_confirm(qtbot, monkeypat
     item = tab.model.get_item(name_idx)
     item._apply_typed_value(JsonType.MULTILINE, "line\\n" + ("x" * 500))
 
-    monkeypatch.setattr("delegates.editor_factory.get_multiline_edit_warning_limit_chars", lambda: 100)
+    monkeypatch.setattr("editors.factory.get_multiline_edit_warning_limit_chars", lambda: 100)
 
     warned: list[str] = []
 
@@ -239,7 +240,7 @@ def test_large_multiline_manual_edit_warns_and_opens_on_confirm(qtbot, monkeypat
         opened.append("opened")
 
     monkeypatch.setattr("delegates.edit_context.QMessageBox.warning", _warn)
-    monkeypatch.setattr("dialogs.qmultiline_dlg.QMultilineDialog.open", _open)
+    monkeypatch.setattr("editors.windowed.multiline_dialog.QMultilineDialog.open", _open)
 
     delegate = tab.view_controller.value_delegate
     parent = QWidget(tab)

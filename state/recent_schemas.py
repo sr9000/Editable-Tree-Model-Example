@@ -6,7 +6,6 @@ from PySide6.QtCore import QSettings
 
 from settings import APPLICATION_ID
 from state.validation_settings import _RECENT_SCHEMAS_KEY
-from validation.schema_types import SchemaSource
 
 RECENT_SCHEMAS_CAP = 12
 
@@ -15,11 +14,19 @@ def _settings() -> QSettings:
     return QSettings(APPLICATION_ID, "validation")
 
 
+def _schema_source_cls():
+    from validation.schema_types import SchemaSource
+
+    return SchemaSource
+
+
 def _serialize(source: SchemaSource) -> str:
     return f"{source.kind}:{source.key}"
 
 
 def _deserialize(raw: object) -> SchemaSource | None:
+    schema_source_cls = _schema_source_cls()
+
     if not isinstance(raw, str):
         return None
     kind, sep, payload = raw.partition(":")
@@ -28,9 +35,9 @@ def _deserialize(raw: object) -> SchemaSource | None:
         return None
 
     if kind == "file":
-        return SchemaSource.for_file(Path(payload))
+        return schema_source_cls.for_file(Path(payload))
     if kind == "url":
-        return SchemaSource.for_url(payload)
+        return schema_source_cls.for_url(payload)
     return None
 
 

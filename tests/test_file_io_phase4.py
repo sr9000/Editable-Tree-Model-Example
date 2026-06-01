@@ -27,7 +27,7 @@ def qapp():
 
 
 def _make_dirty(tab) -> None:
-    assert tab.editing.push_insert_rows(
+    assert tab.editing.commands.push_insert_rows(
         [
             {
                 "parent_path": (),
@@ -170,7 +170,7 @@ def test_sort_keys_on_root_object(qapp):
     tab = JsonTab(lambda *_args, **_kwargs: None, data={"z": 1, "a": 2}, show_root=True)
     try:
         root = tab.model.index(0, 0, QModelIndex())
-        assert tab.editing.push_sort_keys(root)
+        assert tab.editing.commands.push_sort_keys(root)
         assert list(tab.model.root_item.to_json().keys()) == ["a", "z"]
     finally:
         tab.deleteLater()

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from PySide6.QtCore import QSettings
 
-from dialogs.attach_schema_dlg import AttachSchemaDialog
+from app.dialogs.attach_schema_dlg import AttachSchemaDialog
 from settings import APPLICATION_ID
 from state.recent_schemas import push_recent_schema
-from validation.schema_registry import SchemaSource
+from validation.schema_types import SchemaSource
 
 
 def _settings() -> QSettings:

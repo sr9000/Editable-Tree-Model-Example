@@ -1,7 +1,7 @@
 from PySide6.QtCore import QModelIndex
 
+from documents.composition.dependencies import JsonTabServices
 from documents.tab import JsonTab
-from documents.tab_dependencies import JsonTabServices
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import StubIconProvider
 

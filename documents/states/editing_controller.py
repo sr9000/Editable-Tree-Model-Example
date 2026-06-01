@@ -7,14 +7,14 @@ from typing import Any
 
 from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, Qt
 
-from documents.mutation_gateway import DocumentMutationGateway
+from documents.controllers.history import TabHistoryController
+from documents.seams.mutation_gateway import DocumentMutationGateway
 from documents.states.editing.command_dispatcher import CommandDispatcher
 from documents.states.editing.context import EditingContext
 from documents.states.editing.inline_edit_controller import InlineEditController
 from documents.states.editing.move_view_state import MoveViewState
 from documents.states.editing.tree_actions import ACTIONS as _ACTIONS
 from documents.states.editing.tree_actions import TreeAction
-from documents.tab_history import TabHistoryController
 from state.affix_mru import AffixMRU
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
@@ -41,108 +41,28 @@ class EditingController(QObject):
         self._commands = CommandDispatcher(context)
         self._diff_applier = DiffApplier(tab)
 
-    @staticmethod
-    def make_label(text: str, target_qname: str) -> str:
-        return CommandDispatcher.make_label(text, target_qname)
+    # ----- collaborators (use these directly; no more pass-through forwards) -----
+    @property
+    def commands(self) -> CommandDispatcher:
+        """Undo command construction (push_* operations)."""
+        return self._commands
 
-    def push_move_row(
-        self,
-        parent_index: QModelIndex,
-        src: int,
-        dst: int,
-        *,
-        label: str = "move row",
-    ) -> bool:
-        return self._commands.push_move_row(parent_index, src, dst, label=label)
+    @property
+    def inline(self) -> InlineEditController:
+        """Inline edit lifecycle (type-change reopen, enter-to-edit, combo popup)."""
+        return self._inline
 
-    def push_move_rows_anchor(
-        self,
-        sources: list,
-        anchor: Any,
-        *,
-        label: str = "move rows",
-    ) -> bool:
-        return self._commands.push_move_rows_anchor(sources, anchor, label=label)
+    @property
+    def move(self) -> MoveViewState:
+        """Move/expand view-state capture & restore."""
+        return self._move
 
-    def push_move_rows(
-        self,
-        sources: list,
-        target_parent: QModelIndex,
-        target_row: int,
-        *,
-        label: str = "move rows",
-    ) -> bool:
-        return self._commands.push_move_rows(sources, target_parent, target_row, label=label)
+    @property
+    def diff(self) -> DiffApplier:
+        """Surgical model replay used during undo/redo."""
+        return self._diff_applier
 
-    def push_rename(self, name_index: QModelIndex, new_name: Any, *, label: str = "rename") -> bool:
-        return self._commands.push_rename(name_index, new_name, label=label)
-
-    def push_edit_value(self, value_index: QModelIndex, new_value: Any, *, label: str = "edit value") -> bool:
-        return self._commands.push_edit_value(value_index, new_value, label=label)
-
-    def push_change_type(self, type_index: QModelIndex, new_type: Any, *, label: str = "change type") -> bool:
-        return self._commands.push_change_type(type_index, new_type, label=label)
-
-    def push_insert_rows(
-        self,
-        inserts: list,
-        *,
-        label: str = "insert",
-        target_qname: str | None = None,
-    ) -> bool:
-        return self._commands.push_insert_rows(inserts, label=label, target_qname=target_qname)
-
-    def push_remove_rows(self, indexes: list, *, label: str = "delete") -> bool:
-        return self._commands.push_remove_rows(indexes, label=label)
-
-    def push_sort_keys(
-        self,
-        index: QModelIndex,
-        *,
-        recursive: bool = False,
-        label: str | None = None,
-    ) -> bool:
-        return self._commands.push_sort_keys(index, recursive=recursive, label=label)
-
-    def push_switch_field_case(
-        self,
-        renames: list[dict[str, Any]],
-        *,
-        label: str = "switch field case",
-        target_qname: str | None = None,
-    ) -> bool:
-        return self._commands.push_switch_field_case(renames, label=label, target_qname=target_qname)
-
-    def on_type_changed(self, item_index, lossy: bool) -> None:
-        self._inline.on_type_changed(item_index, lossy)
-
-    def reopen_value_editor(self, value_pindex: QPersistentModelIndex) -> None:
-        self._inline.reopen_value_editor(value_pindex)
-
-    def edit_name_or_value_from_enter(self) -> None:
-        self._inline.edit_name_or_value_from_enter()
-
-    def open_active_type_combo_popup(self) -> None:
-        self._inline.open_active_type_combo_popup()
-
-    def collect_expanded_paths(self) -> list[tuple[int, ...]]:
-        return self._move.collect_expanded_paths()
-
-    def capture_move_view_state(self, sources: list) -> dict[str, Any]:
-        return self._move.capture_move_view_state(sources)
-
-    def sort_move_paths(self, paths: list[tuple[tuple[int, ...], int]]) -> list[tuple[tuple[int, ...], int]]:
-        return self._move.sort_move_paths(paths)
-
-    def restore_selection_at_paths(self, placed: list[tuple[tuple, int]]) -> None:
-        self._move.restore_selection_at_paths(placed)
-
-    def apply_move_view_state(self, cmd: _MoveRowsCmd, *, undo: bool) -> None:
-        self._move.apply_move_view_state(cmd, undo=undo)
-
-    def on_undo_index_changed(self, new_index: int) -> None:
-        self._move.on_undo_index_changed(new_index)
-
+    # ----- own logic (not pass-throughs) -----
     def run_tree_action(self, success_message: str, actions: set[TreeAction]) -> None:
         tab = self._tab
         if tab.editability.is_read_only:
@@ -171,26 +91,6 @@ class EditingController(QObject):
         if tab.editability.is_read_only:
             return False
         return insert_child_current(tab.view_state.view)
-
-    @property
-    def diff_applier(self) -> DiffApplier:
-        return self._diff_applier
-
-    def diff_apply(self, item: JsonTreeItem, target: Any, item_index: QModelIndex) -> bool:
-        return self._diff_applier.apply(item, target, item_index)
-
-    def emit_row_changed(self, item_index: QModelIndex) -> None:
-        self._diff_applier.emit_row_changed(item_index)
-
-    def insert_typed_item(
-        self,
-        parent_item: JsonTreeItem,
-        parent_index: QModelIndex,
-        position: int,
-        value: Any,
-        name: str | int | None = None,
-    ) -> bool:
-        return self._diff_applier.insert_typed_item(parent_item, parent_index, position, value, name=name)
 
     def commit_set_data(self, index: QModelIndex, value: Any, role: Qt.ItemDataRole = Qt.ItemDataRole.EditRole) -> bool:
         return self._tab.mutations.commit_set_data(index, value, role)

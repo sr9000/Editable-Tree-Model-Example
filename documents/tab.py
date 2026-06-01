@@ -6,41 +6,26 @@ from typing import Any, Callable
 from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtWidgets import QLineEdit, QWidget
 
-from documents import tab_init
-from documents.mutation_gateway import DocumentMutationGateway
+from documents.composition import init as tab_init
+from documents.composition.dependencies import JsonTabHost, JsonTabServices
+from documents.composition.marker import JsonTabWidgetMarker
+from documents.controllers.appearance import JsonTabAppearanceController
+from documents.controllers.editability import JsonTabEditabilityController
+from documents.controllers.navigation import JsonTabNavigationController
+from documents.controllers.validation import TabValidationController
+from documents.controllers.view import ViewController
+from documents.seams.mutation_gateway import DocumentMutationGateway
 from documents.states.editing_controller import EditingController
 from documents.states.io_controller import IoController
 from documents.states.view_state import ViewState
-from documents.tab_appearance import JsonTabAppearanceController
-from documents.tab_dependencies import JsonTabHost, JsonTabServices
-from documents.tab_editability import JsonTabEditabilityController
-from documents.tab_marker import JsonTabWidgetMarker
-from documents.tab_navigation import JsonTabNavigationController
-from documents.tab_validation import TabValidationController
-from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
 from tree.view import JsonTreeView
-from undo.commands import _ChangeTypeCmd  # noqa: F401 — re-exported for test imports
-from undo.commands import _EditValueCmd  # noqa: F401 — re-exported for test imports
-from undo.commands import _InsertRowsCmd  # noqa: F401 — re-exported for test imports
-from undo.commands import _RemoveRowsCmd  # noqa: F401 — re-exported for test imports
-from undo.commands import _RenameCmd  # noqa: F401 — re-exported for test imports
-from undo.commands import _SortKeysCmd  # noqa: F401 — re-exported for test imports
-from undo.commands import _SwitchFieldCaseCmd  # noqa: F401 — re-exported for test imports
-from undo.commands import _MoveRowsCmd  # noqa: F401 — re-exported for test imports
 
 _DEFAULT_DATA = tab_init._DEFAULT_DATA
-
-# Typed command ids must fit in a signed 32-bit int for Qt.
-_CMD_ID_RENAME = 0x0E71_0001
-_CMD_ID_EDIT_VALUE = 0x0E71_0002
-
-# Merge consecutive same-path edits within this time window.
-_MERGE_WINDOW_SECONDS = 0.5
 
 
 class JsonTab(QWidget, JsonTabWidgetMarker):
@@ -214,7 +199,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         self._host.show_permanent_message(message)
 
     def edit_name_or_value_from_enter(self) -> None:
-        self.editing.edit_name_or_value_from_enter()
+        self.editing.inline.edit_name_or_value_from_enter()
 
     def display_name(self) -> str:
         if self._io.file_path:

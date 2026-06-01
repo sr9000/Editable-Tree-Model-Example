@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from PySide6.QtCore import QItemSelectionModel
 
-from documents.tab import JsonTab, _SwitchFieldCaseCmd
+from documents.tab import JsonTab
 from tree_actions.context_menu import show_context_menu
 from tree_actions.field_case import convert_field_name
 from tree_actions.structure import switch_document_case, switch_selection_case
+from undo.commands import _SwitchFieldCaseCmd
 
 
 def _make_tab(qtbot, data, *, show_root: bool = False) -> JsonTab:

@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QDialog, QUndoView, QVBoxLayout
 
-from documents.document_protocol import Document
+from documents.seams.document_protocol import Document
 
 
 def setup_history_menu(window) -> None:

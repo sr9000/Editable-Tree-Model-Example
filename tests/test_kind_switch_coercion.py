@@ -19,9 +19,9 @@ import pytest
 from gmpy2 import mpq
 from PySide6.QtCore import QModelIndex
 
-from datetime_editor.enums import DateTimeCategory
-from datetime_editor.regex import parse_datetime_text
-from delegates.bytes_codec import decode_bytes, encode_bytes
+from delegates.formatting.bytes_codec import decode_bytes, encode_bytes
+from editors.inline.datetime.enums import DateTimeCategory
+from editors.inline.datetime.regex import parse_datetime_text
 from tree.item_coercion import coerce_value_for_type
 from tree.model import JsonTreeModel
 from tree.types import JsonType
@@ -535,7 +535,7 @@ def test_bytes_to_string_full_round_trip_through_item(qtbot):
     assert item.json_type is JsonType.BYTES
 
     type_idx = tab.model.index(0, 1, QModelIndex())
-    assert tab.editing.push_change_type(type_idx, JsonType.STRING)
+    assert tab.editing.commands.push_change_type(type_idx, JsonType.STRING)
 
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.STRING
@@ -622,7 +622,7 @@ def test_number_to_affix_type_uses_mru_default_affix(qtbot):
     qtbot.addWidget(tab)
 
     type_idx = tab.model.index(1, 1, QModelIndex())
-    assert tab.editing.push_change_type(type_idx, JsonType.INTEGER_CURRENCY)
+    assert tab.editing.commands.push_change_type(type_idx, JsonType.INTEGER_CURRENCY)
 
     item = tab.model.get_item(tab.model.index(1, 0, QModelIndex()))
     assert isinstance(item.value, NumberAffix)
@@ -638,12 +638,12 @@ def test_affix_to_string_to_affix_undo_redo_round_trip(qtbot):
 
     type_idx = tab.model.index(0, 1, QModelIndex())
 
-    assert tab.editing.push_change_type(type_idx, JsonType.STRING)
+    assert tab.editing.commands.push_change_type(type_idx, JsonType.STRING)
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.STRING
     assert item.value == "$10"
 
-    assert tab.editing.push_change_type(type_idx, JsonType.INTEGER_UNITS)
+    assert tab.editing.commands.push_change_type(type_idx, JsonType.INTEGER_UNITS)
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.INTEGER_UNITS
     assert item.value == NumberAffix(AffixKind.UNITS, "$", False, 10)

@@ -2,8 +2,8 @@ from PySide6.QtCore import QEvent, QModelIndex, Qt
 from PySide6.QtGui import QFocusEvent
 from PySide6.QtWidgets import QAbstractItemView, QApplication, QDialogButtonBox, QLineEdit, QPushButton
 
-from dialogs.qmultiline_dlg import QMultilineDialog
 from documents.tab import JsonTab
+from editors.windowed.multiline_dialog import QMultilineDialog
 
 
 def test_secret_line_editor_is_password_with_toggle(qtbot):

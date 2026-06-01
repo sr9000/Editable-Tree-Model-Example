@@ -3,8 +3,9 @@ from __future__ import annotations
 import importlib
 
 from documents.tab import JsonTab
-from validation.schema_registry import SchemaRegistry, SchemaSource
+from validation.schema_registry import SchemaRegistry
 from validation.schema_source import SchemaRef
+from validation.schema_types import SchemaSource
 
 schema_registry_module = importlib.import_module("validation.schema_registry")
 

@@ -6,8 +6,8 @@ import pytest
 from PySide6.QtGui import QUndoStack
 from PySide6.QtWidgets import QApplication
 
+from documents.controllers.history import TabHistoryController
 from documents.tab import JsonTab
-from documents.tab_history import TabHistoryController
 
 
 @pytest.fixture(scope="module")

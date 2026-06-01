@@ -7,16 +7,7 @@ See ai-memory/phases/phase-3-compensating-undo-plan.md for context.
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
 from PySide6.QtWidgets import QApplication
 
-from documents.tab import (
-    JsonTab,
-    _ChangeTypeCmd,
-    _EditValueCmd,
-    _InsertRowsCmd,
-    _MoveRowsCmd,
-    _RemoveRowsCmd,
-    _RenameCmd,
-    _SortKeysCmd,
-)
+from documents.tab import JsonTab
 from tree_actions.paste import paste_from_clipboard
 from tree_actions.structure import (
     delete_selection,
@@ -27,6 +18,15 @@ from tree_actions.structure import (
     move_selection_down,
     move_selection_up,
     sort_selection_keys,
+)
+from undo.commands import (
+    _ChangeTypeCmd,
+    _EditValueCmd,
+    _InsertRowsCmd,
+    _MoveRowsCmd,
+    _RemoveRowsCmd,
+    _RenameCmd,
+    _SortKeysCmd,
 )
 
 

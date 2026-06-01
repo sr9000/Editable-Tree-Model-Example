@@ -17,10 +17,10 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QMessageBox, QTabWidget
 
 import state.view_state as view_state
-from documents.document_protocol import Document
-from documents.tab_dependencies import JsonTabServices
-from documents.tab_factory import create_tab
-from documents.tab_marker import JsonTabWidgetMarker
+from documents.composition.dependencies import JsonTabServices
+from documents.composition.factory import create_tab
+from documents.composition.marker import JsonTabWidgetMarker
+from documents.seams.document_protocol import Document
 
 
 class _MainWindowJsonTabHost:

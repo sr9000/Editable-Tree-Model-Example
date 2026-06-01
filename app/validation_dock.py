@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.validation_panel_model import IssueListModel
-from documents.document_protocol import Document
+from documents.seams.document_protocol import Document
 from state.recent_schemas import recent_schemas
 from validation.index import IssueIndex
 from validation.schema_registry import get_schema_registry

@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QDialog, QInputDialog, QMenu
 
-from dialogs.secret_prefixes_dlg import SecretPrefixesDialog
+from app.dialogs.secret_prefixes_dlg import SecretPrefixesDialog
 from state.edit_limits import (
     get_attach_file_warning_limit_bytes,
     get_binary_edit_warning_limit_bytes,

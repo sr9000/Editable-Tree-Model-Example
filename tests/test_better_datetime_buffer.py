@@ -2,8 +2,8 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from datetime_editor.better_dt_editor import BetterDateTimeBuffer
-from datetime_editor.enums import DateTimeCategory
+from editors.inline.datetime.better_dt_editor import BetterDateTimeBuffer
+from editors.inline.datetime.enums import DateTimeCategory
 
 
 @pytest.fixture()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex
+from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex, QObject
 
 from documents.states.editing.context import EditingContext
 from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
@@ -12,10 +12,15 @@ from tree_actions.selection import selected_source_rows
 from undo.commands import _MoveRowsCmd
 
 
-class MoveViewState:
-    """Capture and restore expansion/selection around move-row commands."""
+class MoveViewState(QObject):
+    """Capture and restore expansion/selection around move-row commands.
+
+    A ``QObject`` parented to the tab so signal connections to its slots
+    (e.g. ``undo_stack.indexChanged``) are auto-disconnected on teardown.
+    """
 
     def __init__(self, context: EditingContext) -> None:
+        super().__init__(context.tab)
         self._context = context
 
     def collect_expanded_paths(self) -> list[tuple[int, ...]]:

@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QAbstractItemView, QComboBox, QStyle, QStyledItemD
 
 from delegates.base import paint_editor_underlay
 from delegates.edit_context import DefaultEditContext, DelegateEditContext, EditResult
-from delegates.value_formatting import _apply_type_style
+from delegates.formatting.value_formatting import _apply_type_style
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider
 from themes.spec import ThemeSpec

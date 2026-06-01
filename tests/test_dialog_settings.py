@@ -1,7 +1,7 @@
 from PySide6.QtCore import QSettings
 
-from dialogs.qhexedit_dlg import QHEXDIALOG_ID, QHexDialog
-from dialogs.qmultiline_dlg import QMULTILINEDIALOG_ID, QMultilineDialog
+from editors.windowed.hex_dialog import QHEXDIALOG_ID, QHexDialog
+from editors.windowed.multiline_dialog import QMULTILINEDIALOG_ID, QMultilineDialog
 from settings import APPLICATION_ID
 
 

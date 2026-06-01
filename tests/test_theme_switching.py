@@ -57,7 +57,7 @@ def test_switching_theme_preserves_undo_expansion_and_selection(qtbot, tmp_path,
 
     count_before = tab.undo_stack.count()
     clean_before = tab.undo_stack.cleanIndex()
-    expanded_before = sorted(tab.editing.collect_expanded_paths())
+    expanded_before = sorted(tab.editing.move.collect_expanded_paths())
     current_before = _current_source_path(tab)
 
     target = win._theme_registry.default_for_mode("dark" if win._theme.mode == "light" else "light")
@@ -65,7 +65,7 @@ def test_switching_theme_preserves_undo_expansion_and_selection(qtbot, tmp_path,
 
     assert tab.undo_stack.count() == count_before
     assert tab.undo_stack.cleanIndex() == clean_before
-    assert sorted(tab.editing.collect_expanded_paths()) == expanded_before
+    assert sorted(tab.editing.move.collect_expanded_paths()) == expanded_before
     assert _current_source_path(tab) == current_before
 
 

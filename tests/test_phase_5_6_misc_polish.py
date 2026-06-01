@@ -106,5 +106,5 @@ def test_float_to_integer_type_change_shows_fraction_loss_warning(qtbot):
 
     root_idx = tab.model.index(0, 0, QModelIndex())
     type_idx = tab.model.index(0, 1, root_idx)
-    assert tab.editing.push_change_type(type_idx, JsonType.INTEGER)
+    assert tab.editing.commands.push_change_type(type_idx, JsonType.INTEGER)
     assert any("Fractional part discarded" in text for text, _ in messages)

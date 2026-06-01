@@ -1,6 +1,6 @@
 from gmpy2 import mpq
 
-from delegates.value_formatting import format_with_type
+from delegates.formatting.value_formatting import format_with_type
 from tree.types import JsonType
 from units.number_affix import AffixKind, NumberAffix, format_number_affix
 

@@ -13,9 +13,10 @@ import time
 
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, Qt
 
-from documents.tab import JsonTab, _EditValueCmd, _MoveRowsCmd, _RemoveRowsCmd
+from documents.tab import JsonTab
 from tree.item import JsonTreeItem
 from tree_actions.structure import delete_selection, move_selection_up
+from undo.commands import _EditValueCmd, _MoveRowsCmd, _RemoveRowsCmd
 
 
 def _make_huge_array_tab(qtbot, *, n: int) -> JsonTab:

@@ -3,8 +3,8 @@
 import datetime
 from typing import Any
 
-from datetime_editor.enums import DateTimeCategory
-from datetime_editor.regex import parse_datetime_text
+from editors.inline.datetime.enums import DateTimeCategory
+from editors.inline.datetime.regex import parse_datetime_text
 from state.secret_settings import get_secret_word_prefixes
 from tree.item_coercion import coerce_value_for_type, compute_editable, normalize_value_for_type
 from tree.item_names import unique_child_name, validated_child_name

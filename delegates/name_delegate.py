@@ -2,9 +2,10 @@ from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QLineEdit, QStyleOptionViewItem, QWidget
 
-from delegates.base import _CapsLockSafeLineEdit, _TextEditorDelegateBase, paint_editor_underlay
+from delegates.base import _TextEditorDelegateBase, paint_editor_underlay
 from delegates.edit_context import DefaultEditContext, DelegateEditContext
 from delegates.validation_badge import draw_severity_badge
+from editors.inline.caps_safe_line import _CapsLockSafeLineEdit
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
 from tree.model_roles import VALIDATION_SEVERITY_ROLE

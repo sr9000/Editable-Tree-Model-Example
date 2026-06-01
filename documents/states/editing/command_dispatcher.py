@@ -7,8 +7,8 @@ from typing import Any
 
 from PySide6.QtCore import QModelIndex
 
+from documents.controllers.number_types import would_drop_fraction_on_type_change
 from documents.states.editing.context import EditingContext
-from documents.tab_number_types import would_drop_fraction_on_type_change
 from tree.types import JsonType
 from tree_actions.anchors import (
     anchor_is_cycle,

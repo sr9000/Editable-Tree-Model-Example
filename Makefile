@@ -1,12 +1,49 @@
-.PHONY: lint dev-setup check-no-reflection test gate
+.PHONY: ui lint dev-setup check-no-reflection check-editors-isolation test gate
 
-lint:
+UI_PY := \
+	ui/mainwindow.py \
+	ui/json_tab_ui.py \
+	ui/dialogs/attach_schema_dialog.py \
+	ui/dialogs/qmultiline_dialog.py \
+	ui/dialogs/qhex_dialog.py \
+	ui/dialogs/secret_prefixes_dialog.py
+
+UI_ISORT_SKIP := \
+	-s ui/mainwindow.py \
+	-s ui/json_tab_ui.py \
+	-s ui/dialogs/attach_schema_dialog.py \
+	-s ui/dialogs/qmultiline_dialog.py \
+	-s ui/dialogs/qhex_dialog.py \
+	-s ui/dialogs/secret_prefixes_dialog.py
+
+UI_BLACK_EXCLUDE := "ui/mainwindow.py|ui/json_tab_ui\.py|ui/dialogs/(attach_schema_dialog|qmultiline_dialog|qhex_dialog|secret_prefixes_dialog)\.py"
+
+ui: $(UI_PY)
+
+ui/mainwindow.py: ui/mainwindow.ui
+	pyside6-uic $< -o $@
+
+ui/json_tab_ui.py: ui/json_tab.ui
+	pyside6-uic $< -o $@
+
+ui/dialogs/attach_schema_dialog.py: ui/dialogs/attach_schema_dialog.ui
+	pyside6-uic $< -o $@
+
+ui/dialogs/qmultiline_dialog.py: ui/dialogs/qmultiline_dialog.ui
+	pyside6-uic $< -o $@
+
+ui/dialogs/qhex_dialog.py: ui/dialogs/qhex_dialog.ui
+	pyside6-uic $< -o $@
+
+ui/dialogs/secret_prefixes_dialog.py: ui/dialogs/secret_prefixes_dialog.ui
+	pyside6-uic $< -o $@
+
+lint: ui
 	autoflake .
 	isort . \
 		--gitignore \
-		-s mainwindow.py \
-		-s documents/json_tab_ui.py
-	black . --line-length 120 --extend-exclude "mainwindow.py|documents/json_tab_ui\.py"
+		$(UI_ISORT_SKIP)
+	black . --line-length 120 --extend-exclude $(UI_BLACK_EXCLUDE)
 
 # Activate the repo-local git hooks for every fresh clone.
 # Idempotent — safe to run multiple times.
@@ -20,11 +57,17 @@ dev-setup:
 check-no-reflection:
 	bash .githooks/pre-commit-ci
 
+# Responsibility-segregation §2.5: editors/ must not import app/documents/tree
+# (concrete widgets) or app/documents (the dispatch seam). Standalone target so
+# it can be run in isolation; also runs inside `check-no-reflection` via the hook.
+check-editors-isolation:
+	bash .githooks/_check_editors_isolation.sh
+
 # Full test suite under the offscreen Qt platform with a hard 10-minute
 # wall-clock cap (see plans/20-decouple-jsontab.md Step A3 / DoD rules).
 # `PYTEST_ARGS` lets callers tack on `-k pattern` or `--lf` without
 # editing the recipe.
-test:
+test: ui
 	QT_QPA_PLATFORM=offscreen timeout 600 pytest -q $(PYTEST_ARGS)
 
 # Composite DoD gate used after every step of the decouple-jsontab plan.
