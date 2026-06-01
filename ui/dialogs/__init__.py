@@ -6,8 +6,8 @@ from ui.dialogs.qmultiline_dialog import Ui_QMultilineDialog
 from ui.dialogs.secret_prefixes_dialog import Ui_SecretPrefixesDialog
 
 __all__ = [
-	"Ui_AttachSchemaDialog",
-	"Ui_QHexDialog",
-	"Ui_QMultilineDialog",
-	"Ui_SecretPrefixesDialog",
+    "Ui_AttachSchemaDialog",
+    "Ui_QHexDialog",
+    "Ui_QMultilineDialog",
+    "Ui_SecretPrefixesDialog",
 ]

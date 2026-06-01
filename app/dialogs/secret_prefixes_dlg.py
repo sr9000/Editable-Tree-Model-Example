@@ -2,11 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from PySide6.QtWidgets import (
-    QDialog,
-    QInputDialog,
-    QMessageBox,
-)
+from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox
 
 from ui.dialogs import Ui_SecretPrefixesDialog
 
@@ -25,7 +21,6 @@ class SecretPrefixesDialog(QDialog):
 
         for prefix in prefixes:
             self.list_widget.addItem(str(prefix))
-
 
         self.add_btn.clicked.connect(self._add)
         self.edit_btn.clicked.connect(self._edit)

@@ -7,7 +7,6 @@ from PySide6.QtCore import QSettings
 from settings import APPLICATION_ID
 from state.validation_settings import _RECENT_SCHEMAS_KEY
 
-
 RECENT_SCHEMAS_CAP = 12
 
 
