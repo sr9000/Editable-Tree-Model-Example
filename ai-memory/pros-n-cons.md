@@ -11,7 +11,7 @@ with exact-rational numerics (`gmpy2.mpq`), a typed undo/redo system,
 JSON-Schema validation, and a theming stack. See `repo-map.md` for the
 module breakdown.
 
-_Test surface: **1124 collected**. `make gate` runs lint →
+_Test surface: **1181 collected**. `make gate` runs lint →
 no-reflection → editor-isolation → tests._
 
 ---
@@ -71,7 +71,9 @@ no-reflection → editor-isolation → tests._
   or display; round-trips across all four formats via `mpq2py`.
 - **UTC datetime** — `DATETIMEUTC` with `Z` suffix and a full
   conversion lattice (`tree/types_datetime.py`), including a real
-  tz-shift on `DATETIMEZONE → DATETIMEUTC`.
+  tz-shift on `DATETIMEZONE → DATETIMEUTC`. Supports precise **nanosecond stepping** 
+  (1-9 fraction digits) while preserving user format exactness (e.g. `_` or `T` separators)
+  when simply rendering.
 - **Number affixes** — frozen `NumberAffix(kind, affix, space, number)`
   with `number: int | mpq`, composite editor, per-tab affix MRU,
   JSON/YAML round-trip (only strings that re-parse are promoted back).

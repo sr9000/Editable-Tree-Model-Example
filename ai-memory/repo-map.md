@@ -156,7 +156,9 @@ core/
 └── datetime_parsing/        Pure datetime parsing (no Qt dependency).
     ├── __init__.py          Re-exports DateTimeCategory, parse_datetime_text, etc.
     ├── enums.py             DateTimeCategory enum.
-    └── regex.py             parse_datetime_text + regex tables.
+    ├── regex.py             parse_datetime_text + regex tables.
+    ├── compat.py            Thin adapter for pandas Timestamp / datetime.
+    └── nano_time.py         NanoTime dataclass for exact nanosecond precision.
 ```
 
 ## 8b) `tree/` module layout (partial — codecs subpackage)
