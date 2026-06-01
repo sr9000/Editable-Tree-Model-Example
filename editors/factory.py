@@ -6,7 +6,7 @@ import zlib
 from gmpy2 import mpq
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QColorDialog, QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
+from PySide6.QtWidgets import QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.color_codec import color_to_html, parse_color
@@ -25,6 +25,7 @@ from editors.inline.datetime.better_dt_editor import BetterDateTimeEditor
 from editors.inline.datetime.enums import DateTimeCategory
 from editors.inline.mpq_spinbox import QMpqSpinBox
 from editors.inline.secret_line import _SecretEditorWatcher, _SecretLineEdit
+from editors.windowed.color_dialog import ColorPickerDialog
 from editors.windowed.hex_dialog import QHexDialog
 from editors.windowed.multiline_dialog import QMultilineDialog
 from state.edit_limits import get_multiline_edit_warning_limit_chars, get_string_edit_warning_limit_chars
@@ -187,13 +188,8 @@ def create_value_editor(
         case JsonType.COLOR_RGB | JsonType.COLOR_RGBA:
             pidx = QPersistentModelIndex(index)
             initial = parse_color(item.value if isinstance(item.value, str) else "") or parse_color("#000000")
-
-            dialog = QColorDialog(parent, currentColor=initial)
-            if item.json_type is JsonType.COLOR_RGBA:
-                dialog.setOption(QColorDialog.ColorDialogOption.ShowAlphaChannel, True)
-            dialog.setWindowTitle("Pick color (RGBA)" if item.json_type is JsonType.COLOR_RGBA else "Pick color (RGB)")
-
             target_type = item.json_type
+            with_alpha = item.json_type is JsonType.COLOR_RGBA
 
             def _on_color_selected(selected) -> None:
                 if not pidx.isValid():
@@ -201,8 +197,13 @@ def create_value_editor(
                 text = color_to_html(selected, target_type)
                 _commit(delegate, pidx, text, Qt.ItemDataRole.EditRole, host=parent)
 
-            dialog.colorSelected.connect(_on_color_selected)
-            dialog.open()
+            ColorPickerDialog(
+                parent,
+                initial=initial,
+                with_alpha=with_alpha,
+                title="Pick color (RGBA)" if with_alpha else "Pick color (RGB)",
+                callback=_on_color_selected,
+            ).open()
             return None
 
         case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
