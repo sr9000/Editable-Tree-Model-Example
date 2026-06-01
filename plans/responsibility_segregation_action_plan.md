@@ -30,15 +30,15 @@ Branch `strict-responsibility-segregation`. Gates at review time:
 | 2. Home single-purpose modules        | ✅ **done**     | `tree/filter_proxy.py`; `model_actions.py` deleted, 2 tests retargeted onto `structure.py` (+168 LOC).                           |
 | 3. Extract `.ui` schemas              | ✅ **done**     | 4 dialogs now `.ui`-backed under `ui/dialogs/`.                                                                                  |
 | 4. Move generated UI to `ui/`         | ✅ **done**     | `mainwindow.*`, `json_tab*` moved; Makefile `pyside6-uic` paths updated.                                                         |
-| 5. Carve `editors/`                   | 🟡 **partial** | Relocation + dispatcher move done; **symbol extractions, fat-`__init__` split, and the isolation rule are NOT done** (see §2.4). |
+| 5. Carve `editors/`                   | ✅ **done**     | Relocation + dispatcher move + all §2.4 extractions/splits + `check-editors-isolation` gate landed.                              |
 | 6. Kill `documents/tab.py` re-exports | ⬜ **todo**     | 8 `from undo.commands import _…` re-exports still in `tab.py` (lines 27–34).                                                     |
 | 7. Split `documents/`                 | ⬜ **todo**     | See §3 (partially overtaken — `json_tab_ui.py` already in `ui/`).                                                                |
 | 8. De-façade `EditingController`      | ⬜ **todo**     | Collaborators already extracted by commits T1–T6; only the 199-LOC forwarding shell remains (see §3.2).                          |
 
-**Net:** Part 1 (§1 + §5 dead code) is complete. Part 2 (§2 editors) is at the
-"relocation complete, refactor incomplete" stage — the directory tree exists but
-the per-symbol extractions, the `__init__.py` splits, and the binding isolation
-rule remain open (tracked in the new §2.4 closeout checklist).
+**Net:** Part 1 (§1 + §5 dead code) is complete. Part 2 (§2 editors) is **complete**
+as of 2026-06-01: all §2.4 extractions/splits landed and the `check-editors-isolation`
+gate (§2.5) enforces the contract. Next open work is Part 3 (steps 6–8, the
+`documents/` split).
 
 ---
 
@@ -218,30 +218,21 @@ delegates/
 ### 2.4 §7-step-5 closeout checklist (what "carve `editors/`" still needs)
 
 Relocation landed (commits `f4c69f9`…`58a9244`, `8159a4c`, `7dbda11`, `a0b79b4`),
-but the following sub-tasks from §2.1 / §2.3 are **still open**. Step 5 is **not**
-done until every box is checked and the gate in §2.5 passes.
+and the following sub-tasks from §2.1 / §2.3 are now **all complete** (2026-06-01):
 
-- [ ] **Extract `editors/context.py`** — move `EditorContextProtocol` (currently
-  inline in `factory.py`, ~line 55) into its own module; `factory.py` imports it.
-- [ ] **Extract `editors/inline/secret_line.py`** — move `_SecretLineEdit`
-  (`factory.py` ~line 77) and its watcher out of the dispatcher.
-- [ ] **Extract `editors/inline/caps_safe_line.py`** — move `_CapsLockSafeLineEdit`
-  out of `delegates/base.py` (it is an editor widget, not a delegate).
-- [ ] **Extract `editors/inline/affix_composite.py`** — move `AffixCompositeEditor`
-  out of `delegates/number_affix_delegate.py` (leave the pure affix helpers
-  —`is_affix_json_type`, `kind_for_json_type`, …— wherever the delegate needs them).
-- [ ] **Extract `editors/windowed/color_dialog.py`** — lift the `QColorDialog`
-  wiring out of `factory.py`.
-- [ ] **Split fat `__init__.py`** (§2.3.2) — `inline/bigint_spinbox/__init__.py`
-  (271), `inline/mpq_spinbox/__init__.py` (295), `windowed/hexedit/__init__.py`
-  (1130) into named modules (`spinbox.py`, `validator.py`, `chunks.py` is already
-  split, etc.). A 1130-line `__init__.py` is itself the segregation smell.
-- [ ] **Create `delegates/formatting/`** (§2.1 target) — group `value_formatting.py`,
-  `bytes_codec.py`, `color_codec.py` as pure helpers so `delegates/` is delegate
-  logic + a formatting helper package only.
-- [ ] **Fix isolation violations** — vendor `qba_to_bytes` into `editors/` (remove the
-  `app.runtime_compat` import in `windowed/hexedit/chunks.py`); audit concrete
-  widgets for any `app`/`documents`/`tree` imports.
+- [x] **Extract `editors/context.py`** — `EditorContextProtocol` + `ValueDelegateProtocol`.
+- [x] **Extract `editors/inline/secret_line.py`** — `_SecretLineEdit` + `_SecretEditorWatcher`.
+- [x] **Extract `editors/inline/caps_safe_line.py`** — `_CapsLockSafeLineEdit` + lock-key constants.
+- [x] **Extract `editors/inline/affix_composite.py`** — `AffixCompositeEditor`, decoupled
+      from `JsonType` (now takes `kind` + `is_integer`); helpers stay in `delegates/number_affix_delegate.py`.
+- [x] **Extract `editors/windowed/color_dialog.py`** — `ColorPickerDialog` lifted from `factory.py`.
+- [x] **Split fat `__init__.py`** — `bigint_spinbox` → `validator.py` + `spinbox.py`;
+      `mpq_spinbox` → `validator.py` + `spinbox.py`; `hexedit` → `widget.py` (+ existing
+      `chunks/color_manager/commands`). All package `__init__.py` are now thin re-exports.
+- [x] **Create `delegates/formatting/`** — `value_formatting.py`, `bytes_codec.py`,
+      `color_codec.py` grouped; all importers updated.
+- [x] **Fix isolation violations** — vendored reflection-free `qba_to_bytes` into
+      `hexedit/chunks.py` (no more `app.runtime_compat` import); concrete widgets are clean.
 
 ### 2.5 Gate / DoD for `editors/` (§7 step 5)
 
@@ -403,11 +394,11 @@ Status legend: ✅ done · 🟡 partial · ⬜ todo. Every step is gated by `mak
 4. ✅ **Move generated UI to top-level `ui/`** — `mainwindow.*`, `json_tab*`, their
    `.ui` sources, and Makefile paths. *DoD:* nothing generated left at root or under
    `documents/`; `make ui` regenerates in place; gate green. **(done — `9aad897`)**
-5. 🟡 **Carve `editors/`** — relocation landed; **finish the §2.4 checklist** (extract
-   `context`/`secret_line`/`caps_safe_line`/`affix_composite`/`color_dialog`, split the
-   fat `__init__.py` files, create `delegates/formatting/`, fix the isolation
-   violations). *DoD/gate:* see **§2.4 + §2.5** (incl. the new `check-editors-isolation`
-   gate). **(partial — directory tree done; symbol extraction + isolation pending)**
+5. ✅ **Carve `editors/`** — relocation + dispatcher move landed earlier; the §2.4
+   checklist (extract `context`/`secret_line`/`caps_safe_line`/`affix_composite`/
+   `color_dialog`, split the fat `__init__.py` files, create `delegates/formatting/`,
+   fix the isolation violations) is **complete**, and the `check-editors-isolation`
+   gate (§2.5) now enforces the contract. **(done — 2026-06-01)**
 6. ⬜ **Kill `documents/tab.py` undo re-exports** — migrate test imports to
    `undo.commands`. *DoD/gate:* see **§3.1**.
 7. ⬜ **Split `documents/` into composition / controllers / states / seams.**
