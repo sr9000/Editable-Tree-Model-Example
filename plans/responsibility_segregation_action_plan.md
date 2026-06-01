@@ -19,6 +19,29 @@ Plus a small pile of **dead code** to delete outright.
 
 ---
 
+## 0.5 Progress snapshot (reviewed 2026-06-01)
+
+Branch `strict-responsibility-segregation`. Gates at review time:
+`pytest` = **1124 passed (18.5s)**, `make check-no-reflection` green, tree clean.
+
+| Step (§7)                             | Status         | Notes                                                                                                                            |
+|---------------------------------------|----------------|----------------------------------------------------------------------------------------------------------------------------------|
+| 1. Delete dead code                   | ✅ **done**     | `header_view_editor.py` + 4 `settings` enums gone.                                                                               |
+| 2. Home single-purpose modules        | ✅ **done**     | `tree/filter_proxy.py`; `model_actions.py` deleted, 2 tests retargeted onto `structure.py` (+168 LOC).                           |
+| 3. Extract `.ui` schemas              | ✅ **done**     | 4 dialogs now `.ui`-backed under `ui/dialogs/`.                                                                                  |
+| 4. Move generated UI to `ui/`         | ✅ **done**     | `mainwindow.*`, `json_tab*` moved; Makefile `pyside6-uic` paths updated.                                                         |
+| 5. Carve `editors/`                   | 🟡 **partial** | Relocation + dispatcher move done; **symbol extractions, fat-`__init__` split, and the isolation rule are NOT done** (see §2.4). |
+| 6. Kill `documents/tab.py` re-exports | ⬜ **todo**     | 8 `from undo.commands import _…` re-exports still in `tab.py` (lines 27–34).                                                     |
+| 7. Split `documents/`                 | ⬜ **todo**     | See §3 (partially overtaken — `json_tab_ui.py` already in `ui/`).                                                                |
+| 8. De-façade `EditingController`      | ⬜ **todo**     | Collaborators already extracted by commits T1–T6; only the 199-LOC forwarding shell remains (see §3.2).                          |
+
+**Net:** Part 1 (§1 + §5 dead code) is complete. Part 2 (§2 editors) is at the
+"relocation complete, refactor incomplete" stage — the directory tree exists but
+the per-symbol extractions, the `__init__.py` splits, and the binding isolation
+rule remain open (tracked in the new §2.4 closeout checklist).
+
+---
+
 ## 1. Loose root modules — disposition table
 
 Everything at repo root that is not an entry point (`main.py`) or genuine
@@ -143,6 +166,23 @@ delegates/
   `editors/` may import from `app/`, `documents/`, or `tree/`. The grouping makes
   the inline/windowed contract explicit instead of implicit in a `match` statement,
   while preserving each widget's reusability.
+
+  > **Rule clarification (2026-06-01).** The blanket "no `app`/`documents`/`tree`
+  > imports" wording is too strong for `editors/factory.py`, which **must** read
+  > `tree.types.JsonType` / `tree.item.JsonTreeItem` to dispatch. The rule is
+  > therefore scoped as:
+  > - **Concrete widgets** (`inline/*`, `windowed/*`) — **zero** imports from
+      > `app/`, `documents/`, `tree/`. This is the reusability contract.
+  > - **`editors/factory.py` + `editors/context.py`** — the single dispatch seam —
+      > **may** import `tree.types` / `tree.item` for type dispatch, but still **never**
+      > `app/` or `documents/` (host access goes through `EditorContextProtocol`).
+  >
+  > Two current violations must be fixed before §7 step 5 can be marked done:
+  > 1. `editors/windowed/hexedit/chunks.py` imports `app.runtime_compat.qba_to_bytes`
+       > — vendor that helper into `editors/` (it is a pure `QByteArray→bytes` shim).
+  > 2. `editors/factory.py` imports `tree.*` — allowed under the scoped rule above,
+       > but the concrete-widget files must be audited to confirm none do.
+
 - It removes the **two responsibilities currently fused in `delegates/`**: delegates
   (paint + when-to-edit) vs editors (the widgets themselves). Right now
   `editor_factory.py` (485 LOC) constructs every widget *and* defines
@@ -175,6 +215,46 @@ delegates/
    self-hosted, internal symbol/file names may be modernized freely; there is no
    external import-name contract to preserve.
 
+### 2.4 §7-step-5 closeout checklist (what "carve `editors/`" still needs)
+
+Relocation landed (commits `f4c69f9`…`58a9244`, `8159a4c`, `7dbda11`, `a0b79b4`),
+but the following sub-tasks from §2.1 / §2.3 are **still open**. Step 5 is **not**
+done until every box is checked and the gate in §2.5 passes.
+
+- [ ] **Extract `editors/context.py`** — move `EditorContextProtocol` (currently
+  inline in `factory.py`, ~line 55) into its own module; `factory.py` imports it.
+- [ ] **Extract `editors/inline/secret_line.py`** — move `_SecretLineEdit`
+  (`factory.py` ~line 77) and its watcher out of the dispatcher.
+- [ ] **Extract `editors/inline/caps_safe_line.py`** — move `_CapsLockSafeLineEdit`
+  out of `delegates/base.py` (it is an editor widget, not a delegate).
+- [ ] **Extract `editors/inline/affix_composite.py`** — move `AffixCompositeEditor`
+  out of `delegates/number_affix_delegate.py` (leave the pure affix helpers
+  —`is_affix_json_type`, `kind_for_json_type`, …— wherever the delegate needs them).
+- [ ] **Extract `editors/windowed/color_dialog.py`** — lift the `QColorDialog`
+  wiring out of `factory.py`.
+- [ ] **Split fat `__init__.py`** (§2.3.2) — `inline/bigint_spinbox/__init__.py`
+  (271), `inline/mpq_spinbox/__init__.py` (295), `windowed/hexedit/__init__.py`
+  (1130) into named modules (`spinbox.py`, `validator.py`, `chunks.py` is already
+  split, etc.). A 1130-line `__init__.py` is itself the segregation smell.
+- [ ] **Create `delegates/formatting/`** (§2.1 target) — group `value_formatting.py`,
+  `bytes_codec.py`, `color_codec.py` as pure helpers so `delegates/` is delegate
+  logic + a formatting helper package only.
+- [ ] **Fix isolation violations** — vendor `qba_to_bytes` into `editors/` (remove the
+  `app.runtime_compat` import in `windowed/hexedit/chunks.py`); audit concrete
+  widgets for any `app`/`documents`/`tree` imports.
+
+### 2.5 Gate / DoD for `editors/` (§7 step 5)
+
+- **Acceptance:** every box in §2.4 checked; `delegates/` contains only delegate
+  modules + `formatting/`; no concrete editor widget imports `app`/`documents`/`tree`.
+- **Enforcement gate (new):** add a `check-editors-isolation` target to the
+  `Makefile` (and wire it into `gate`) that fails if any file under
+  `editors/inline/` or `editors/windowed/` imports `app`, `documents`, or `tree`,
+  and if any file under `editors/` imports `app` or `documents`. Mirror it in
+  `.githooks/pre-commit-ci` so it runs per-commit like `check-no-reflection`.
+- **Test gate:** `make gate` green (lint → reflection → editors-isolation → tests),
+  1124+ tests still passing.
+
 ---
 
 ## 3. `documents/` — split the grab bag
@@ -205,7 +285,8 @@ documents/
   seams/
     mutation_gateway.py
     document_protocol.py
-  # json_tab_ui.py (generated UI) moves to top-level ui/ (approved, §1 / §6)
+  # json_tab_ui.py — ALREADY moved to top-level ui/ (§7 step 4 done); listed here
+  # only as a reminder that no generated UI remains under documents/.
 ```
 
 ### 3.1 Kill the test-only re-exports in `tab.py`
@@ -217,20 +298,39 @@ runtime reason. Migrate those tests to `from undo.commands import …` and delet
 re-export block. This is the single clearest "documents is a convenience namespace,
 not a boundary" smell.
 
+**Status (2026-06-01):** still present — `documents/tab.py` lines 27–34 import 8
+`_*Cmd` classes with `# noqa: F401 — re-exported for test imports`.
+
+**DoD / gate:** the re-export block is deleted; `grep -rn "from documents.tab import _"
+tests/` returns nothing; affected tests import from `undo.commands`; `make gate` green.
+
 ### 3.2 `EditingController` is still a forwarding façade
 
-`documents/states/editing_controller.py` (199 LOC) is ~30 one-line methods that
-forward to four real collaborators it constructs:
+> **Update (2026-06-01).** The collaborators have **already been extracted** (commits
+> `T1`–`T6`, now on `master`) into `documents/states/editing/`:
+> `command_dispatcher.py` (356), `inline_edit_controller.py` (97),
+> `move_view_state.py` (188), `tree_actions.py` (53), `context.py` (16). What remains
+> is the **199-LOC forwarding shell** `documents/states/editing_controller.py`. So
+> this step is now purely "stop forwarding," not "extract collaborators."
 
-- `MoveViewState` (move/expand state)
-- `InlineEditController` (inline edit lifecycle)
-- `CommandDispatcher` (undo command construction, 356 LOC)
-- `DiffApplier` (surgical replay)
+`documents/states/editing_controller.py` (199 LOC) is ~30 one-line methods that
+forward to the collaborators it constructs:
+
+- `MoveViewState` (`move_view_state.py` — move/expand state)
+- `InlineEditController` (`inline_edit_controller.py` — inline edit lifecycle)
+- `CommandDispatcher` (`command_dispatcher.py` — undo command construction, 356 LOC;
+  owns the `DiffApplier` surgical-replay path)
+- `TreeActionController` (`tree_actions.py`) and the shared `EditingContext` (`context.py`)
 
 Recommendation: stop forwarding. Expose the collaborators as named properties
-(`editing.commands`, `editing.inline`, `editing.move`, `editing.diff`) and let
+(`editing.commands`, `editing.inline`, `editing.move`, `editing.actions`) and let
 callers use them directly. The façade currently hides which sub-service owns each
 operation — the exact "bucket of forwarded methods" the prior review flagged.
+
+**DoD / gate:** `editing_controller.py` exposes the collaborators as properties and
+holds **no** pass-through one-liners; every former forwarder call site updated to the
+property path; `grep` shows no `editing\.<verb>` forwarders remain; `make gate` green.
+
 
 ---
 
@@ -287,21 +387,35 @@ These were open questions; the owner has decided:
 
 ## 7. Recommended execution order (low risk → high)
 
-1. **Delete dead code** — `header_view_editor.py`, the four `settings` enums.
-   (Zero runtime risk.)
-2. **Home the single-purpose modules** — `tree_filter_proxy.py` → `tree/filter_proxy.py`;
-   **delete** `model_actions.py` and retarget its two tests onto
-   `tree_actions/structure.py`.
-3. **Extract `.ui` schemas** for the four hand-built dialogs; regenerate via
-   `pyside6-uic`. (Prerequisite for step 5.)
-4. **Move generated UI to top-level `ui/`** — `mainwindow.py`, `json_tab_ui.py`,
-   their `.ui` sources, and the `Makefile` paths.
-5. **Carve `editors/`** — move widget packages + dialog editors (now `.ui`-backed);
-   lift the dispatcher out of `delegates/`; enforce the no-`app`/`documents`/`tree`
-   import rule; split fat `__init__.py` files; relocate app dialogs to `app/dialogs/`.
-6. **Kill `documents/tab.py` undo re-exports** — migrate test imports to `undo.commands`.
-7. **Split `documents/` into composition / controllers / states / seams.**
-8. **De-façade `EditingController`** — expose collaborators, drop pass-throughs.
+Status legend: ✅ done · 🟡 partial · ⬜ todo. Every step is gated by `make gate`
+(lint → reflection → tests; plus `check-editors-isolation` once §2.5 lands).
 
-Each step is independently shippable and gated by `make test` (the suite is the
+1. ✅ **Delete dead code** — `header_view_editor.py`, the four `settings` enums.
+   *DoD:* files gone, no importers, gate green. **(done — commit `4093ba6`)**
+2. ✅ **Home the single-purpose modules** — `tree_filter_proxy.py` →
+   `tree/filter_proxy.py`; **deleted** `model_actions.py` and retargeted its two
+   tests onto `tree_actions/structure.py`.
+   *DoD:* `structure.py` covers insert-before/after, duplicate-with-rename,
+   move-up across parent boundary, recursive sort, insert-child; gate green.
+   **(done — commit `4093ba6`, `structure.py` +168 LOC)**
+3. ✅ **Extract `.ui` schemas** for the four hand-built dialogs; regenerate via
+   `pyside6-uic`. *DoD:* each dialog `.ui`-backed; gate green. **(done — `f2cc12a`)**
+4. ✅ **Move generated UI to top-level `ui/`** — `mainwindow.*`, `json_tab*`, their
+   `.ui` sources, and Makefile paths. *DoD:* nothing generated left at root or under
+   `documents/`; `make ui` regenerates in place; gate green. **(done — `9aad897`)**
+5. 🟡 **Carve `editors/`** — relocation landed; **finish the §2.4 checklist** (extract
+   `context`/`secret_line`/`caps_safe_line`/`affix_composite`/`color_dialog`, split the
+   fat `__init__.py` files, create `delegates/formatting/`, fix the isolation
+   violations). *DoD/gate:* see **§2.4 + §2.5** (incl. the new `check-editors-isolation`
+   gate). **(partial — directory tree done; symbol extraction + isolation pending)**
+6. ⬜ **Kill `documents/tab.py` undo re-exports** — migrate test imports to
+   `undo.commands`. *DoD/gate:* see **§3.1**.
+7. ⬜ **Split `documents/` into composition / controllers / states / seams.**
+   *Note:* `json_tab_ui.py` already moved (step 4). *DoD:* `tab.py` stays a thin
+   facade; each former `tab_*.py` lands in exactly one sub-package; no module imports
+   its old path; repo-map updated; gate green.
+8. ⬜ **De-façade `EditingController`** — collaborators already extracted (T1–T6);
+   expose them as properties and drop the pass-throughs. *DoD/gate:* see **§3.2**.
+
+Each step is independently shippable and gated by `make gate` (the suite is the
 safety net for these pure relocations).
