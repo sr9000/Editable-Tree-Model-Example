@@ -1,6 +1,6 @@
 import pytest
 
-from qmpq_spinbox import PARTIAL_FLOAT
+from editors.inline.mpq_spinbox import PARTIAL_FLOAT
 
 
 def m(s: str) -> bool:

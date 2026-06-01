@@ -2,8 +2,8 @@ import pytest
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 
-from qhexedit import QHexEdit
-from qhexedit.color_manager import ColorManager
+from editors.windowed.hexedit import QHexEdit
+from editors.windowed.hexedit.color_manager import ColorManager
 
 
 @pytest.fixture(scope="module")

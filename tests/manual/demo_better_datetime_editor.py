@@ -4,7 +4,7 @@ from datetime import datetime
 
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
-from datetime_editor.better_dt_editor import BetterDateTimeEditor
+from editors.inline.datetime.better_dt_editor import BetterDateTimeEditor
 
 
 def main() -> None:

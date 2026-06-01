@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from qhexedit import QHexEdit
+from editors.windowed.hexedit import QHexEdit
 
 
 class DemoHighlightingQHexEditWindow(QMainWindow):

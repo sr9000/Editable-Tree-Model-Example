@@ -1,8 +1,8 @@
 import pytest
 from PySide6.QtGui import QValidator
 
-from datetime_editor import DateTimeCategory
-from datetime_editor.validator import DateTimeValidator
+from editors.inline.datetime.enums import DateTimeCategory
+from editors.inline.datetime.validator import DateTimeValidator
 
 ALL_CATEGORIES = {None} | set(DateTimeCategory)
 PURE_CATEGORIES = {DateTimeCategory.Date, DateTimeCategory.Time}
