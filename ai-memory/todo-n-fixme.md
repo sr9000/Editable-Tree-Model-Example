@@ -1,145 +1,82 @@
 # TODO & FIXME
 
-_Last updated: **2026-05-26**_
+_Last updated: **2026-06-01** (post code-quality audit). Minor smells
+and speculative wishlist entries were pruned; only actionable,
+meaningful work remains. Format:
+`- [ ] [scope] description — file:symbol`._
 
-Format: `- [ ] [scope] description — file:symbol`
+## High priority — architecture (audit §8)
 
-## Validation follow-ups
-- [ ] [validation] URL schema staleness — no `ETag` /
-      `If-Modified-Since` conditional request on `reload()`; URL
-      schemas are always re-fetched.
-      — `validation/schema_registry.py`, `validation/schema_source.py`
-- [ ] [validation] Inline `$schema` blocks / embedded schema literals
-      have no content-hash dedup yet; dedup currently keys file paths
-      and URLs only.
-      — `validation/schema_registry.py`, `validation/schema_source.py`
-- [ ] [feature] Remote `$ref` resolution against `http(s)://` — currently remote
-      `$schema` URLs are silently ignored; implement via a configurable HTTP resolver
-      passed to `jsonschema` or a pre-fetch cache.
-      — `validation/schema_source.py`, `validation/_engine.py`
-- [ ] [ux] Schema-authoring UX — "JSON Schema Draft picker" (Draft 7 ↔ Draft
-      2020-12) combo in the dock; per-tab draft override for validation.
-      — `app/validation_dock.py`, `validation/_engine.py`
-- [ ] [ux] Per-issue quick-fix actions — context menu on a validation issue in
-      the dock list (e.g., "Add missing required key", "Change type to string").
-      — `app/validation_dock.py`, `tree_actions/structure.py`
-- [ ] [tests] WCAG snapshot tests for validation-badge theme colours
-      (`themes/_contrast.py` is available; `VALIDATION_SEVERITY_ROLE` paints
-      cells, but no accessibility regression suite exists yet).
+- [ ] [arch] Resolve the 11 `tree/` upward imports. Tracked in detail by
+  `plans/refactor-tree-upward-imports.md`.
+  — `tree/item.py`, `tree/item_coercion.py`, `tree/types.py`
+- [ ] [tooling] Pin `pytest-qt` in `requirements.txt` and confirm the
+  `make test` target runs `QT_QPA_PLATFORM=offscreen pytest -q`.
+- [ ] [tests] `tests/test_value_delegate.py` — full delegate matrix:
+  editor widget class per `JsonType`; `setEditorData` /
+  `setModelData` round-trip for INTEGER, mpq FLOAT/PERCENT, BOOLEAN,
+  DATE/TIME/DATETIME/DATETIMEZONE, STRING/UNICODE; dialog delegates
+  (MULTILINE/TEXT/BYTES/ZLIB/GZIP) commit via `QPersistentModelIndex`
+  + `JsonTab.commit_set_data`.
+- [ ] [tests] `tests/test_io_roundtrip.py` — parametrized load → mutate
+  → save → reload property tests against `data.json` / `data.yaml`
+  (+ JSONL / YAML-multi), asserting mpq and tz-aware datetimes
+  survive every format.
 
-## Secret strings follow-ups (v2)
-- [ ] [secret] Persist secret kind for non-matching field names (schema-sidecar
-      or equivalent metadata), so sticky secrets survive reload after rename.
-      — `tree/item.py`, `io_formats/{dump,load}.py`, `state/`
-- [ ] [secret, security] Clipboard scrubbing policy for revealed secret values
-      (clear/expire clipboard after copy operations).
-      — `tree_actions/clipboard.py`, secret editor paths in `delegates/value.py`
-- [ ] [secret, ux] Manual override surface for secret kinds (type delegate
-      entry or context-menu action) rather than name-heuristic only.
-      — `delegates/type_delegate.py`, `tree_actions/context_menu.py`
-- [ ] [secret, ux] Reveal-in-view action with global timer (cell-level reveal,
-      not editor-only reveal).
-      — `delegates/value.py`, `tree_actions/context_menu.py`
+## Medium priority
 
-- [ ] [tests] `tests/test_value_delegate.py`: full editor matrix.
-      - editor widget class per `JsonType`
-      - `setEditorData` / `setModelData` round-trip for INTEGER, mpq
-        FLOAT/PERCENT, BOOLEAN, DATE/TIME/DATETIME/DATETIMEZONE,
-        STRING/UNICODE
-      - dispatch-by-widget-class survives stale editors
-      - dialog-based delegates (MULTILINE/TEXT/BYTES/ZLIB/GZIP)
-        commit via `QPersistentModelIndex` + `JsonTab.commit_set_data`
-- [ ] [tests] `tests/test_io_roundtrip.py`: parametrized round-trip
-      property tests against `data.json` and `data.yaml` (and the
-      JSONL / YAML-multi variants), asserting mpq and datetimes
-      (with timezone) survive both formats.
-- [ ] [tests] Model invariants:
-      - `setData` emits `dataChanged` covering cols 0..2 of the
-        affected row
-      - `removeRows` updates persistent indices correctly
-      - `parent()` / `index()` round-trip on a 3-level tree
-      - `change_type` `lossy=True` only when there were prior children
-      - `unique_child_name` collision avoidance with a reserved-name
-        set
-- [ ] [tests] Theme snapshot + WCAG accessibility suites
-      (`themes/_contrast.py` is already in place; nothing wires it
-      into a test yet).
-      - `tests/test_theme_snapshot.py` — deterministic built-in theme
-        snapshots, partial-override coverage
-      - `tests/test_theme_accessibility.py` — contrast regression
-        coverage for built-in themes
-- [ ] [tests] End-to-end smoke on a `MainWindow`: open → edit →
-      Save → reopen → verify dirty marker cleared, recent-files
-      populated.
-- [ ] [tooling] Pin `pytest-qt` in `requirements.txt`.
-- [ ] [tooling] Add a `make test` target running
-      `QT_QPA_PLATFORM=offscreen pytest -q`.
-- [ ] [tooling] Add `coverage` / `pytest-cov` and commit a short
-      summary to `ai-memory/coverage.md`.
-- [ ] [tooling] Add a `themes-check` `Makefile` target (lint built-in
-      YAML against the schema once that exists).
+- [ ] [refactor] Split `tree_actions/structure.py` (774 lines) into
+  `structure_insert` / `structure_move` / `structure_sort` /
+  `structure_expand`.
+- [ ] [refactor] Extract a `FileOperationsPresenter` from
+  `app/main_window.py` (637 lines): `_confirm_reload_dirty_tab`,
+  `_reload_tab_from_path`, `_save_tab`.
+- [ ] [hygiene] Narrow `IoController.save()` exception handling — catch
+  specific I/O / serialization errors and surface structured
+  diagnostics for malformed datetime / bytes.
+  — `documents/states/io_controller.py:54`
+- [ ] [tests] Model invariants: `setData` emits `dataChanged` covering
+  cols 0..2; `removeRows` updates persistent indices; 3-level
+  `parent()`/`index()` round-trip; `change_type` `lossy=True` only
+  with prior children; `unique_child_name` collision avoidance.
 
-## Theme / docs
-- [ ] [docs] `themes/builtin/schema.md` covering YAML grammar, every
-      `JsonType`, fallback semantics, icon path resolution, worked
-      examples.
-- [ ] [docs] README theming section with screenshots and the user
-      theme directory location per OS
-      (`QStandardPaths.AppConfigLocation/themes/*.yaml`).
-- [ ] [ux] Watch user theme **icon asset folders** in addition to
-      YAML files so custom SVG/PNG edits hot-reload without touching
-      the YAML. — `app/theme_controller.py`
+## Low priority — hygiene & dead code (audit §6)
 
-## UX polish
-- [ ] [ux] Match-highlight delegate (`ValueDelegate.paint` override
-      drawing a yellow background span over substring matches when
-      a filter is active). — `delegates/value.py`
-
-## Code hygiene (low priority)
-- [ ] [hygiene] Drop the legacy `_demo_data()` seed and its
-      `base64` / `gzip` / `zlib` / `gmpy2` imports from
-      `documents/tab.py` once the remaining bare-`JsonTab(...)`
-      tests migrate to explicit `data=` constructors.
-- [ ] [hygiene] Decide whether to keep `header_view_editor.py`. The
-      mixin is currently unused (commented out at the call site).
-- [ ] [hygiene] Consider renaming the underscore-prefixed helpers
-      that get re-imported across modules in `tree_actions/` so the
-      cross-package public surface isn't named with a leading
-      underscore (`_resolve_model`, `_to_source_index`, …).
-- [ ] [hygiene] Simplify the multi-step Shiboken import fallback in
-      `app/theme_controller.py` (`from PySide6.QtCore import Shiboken`
-      → `import shiboken6` → `None`) once a single canonical import
-      is chosen.
-
-## Smells / footguns (very low priority, no functional impact)
-- [ ] [smell] `JsonTreeItem.row()` returns `0` for the root (no
-      parent) instead of `-1`; tolerable but a footgun for future
-      code.
+- [ ] [hygiene] Remove deprecated shims `_closed_tabs_stack` /
+  `_MAX_CLOSED_TABS` and the no-op stubs `_setup_validation_dock` /
+  `_setup_schemas_menu` once tests migrate.
+  — `app/main_window.py:200-204,356-358`
+- [ ] [hygiene] Rename underscore-prefixed helpers re-exported across
+  `tree_actions/` (`_resolve_model`, `_to_source_index`, …) — they
+  are a shared internal API, not module-private.
+  — `tree_actions/selection.py`
+- [ ] [tests] Add a `Document`-protocol conformance check (mypy or a
+  dedicated test) verifying `JsonTab` implements every `Document`
+  attribute.
+- [ ] [tooling] Add `pytest-cov` and commit a coverage snapshot to
+  `ai-memory/coverage.md`.
+- [ ] [smell] `JsonTreeItem.row()` returns `0` for the root; return `-1`
+  to signal "no parent". — `tree/item.py:73`
 - [ ] [smell] `ValueDelegate.createEditor` raises `ValueError` for
-      `OBJECT`, `ARRAY`, `NULL` (unreachable thanks to `flags()`); a
-      defensive `return None` would degrade more gracefully.
-- [ ] [smell] `state.view_state` persists expansion/current as
-      positional `(int,…)` paths; structural mutations
-      (sort/insert/paste) before a save→reload land on a different
-      node. Consider keying by name where available.
-- [ ] [smell] `JsonTab.save()` catches `Exception` broadly and
-      reports via status bar; consider narrowing the catch and
-      surfacing structured diagnostics for malformed datetime /
-      bytes.
+  OBJECT/ARRAY/NULL (unreachable via `flags()`); `return None`
+  degrades more gracefully. — `editors/factory.py:232`
 
-## Long-horizon wishlist
+## Feature follow-ups (deferred)
 
-Captured here so future audits don't lose them. None of these are
-specced or actively in progress — they're the original wishlist from
-the repo root.
-
-- [ ] [feature] Float/integer numeric **previews**: hex/oct/bin for
-      integers; float16/float32/float64 representation preview
-      (context menu).
-- [ ] [feature] Multiline statistics: lines / words / runes (Unicode
-      code points) on the multiline editor.
-- [ ] [feature] Toggleable alphabet sort and custom array sort.
-- [ ] [feature] Case transforms (Kebab / Snake / Camel / Caps) on
-      file or selection.
-- [ ] [feature] Configurable keymap via `settings.json`.
-- [ ] [feature] `Ctrl+PgUp` / `Ctrl+PgDown` to switch between tabs.
+- [ ] [secret] Persist secret kind for non-matching field names
+  (schema-sidecar / metadata) so sticky secrets survive
+  rename + reload. — `tree/item.py`, `io_formats/{dump,load}.py`
+- [ ] [secret, security] Clipboard scrubbing for revealed secrets
+  (clear/expire after copy). — `tree_actions/clipboard.py`
+- [ ] [validation] URL schema staleness — add `ETag` /
+  `If-Modified-Since` conditional requests on `reload()`.
+  — `validation/schema_registry.py`, `validation/schema_source.py`
+- [ ] [validation] Remote `$ref` resolution against `http(s)://`
+  (currently silently ignored). — `validation/schema_source.py`,
+  `validation/_engine.py`
+- [ ] [ux] Match-highlight delegate (`ValueDelegate.paint` yellow span
+  over substring matches when a filter is active).
+  — `delegates/value.py`
+- [ ] [docs] README theming section + `themes/builtin/schema.md`
+  (YAML grammar, fallback semantics, icon path resolution, worked
+  examples).
