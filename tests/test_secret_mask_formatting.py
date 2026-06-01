@@ -1,4 +1,4 @@
-from delegates.value_formatting import format_with_type
+from delegates.formatting.value_formatting import format_with_type
 from settings import SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
 from tree.item import JsonTreeItem
 from tree.model_roles import tooltip_role_for_value

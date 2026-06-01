@@ -4,7 +4,7 @@ from gmpy2 import mpq
 from PySide6.QtGui import QBrush, QPalette
 from PySide6.QtWidgets import QStyleOptionViewItem
 
-from delegates.bytes_codec import decode_bytes
+from delegates.formatting.bytes_codec import decode_bytes
 from mpq2py import mpq_serialization
 from settings import SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
 from themes.spec import TypeStyle

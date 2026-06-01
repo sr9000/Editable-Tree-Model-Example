@@ -273,7 +273,7 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
 
 def _looks_valid_for(json_type: JsonType, value: str) -> bool:
     """Return True iff *value* is a valid encoded representation for *json_type*."""
-    from delegates.bytes_codec import decode_bytes
+    from delegates.formatting.bytes_codec import decode_bytes
 
     try:
         decode_bytes(value, json_type)
@@ -365,7 +365,7 @@ def coerce_value_for_type(
                 return (False, None) if strict else (True, stub_integer())
             # bytes-family → decoded length is a meaningful integer
             if isinstance(value, str) and old_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
-                from delegates.bytes_codec import decode_bytes
+                from delegates.formatting.bytes_codec import decode_bytes
 
                 try:
                     return True, len(decode_bytes(value, old_type))
@@ -472,7 +472,7 @@ def coerce_value_for_type(
                 return True, "true" if value else "false"
             # Bytes-family → decode and surface the underlying text when printable.
             if isinstance(value, str) and old_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
-                from delegates.bytes_codec import decode_bytes
+                from delegates.formatting.bytes_codec import decode_bytes
 
                 try:
                     raw = decode_bytes(value, old_type)
@@ -501,7 +501,7 @@ def coerce_value_for_type(
 
         # 3.4: encode-on-switch; use old_type for lossless cross-format re-encoding
         case JsonType.BYTES | JsonType.ZLIB | JsonType.GZIP:
-            from delegates.bytes_codec import decode_bytes, encode_bytes
+            from delegates.formatting.bytes_codec import decode_bytes, encode_bytes
 
             if value is None:
                 return (True, "") if strict else (True, encode_bytes(stub_bytes_raw(), json_type))
@@ -536,7 +536,7 @@ def coerce_value_for_type(
             return (False, None) if strict else (True, {})
 
         case JsonType.COLOR_RGB | JsonType.COLOR_RGBA:
-            from delegates.color_codec import normalize_color_string
+            from delegates.formatting.color_codec import normalize_color_string
 
             if isinstance(value, str):
                 normalized = normalize_color_string(value, json_type)

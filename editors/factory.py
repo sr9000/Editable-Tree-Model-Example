@@ -8,8 +8,8 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSortFilterProxyM
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
-from delegates.bytes_codec import decode_bytes, encode_bytes
-from delegates.color_codec import color_to_html, parse_color
+from delegates.formatting.bytes_codec import decode_bytes, encode_bytes
+from delegates.formatting.color_codec import color_to_html, parse_color
 from delegates.number_affix_delegate import (
     is_affix_json_type,
     is_integer_json_type,
