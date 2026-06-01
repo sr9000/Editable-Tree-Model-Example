@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from calendar import monthrange
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional, Union
 
 from pandas import Timedelta, Timestamp
@@ -223,10 +223,16 @@ class BetterDateTimeBuffer:
         if isinstance(value, date):
             return Timestamp(value)
         if isinstance(value, NanoTime):
+            d = date.today()
             return Timestamp(
-                datetime.combine(
-                    date.today(), datetime.time(value.hour, value.minute, value.second, value.nanosecond // 1000)
-                )
+                year=d.year,
+                month=d.month,
+                day=d.day,
+                hour=value.hour,
+                minute=value.minute,
+                second=value.second,
+                microsecond=value.nanosecond // 1000,
+                nanosecond=value.nanosecond % 1000,
             )
         raise TypeError("Unsupported value type")
 
