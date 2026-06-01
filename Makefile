@@ -1,4 +1,4 @@
-.PHONY: ui lint dev-setup check-no-reflection check-editors-isolation test gate
+.PHONY: ui lint dev-setup check-no-reflection check-editors-isolation check-tree-isolation test gate
 
 UI_PY := \
 	ui/mainwindow.py \
@@ -62,6 +62,12 @@ check-no-reflection:
 # it can be run in isolation; also runs inside `check-no-reflection` via the hook.
 check-editors-isolation:
 	bash .githooks/_check_editors_isolation.sh
+
+# Tree isolation: tree/ must not import app/documents/editors/delegates/state/validation.
+# Standalone target so it can be run in isolation; also runs inside
+# `check-no-reflection` via the hook.
+check-tree-isolation:
+	bash .githooks/_check_tree_isolation.sh
 
 # Full test suite under the offscreen Qt platform with a hard 10-minute
 # wall-clock cap (see plans/20-decouple-jsontab.md Step A3 / DoD rules).

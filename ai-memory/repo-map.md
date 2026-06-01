@@ -2,8 +2,8 @@
 
 _This is a condensed index and architectural summary. LLM agents should refer to direct source files for implementation
 details._
-**Last updated:** 2026-06-01 (after responsibility-segregation plan, all 8 steps complete; added
-`reports/` index entry and corrected the `make lint` toolchain description).
+**Last updated:** 2026-06-01 (after tree-upward-imports refactor; added `core/`, `tree/codecs/`,
+tree-isolation rule, and `check-tree-isolation` target).
 
 ## 1) High-level Purpose
 
@@ -55,8 +55,12 @@ Model".
   `app/`, `documents/`, or `tree/`. The dispatch seam (`editors/factory.py`, `editors/context.py`) may import
   `tree.types` / `tree.item` for type dispatch, but never `app/` or `documents/`. Enforced by
   `make check-editors-isolation`.
+- **Tree isolation**: `tree/` must **never** import from `app/`, `documents/`, `editors/`, `delegates/`, `state/`, or
+  `validation/`. Shared pure-data logic (datetime parsing, bytes/color codecs) lives in `core/` or `tree/codecs/`;
+  secret-name matching is injected via `SecretNamePredicate`. Enforced by `make check-tree-isolation`.
 - **Separation of Concerns**:
     - `tree/`: Data structure and model.
+    - `core/`: Shared pure-data logic (datetime parsing) consumed by both `tree/` and `editors/`.
     - `editors/`: Value-editing widgets (inline + windowed) and dispatch.
     - `delegates/`: Presentation, cell-level editing delegation, and formatting helpers.
     - `tree_actions/`: Logic for high-level operations.
@@ -132,7 +136,7 @@ editors/
 ├── inline/                  In-cell editor widgets (no app/documents/tree imports).
 │   ├── bigint_spinbox/      QBigIntSpinBox (spinbox.py + validator.py).
 │   ├── mpq_spinbox/         QMpqSpinBox (spinbox.py + validator.py).
-│   ├── datetime/            BetterDateTimeEditor + validator/regex/enums.
+│   ├── datetime/            BetterDateTimeEditor + validator (enums/regex re-exported from core/).
 │   ├── affix_composite.py   AffixCompositeEditor (prefix/suffix + spinbox).
 │   ├── secret_line.py       _SecretLineEdit + _SecretEditorWatcher.
 │   └── caps_safe_line.py    _CapsLockSafeLineEdit + lock-key constants.
@@ -142,6 +146,48 @@ editors/
     ├── hexedit/             Hex editor widget (widget.py + chunks/commands/color_manager).
     ├── hex_dialog.py        QHexDialog wrapper.
     └── color_dialog.py      ColorPickerDialog (QColorDialog wiring).
+```
+
+## 8a) `core/` module layout
+
+```
+core/
+├── __init__.py
+└── datetime_parsing/        Pure datetime parsing (no Qt dependency).
+    ├── __init__.py          Re-exports DateTimeCategory, parse_datetime_text, etc.
+    ├── enums.py             DateTimeCategory enum.
+    └── regex.py             parse_datetime_text + regex tables.
+```
+
+## 8b) `tree/` module layout (partial — codecs subpackage)
+
+```
+tree/
+├── codecs/                  Encode/decode for binary and color types.
+│   ├── __init__.py
+│   ├── bytes_codec.py       decode_bytes / encode_bytes for BYTES/ZLIB/GZIP.
+│   └── color_codec.py       parse_color / color_to_html / normalize_color_string.
+├── model.py
+├── item.py
+├── filter_proxy.py
+├── types.py
+├── item_coercion.py
+├── actions/anchors.py
+├── commands.py
+├── diff.py
+├── actions/anchors.py
+├── actions/clipboard.py
+├── actions/dnd.py
+├── actions/move.py
+├── actions/sort.py
+├── validation/
+├── app/validation_presenter.py
+├── themes/
+├── app/theme_controller.py
+├── state/
+├── io_formats/
+├── ui/
+├── dialogs/
 ```
 
 ## 9) `delegates/` module layout (post editors/ extraction)
@@ -156,10 +202,10 @@ delegates/
 ├── number_affix_delegate.py Affix helpers (editor part moved to editors/inline/).
 ├── edit_context.py          Delegate-side edit context.
 ├── validation_badge.py      Presentation helper for validation badges.
-└── formatting/              Pure formatting/codec helpers.
+└── formatting/              Pure formatting/codec helpers (re-export shims from tree/codecs/).
     ├── value_formatting.py  Display-text formatting for value column.
-    ├── bytes_codec.py       Encode/decode for BYTES/ZLIB/GZIP display.
-    └── color_codec.py       Encode/decode for COLOR_RGB/RGBA display.
+    ├── bytes_codec.py       Re-export shim → tree.codecs.bytes_codec.
+    └── color_codec.py       Re-export shim → tree.codecs.color_codec.
 ```
 
 ## 10) `ui/` module layout (generated UI + dialog schemas)
@@ -188,6 +234,7 @@ App-level dialog implementations live in `app/dialogs/` (`attach_schema_dlg.py`,
 make test                    # QT_QPA_PLATFORM=offscreen timeout 600 pytest -q (1124 pass)
 make check-no-reflection     # forbid getattr/hasattr/TYPE_CHECKING outside allowlist
 make check-editors-isolation # forbid app/documents/tree imports in concrete editor widgets
+make check-tree-isolation    # forbid app/documents/editors/delegates/state/validation imports in tree/
 make lint                    # autoflake + isort + black (in place; line-length 120, UI files skipped)
-make gate                    # full DoD gate (lint → reflection → editors-isolation → tests)
+make gate                    # full DoD gate (lint → reflection → editors-isolation → tree-isolation → tests)
 ```

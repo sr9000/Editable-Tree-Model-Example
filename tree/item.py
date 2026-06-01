@@ -1,16 +1,31 @@
 # Ported from: https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/editabletreemodel
 
 import datetime
+from collections.abc import Callable
 from typing import Any
 
-from editors.inline.datetime.enums import DateTimeCategory
-from editors.inline.datetime.regex import parse_datetime_text
-from state.secret_settings import get_secret_word_prefixes
+from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.regex import parse_datetime_text
 from tree.item_coercion import coerce_value_for_type, compute_editable, normalize_value_for_type
 from tree.item_names import unique_child_name, validated_child_name
 from tree.types import DATETIME_FAMILY, SECRET_FAMILY, TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
 from tree.types_datetime import convert_datetime
-from validation.secret_names import name_looks_secret
+
+SecretNamePredicate = Callable[[str], bool]
+
+
+def _default_secret_name_predicate(name: str) -> bool:
+    """Default predicate that delegates to the real secret-name logic.
+
+    Kept as a module-level function so headless test fixtures that
+    construct ``JsonTreeItem(...)`` without extra wiring still work.
+    The import lives inside the function to avoid a hard ``tree →
+    state/validation`` dependency at module load time.
+    """
+    from state.secret_settings import get_secret_word_prefixes
+    from validation.secret_names import name_looks_secret
+
+    return name_looks_secret(name, get_secret_word_prefixes())
 
 
 class JsonTreeItem:
@@ -21,8 +36,10 @@ class JsonTreeItem:
         parent_item: "JsonTreeItem | None" = None,
         value: Any = None,
         name: str | int = None,
+        secret_name_predicate: SecretNamePredicate | None = None,
     ) -> None:
         self.parent_item: "JsonTreeItem | None" = parent_item
+        self._secret_name_predicate: SecretNamePredicate = secret_name_predicate or _default_secret_name_predicate
 
         self.name = name
         self.child_items: list["JsonTreeItem"] = []
@@ -197,7 +214,11 @@ class JsonTreeItem:
                 )
                 if child_name is not None:
                     reserved_names.add(child_name)
-                new_items.append(JsonTreeItem(parent_item=self, value=None, name=child_name))
+                new_items.append(
+                    JsonTreeItem(
+                        parent_item=self, value=None, name=child_name, secret_name_predicate=self._secret_name_predicate
+                    )
+                )
 
             self.child_items[position:position] = new_items
             self._children_dirty = True
@@ -234,11 +255,15 @@ class JsonTreeItem:
         match json_type:
             case JsonType.ARRAY:
                 arr = value if isinstance(value, list) else []
-                self.child_items = [JsonTreeItem(self, x) for x in arr]
+                self.child_items = [
+                    JsonTreeItem(self, x, secret_name_predicate=self._secret_name_predicate) for x in arr
+                ]
                 self.value = []
             case JsonType.OBJECT:
                 obj = value if isinstance(value, dict) else {}
-                self.child_items = [JsonTreeItem(self, v, k) for k, v in obj.items()]
+                self.child_items = [
+                    JsonTreeItem(self, v, k, secret_name_predicate=self._secret_name_predicate) for k, v in obj.items()
+                ]
                 self.value = {}
             case _:
                 self.value = self._normalize_value_for_type(value)
@@ -264,7 +289,7 @@ class JsonTreeItem:
     def _promote_secret_from_name(self, allow_from_null: bool = False) -> None:
         if self.json_type in SECRET_FAMILY:
             return
-        if not name_looks_secret(self.name, get_secret_word_prefixes()):
+        if not self._secret_name_predicate(self.name if isinstance(self.name, str) else ""):
             return
         if isinstance(self.value, str):
             self._apply_typed_value(self._secret_type_for_value(), self.value)

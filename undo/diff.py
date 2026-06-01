@@ -81,7 +81,7 @@ class DiffApplier:
         if pairs:
             self._tab.model.beginInsertRows(item_index, 0, len(pairs) - 1)
             for name, v in pairs:
-                item.child_items.append(JsonTreeItem(item, v, name))
+                item.child_items.append(JsonTreeItem(item, v, name, secret_name_predicate=item._secret_name_predicate))
             item.mark_children_dirty()
             self._tab.model.endInsertRows()
         self.emit_row_changed(item_index)
@@ -100,7 +100,7 @@ class DiffApplier:
         value: Any,
         name: str | int | None = None,
     ) -> bool:
-        new_item = JsonTreeItem(parent_item, value, name)
+        new_item = JsonTreeItem(parent_item, value, name, secret_name_predicate=parent_item._secret_name_predicate)
         self._tab.model.beginInsertRows(parent_index, position, position)
         parent_item.child_items.insert(position, new_item)
         parent_item.mark_children_dirty()

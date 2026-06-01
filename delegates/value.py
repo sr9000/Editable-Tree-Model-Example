@@ -4,7 +4,6 @@ from PySide6.QtWidgets import QStyle, QStyleOptionViewItem, QTreeView, QWidget
 
 from delegates.base import _TextEditorDelegateBase, paint_editor_underlay
 from delegates.edit_context import DefaultEditContext, DelegateEditContext
-from delegates.formatting.color_codec import parse_color
 from delegates.formatting.value_formatting import _apply_type_style, format_default, format_with_type
 from delegates.validation_badge import draw_severity_badge
 from editors.factory import create_value_editor, set_value_editor_data, set_value_model_data
@@ -12,6 +11,7 @@ from editors.inline.datetime.enums import DateTimeCategory
 from editors.inline.secret_line import _SecretEditorWatcher
 from themes import LIGHT_DEFAULT
 from themes.spec import ThemeSpec
+from tree.codecs.color_codec import parse_color
 from tree.item import JsonTreeItem
 from tree.model_roles import JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE
 from tree.types import JsonType

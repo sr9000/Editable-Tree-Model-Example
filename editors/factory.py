@@ -8,8 +8,6 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSortFilterProxyM
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
-from delegates.formatting.bytes_codec import decode_bytes, encode_bytes
-from delegates.formatting.color_codec import color_to_html, parse_color
 from delegates.number_affix_delegate import (
     is_affix_json_type,
     is_integer_json_type,
@@ -29,6 +27,8 @@ from editors.windowed.color_dialog import ColorPickerDialog
 from editors.windowed.hex_dialog import QHexDialog
 from editors.windowed.multiline_dialog import QMultilineDialog
 from state.edit_limits import get_multiline_edit_warning_limit_chars, get_string_edit_warning_limit_chars
+from tree.codecs.bytes_codec import decode_bytes, encode_bytes
+from tree.codecs.color_codec import color_to_html, parse_color
 from tree.item import JsonTreeItem
 from tree.types import TEXT_LINE_FAMILY, TEXT_MULTI_FAMILY, JsonType
 

@@ -5,11 +5,11 @@ from gmpy2 import mpq
 from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionViewItem
 
-from delegates.formatting.bytes_codec import encode_bytes
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from documents.tab import JsonTab
 from themes import DARK_DEFAULT, LIGHT_DEFAULT, parse_theme_mapping
+from tree.codecs.bytes_codec import encode_bytes
 from tree.model import JsonTreeModel
 from tree.types import JsonType
 from units.number_affix import AffixKind, NumberAffix
