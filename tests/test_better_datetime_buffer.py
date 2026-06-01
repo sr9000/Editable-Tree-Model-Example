@@ -1,8 +1,10 @@
 from datetime import date, datetime, timedelta
 
 import pytest
+from pandas import Timestamp
 
 from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.nano_time import NanoTime
 from editors.inline.datetime.better_dt_editor import BetterDateTimeBuffer
 
 
@@ -22,7 +24,7 @@ def test_set_value_round_trip(buffer: BetterDateTimeBuffer) -> None:
 
 def test_accept_text_updates_value_and_segments(buffer: BetterDateTimeBuffer) -> None:
     datetime_text = "2025-01-02T03:04:05"
-    date_exp = datetime.fromisoformat(datetime_text)
+    date_exp = Timestamp(datetime_text)
     buffer.set_category(DateTimeCategory.DateTime, "")
     parsed = buffer.accept_text(datetime_text)
     assert parsed == date_exp
@@ -55,8 +57,8 @@ def test_revert_text_restores_last_valid(buffer: BetterDateTimeBuffer) -> None:
 )
 def test_step_with_set_value(buffer: BetterDateTimeBuffer, val_str: str, inc: int, exp_str: str) -> None:
     clr = val_str.replace("*", "")
-    val = datetime.fromisoformat(clr)
-    exp_val = datetime.fromisoformat(exp_str)
+    val = Timestamp(datetime.fromisoformat(clr))
+    exp_val = Timestamp(datetime.fromisoformat(exp_str))
     text, _ = buffer.set_value(val)
     assert text == clr
     new_text, _ = buffer.step(inc, val_str.index("*"))
@@ -83,7 +85,7 @@ def test_step_with_accept_text(
     exp_str: str,
     exp_offset_minutes: int | None,
 ) -> None:
-    exp_val = datetime.fromisoformat(exp_str)
+    exp_val = Timestamp(exp_str)
     buffer.set_category(ctg, "")
     buffer.accept_text(val_str.replace("*", ""))
     new_text, _ = buffer.step(inc, val_str.index("*"))
@@ -137,7 +139,7 @@ def test_buffer_category_and_invalid_accept(buffer: BetterDateTimeBuffer) -> Non
 
 
 def test_step_uses_last_segment_when_cursor_outside(buffer: BetterDateTimeBuffer) -> None:
-    val = datetime(2024, 5, 6, 7, 8, 9)
+    val = Timestamp(2024, 5, 6, 7, 8, 9)
     text, _ = buffer.set_value(val)
     result = buffer.step(+1, cursor_pos=len(text) + 5)
     assert result is not None
@@ -147,7 +149,7 @@ def test_step_uses_last_segment_when_cursor_outside(buffer: BetterDateTimeBuffer
 
 
 def test_segment_helpers_return_none(buffer: BetterDateTimeBuffer) -> None:
-    buffer.set_value(datetime(2024, 1, 1, 0, 0, 0))
+    buffer.set_value(Timestamp(2024, 1, 1, 0, 0, 0))
     assert buffer._segment_at_cursor(10_000) is None
     assert buffer._segment_by_name("tz_sign") is None
 

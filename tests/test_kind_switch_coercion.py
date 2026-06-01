@@ -17,9 +17,11 @@ import zlib
 
 import pytest
 from gmpy2 import mpq
+from pandas import Timestamp
 from PySide6.QtCore import QModelIndex
 
 from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
 from tree.item_coercion import coerce_value_for_type
@@ -280,17 +282,13 @@ def _temporal_text_and_object(temporal_type: JsonType):
         case JsonType.DATE:
             return "2024-01-02", datetime.date(2024, 1, 2)
         case JsonType.TIME:
-            return "01:02:03.5", datetime.time(1, 2, 3, 500000)
+            return "01:02:03.5", NanoTime(1, 2, 3, 500000000)
         case JsonType.DATETIME:
-            return "2024-01-02T03:04:05.5", datetime.datetime(2024, 1, 2, 3, 4, 5, 500000)
+            return "2024-01-02T03:04:05.5", Timestamp("2024-01-02 03:04:05.500000")
         case JsonType.DATETIMEZONE:
-            return "2024-01-02T03:04:05.5+01:00", datetime.datetime(
-                2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone(datetime.timedelta(hours=1))
-            )
+            return "2024-01-02T03:04:05.5+01:00", Timestamp("2024-01-02 03:04:05.500000+0100")
         case JsonType.DATETIMEUTC:
-            return "2024-01-02T03:04:05.5Z", datetime.datetime(
-                2024, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone.utc
-            )
+            return "2024-01-02T03:04:05.5Z", Timestamp("2024-01-02 03:04:05.500000", tz="UTC")
     raise AssertionError(f"unsupported temporal type: {temporal_type}")
 
 

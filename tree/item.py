@@ -4,7 +4,10 @@ import datetime
 from collections.abc import Callable
 from typing import Any
 
+from pandas import Timestamp
+
 from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
 from tree.item_coercion import coerce_value_for_type, compute_editable, normalize_value_for_type
 from tree.item_names import unique_child_name, validated_child_name
@@ -356,17 +359,16 @@ class JsonTreeItem:
         converted = convert_datetime(parsed, src, dst)
         if isinstance(converted, datetime.date) and not isinstance(converted, datetime.datetime):
             return converted.isoformat()
-        if isinstance(converted, datetime.time):
+        if isinstance(converted, NanoTime):
             return converted.isoformat()
-        if isinstance(converted, datetime.datetime):
+        if isinstance(converted, Timestamp):
             if dst is JsonType.DATETIME:
-                return converted.replace(tzinfo=None).isoformat()
+                ts = converted.tz_localize(None) if converted.tzinfo is not None else converted
+                return ts.isoformat(sep=" ")
             if dst is JsonType.DATETIMEZONE:
-                aware = converted if converted.tzinfo is not None else converted.replace(tzinfo=datetime.timezone.utc)
+                aware = converted if converted.tzinfo is not None else converted.tz_localize("UTC")
                 return aware.isoformat()
             if dst is JsonType.DATETIMEUTC:
-                aware = (
-                    converted if converted.tzinfo is not None else converted.replace(tzinfo=datetime.timezone.utc)
-                ).astimezone(datetime.timezone.utc)
+                aware = (converted if converted.tzinfo is not None else converted.tz_localize("UTC")).tz_convert("UTC")
                 return aware.isoformat().replace("+00:00", "Z")
         return None

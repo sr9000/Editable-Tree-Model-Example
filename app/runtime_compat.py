@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
+from pandas import Timestamp
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
 
@@ -118,7 +119,7 @@ def accent_color_role() -> QPalette.ColorRole | None:
 # ── Timezone names ────────────────────────────────────────────────────────
 
 
-def tz_name(dt: datetime) -> str | None:
+def tz_name(dt: Timestamp | datetime) -> str | None:
     """Return a stable IANA-like timezone identifier for *dt*.
 
     Handles both ``zoneinfo.ZoneInfo`` (``.key``) and ``pytz``-style
@@ -128,7 +129,7 @@ def tz_name(dt: datetime) -> str | None:
     tz = dt.tzinfo
     if tz is None:
         return None
-    name = getattr(tz, "key", None) or getattr(tz, "zone", None)
+    name = getattr(tz, "key", None) or getattr(tz, "zone", None)  # allow: runtime_compat getattr
     return name if isinstance(name, str) else None
 
 

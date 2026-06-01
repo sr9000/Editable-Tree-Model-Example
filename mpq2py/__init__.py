@@ -2,7 +2,9 @@ from decimal import Decimal
 
 import yaml
 from gmpy2 import mpq
+from pandas import Timestamp
 
+from core.datetime_parsing.nano_time import NanoTime
 from units.number_affix import NumberAffix, format_number_affix
 
 
@@ -70,6 +72,10 @@ def mpq_json_default(obj):
         # (clipboard, drag MIME, file dump). On reload / paste, name-/value-
         # based classification re-promotes the string back to a NumberAffix.
         return format_number_affix(obj)
+    if isinstance(obj, Timestamp):
+        return obj.isoformat()
+    if isinstance(obj, NanoTime):
+        return obj.isoformat()
     raise TypeError(f"Type {type(obj)} not serializable")
 
 
@@ -103,3 +109,17 @@ def mpq_yaml_represent(dumper: MpqSafeDumper, data: mpq):
 
 
 MpqSafeDumper.add_representer(mpq, mpq_yaml_represent)
+
+
+def _timestamp_yaml_represent(dumper: MpqSafeDumper, data: Timestamp):
+    return dumper.represent_scalar("tag:yaml.org,2002:timestamp", data.isoformat())
+
+
+MpqSafeDumper.add_representer(Timestamp, _timestamp_yaml_represent)
+
+
+def _nanotime_yaml_represent(dumper: MpqSafeDumper, data: NanoTime):
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data.isoformat())
+
+
+MpqSafeDumper.add_representer(NanoTime, _nanotime_yaml_represent)

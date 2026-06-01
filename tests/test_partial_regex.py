@@ -26,11 +26,11 @@ from core.datetime_parsing.regex import PARTIAL_DATETIME_RE
         ("12:34:56", {"hour": "12", "minute": "34", "second": "56"}),
         (
             "12:34:56.",
-            {"hour": "12", "minute": "34", "second": "56", "microsecond": ""},
+            {"hour": "12", "minute": "34", "second": "56", "subsecond": ""},
         ),
         (
             "12:34:56.1",
-            {"hour": "12", "minute": "34", "second": "56", "microsecond": "1"},
+            {"hour": "12", "minute": "34", "second": "56", "subsecond": "1"},
         ),
         # Date and time
         (
@@ -131,9 +131,13 @@ from core.datetime_parsing.regex import PARTIAL_DATETIME_RE
         ("--T09::.+:", {"hour": "09"}),  # hour only
         ("--T:08:.+:", {"minute": "08"}),  # minute only
         ("--T::07.+:", {"second": "07"}),  # second only
-        ("--T::.123456+:", {"microsecond": "123456"}),  # micro only
+        ("--T::.123456+:", {"subsecond": "123456"}),  # subsecond only
         ("--T::.+10:", {"tz_hour": "10"}),  # tz_hour only
         ("--T::.+:20", {"tz_minute": "20"}),  # tz_minute only
+        # Nanosecond precision (7-9 digits)
+        ("--T::.1234567+:", {"subsecond": "1234567"}),  # 7 digits
+        ("--T::.12345678+:", {"subsecond": "12345678"}),  # 8 digits
+        ("--T::.123456789+:", {"subsecond": "123456789"}),  # 9 digits
     ],
 )
 def test_partial_regex_groups(text, expected):

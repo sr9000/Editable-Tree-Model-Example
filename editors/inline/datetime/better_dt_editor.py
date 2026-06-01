@@ -5,16 +5,18 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional, Union
 
+from pandas import Timedelta, Timestamp
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFocusEvent, QKeyEvent, QValidator
 from PySide6.QtWidgets import QLineEdit
 
 from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import PARTIAL_DATETIME_RE, parse_datetime_text
 
 from .validator import DateTimeValidator
 
-ValueType = Union[date, time, datetime, None]
+ValueType = Union[date, NanoTime, Timestamp, None]
 
 
 @dataclass
@@ -139,15 +141,16 @@ class BetterDateTimeBuffer:
             dt_value = dt_value.replace(minute=(dt_value.minute + delta) % 60)
         elif segment.name == "second":
             dt_value = dt_value.replace(second=(dt_value.second + delta) % 60)
-        elif segment.name == "microsecond":
-            dt_value = self._apply_microsecond_delta(dt_value, segment, delta)
+        elif segment.name == "subsecond":
+            dt_value = self._apply_subsecond_delta(dt_value, segment, delta)
         elif segment.name in {"tz_sign", "tz_hour", "tz_minute", "utc"}:
             if self._category is DateTimeCategory.DateTimeUTC:
                 return None
             dt_value = self._ensure_timezone(dt_value)
             total_minutes = self._timezone_minutes(dt_value)
             total_minutes = self._adjust_timezone_minutes(segment.name, total_minutes, delta)
-            dt_value = dt_value.replace(tzinfo=timezone(timedelta(minutes=total_minutes)))
+            new_tz = timezone(timedelta(minutes=total_minutes))
+            dt_value = dt_value.tz_localize(None).tz_localize(new_tz)
             return self._rebuild_timezone_segments(dt_value, segment)
         else:
             return None
@@ -170,7 +173,7 @@ class BetterDateTimeBuffer:
         self._segments = self._extract_segments(new_text)
         return new_text, segment.start + len(replacement)
 
-    def _rebuild_timezone_segments(self, value: datetime, anchor: _Segment) -> Optional[tuple[str, int]]:
+    def _rebuild_timezone_segments(self, value: Timestamp, anchor: _Segment) -> Optional[tuple[str, int]]:
         tz_segments = [seg for seg in self._segments if seg.name in {"tz_sign", "tz_hour", "tz_minute", "utc"}]
         if not tz_segments:
             return None
@@ -198,44 +201,56 @@ class BetterDateTimeBuffer:
     def _format_value(value: ValueType) -> tuple[str, Optional[DateTimeCategory]]:
         if value is None:
             return "", None
-        if isinstance(value, datetime):
-            if value.tzinfo:
+        if isinstance(value, Timestamp):
+            if value.tzinfo is not None:
                 if value.tzinfo == timezone.utc:
                     return (
-                        value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+                        value.tz_convert("UTC").isoformat().replace("+00:00", "Z"),
                         DateTimeCategory.DateTimeUTC,
                     )
                 return value.isoformat(), DateTimeCategory.DateTimeWithTZ
             return value.isoformat(sep=" "), DateTimeCategory.DateTime
         if isinstance(value, date):
             return value.isoformat(), DateTimeCategory.Date
-        if isinstance(value, time):
+        if isinstance(value, NanoTime):
             return value.isoformat(), DateTimeCategory.Time
         raise TypeError("Unsupported value type")
 
     @staticmethod
-    def _as_datetime(value: ValueType) -> datetime:
-        if isinstance(value, datetime):
+    def _as_datetime(value: ValueType) -> Timestamp:
+        if isinstance(value, Timestamp):
             return value
         if isinstance(value, date):
-            return datetime.combine(value, time())
-        if isinstance(value, time):
-            return datetime.combine(date.today(), value)
+            return Timestamp(value)
+        if isinstance(value, NanoTime):
+            d = date.today()
+            return Timestamp(
+                year=d.year,
+                month=d.month,
+                day=d.day,
+                hour=value.hour,
+                minute=value.minute,
+                second=value.second,
+                microsecond=value.nanosecond // 1000,
+                nanosecond=value.nanosecond % 1000,
+            )
         raise TypeError("Unsupported value type")
 
     @staticmethod
-    def _restore_type(value: datetime, category: Optional[DateTimeCategory]) -> ValueType:
+    def _restore_type(value: Timestamp, category: Optional[DateTimeCategory]) -> ValueType:
         match category:
             case DateTimeCategory.Date:
                 return value.date()
             case DateTimeCategory.Time:
-                return value.time()
+                return NanoTime(
+                    hour=value.hour, minute=value.minute, second=value.second, nanosecond=value.microsecond * 1000
+                )
             case DateTimeCategory.DateTime:
-                return value.replace(tzinfo=None)
+                return value.tz_localize(None) if value.tzinfo is not None else value
             case DateTimeCategory.DateTimeWithTZ:
-                return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+                return value if value.tzinfo is not None else value.tz_localize("UTC")
             case DateTimeCategory.DateTimeUTC:
-                return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)
+                return value.tz_localize("UTC") if value.tzinfo is None else value.tz_convert("UTC")
             case _:
                 return value
 
@@ -258,25 +273,25 @@ class BetterDateTimeBuffer:
         return segments
 
     @staticmethod
-    def _apply_microsecond_delta(value: datetime, segment: _Segment, delta: int) -> datetime:
-        digits = max(1, min(segment.length, 6))
-        step = 10 ** (6 - digits)
-        return value + timedelta(microseconds=delta * step)
+    def _apply_subsecond_delta(value: Timestamp, segment: _Segment, delta: int) -> Timestamp:
+        digits = max(1, min(segment.length, 9))
+        step = 10 ** (9 - digits)
+        return value + Timedelta(delta * step)
 
     @staticmethod
-    def _format_microsecond(microsecond: int, width: int) -> str:
-        digits = max(1, min(width or 6, 6))
-        full = f"{microsecond:06d}"
-        return full[:digits] if digits < 6 else full
+    def _format_subsecond(nanosecond: int, width: int) -> str:
+        digits = max(1, min(width or 9, 9))
+        full = f"{nanosecond:09d}"
+        return full[:digits] if digits < 9 else full
 
     @staticmethod
-    def _ensure_timezone(value: datetime) -> datetime:
+    def _ensure_timezone(value: Timestamp) -> Timestamp:
         if value.tzinfo is not None:
             return value
-        return value.replace(tzinfo=timezone.utc)
+        return value.tz_localize("UTC")
 
     @staticmethod
-    def _timezone_minutes(value: datetime) -> int:
+    def _timezone_minutes(value: Timestamp) -> int:
         offset = value.tzinfo.utcoffset(value) or timedelta()
         return int(offset.total_seconds() // 60)
 
@@ -338,7 +353,7 @@ class BetterDateTimeBuffer:
         return f"{sign}{hours:02d}:{minute_part:02d}"
 
     @staticmethod
-    def _format_segment_value(name: str, value: datetime, width: int) -> Optional[str]:
+    def _format_segment_value(name: str, value: Timestamp, width: int) -> Optional[str]:
         match name:
             case "year":
                 text = f"{value.year:04d}"
@@ -352,8 +367,9 @@ class BetterDateTimeBuffer:
                 text = f"{value.minute:02d}"
             case "second":
                 text = f"{value.second:02d}"
-            case "microsecond":
-                text = BetterDateTimeBuffer._format_microsecond(value.microsecond, width)
+            case "subsecond":
+                nanosecond = value.microsecond * 1000 + value.nanosecond
+                text = BetterDateTimeBuffer._format_subsecond(nanosecond, width)
             case "tz_sign":
                 minutes = BetterDateTimeBuffer._timezone_minutes(BetterDateTimeBuffer._ensure_timezone(value))
                 text = "+" if minutes >= 0 else "-"
