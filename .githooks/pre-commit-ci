@@ -55,4 +55,9 @@ if ! bash "$(dirname "$0")/_check_jsontab_import_leaks.sh" $(git ls-files '*.py'
     fail=1
 fi
 
+# Responsibility-segregation §2.5: enforce editors/ isolation contract.
+if ! bash "$(dirname "$0")/_check_editors_isolation.sh"; then
+    fail=1
+fi
+
 exit $fail

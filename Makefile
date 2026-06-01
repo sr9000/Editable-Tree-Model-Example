@@ -1,4 +1,4 @@
-.PHONY: ui lint dev-setup check-no-reflection test gate
+.PHONY: ui lint dev-setup check-no-reflection check-editors-isolation test gate
 
 UI_PY := \
 	ui/mainwindow.py \
@@ -56,6 +56,12 @@ dev-setup:
 # the allowlist. Mirrors the staged-files check in .githooks/pre-commit.
 check-no-reflection:
 	bash .githooks/pre-commit-ci
+
+# Responsibility-segregation §2.5: editors/ must not import app/documents/tree
+# (concrete widgets) or app/documents (the dispatch seam). Standalone target so
+# it can be run in isolation; also runs inside `check-no-reflection` via the hook.
+check-editors-isolation:
+	bash .githooks/_check_editors_isolation.sh
 
 # Full test suite under the offscreen Qt platform with a hard 10-minute
 # wall-clock cap (see plans/20-decouple-jsontab.md Step A3 / DoD rules).
