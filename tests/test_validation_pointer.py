@@ -1,7 +1,6 @@
 from gmpy2 import mpq
 
-from validation.json_pointer import (instance_path_to_model_path,
-                                     model_path_to_instance_path)
+from validation.json_pointer import instance_path_to_model_path, model_path_to_instance_path
 
 DATA = {
     "obj": {

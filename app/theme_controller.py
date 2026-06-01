@@ -3,17 +3,24 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import QFileSystemWatcher, QObject, Qt, QTimer, QUrl, Slot
-from PySide6.QtGui import (QAction, QActionGroup, QDesktopServices,
-                           QGuiApplication, QPalette)
+from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
-from app.runtime_compat import (accent_color_role, color_scheme_setter,
-                                has_color_scheme_changed_signal,
-                                install_color_scheme_memory)
-from state.theme_settings import (get_follow_system, get_watch_user_dir,
-                                  resolve_active_theme, set_follow_system,
-                                  set_manual_theme_name,
-                                  set_preferred_theme_name, set_watch_user_dir)
+from app.runtime_compat import (
+    accent_color_role,
+    color_scheme_setter,
+    has_color_scheme_changed_signal,
+    install_color_scheme_memory,
+)
+from state.theme_settings import (
+    get_follow_system,
+    get_watch_user_dir,
+    resolve_active_theme,
+    set_follow_system,
+    set_manual_theme_name,
+    set_preferred_theme_name,
+    set_watch_user_dir,
+)
 from themes import ThemeRegistry
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec

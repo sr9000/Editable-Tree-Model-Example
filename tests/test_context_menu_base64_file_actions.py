@@ -7,8 +7,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from documents.tab import JsonTab
 from settings import BINARY_ATTACH_WARNING_LIMIT_BYTES
-from tree_actions.context_menu import (attach_base64_from_file,
-                                       save_base64_as_file)
+from tree_actions.context_menu import attach_base64_from_file, save_base64_as_file
 
 
 def _make_tab(qtbot, data) -> JsonTab:

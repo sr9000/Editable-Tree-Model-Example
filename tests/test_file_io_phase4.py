@@ -5,8 +5,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.main_window import MainWindow
 from documents.tab import JsonTab
-from io_formats import (SAVE_FORMAT_JSONL, SAVE_FORMAT_YAML_MULTI, dump_text,
-                        load_file_with_format, save_file)
+from io_formats import SAVE_FORMAT_JSONL, SAVE_FORMAT_YAML_MULTI, dump_text, load_file_with_format, save_file
 from tree.types import JsonType
 
 

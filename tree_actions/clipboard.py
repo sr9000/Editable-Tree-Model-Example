@@ -9,18 +9,15 @@ from PySide6.QtWidgets import QApplication, QTreeView
 from mpq2py import MpqSafeDumper, mpq_json_default
 from tree.model import JsonTreeModel
 from tree.types import JsonType
-from tree_actions.selection import (_index_path, _is_ancestor, _resolve_model,
-                                    _selected_rows, selection_shape)
-from tree_actions.selection import \
-    top_level_source_rows as _top_level_selected_rows
+from tree_actions.selection import _index_path, _is_ancestor, _resolve_model, _selected_rows, selection_shape
+from tree_actions.selection import top_level_source_rows as _top_level_selected_rows
 
 MIME_JSON_TREE = "application/x-json-tree"
 
 
 def _dump_text(payload: Any) -> str:
     """Serialize *payload* to a string using the configured clipboard text format."""
-    from state.clipboard_settings import (CLIPBOARD_TEXT_FORMAT_YAML,
-                                          get_clipboard_text_format)
+    from state.clipboard_settings import CLIPBOARD_TEXT_FORMAT_YAML, get_clipboard_text_format
 
     if get_clipboard_text_format() == CLIPBOARD_TEXT_FORMAT_YAML:
         try:
@@ -309,8 +306,7 @@ def clipboard_to_tab_data() -> tuple[Any, str | None]:
     Returns (None, None) when the clipboard contains nothing usable.
     save_format uses SAVE_FORMAT_* constants from io_formats.detect.
     """
-    from io_formats.detect import (SAVE_FORMAT_JSON, SAVE_FORMAT_YAML,
-                                   SAVE_FORMAT_YAML_MULTI)
+    from io_formats.detect import SAVE_FORMAT_JSON, SAVE_FORMAT_YAML, SAVE_FORMAT_YAML_MULTI
 
     mime = QApplication.clipboard().mimeData()
     if mime is None:

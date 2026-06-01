@@ -6,8 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import (QItemSelectionModel, QModelIndex, QObject, Qt,
-                            QTimer)
+from PySide6.QtCore import QItemSelectionModel, QModelIndex, QObject, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView
 
 from io_formats.detect import SAVE_FORMAT_YAML_MULTI

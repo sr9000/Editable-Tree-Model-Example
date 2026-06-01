@@ -5,9 +5,7 @@ from PySide6.QtCore import QItemSelectionModel, QModelIndex
 from PySide6.QtWidgets import QApplication, QTreeView
 
 from tree.model import JsonTreeModel
-from tree_actions.clipboard import (MIME_JSON_TREE, copy_selection,
-                                    copy_selection_value_only,
-                                    copy_selection_with_name)
+from tree_actions.clipboard import MIME_JSON_TREE, copy_selection, copy_selection_value_only, copy_selection_with_name
 from tree_actions.paste import paste_from_clipboard
 from tree_actions.structure import cut_selection, delete_selection
 
@@ -134,8 +132,7 @@ def test_copy_paste_preserves_object_key_name_when_possible(qtbot):
 
 
 def test_copy_selection_with_name_and_value_only(qtbot):
-    from tree_actions.clipboard import (copy_selection_value_only,
-                                        copy_selection_with_name)
+    from tree_actions.clipboard import copy_selection_value_only, copy_selection_with_name
 
     model = JsonTreeModel({"foo": 42})
     view = QTreeView()
@@ -177,8 +174,7 @@ def test_copy_selection_string_value_is_json_quoted(qtbot):
 
 
 def test_copy_selection_object_array_includes_internal_values(qtbot):
-    from tree_actions.clipboard import (copy_selection_value_only,
-                                        copy_selection_with_name)
+    from tree_actions.clipboard import copy_selection_value_only, copy_selection_with_name
 
     model = JsonTreeModel({"foo": {"bar": [1, 2]}})
     view = QTreeView()

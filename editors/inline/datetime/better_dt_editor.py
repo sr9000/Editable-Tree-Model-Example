@@ -12,8 +12,7 @@ from PySide6.QtWidgets import QLineEdit
 
 from core.datetime_parsing.enums import DateTimeCategory
 from core.datetime_parsing.nano_time import NanoTime
-from core.datetime_parsing.regex import (PARTIAL_DATETIME_RE,
-                                         parse_datetime_text)
+from core.datetime_parsing.regex import PARTIAL_DATETIME_RE, parse_datetime_text
 
 from .validator import DateTimeValidator
 

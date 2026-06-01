@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import (QColor, QFontMetrics, QPainter, QPalette,
-                           QTextCharFormat, QTextLayout, QTextOption)
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPalette, QTextCharFormat, QTextLayout, QTextOption
 from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionViewItem
 
 from themes.spec import ThemeSpec

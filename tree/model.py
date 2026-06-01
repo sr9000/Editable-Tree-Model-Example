@@ -4,14 +4,18 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Any, Optional, cast
 
-from PySide6.QtCore import (QAbstractItemModel, QMimeData, QModelIndex,
-                            QPersistentModelIndex, Qt, Signal)
+from PySide6.QtCore import QAbstractItemModel, QMimeData, QModelIndex, QPersistentModelIndex, Qt, Signal
 
 from themes.icon_provider import IconProvider, StubIconProvider
 from tree.item import JsonTreeItem
-from tree.model_roles import (JSON_TYPE_ROLE, VALIDATION_SEVERITY_ROLE,
-                              display_role_value, edit_role_value,
-                              font_role_for_name, tooltip_role_for_value)
+from tree.model_roles import (
+    JSON_TYPE_ROLE,
+    VALIDATION_SEVERITY_ROLE,
+    display_role_value,
+    edit_role_value,
+    font_role_for_name,
+    tooltip_role_for_value,
+)
 from tree.types import JsonType
 
 

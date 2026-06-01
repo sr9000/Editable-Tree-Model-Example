@@ -5,8 +5,7 @@ from PySide6.QtCore import QModelIndex, QSettings, QSortFilterProxyModel
 
 from documents.seams.document_protocol import Document
 from settings import APPLICATION_ID
-from state.qsettings_coercion import (_coerce_int, _coerce_int_list,
-                                      _coerce_path, _coerce_paths)
+from state.qsettings_coercion import _coerce_int, _coerce_int_list, _coerce_path, _coerce_paths
 
 MAX_EXPANDED_PATHS = 5000
 

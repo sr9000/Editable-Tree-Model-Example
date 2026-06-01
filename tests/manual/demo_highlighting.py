@@ -3,9 +3,16 @@
 
 import sys
 
-from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog,
-                               QHBoxLayout, QMainWindow, QPushButton,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QColorDialog,
+    QHBoxLayout,
+    QMainWindow,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from editors.windowed.hexedit import QHexEdit
 

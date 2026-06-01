@@ -5,8 +5,14 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QFileDialog
 
-from io_formats import (SAVE_FORMAT_JSON, SAVE_FORMAT_JSONL, SAVE_FORMAT_YAML,
-                        SAVE_FORMAT_YAML_MULTI, detect_format, save_file)
+from io_formats import (
+    SAVE_FORMAT_JSON,
+    SAVE_FORMAT_JSONL,
+    SAVE_FORMAT_YAML,
+    SAVE_FORMAT_YAML_MULTI,
+    detect_format,
+    save_file,
+)
 
 
 class IoController(QObject):

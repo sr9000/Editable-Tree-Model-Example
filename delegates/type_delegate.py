@@ -1,14 +1,9 @@
-from PySide6.QtCore import (QAbstractItemModel, QModelIndex,
-                            QPersistentModelIndex, QSize,
-                            QSortFilterProxyModel, Qt)
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, QSize, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QStyle,
-                               QStyledItemDelegate, QStyleOptionViewItem,
-                               QWidget)
+from PySide6.QtWidgets import QAbstractItemView, QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
 from delegates.base import paint_editor_underlay
-from delegates.edit_context import (DefaultEditContext, DelegateEditContext,
-                                    EditResult)
+from delegates.edit_context import DefaultEditContext, DelegateEditContext, EditResult
 from delegates.formatting.value_formatting import _apply_type_style
 from themes import LIGHT_DEFAULT
 from themes.icon_provider import IconProvider, StubIconProvider

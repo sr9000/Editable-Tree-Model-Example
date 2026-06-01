@@ -3,8 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QSettings
 
 from settings import APPLICATION_ID
-from state.recent_schemas import (RECENT_SCHEMAS_CAP, clear_recent_schemas,
-                                  push_recent_schema, recent_schemas)
+from state.recent_schemas import RECENT_SCHEMAS_CAP, clear_recent_schemas, push_recent_schema, recent_schemas
 from state.validation_settings import _RECENT_SCHEMAS_KEY
 from validation.schema_types import SchemaSource
 

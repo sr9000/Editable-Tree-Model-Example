@@ -7,8 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QApplication
 
-from delegates.edit_context import (DefaultEditContext, DelegateEditContext,
-                                    EditResult)
+from delegates.edit_context import DefaultEditContext, DelegateEditContext, EditResult
 
 
 @pytest.fixture(scope="module")

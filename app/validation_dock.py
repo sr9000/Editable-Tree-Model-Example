@@ -3,9 +3,18 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtWidgets import (QCheckBox, QDockWidget, QHBoxLayout, QLabel,
-                               QListView, QMenu, QPushButton, QToolButton,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QDockWidget,
+    QHBoxLayout,
+    QLabel,
+    QListView,
+    QMenu,
+    QPushButton,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.validation_panel_model import IssueListModel
 from documents.seams.document_protocol import Document

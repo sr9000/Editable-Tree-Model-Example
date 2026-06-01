@@ -4,14 +4,16 @@ from PySide6.QtCore import QSettings
 
 from app.main_window import MainWindow
 from settings import APPLICATION_ID
-from state.edit_limits import (get_attach_file_warning_limit_bytes,
-                               get_binary_edit_warning_limit_bytes,
-                               get_multiline_edit_warning_limit_chars,
-                               get_string_edit_warning_limit_chars,
-                               set_attach_file_warning_limit_bytes,
-                               set_binary_edit_warning_limit_bytes,
-                               set_multiline_edit_warning_limit_chars,
-                               set_string_edit_warning_limit_chars)
+from state.edit_limits import (
+    get_attach_file_warning_limit_bytes,
+    get_binary_edit_warning_limit_bytes,
+    get_multiline_edit_warning_limit_chars,
+    get_string_edit_warning_limit_chars,
+    set_attach_file_warning_limit_bytes,
+    set_binary_edit_warning_limit_bytes,
+    set_multiline_edit_warning_limit_chars,
+    set_string_edit_warning_limit_chars,
+)
 
 
 def _clear_limits_settings() -> None:

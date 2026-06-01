@@ -1,7 +1,6 @@
 from gmpy2 import mpq
 
-from units.number_affix import (AffixKind, NumberAffix, format_number_affix,
-                                is_integer_core, parse_number_affix)
+from units.number_affix import AffixKind, NumberAffix, format_number_affix, is_integer_core, parse_number_affix
 
 
 def test_parse_prefix_no_space_int() -> None:

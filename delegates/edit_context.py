@@ -13,13 +13,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
-from PySide6.QtCore import (QAbstractItemModel, QModelIndex,
-                            QPersistentModelIndex, Qt)
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt
 from PySide6.QtWidgets import QMessageBox, QWidget
 
-from state.edit_limits import (get_binary_edit_warning_limit_bytes,
-                               get_multiline_edit_warning_limit_chars,
-                               get_string_edit_warning_limit_chars)
+from state.edit_limits import (
+    get_binary_edit_warning_limit_bytes,
+    get_multiline_edit_warning_limit_chars,
+    get_string_edit_warning_limit_chars,
+)
 from units import counts, format_bytes
 
 

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject, QPersistentModelIndex, Qt
 from PySide6.QtGui import QFont, QFontMetrics
-from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLineEdit,
-                               QPushButton, QWidget)
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLineEdit, QPushButton, QWidget
 
 from editors.context import ValueDelegateProtocol
 from editors.inline.caps_safe_line import _CapsLockSafeLineEdit

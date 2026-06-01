@@ -9,13 +9,25 @@ from PySide6.QtWidgets import QApplication
 
 from documents.tab import JsonTab
 from tree_actions.paste import paste_from_clipboard
-from tree_actions.structure import (delete_selection, duplicate_selection,
-                                    insert_child_current, insert_sibling_after,
-                                    insert_sibling_before, move_selection_down,
-                                    move_selection_up, sort_selection_keys)
-from undo.commands import (_ChangeTypeCmd, _EditValueCmd, _InsertRowsCmd,
-                           _MoveRowsCmd, _RemoveRowsCmd, _RenameCmd,
-                           _SortKeysCmd)
+from tree_actions.structure import (
+    delete_selection,
+    duplicate_selection,
+    insert_child_current,
+    insert_sibling_after,
+    insert_sibling_before,
+    move_selection_down,
+    move_selection_up,
+    sort_selection_keys,
+)
+from undo.commands import (
+    _ChangeTypeCmd,
+    _EditValueCmd,
+    _InsertRowsCmd,
+    _MoveRowsCmd,
+    _RemoveRowsCmd,
+    _RenameCmd,
+    _SortKeysCmd,
+)
 
 
 def _select_row0(tab: JsonTab, row: int, parent: QModelIndex = QModelIndex()) -> None:

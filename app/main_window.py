@@ -4,19 +4,25 @@ from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QMimeData, QSettings, QTimer
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
-from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QFontDialog,
-                               QMainWindow, QMenu, QMessageBox, QTreeView,
-                               QUndoView)
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFileDialog,
+    QFontDialog,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QTreeView,
+    QUndoView,
+)
 
 import state.view_state as view_state
 from app.app_settings import AppSettingsPresenter
 from app.close_confirm import confirm_close
 from app.font_controller import FontController
 from app.history import bind_undo_signals, setup_history_menu
-from app.main_window_actions import \
-    setup_connections as setup_main_window_connections
-from app.main_window_actions import \
-    update_actions as update_main_window_actions
+from app.main_window_actions import setup_connections as setup_main_window_connections
+from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, refresh_recent_menu
 from app.schema_tab_pool import SchemaTabPool
 from app.tab_lifecycle import TabLifecyclePresenter
@@ -27,8 +33,7 @@ from documents.seams.document_protocol import Document
 from io_formats.load import load_file_with_format
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
 from tree_actions.clipboard import clipboard_to_tab_data
-from tree_actions.field_case import (FIELD_CASE_LABELS, FIELD_CASE_ORDER,
-                                     FieldCase)
+from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
 from tree_actions.structure import collapse_all, delete_selection, expand_all
 from tree_actions.structure import switch_document_case as switch_case_document
 from ui.mainwindow import Ui_MainWindow
@@ -101,8 +106,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # ── Copy-as-YAML toggle ─────────────────────────────────────────────
         self._copyAsYamlAction = QAction(self.tr("Copy as YAML text"), self)
         self._copyAsYamlAction.setCheckable(True)
-        from state.clipboard_settings import (CLIPBOARD_TEXT_FORMAT_YAML,
-                                              get_clipboard_text_format)
+        from state.clipboard_settings import CLIPBOARD_TEXT_FORMAT_YAML, get_clipboard_text_format
 
         self._copyAsYamlAction.setChecked(get_clipboard_text_format() == CLIPBOARD_TEXT_FORMAT_YAML)
         self._copyAsYamlAction.toggled.connect(self._on_copy_as_yaml_toggled)
@@ -222,9 +226,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.viewMenu.addAction(self.viewSelectMonospaceFontAction)
 
     def _on_copy_as_yaml_toggled(self, checked: bool) -> None:
-        from state.clipboard_settings import (CLIPBOARD_TEXT_FORMAT_JSON,
-                                              CLIPBOARD_TEXT_FORMAT_YAML,
-                                              set_clipboard_text_format)
+        from state.clipboard_settings import (
+            CLIPBOARD_TEXT_FORMAT_JSON,
+            CLIPBOARD_TEXT_FORMAT_YAML,
+            set_clipboard_text_format,
+        )
 
         set_clipboard_text_format(CLIPBOARD_TEXT_FORMAT_YAML if checked else CLIPBOARD_TEXT_FORMAT_JSON)
         fmt = "YAML" if checked else "JSON"

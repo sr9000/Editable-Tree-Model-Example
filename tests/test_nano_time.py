@@ -12,6 +12,7 @@ class TestNanoTimeConstruction:
         assert nt.minute == 0
         assert nt.second == 0
         assert nt.nanosecond == 0
+        assert nt.frac_digits == 0
 
     def test_full_construction(self):
         nt = NanoTime(23, 59, 59, 999999999)
@@ -41,22 +42,43 @@ class TestNanoTimeConstruction:
         with pytest.raises(AttributeError):  # allow: testing frozen dataclass immutability
             nt.hour = 13  # type: ignore[misc]
 
+    def test_frac_digits_none(self):
+        nt = NanoTime(12, 34, 0, 0, _frac_digits=None)
+        assert nt.frac_digits is None
+
+    def test_frac_digits_explicit(self):
+        nt = NanoTime(12, 34, 56, 123000000, _frac_digits=3)
+        assert nt.frac_digits == 3
+
+    def test_invalid_frac_digits(self):
+        with pytest.raises(ValueError, match="frac_digits"):
+            NanoTime(12, 34, 56, 0, _frac_digits=10)
+
 
 class TestNanoTimeIsoformat:
     def test_auto_no_fraction(self):
         assert NanoTime(12, 34, 56).isoformat() == "12:34:56"
 
     def test_auto_with_fraction(self):
-        assert NanoTime(12, 34, 56, 123000000).isoformat() == "12:34:56.123"
+        assert NanoTime(12, 34, 56, 123000000, _frac_digits=3).isoformat() == "12:34:56.123"
 
     def test_auto_with_microsecond_precision(self):
-        assert NanoTime(12, 34, 56, 123456000).isoformat() == "12:34:56.123456"
+        assert NanoTime(12, 34, 56, 123456000, _frac_digits=6).isoformat() == "12:34:56.123456"
 
     def test_auto_with_nanosecond_precision(self):
-        assert NanoTime(12, 34, 56, 123456789).isoformat() == "12:34:56.123456789"
+        assert NanoTime(12, 34, 56, 123456789, _frac_digits=9).isoformat() == "12:34:56.123456789"
 
     def test_auto_trailing_zeros_stripped(self):
-        assert NanoTime(12, 34, 56, 100000000).isoformat() == "12:34:56.1"
+        assert NanoTime(12, 34, 56, 100000000, _frac_digits=1).isoformat() == "12:34:56.1"
+
+    def test_auto_hh_mm_format(self):
+        assert NanoTime(12, 34, 0, 0, _frac_digits=None).isoformat() == "12:34"
+
+    def test_auto_hh_mm_ss_format(self):
+        assert NanoTime(12, 34, 56, 0, _frac_digits=0).isoformat() == "12:34:56"
+
+    def test_auto_hh_mm_ss_frac_format(self):
+        assert NanoTime(12, 34, 56, 100000000, _frac_digits=1).isoformat() == "12:34:56.1"
 
     def test_timespec_hours(self):
         assert NanoTime(12, 34, 56).isoformat(timespec="hours") == "12:34"
@@ -79,19 +101,29 @@ class TestNanoTimeIsoformat:
 
 class TestNanoTimeFromisoformat:
     def test_hh_mm(self):
-        assert NanoTime.fromisoformat("12:34") == NanoTime(12, 34, 0, 0)
+        nt = NanoTime.fromisoformat("12:34")
+        assert nt == NanoTime(12, 34, 0, 0)
+        assert nt.frac_digits is None
 
     def test_hh_mm_ss(self):
-        assert NanoTime.fromisoformat("12:34:56") == NanoTime(12, 34, 56, 0)
+        nt = NanoTime.fromisoformat("12:34:56")
+        assert nt == NanoTime(12, 34, 56, 0)
+        assert nt.frac_digits == 0
 
     def test_hh_mm_ss_fff_6digit(self):
-        assert NanoTime.fromisoformat("12:34:56.123456") == NanoTime(12, 34, 56, 123456000)
+        nt = NanoTime.fromisoformat("12:34:56.123456")
+        assert nt == NanoTime(12, 34, 56, 123456000)
+        assert nt.frac_digits == 6
 
     def test_hh_mm_ss_fff_9digit(self):
-        assert NanoTime.fromisoformat("12:34:56.123456789") == NanoTime(12, 34, 56, 123456789)
+        nt = NanoTime.fromisoformat("12:34:56.123456789")
+        assert nt == NanoTime(12, 34, 56, 123456789)
+        assert nt.frac_digits == 9
 
     def test_hh_mm_ss_fff_1digit(self):
-        assert NanoTime.fromisoformat("12:34:56.1") == NanoTime(12, 34, 56, 100000000)
+        nt = NanoTime.fromisoformat("12:34:56.1")
+        assert nt == NanoTime(12, 34, 56, 100000000)
+        assert nt.frac_digits == 1
 
     def test_invalid_string(self):
         with pytest.raises(ValueError, match="Invalid"):
@@ -102,6 +134,7 @@ class TestNanoTimeRoundTrip:
     @pytest.mark.parametrize(
         "text",
         [
+            "12:34",
             "12:34:56",
             "12:34:56.1",
             "12:34:56.123",
@@ -113,26 +146,46 @@ class TestNanoTimeRoundTrip:
         nt = NanoTime.fromisoformat(text)
         assert nt.isoformat() == text
 
-    def test_hh_mm_round_trip(self):
-        """'12:34' parses to NanoTime(12,34,0,0) which formats as '12:34:00'."""
-        nt = NanoTime.fromisoformat("12:34")
-        assert nt == NanoTime(12, 34, 0, 0)
-        assert nt.isoformat() == "12:34:00"
-
 
 class TestNanoTimeReplace:
     def test_replace_hour(self):
-        nt = NanoTime(12, 34, 56, 123456789)
+        nt = NanoTime(12, 34, 56, 123456789, _frac_digits=9)
         replaced = nt.replace(hour=23)
         assert replaced == NanoTime(23, 34, 56, 123456789)
+        assert replaced.frac_digits == 9
 
     def test_replace_nanosecond(self):
-        nt = NanoTime(12, 34, 56, 123456789)
+        nt = NanoTime(12, 34, 56, 123456789, _frac_digits=9)
         replaced = nt.replace(nanosecond=0)
         assert replaced == NanoTime(12, 34, 56, 0)
+        assert replaced.frac_digits == 9
+
+    def test_replace_preserves_frac_digits(self):
+        nt = NanoTime.fromisoformat("12:34")
+        replaced = nt.replace(hour=23)
+        assert replaced.frac_digits is None
+        assert replaced.isoformat() == "23:34"
+
+    def test_replace_frac_digits(self):
+        nt = NanoTime(12, 34, 56, 0)
+        replaced = nt.replace(frac_digits=None)
+        assert replaced.frac_digits is None
+        assert replaced.isoformat() == "12:34"
 
 
 class TestNanoTimeStr:
     def test_str_matches_isoformat(self):
-        nt = NanoTime(12, 34, 56, 123000000)
+        nt = NanoTime(12, 34, 56, 123000000, _frac_digits=3)
         assert str(nt) == nt.isoformat()
+
+
+class TestNanoTimeEquality:
+    def test_equal_ignores_frac_digits(self):
+        a = NanoTime(12, 34, 0, 0, _frac_digits=None)
+        b = NanoTime(12, 34, 0, 0, _frac_digits=0)
+        assert a == b
+
+    def test_hash_ignores_frac_digits(self):
+        a = NanoTime(12, 34, 0, 0, _frac_digits=None)
+        b = NanoTime(12, 34, 0, 0, _frac_digits=0)
+        assert hash(a) == hash(b)

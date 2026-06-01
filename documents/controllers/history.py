@@ -7,8 +7,7 @@ from typing import Any
 from PySide6.QtCore import QObject
 from PySide6.QtGui import QUndoStack
 
-from state.view_state import (apply_expanded_relative_paths,
-                              iter_expanded_relative_paths)
+from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 
 
 class TabHistoryController(QObject):

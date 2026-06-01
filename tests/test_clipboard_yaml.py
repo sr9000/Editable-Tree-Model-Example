@@ -11,15 +11,20 @@ from PySide6.QtWidgets import QApplication, QTreeView
 
 from app.main_window import MainWindow
 from documents.tab import JsonTab
-from state.clipboard_settings import (CLIPBOARD_TEXT_FORMAT_JSON,
-                                      CLIPBOARD_TEXT_FORMAT_YAML,
-                                      get_clipboard_text_format,
-                                      set_clipboard_text_format)
+from state.clipboard_settings import (
+    CLIPBOARD_TEXT_FORMAT_JSON,
+    CLIPBOARD_TEXT_FORMAT_YAML,
+    get_clipboard_text_format,
+    set_clipboard_text_format,
+)
 from tree.model import JsonTreeModel
-from tree_actions.clipboard import (MIME_JSON_TREE,
-                                    clipboard_text_is_valid_data,
-                                    clipboard_to_tab_data, copy_selection,
-                                    entries_from_mime)
+from tree_actions.clipboard import (
+    MIME_JSON_TREE,
+    clipboard_text_is_valid_data,
+    clipboard_to_tab_data,
+    copy_selection,
+    entries_from_mime,
+)
 
 
 def _current_tab(win: MainWindow) -> JsonTab:

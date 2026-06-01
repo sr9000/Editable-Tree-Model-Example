@@ -12,16 +12,17 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QDialog, QInputDialog, QMenu
 
 from app.dialogs.secret_prefixes_dlg import SecretPrefixesDialog
-from state.edit_limits import (get_attach_file_warning_limit_bytes,
-                               get_binary_edit_warning_limit_bytes,
-                               get_multiline_edit_warning_limit_chars,
-                               get_string_edit_warning_limit_chars,
-                               set_attach_file_warning_limit_bytes,
-                               set_binary_edit_warning_limit_bytes,
-                               set_multiline_edit_warning_limit_chars,
-                               set_string_edit_warning_limit_chars)
-from state.secret_settings import (get_secret_word_prefixes,
-                                   set_secret_word_prefixes)
+from state.edit_limits import (
+    get_attach_file_warning_limit_bytes,
+    get_binary_edit_warning_limit_bytes,
+    get_multiline_edit_warning_limit_chars,
+    get_string_edit_warning_limit_chars,
+    set_attach_file_warning_limit_bytes,
+    set_binary_edit_warning_limit_bytes,
+    set_multiline_edit_warning_limit_chars,
+    set_string_edit_warning_limit_chars,
+)
+from state.secret_settings import get_secret_word_prefixes, set_secret_word_prefixes
 from units import counts, format_bytes
 
 

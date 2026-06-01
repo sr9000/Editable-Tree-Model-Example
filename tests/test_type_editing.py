@@ -2,8 +2,7 @@ import pytest
 from gmpy2 import mpq
 from PySide6.QtCore import QEvent, QModelIndex, Qt
 from PySide6.QtGui import QFocusEvent, QKeyEvent
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox,
-                               QLineEdit, QStyleOptionViewItem, QWidget)
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
 from delegates.type_delegate import JsonTypeDelegate
 from documents.tab import JsonTab

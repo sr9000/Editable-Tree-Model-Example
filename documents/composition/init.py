@@ -5,12 +5,15 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from documents.composition.demo_data import build_demo_data
-from documents.composition.dependencies import (JsonTabServices,
-                                                build_legacy_json_tab_services)
-from documents.composition.setup import (init_delegates_and_connections,
-                                         init_layout, init_model,
-                                         init_search_filter, init_shortcuts,
-                                         init_validation_state)
+from documents.composition.dependencies import JsonTabServices, build_legacy_json_tab_services
+from documents.composition.setup import (
+    init_delegates_and_connections,
+    init_layout,
+    init_model,
+    init_search_filter,
+    init_shortcuts,
+    init_validation_state,
+)
 from documents.controllers.appearance import JsonTabAppearanceController
 from documents.controllers.editability import JsonTabEditabilityController
 from documents.controllers.history import TabHistoryController

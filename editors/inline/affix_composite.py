@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Iterable
 
 from PySide6.QtGui import QFont, QFontMetrics
-from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton,
-                               QSizePolicy, QWidget)
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 from editors.inline.bigint_spinbox import QBigIntSpinBox
 from editors.inline.mpq_spinbox import QMpqSpinBox

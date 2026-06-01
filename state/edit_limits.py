@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import QSettings
 
-from settings import (APPLICATION_ID, BINARY_ATTACH_WARNING_LIMIT_BYTES,
-                      BINARY_EDIT_WARNING_LIMIT_BYTES,
-                      MULTILINE_EDIT_WARNING_LIMIT_CHARS,
-                      STRING_EDIT_WARNING_LIMIT_CHARS)
+from settings import (
+    APPLICATION_ID,
+    BINARY_ATTACH_WARNING_LIMIT_BYTES,
+    BINARY_EDIT_WARNING_LIMIT_BYTES,
+    MULTILINE_EDIT_WARNING_LIMIT_CHARS,
+    STRING_EDIT_WARNING_LIMIT_CHARS,
+)
 
 _STRING_LIMIT_KEY = "edit_limits/string_chars"
 _MULTILINE_LIMIT_KEY = "edit_limits/multiline_chars"

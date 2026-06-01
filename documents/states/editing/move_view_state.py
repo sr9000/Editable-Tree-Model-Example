@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import (QItemSelection, QItemSelectionModel, QModelIndex,
-                            QObject)
+from PySide6.QtCore import QItemSelection, QItemSelectionModel, QModelIndex, QObject
 
 from documents.states.editing.context import EditingContext
-from state.view_state import (apply_expanded_relative_paths,
-                              iter_expanded_relative_paths)
+from state.view_state import apply_expanded_relative_paths, iter_expanded_relative_paths
 from tree_actions.selection import selected_source_rows
 from undo.commands import _MoveRowsCmd
 

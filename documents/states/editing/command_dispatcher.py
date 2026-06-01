@@ -7,16 +7,25 @@ from typing import Any
 from pandas import Timestamp
 from PySide6.QtCore import QModelIndex
 
-from documents.controllers.number_types import \
-    would_drop_fraction_on_type_change
+from documents.controllers.number_types import would_drop_fraction_on_type_change
 from documents.states.editing.context import EditingContext
 from tree.types import JsonType
-from tree_actions.anchors import (anchor_is_cycle, anchor_is_no_op,
-                                  pre_pop_target_row_to_anchor,
-                                  resolve_anchor_insert_row)
-from undo.commands import (_ChangeTypeCmd, _EditValueCmd, _InsertRowsCmd,
-                           _MoveRowsCmd, _RemoveRowsCmd, _RenameCmd,
-                           _SortKeysCmd, _SwitchFieldCaseCmd)
+from tree_actions.anchors import (
+    anchor_is_cycle,
+    anchor_is_no_op,
+    pre_pop_target_row_to_anchor,
+    resolve_anchor_insert_row,
+)
+from undo.commands import (
+    _ChangeTypeCmd,
+    _EditValueCmd,
+    _InsertRowsCmd,
+    _MoveRowsCmd,
+    _RemoveRowsCmd,
+    _RenameCmd,
+    _SortKeysCmd,
+    _SwitchFieldCaseCmd,
+)
 
 
 class CommandDispatcher:

@@ -6,9 +6,7 @@ from PySide6.QtWidgets import QApplication, QTreeView
 
 from documents.tab import JsonTab
 from tree.model import JsonTreeModel
-from tree_actions.paste import (has_clipboard_entries, paste_after,
-                                paste_as_child, paste_before,
-                                paste_replace_value)
+from tree_actions.paste import has_clipboard_entries, paste_after, paste_as_child, paste_before, paste_replace_value
 
 
 def _select(view: QTreeView, idx) -> None:

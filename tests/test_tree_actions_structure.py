@@ -2,9 +2,14 @@ from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QTreeView
 
 from tree.model import JsonTreeModel
-from tree_actions.structure import (action_duplicate, action_insert_row_after,
-                                    action_insert_row_before, action_move_down,
-                                    action_move_up, action_sort_keys)
+from tree_actions.structure import (
+    action_duplicate,
+    action_insert_row_after,
+    action_insert_row_before,
+    action_move_down,
+    action_move_up,
+    action_sort_keys,
+)
 
 
 def test_insert_row_before_and_after(qtbot):

@@ -1,7 +1,6 @@
 from PySide6.QtCore import QEvent, QModelIndex, Qt
 from PySide6.QtGui import QFocusEvent
-from PySide6.QtWidgets import (QAbstractItemView, QApplication,
-                               QDialogButtonBox, QLineEdit, QPushButton)
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QDialogButtonBox, QLineEdit, QPushButton
 
 from documents.tab import JsonTab
 from editors.windowed.multiline_dialog import QMultilineDialog

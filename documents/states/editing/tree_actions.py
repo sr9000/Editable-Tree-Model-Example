@@ -6,13 +6,17 @@ from enum import Enum, auto
 from typing import Callable
 
 from tree_actions.clipboard import copy_selection
-from tree_actions.paste import (paste_auto, paste_insert_after_zip,
-                                paste_replace_zip)
-from tree_actions.structure import (cut_selection, delete_selection,
-                                    duplicate_selection, move_selection_down,
-                                    move_selection_out_down,
-                                    move_selection_out_up, move_selection_up,
-                                    sort_selection_keys)
+from tree_actions.paste import paste_auto, paste_insert_after_zip, paste_replace_zip
+from tree_actions.structure import (
+    cut_selection,
+    delete_selection,
+    duplicate_selection,
+    move_selection_down,
+    move_selection_out_down,
+    move_selection_out_up,
+    move_selection_up,
+    sort_selection_keys,
+)
 
 
 class TreeAction(Enum):

@@ -7,9 +7,12 @@ import copy
 from PySide6.QtCore import QItemSelectionModel
 
 from documents.tab import JsonTab
-from tree_actions.structure import (move_selection_down,
-                                    move_selection_out_down,
-                                    move_selection_out_up, move_selection_up)
+from tree_actions.structure import (
+    move_selection_down,
+    move_selection_out_down,
+    move_selection_out_up,
+    move_selection_up,
+)
 
 
 def _make_tab(qtbot, data, *, show_root: bool = False) -> JsonTab:
