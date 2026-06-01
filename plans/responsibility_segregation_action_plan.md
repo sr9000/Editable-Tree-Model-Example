@@ -24,21 +24,22 @@ Plus a small pile of **dead code** to delete outright.
 Branch `strict-responsibility-segregation`. Gates at review time:
 `pytest` = **1124 passed (18.5s)**, `make check-no-reflection` green, tree clean.
 
-| Step (§7)                             | Status         | Notes                                                                                                                            |
-|---------------------------------------|----------------|----------------------------------------------------------------------------------------------------------------------------------|
-| 1. Delete dead code                   | ✅ **done**     | `header_view_editor.py` + 4 `settings` enums gone.                                                                               |
-| 2. Home single-purpose modules        | ✅ **done**     | `tree/filter_proxy.py`; `model_actions.py` deleted, 2 tests retargeted onto `structure.py` (+168 LOC).                           |
-| 3. Extract `.ui` schemas              | ✅ **done**     | 4 dialogs now `.ui`-backed under `ui/dialogs/`.                                                                                  |
-| 4. Move generated UI to `ui/`         | ✅ **done**     | `mainwindow.*`, `json_tab*` moved; Makefile `pyside6-uic` paths updated.                                                         |
-| 5. Carve `editors/`                   | ✅ **done**     | Relocation + dispatcher move + all §2.4 extractions/splits + `check-editors-isolation` gate landed.                              |
-| 6. Kill `documents/tab.py` re-exports | ⬜ **todo**     | 8 `from undo.commands import _…` re-exports still in `tab.py` (lines 27–34).                                                     |
-| 7. Split `documents/`                 | ⬜ **todo**     | See §3 (partially overtaken — `json_tab_ui.py` already in `ui/`).                                                                |
-| 8. De-façade `EditingController`      | ⬜ **todo**     | Collaborators already extracted by commits T1–T6; only the 199-LOC forwarding shell remains (see §3.2).                          |
+| Step (§7)                             | Status     | Notes                                                                                                                      |
+|---------------------------------------|------------|----------------------------------------------------------------------------------------------------------------------------|
+| 1. Delete dead code                   | ✅ **done** | `header_view_editor.py` + 4 `settings` enums gone.                                                                         |
+| 2. Home single-purpose modules        | ✅ **done** | `tree/filter_proxy.py`; `model_actions.py` deleted, 2 tests retargeted onto `structure.py` (+168 LOC).                     |
+| 3. Extract `.ui` schemas              | ✅ **done** | 4 dialogs now `.ui`-backed under `ui/dialogs/`.                                                                            |
+| 4. Move generated UI to `ui/`         | ✅ **done** | `mainwindow.*`, `json_tab*` moved; Makefile `pyside6-uic` paths updated.                                                   |
+| 5. Carve `editors/`                   | ✅ **done** | Relocation + dispatcher move + all §2.4 extractions/splits + `check-editors-isolation` gate landed.                        |
+| 6. Kill `documents/tab.py` re-exports | ✅ **done** | Re-export block deleted; affected tests import from `undo.commands`.                                                       |
+| 7. Split `documents/`                 | ✅ **done** | `composition/` + `controllers/` + `seams/` subpackages; all imports rewritten; repo-map updated.                           |
+| 8. De-façade `EditingController`      | ✅ **done** | Exposes `commands`/`inline`/`move`/`diff`; pass-throughs removed (199→99 LOC); signal-wired collaborators made `QObject`s. |
 
 **Net:** Part 1 (§1 + §5 dead code) is complete. Part 2 (§2 editors) is **complete**
 as of 2026-06-01: all §2.4 extractions/splits landed and the `check-editors-isolation`
-gate (§2.5) enforces the contract. Next open work is Part 3 (steps 6–8, the
-`documents/` split).
+gate (§2.5) enforces the contract. Part 3 (steps 6–8, the `documents/` split) is also
+**complete** as of 2026-06-01. The whole plan is done; `make gate` is green
+(1124 tests).
 
 ---
 
@@ -224,15 +225,15 @@ and the following sub-tasks from §2.1 / §2.3 are now **all complete** (2026-06
 - [x] **Extract `editors/inline/secret_line.py`** — `_SecretLineEdit` + `_SecretEditorWatcher`.
 - [x] **Extract `editors/inline/caps_safe_line.py`** — `_CapsLockSafeLineEdit` + lock-key constants.
 - [x] **Extract `editors/inline/affix_composite.py`** — `AffixCompositeEditor`, decoupled
-      from `JsonType` (now takes `kind` + `is_integer`); helpers stay in `delegates/number_affix_delegate.py`.
+  from `JsonType` (now takes `kind` + `is_integer`); helpers stay in `delegates/number_affix_delegate.py`.
 - [x] **Extract `editors/windowed/color_dialog.py`** — `ColorPickerDialog` lifted from `factory.py`.
 - [x] **Split fat `__init__.py`** — `bigint_spinbox` → `validator.py` + `spinbox.py`;
-      `mpq_spinbox` → `validator.py` + `spinbox.py`; `hexedit` → `widget.py` (+ existing
-      `chunks/color_manager/commands`). All package `__init__.py` are now thin re-exports.
+  `mpq_spinbox` → `validator.py` + `spinbox.py`; `hexedit` → `widget.py` (+ existing
+  `chunks/color_manager/commands`). All package `__init__.py` are now thin re-exports.
 - [x] **Create `delegates/formatting/`** — `value_formatting.py`, `bytes_codec.py`,
-      `color_codec.py` grouped; all importers updated.
+  `color_codec.py` grouped; all importers updated.
 - [x] **Fix isolation violations** — vendored reflection-free `qba_to_bytes` into
-      `hexedit/chunks.py` (no more `app.runtime_compat` import); concrete widgets are clean.
+  `hexedit/chunks.py` (no more `app.runtime_compat` import); concrete widgets are clean.
 
 ### 2.5 Gate / DoD for `editors/` (§7 step 5)
 
@@ -289,20 +290,25 @@ runtime reason. Migrate those tests to `from undo.commands import …` and delet
 re-export block. This is the single clearest "documents is a convenience namespace,
 not a boundary" smell.
 
-**Status (2026-06-01):** still present — `documents/tab.py` lines 27–34 import 8
-`_*Cmd` classes with `# noqa: F401 — re-exported for test imports`.
+**Status (2026-06-01):** ✅ **done** — the re-export block is deleted; the affected
+tests (`test_typed_undo_commands`, `test_typed_undo_perf`, `test_field_case_actions`)
+import the `_*Cmd` classes from `undo.commands` directly.
 
 **DoD / gate:** the re-export block is deleted; `grep -rn "from documents.tab import _"
 tests/` returns nothing; affected tests import from `undo.commands`; `make gate` green.
 
 ### 3.2 `EditingController` is still a forwarding façade
 
-> **Update (2026-06-01).** The collaborators have **already been extracted** (commits
-> `T1`–`T6`, now on `master`) into `documents/states/editing/`:
-> `command_dispatcher.py` (356), `inline_edit_controller.py` (97),
-> `move_view_state.py` (188), `tree_actions.py` (53), `context.py` (16). What remains
-> is the **199-LOC forwarding shell** `documents/states/editing_controller.py`. So
-> this step is now purely "stop forwarding," not "extract collaborators."
+> **Status (2026-06-01): ✅ done.** `EditingController` no longer forwards. It now
+> exposes the collaborators as named properties — `commands` (`CommandDispatcher`),
+> `inline` (`InlineEditController`), `move` (`MoveViewState`), `diff` (`DiffApplier`)
+> — and every caller uses them directly (`tab.editing.commands.push_*`,
+> `tab.editing.diff.apply`, …). The shell shrank from 199 → 99 LOC, keeping only
+> the real-logic methods (`run_tree_action`, `do_insert_*`, `commit_set_data`). The
+> two signal-wired collaborators (`MoveViewState`, `InlineEditController`) were made
+> `QObject`s parented to the tab so `undo_stack.indexChanged` / `model.typeChanged`
+> connections auto-disconnect on teardown (previously the QObject `EditingController`
+> provided that lifetime; removing its forwarders exposed a dangling-connection crash).
 
 `documents/states/editing_controller.py` (199 LOC) is ~30 one-line methods that
 forward to the collaborators it constructs:
@@ -399,14 +405,21 @@ Status legend: ✅ done · 🟡 partial · ⬜ todo. Every step is gated by `mak
    `color_dialog`, split the fat `__init__.py` files, create `delegates/formatting/`,
    fix the isolation violations) is **complete**, and the `check-editors-isolation`
    gate (§2.5) now enforces the contract. **(done — 2026-06-01)**
-6. ⬜ **Kill `documents/tab.py` undo re-exports** — migrate test imports to
-   `undo.commands`. *DoD/gate:* see **§3.1**.
-7. ⬜ **Split `documents/` into composition / controllers / states / seams.**
-   *Note:* `json_tab_ui.py` already moved (step 4). *DoD:* `tab.py` stays a thin
-   facade; each former `tab_*.py` lands in exactly one sub-package; no module imports
-   its old path; repo-map updated; gate green.
-8. ⬜ **De-façade `EditingController`** — collaborators already extracted (T1–T6);
-   expose them as properties and drop the pass-throughs. *DoD/gate:* see **§3.2**.
+6. ✅ **Kill `documents/tab.py` undo re-exports** — re-export block deleted; the three
+   affected tests import `_*Cmd` from `undo.commands`. *DoD/gate:* see **§3.1**. **(done — 2026-06-01)**
+7. ✅ **Split `documents/` into composition / controllers / states / seams.**
+   16 modules relocated into `composition/`, `controllers/`, `seams/` (`states/`
+   already existed); all 48 import references rewritten; repo-map updated. The
+   stateless predicate module `tab_number_types.py` landed at
+   `controllers/number_types.py` (it had no slot in the original §3 target — it is the
+   type-change predicate consulted by the editing path). *DoD:* no module imports its
+   old path; gate green. **(done — 2026-06-01)**
+8. ✅ **De-façade `EditingController`** — collaborators exposed as `commands`/`inline`/
+   `move`/`diff` properties; all pass-throughs removed; signal-wired collaborators made
+   `QObject`s. *DoD/gate:* see **§3.2**. **(done — 2026-06-01)**
 
 Each step is independently shippable and gated by `make gate` (the suite is the
 safety net for these pure relocations).
+
+> **Plan complete (2026-06-01).** All eight steps are done; `make gate` is green
+> (lint → reflection + leak/isolation checks → 1124 tests).
