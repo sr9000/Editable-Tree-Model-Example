@@ -2,7 +2,8 @@
 
 _This is a condensed index and architectural summary. LLM agents should refer to direct source files for implementation
 details._
-**Last updated:** 2026-06-01 (after responsibility-segregation plan, all 8 steps complete).
+**Last updated:** 2026-06-01 (after responsibility-segregation plan, all 8 steps complete; added
+`reports/` index entry and corrected the `make lint` toolchain description).
 
 ## 1) High-level Purpose
 
@@ -30,6 +31,7 @@ Model".
 | **Theming**         | `themes/`, `app/theme_controller.py`                                                                            |
 | **Persistence**     | `state/` (View state, settings), `io_formats/` (File I/O)                                                       |
 | **Generated UI**    | `ui/` (mainwindow, json_tab + .ui sources), `ui/dialogs/` (.ui-backed dialog schemas)                           |
+| **Reviews/Reports** | `reports/` (architecture & code-quality review docs)                                                            |
 
 ## 3) Core Invariants & Repo Rules
 
@@ -186,6 +188,6 @@ App-level dialog implementations live in `app/dialogs/` (`attach_schema_dlg.py`,
 make test                    # QT_QPA_PLATFORM=offscreen timeout 600 pytest -q (1124 pass)
 make check-no-reflection     # forbid getattr/hasattr/TYPE_CHECKING outside allowlist
 make check-editors-isolation # forbid app/documents/tree imports in concrete editor widgets
-make lint                    # isort + black + ruff in place
+make lint                    # autoflake + isort + black (in place; line-length 120, UI files skipped)
 make gate                    # full DoD gate (lint → reflection → editors-isolation → tests)
 ```
