@@ -2,8 +2,8 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
-from editors.inline.datetime.enums import DateTimeCategory
-from editors.inline.datetime.regex import parse_datetime_text
+from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.regex import parse_datetime_text
 
 
 @pytest.mark.parametrize(

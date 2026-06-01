@@ -3,8 +3,9 @@ from datetime import date, datetime, time, timezone
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import QLineEdit
 
-from .enums import DateTimeCategory
-from .regex import parse_datetime_text
+from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.regex import parse_datetime_text
+
 from .validator import DateTimeValidator
 
 

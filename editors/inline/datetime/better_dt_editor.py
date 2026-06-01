@@ -9,8 +9,9 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFocusEvent, QKeyEvent, QValidator
 from PySide6.QtWidgets import QLineEdit
 
-from .enums import DateTimeCategory
-from .regex import PARTIAL_DATETIME_RE, parse_datetime_text
+from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.regex import PARTIAL_DATETIME_RE, parse_datetime_text
+
 from .validator import DateTimeValidator
 
 ValueType = Union[date, time, datetime, None]

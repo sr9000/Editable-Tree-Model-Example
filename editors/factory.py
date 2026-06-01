@@ -8,6 +8,7 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSortFilterProxyM
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
+from core.datetime_parsing.enums import DateTimeCategory
 from delegates.number_affix_delegate import (
     is_affix_json_type,
     is_integer_json_type,
@@ -20,7 +21,6 @@ from editors.inline.affix_composite import AffixCompositeEditor
 from editors.inline.bigint_spinbox import QBigIntSpinBox
 from editors.inline.caps_safe_line import _CapsLockSafeLineEdit
 from editors.inline.datetime.better_dt_editor import BetterDateTimeEditor
-from editors.inline.datetime.enums import DateTimeCategory
 from editors.inline.mpq_spinbox import QMpqSpinBox
 from editors.inline.secret_line import _SecretEditorWatcher, _SecretLineEdit
 from editors.windowed.color_dialog import ColorPickerDialog

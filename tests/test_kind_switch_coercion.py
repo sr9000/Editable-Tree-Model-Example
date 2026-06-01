@@ -19,8 +19,8 @@ import pytest
 from gmpy2 import mpq
 from PySide6.QtCore import QModelIndex
 
-from editors.inline.datetime.enums import DateTimeCategory
-from editors.inline.datetime.regex import parse_datetime_text
+from core.datetime_parsing.enums import DateTimeCategory
+from core.datetime_parsing.regex import parse_datetime_text
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
 from tree.item_coercion import coerce_value_for_type
 from tree.model import JsonTreeModel

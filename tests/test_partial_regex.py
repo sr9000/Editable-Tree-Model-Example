@@ -1,6 +1,6 @@
 import pytest
 
-from editors.inline.datetime.regex import PARTIAL_DATETIME_RE
+from core.datetime_parsing.regex import PARTIAL_DATETIME_RE
 
 
 @pytest.mark.parametrize(
