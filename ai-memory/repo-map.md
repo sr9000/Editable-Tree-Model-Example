@@ -136,7 +136,7 @@ editors/
 ├── inline/                  In-cell editor widgets (no app/documents/tree imports).
 │   ├── bigint_spinbox/      QBigIntSpinBox (spinbox.py + validator.py).
 │   ├── mpq_spinbox/         QMpqSpinBox (spinbox.py + validator.py).
-│   ├── datetime/            BetterDateTimeEditor + validator (enums/regex re-exported from core/).
+│   ├── datetime/            BetterDateTimeEditor + validator (enums/regex imported from core/).
 │   ├── affix_composite.py   AffixCompositeEditor (prefix/suffix + spinbox).
 │   ├── secret_line.py       _SecretLineEdit + _SecretEditorWatcher.
 │   └── caps_safe_line.py    _CapsLockSafeLineEdit + lock-key constants.
@@ -202,10 +202,8 @@ delegates/
 ├── number_affix_delegate.py Affix helpers (editor part moved to editors/inline/).
 ├── edit_context.py          Delegate-side edit context.
 ├── validation_badge.py      Presentation helper for validation badges.
-└── formatting/              Pure formatting/codec helpers (re-export shims from tree/codecs/).
-    ├── value_formatting.py  Display-text formatting for value column.
-    ├── bytes_codec.py       Re-export shim → tree.codecs.bytes_codec.
-    └── color_codec.py       Re-export shim → tree.codecs.color_codec.
+└── formatting/              Pure formatting helpers.
+    └── value_formatting.py  Display-text formatting for value column.
 ```
 
 ## 10) `ui/` module layout (generated UI + dialog schemas)
