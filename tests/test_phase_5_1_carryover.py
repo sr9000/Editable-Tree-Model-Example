@@ -14,9 +14,10 @@ import base64
 from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem, QWidget
 
-from documents.tab import _CMD_ID_EDIT_VALUE, _CMD_ID_RENAME, _MERGE_WINDOW_SECONDS, JsonTab
+from documents.tab import JsonTab
 from settings import BINARY_EDIT_WARNING_LIMIT_BYTES
 from tree.types import JsonType
+from undo.commands import _CMD_ID_EDIT_VALUE, _CMD_ID_RENAME, _MERGE_WINDOW_SECONDS
 
 
 def _row_named(tab: JsonTab, name: str) -> int | None:

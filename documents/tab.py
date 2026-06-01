@@ -27,13 +27,6 @@ from tree.view import JsonTreeView
 
 _DEFAULT_DATA = tab_init._DEFAULT_DATA
 
-# Typed command ids must fit in a signed 32-bit int for Qt.
-_CMD_ID_RENAME = 0x0E71_0001
-_CMD_ID_EDIT_VALUE = 0x0E71_0002
-
-# Merge consecutive same-path edits within this time window.
-_MERGE_WINDOW_SECONDS = 0.5
-
 
 class JsonTab(QWidget, JsonTabWidgetMarker):
     _appearance: JsonTabAppearanceController | None = None
