@@ -4,8 +4,8 @@ from PySide6.QtCore import QItemSelectionModel, QPoint, Qt, QTimer
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QComboBox, QFileDialog, QMenu, QMessageBox, QTreeView
 
-from delegates.formatting.bytes_codec import decode_bytes, encode_bytes
 from state.edit_limits import get_attach_file_warning_limit_bytes
+from tree.codecs.bytes_codec import decode_bytes, encode_bytes
 from tree.types import JsonType
 from tree_actions._tab_lookup import find_owning_tab
 from tree_actions.clipboard import copy_selection, copy_selection_value_only, copy_selection_with_name

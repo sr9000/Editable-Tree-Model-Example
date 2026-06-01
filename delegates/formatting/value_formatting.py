@@ -4,10 +4,10 @@ from gmpy2 import mpq
 from PySide6.QtGui import QBrush, QPalette
 from PySide6.QtWidgets import QStyleOptionViewItem
 
-from delegates.formatting.bytes_codec import decode_bytes
 from mpq2py import mpq_serialization
 from settings import SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
 from themes.spec import TypeStyle
+from tree.codecs.bytes_codec import decode_bytes
 from tree.types import EMPTY_FAMILY, SECRET_FAMILY, WS_FAMILY, JsonType
 from units import format_bytes
 from units.number_affix import NumberAffix, format_number_affix
