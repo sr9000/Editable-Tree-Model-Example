@@ -2,8 +2,8 @@ from gmpy2 import mpq
 from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QStyleOptionViewItem
 
-from delegates.number_affix_delegate import AffixCompositeEditor
 from documents.tab import JsonTab
+from editors.inline.affix_composite import AffixCompositeEditor
 from tree.types import JsonType
 from units.number_affix import AffixKind, NumberAffix
 

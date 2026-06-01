@@ -11,13 +11,14 @@ from PySide6.QtWidgets import QColorDialog, QComboBox, QLineEdit, QStyleOptionVi
 from delegates.bytes_codec import decode_bytes, encode_bytes
 from delegates.color_codec import color_to_html, parse_color
 from delegates.number_affix_delegate import (
-    AffixCompositeEditor,
     is_affix_json_type,
+    is_integer_json_type,
     kind_for_json_type,
     normalize_affix_value,
     validate_affix_value,
 )
 from editors.context import EditorContextProtocol, ValueDelegateProtocol
+from editors.inline.affix_composite import AffixCompositeEditor
 from editors.inline.bigint_spinbox import QBigIntSpinBox
 from editors.inline.caps_safe_line import _CapsLockSafeLineEdit
 from editors.inline.datetime.better_dt_editor import BetterDateTimeEditor
@@ -96,7 +97,12 @@ def create_value_editor(
             if provider is not None:
                 key = "affix_prefix" if kind.value == "prefix" else "affix_suffix"
                 icon = provider.for_key(key)
-            editor = AffixCompositeEditor(parent, json_type=item.json_type, mru_items=mru_items)
+            editor = AffixCompositeEditor(
+                parent,
+                kind=kind,
+                is_integer=is_integer_json_type(item.json_type),
+                mru_items=mru_items,
+            )
         case JsonType.INTEGER:
             editor = QBigIntSpinBox(parent)
         case JsonType.FLOAT:
