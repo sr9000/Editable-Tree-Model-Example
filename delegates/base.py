@@ -1,6 +1,13 @@
-from PySide6.QtCore import QEvent, QModelIndex, QPersistentModelIndex, Qt
+from PySide6.QtCore import QEvent, QModelIndex, QPersistentModelIndex
 from PySide6.QtGui import QFocusEvent, QIcon, QKeyEvent, QPainter
-from PySide6.QtWidgets import QApplication, QLineEdit, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
+from PySide6.QtWidgets import QApplication, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
+
+from editors.inline.caps_safe_line import _LAYOUT_SWITCH_FOCUS_REASONS, _LOCK_KEYS
+
+__all__ = [
+    "_TextEditorDelegateBase",
+    "paint_editor_underlay",
+]
 
 
 def paint_editor_underlay(
@@ -20,43 +27,6 @@ def paint_editor_underlay(
     opt.features &= ~QStyleOptionViewItem.ViewItemFeature.HasDecoration
     style = widget.style() if widget is not None else QApplication.style()
     style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, widget)
-
-
-# Some users bind CapsLock to a keyboard-layout switch via xkb / IM.
-# That can deliver a Key_CapsLock event, plus an ``ActiveWindowFocusReason``
-# / ``OtherFocusReason`` ``FocusOut`` to the embedded line-editor, which the
-# default ``QStyledItemDelegate.eventFilter`` would interpret as "commit and
-# close editor". We absorb both so inline editing survives a layout switch.
-_LAYOUT_SWITCH_FOCUS_REASONS = (
-    Qt.FocusReason.ActiveWindowFocusReason,
-    Qt.FocusReason.OtherFocusReason,
-)
-_LOCK_KEYS = (
-    Qt.Key.Key_CapsLock,
-    Qt.Key.Key_NumLock,
-    Qt.Key.Key_ScrollLock,
-)
-
-
-class _CapsLockSafeLineEdit(QLineEdit):
-    """Inline text editor that survives CapsLock-driven layout switches.
-
-    Swallows lock-key key events and ignores ``FocusOut`` events whose
-    reason matches a layout / app-state change, so the delegate never
-    sees a "commit and close" trigger from those.
-    """
-
-    def keyPressEvent(self, event: QKeyEvent) -> None:
-        if event.key() in _LOCK_KEYS:
-            event.accept()
-            return
-        super().keyPressEvent(event)
-
-    def focusOutEvent(self, event: QFocusEvent) -> None:
-        if event.reason() in _LAYOUT_SWITCH_FOCUS_REASONS:
-            event.ignore()
-            return
-        super().focusOutEvent(event)
 
 
 class _TextEditorDelegateBase(QStyledItemDelegate):

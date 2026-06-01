@@ -4,8 +4,8 @@ from PySide6.QtCore import QEvent, QObject, QPersistentModelIndex, Qt
 from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLineEdit, QPushButton, QWidget
 
-from delegates.base import _CapsLockSafeLineEdit
 from editors.context import ValueDelegateProtocol
+from editors.inline.caps_safe_line import _CapsLockSafeLineEdit
 from settings import SECRET_HIDE_ON_FOCUS_OUT
 
 
