@@ -484,7 +484,7 @@ def _move_selection_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
         _status_partial_move(tab)
 
     if placed_total:
-        tab.editing.restore_selection_at_paths(placed_total)
+        tab.editing.move.restore_selection_at_paths(placed_total)
 
     return moved > 0
 
@@ -570,7 +570,7 @@ def _move_selection_out_with_tab(tree_view: QTreeView, *, up: bool) -> bool:
     if skipped_root or 0 < moved < len(planned):
         _status_partial_move(tab)
     if placed_total:
-        tab.editing.restore_selection_at_paths(placed_total)
+        tab.editing.move.restore_selection_at_paths(placed_total)
     return moved > 0
 
 

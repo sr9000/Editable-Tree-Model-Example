@@ -432,7 +432,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         root_index = tab.root_index()
         root_item = tab.root_item()
-        changed = tab.editing.diff_apply(root_item, data, root_index)
+        changed = tab.editing.diff.apply(root_item, data, root_index)
         if changed:
             tab.undo_stack.clear()
         tab.undo_stack.setClean()

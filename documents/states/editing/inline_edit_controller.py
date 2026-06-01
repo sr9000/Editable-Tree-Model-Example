@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, QTimer
+from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QComboBox
 
 from documents.states.editing.context import EditingContext
 
 
-class InlineEditController:
+class InlineEditController(QObject):
+    """Inline editor orchestration.
+
+    A ``QObject`` parented to the tab so signal connections to its slots
+    (e.g. ``model.typeChanged``) are auto-disconnected on teardown.
+    """
+
     def __init__(self, context: EditingContext) -> None:
+        super().__init__(context.tab)
         self._context = context
 
     def on_type_changed(self, item_index, lossy: bool) -> None:

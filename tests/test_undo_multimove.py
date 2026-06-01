@@ -45,7 +45,7 @@ def test_same_parent_forward_block_move_and_undo(qtbot):
     d = tab.model.index(3, 0, QModelIndex())  # row 3 = "d"
 
     # Move c,d after e → target_row = 5
-    assert tab.editing.push_move_rows([c, d], QModelIndex(), 5)
+    assert tab.editing.commands.push_move_rows([c, d], QModelIndex(), 5)
 
     # After move: a, b, e, c, d, f  (rows 2&3 land at position 3 after adjustment)
     result_before_undo = _keys(tab)
@@ -73,7 +73,7 @@ def test_same_parent_backward_block_move_and_undo(qtbot):
     f = tab.model.index(5, 0, QModelIndex())  # row 5 = "f"
     h = tab.model.index(7, 0, QModelIndex())  # row 7 = "h"
 
-    assert tab.editing.push_move_rows([f, h], QModelIndex(), 2)
+    assert tab.editing.commands.push_move_rows([f, h], QModelIndex(), 2)
 
     result = _keys(tab)
     # f and h must appear before their original neighbors c..g (at/after index 2)
@@ -111,7 +111,7 @@ def test_cross_parent_multimove_and_undo(qtbot):
     ax = tab.model.index(0, 0, a_idx)  # a.x
     by = tab.model.index(0, 0, b_idx)  # b.y
 
-    assert tab.editing.push_move_rows([ax, by], c_idx, 0)
+    assert tab.editing.commands.push_move_rows([ax, by], c_idx, 0)
 
     # c should now contain 2 items
     c_after = tab.model.get_item(c_idx).to_json()
@@ -146,7 +146,7 @@ def test_cross_parent_move_undo_restores_original_name_after_collision_rename(qt
     bar_idx = _idx(tab, 1)
     bar_x = tab.model.index(0, 0, bar_idx)
 
-    assert tab.editing.push_move_rows([bar_x], foo_idx, 1)
+    assert tab.editing.commands.push_move_rows([bar_x], foo_idx, 1)
     assert tab.model.root_item.to_json() == {
         "foo": {"x": 1, "x_2": 2},
         "bar": {},
@@ -181,11 +181,11 @@ def test_cycle_guard_returns_false_no_command_pushed(qtbot):
     original_count = tab.undo_stack.count()
 
     # Try to move "top" into "deep"
-    assert tab.editing.push_move_rows([top_idx], deep_idx, 0) is False
+    assert tab.editing.commands.push_move_rows([top_idx], deep_idx, 0) is False
     assert tab.undo_stack.count() == original_count
 
     # Try to move "nest" into itself (same path as target parent)
-    assert tab.editing.push_move_rows([nest_idx], nest_idx, 0) is False
+    assert tab.editing.commands.push_move_rows([nest_idx], nest_idx, 0) is False
     assert tab.undo_stack.count() == original_count
 
     # Model must be unchanged
@@ -203,11 +203,11 @@ def test_merge_with_returns_false(qtbot):
     a = tab.model.index(0, 0, QModelIndex())
 
     # Move a → end of root: [b, c, a]
-    tab.editing.push_move_rows([a], QModelIndex(), 3)
+    tab.editing.commands.push_move_rows([a], QModelIndex(), 3)
     # After first move: [b, c, a]  →  a is now at index 2
     # Move a → row 0: [a, b, c]
     a2 = tab.model.index(2, 0, QModelIndex())
-    tab.editing.push_move_rows([a2], QModelIndex(), 0)
+    tab.editing.commands.push_move_rows([a2], QModelIndex(), 0)
 
     # Two separate undo steps
     assert tab.undo_stack.count() == 2
@@ -225,7 +225,7 @@ def test_merge_with_returns_false(qtbot):
 def test_push_move_row_still_works(qtbot):
     tab = _make_tab(qtbot, {"a": 1, "b": 2, "c": 3})
 
-    assert tab.editing.push_move_row(QModelIndex(), 0, 2)  # move row 0 ("a") to row 2
+    assert tab.editing.commands.push_move_row(QModelIndex(), 0, 2)  # move row 0 ("a") to row 2
     assert _keys(tab) == ["b", "c", "a"]
 
     assert tab.undo_stack.count() == 1
@@ -246,7 +246,7 @@ def test_forward_block_move_index_adjustment(qtbot):
 
     c = tab.model.index(2, 0, QModelIndex())
     d = tab.model.index(3, 0, QModelIndex())
-    assert tab.editing.push_move_rows([c, d], QModelIndex(), 5)
+    assert tab.editing.commands.push_move_rows([c, d], QModelIndex(), 5)
 
     # Expected: a, b, e, c, d, f
     assert _keys(tab) == ["a", "b", "e", "c", "d", "f"]
@@ -266,7 +266,7 @@ def test_backward_block_move_index_invariant(qtbot):
 
     f = tab.model.index(5, 0, QModelIndex())
     h = tab.model.index(7, 0, QModelIndex())
-    assert tab.editing.push_move_rows([f, h], QModelIndex(), 2)
+    assert tab.editing.commands.push_move_rows([f, h], QModelIndex(), 2)
 
     # f lands at 2, h at 3; c,d,e,g shift right
     keys = _keys(tab)

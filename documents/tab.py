@@ -206,7 +206,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         self._host.show_permanent_message(message)
 
     def edit_name_or_value_from_enter(self) -> None:
-        self.editing.edit_name_or_value_from_enter()
+        self.editing.inline.edit_name_or_value_from_enter()
 
     def display_name(self) -> str:
         if self._io.file_path:

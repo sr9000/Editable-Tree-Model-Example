@@ -96,7 +96,7 @@ class _RenameCmd(QUndoCommand):
         item.name = name
         if item.parent_item is not None:
             item.parent_item.mark_children_dirty()
-        self._tab.editing.emit_row_changed(idx)
+        self._tab.editing.diff.emit_row_changed(idx)
 
 
 class _EditValueCmd(QUndoCommand):
@@ -127,12 +127,12 @@ class _EditValueCmd(QUndoCommand):
     def redo(self):
         idx = self._tab.mutations.index_from_path(self._path)
         if idx.isValid():
-            self._tab.editing.diff_apply(self._tab.model.get_item(idx), self._new_value, idx)
+            self._tab.editing.diff.apply(self._tab.model.get_item(idx), self._new_value, idx)
 
     def undo(self):
         idx = self._tab.mutations.index_from_path(self._path)
         if idx.isValid():
-            self._tab.editing.diff_apply(self._tab.model.get_item(idx), self._old_subtree, idx)
+            self._tab.editing.diff.apply(self._tab.model.get_item(idx), self._old_subtree, idx)
 
 
 class _ChangeTypeCmd(QUndoCommand):
@@ -217,7 +217,7 @@ class _InsertRowsCmd(QUndoCommand):
         for rec in self._inserts:
             p = self._tab.mutations.index_from_path(rec["parent_path"])
             parent_item = self._tab.model.get_item(p)
-            self._tab.editing.insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec.get("name"))
+            self._tab.editing.diff.insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec.get("name"))
             if first_idx is None:
                 first_idx = self._tab.model.index(rec["row"], 0, p)
                 first_path = tuple(rec["parent_path"]) + (rec["row"],)
@@ -247,7 +247,7 @@ class _RemoveRowsCmd(QUndoCommand):
         for rec in reversed(self._removals):
             p = self._tab.mutations.index_from_path(rec["parent_path"])
             parent_item = self._tab.model.get_item(p)
-            self._tab.editing.insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec["name"])
+            self._tab.editing.diff.insert_typed_item(parent_item, p, rec["row"], rec["value"], name=rec["name"])
 
 
 class _MoveRowsCmd(QUndoCommand):
@@ -436,7 +436,7 @@ class _SortKeysCmd(QUndoCommand):
     def undo(self):
         idx = self._tab.mutations.index_from_path(self._path)
         if idx.isValid():
-            self._tab.editing.diff_apply(self._tab.model.get_item(idx), self._old_subtree, idx)
+            self._tab.editing.diff.apply(self._tab.model.get_item(idx), self._old_subtree, idx)
 
 
 class _SwitchFieldCaseCmd(QUndoCommand):
@@ -462,4 +462,4 @@ class _SwitchFieldCaseCmd(QUndoCommand):
             item.name = rec[key]
             if item.parent_item is not None:
                 item.parent_item.mark_children_dirty()
-            self._tab.editing.emit_row_changed(idx)
+            self._tab.editing.diff.emit_row_changed(idx)

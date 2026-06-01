@@ -113,6 +113,6 @@ def bootstrap(
     init_validation_state(tab, model_data)
 
     tab.undo_stack.cleanChanged.connect(tab.io.on_clean_changed)
-    tab.undo_stack.indexChanged.connect(tab.editing.on_undo_index_changed)
+    tab.undo_stack.indexChanged.connect(tab.editing.move.on_undo_index_changed)
     tab.undo_stack.setClean()
     tab.io.set_dirty(False)

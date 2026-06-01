@@ -391,7 +391,7 @@ def test_bool_to_string_undo_redo(qtbot):
     qtbot.addWidget(tab)
     type_idx = tab.model.index(0, 1, QModelIndex())
 
-    tab.editing.push_change_type(type_idx, JsonType.STRING)
+    tab.editing.commands.push_change_type(type_idx, JsonType.STRING)
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.value == "true"
 
@@ -416,7 +416,7 @@ def test_bytes_to_zlib_undo_redo(qtbot):
     assert item.json_type is JsonType.BYTES
 
     type_idx = tab.model.index(0, 1, QModelIndex())
-    tab.editing.push_change_type(type_idx, JsonType.ZLIB)
+    tab.editing.commands.push_change_type(type_idx, JsonType.ZLIB)
 
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.ZLIB
@@ -440,7 +440,7 @@ def test_array_to_object_undo_redo(qtbot):
     arr_idx = tab.model.index(0, 0, QModelIndex())
     type_idx = tab.model.index(0, 1, QModelIndex())
 
-    tab.editing.push_change_type(type_idx, JsonType.OBJECT)
+    tab.editing.commands.push_change_type(type_idx, JsonType.OBJECT)
     item = tab.model.get_item(arr_idx)
     assert item.json_type is JsonType.OBJECT
     assert item.child_count() == 3

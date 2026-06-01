@@ -58,7 +58,7 @@ def test_move_preserves_expansion_and_selection_and_undo(qtbot):
     tab.view.setExpanded(tab.view_controller.source_to_view(x), False)
     _select_source_rows(tab, b, x)
 
-    assert tab.editing.push_move_rows([b, x], target, 0)
+    assert tab.editing.commands.push_move_rows([b, x], target, 0)
 
     target_after = _idx(tab, 0)
     moved_b_row = _child_row_by_name(tab, target_after, "b")

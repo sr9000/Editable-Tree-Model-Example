@@ -24,7 +24,7 @@ def _ensure_seed_row(tab: JsonTab) -> QModelIndex:
     if tab.model.show_root:
         root = tab.model.index(0, 0, QModelIndex())
         if tab.model.rowCount(root) == 0:
-            assert tab.editing.push_insert_rows(
+            assert tab.editing.commands.push_insert_rows(
                 [
                     {
                         "parent_path": (),
@@ -38,7 +38,7 @@ def _ensure_seed_row(tab: JsonTab) -> QModelIndex:
         return tab.model.index(0, 0, root)
 
     if tab.model.rowCount() == 0:
-        assert tab.editing.push_insert_rows(
+        assert tab.editing.commands.push_insert_rows(
             [
                 {
                     "parent_path": (),
