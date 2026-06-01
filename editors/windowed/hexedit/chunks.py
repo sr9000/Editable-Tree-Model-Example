@@ -2,14 +2,22 @@ from typing import Optional
 
 from PySide6.QtCore import QBuffer, QIODevice, QObject
 
-from app.runtime_compat import qba_to_bytes
-
 NORMAL = 0
 HIGHLIGHTED = 1
 
 BUFFER_SIZE = 0x10000
 CHUNK_SIZE = 0x1000
 READ_CHUNK_MASK = 0xFFFFFFFFFFFFF000
+
+
+def qba_to_bytes(qba) -> bytes:
+    """Convert a ``QByteArray``-like buffer to ``bytes``.
+
+    Kept local so this self-hosted widget never imports from ``app``.
+    PySide6 ``QByteArray`` supports the buffer protocol, so ``bytes(...)``
+    converts it directly; ``bytes`` / ``bytearray`` pass through unchanged.
+    """
+    return bytes(qba)
 
 
 class Chunk:
