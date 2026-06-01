@@ -60,4 +60,9 @@ if ! bash "$(dirname "$0")/_check_editors_isolation.sh"; then
     fail=1
 fi
 
+# Tree isolation: tree/ must not import app/documents/editors/delegates/state/validation.
+if ! bash "$(dirname "$0")/_check_tree_isolation.sh"; then
+    fail=1
+fi
+
 exit $fail
