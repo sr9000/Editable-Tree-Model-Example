@@ -1,7 +1,8 @@
 import simplejson
 from gmpy2 import mpq
 
-from io_formats import SAVE_FORMAT_JSON, SAVE_FORMAT_YAML, dump_text, load_file_with_format
+from io_formats import (SAVE_FORMAT_JSON, SAVE_FORMAT_YAML, dump_text,
+                        load_file_with_format)
 from tree.types import JsonType, parse_json_type
 from units.number_affix import AffixKind, NumberAffix
 

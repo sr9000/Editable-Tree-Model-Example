@@ -4,12 +4,16 @@ from PySide6.QtWidgets import QTreeView
 from tree.model_protocol import TreeModelLike
 from tree.types import JsonType
 from tree_actions._tab_lookup import find_owning_tab
-from tree_actions.anchors import MoveAnchor, anchor_after_index, anchor_before_index
+from tree_actions.anchors import (MoveAnchor, anchor_after_index,
+                                  anchor_before_index)
 from tree_actions.clipboard import copy_selection
 from tree_actions.field_case import FieldCase, convert_field_name
-from tree_actions.selection import _index_path, _is_root_index, _resolve_model, _row0, _to_source_index, _to_view_index
+from tree_actions.selection import (_index_path, _is_root_index,
+                                    _resolve_model, _row0, _to_source_index,
+                                    _to_view_index)
 from tree_actions.selection import selected_source_rows as _selected_rows
-from tree_actions.selection import top_level_source_rows as _top_level_selected_rows
+from tree_actions.selection import \
+    top_level_source_rows as _top_level_selected_rows
 
 
 def _row0_index(index: QModelIndex, model: TreeModelLike) -> QModelIndex:

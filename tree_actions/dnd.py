@@ -5,7 +5,8 @@ from PySide6.QtCore import QMimeData, QModelIndex, Qt
 from tree.types import JsonType
 from tree.view import JsonTreeView
 from tree_actions._tab_lookup import find_owning_tab
-from tree_actions.clipboard import MIME_JSON_TREE, entries_from_mime, source_paths_from_mime
+from tree_actions.clipboard import (MIME_JSON_TREE, entries_from_mime,
+                                    source_paths_from_mime)
 from tree_actions.paste import paste_entries_at
 
 

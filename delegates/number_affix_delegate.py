@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.types import JsonType
-from units.number_affix import AffixKind, NumberAffix, format_number_affix, parse_number_affix
+from units.number_affix import (AffixKind, NumberAffix, format_number_affix,
+                                parse_number_affix)
 
 _AFFIX_TYPES = {
     JsonType.INTEGER_CURRENCY,

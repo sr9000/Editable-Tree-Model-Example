@@ -15,18 +15,12 @@ from core.datetime_parsing.regex import parse_datetime_text
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
 from tree.codecs.color_codec import normalize_color_string
-from tree.stubs import (
-    stub_bytes_raw,
-    stub_color_rgb,
-    stub_color_rgba,
-    stub_float,
-    stub_integer,
-    stub_multiline,
-    stub_percent,
-    stub_string,
-)
+from tree.stubs import (stub_bytes_raw, stub_color_rgb, stub_color_rgba,
+                        stub_float, stub_integer, stub_multiline, stub_percent,
+                        stub_string)
 from tree.types import TEXT_FAMILY, TEXT_MULTI_FAMILY, JsonType
-from units.number_affix import AffixKind, NumberAffix, format_number_affix, parse_number_affix
+from units.number_affix import (AffixKind, NumberAffix, format_number_affix,
+                                parse_number_affix)
 
 # ---------------------------------------------------------------------------
 # Bytes / text helpers

@@ -2,42 +2,32 @@ from pathlib import Path
 
 from PySide6.QtCore import QItemSelectionModel, QPoint, Qt, QTimer
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QComboBox, QFileDialog, QMenu, QMessageBox, QTreeView
+from PySide6.QtWidgets import (QComboBox, QFileDialog, QMenu, QMessageBox,
+                               QTreeView)
 
 from state.edit_limits import get_attach_file_warning_limit_bytes
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
 from tree.types import JsonType
 from tree_actions._tab_lookup import find_owning_tab
-from tree_actions.clipboard import copy_selection, copy_selection_value_only, copy_selection_with_name
+from tree_actions.clipboard import (copy_selection, copy_selection_value_only,
+                                    copy_selection_with_name)
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER
-from tree_actions.paste import (
-    has_clipboard_entries,
-    paste_after,
-    paste_as_child,
-    paste_auto,
-    paste_before,
-    paste_clones_at_targets,
-    paste_insert_after_zip,
-    paste_replace_value,
-    paste_replace_zip,
-)
-from tree_actions.selection import _index_path, _resolve_model, _row0, _to_source_index, selected_source_rows
-from tree_actions.structure import (
-    collapse_selection_recursive,
-    cut_selection,
-    delete_selection,
-    duplicate_selection,
-    expand_selection_recursive,
-    insert_child_current,
-    insert_sibling_after,
-    insert_sibling_before,
-    move_selection_down,
-    move_selection_out_down,
-    move_selection_out_up,
-    move_selection_up,
-    sort_selection_keys,
-    switch_selection_case,
-)
+from tree_actions.paste import (has_clipboard_entries, paste_after,
+                                paste_as_child, paste_auto, paste_before,
+                                paste_clones_at_targets,
+                                paste_insert_after_zip, paste_replace_value,
+                                paste_replace_zip)
+from tree_actions.selection import (_index_path, _resolve_model, _row0,
+                                    _to_source_index, selected_source_rows)
+from tree_actions.structure import (collapse_selection_recursive,
+                                    cut_selection, delete_selection,
+                                    duplicate_selection,
+                                    expand_selection_recursive,
+                                    insert_child_current, insert_sibling_after,
+                                    insert_sibling_before, move_selection_down,
+                                    move_selection_out_down,
+                                    move_selection_out_up, move_selection_up,
+                                    sort_selection_keys, switch_selection_case)
 
 _BASE64_TYPES = {JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP}
 

@@ -1,7 +1,8 @@
 import pytest
 
 from settings import SECRET_WORD_PREFIXES
-from state.secret_settings import get_secret_word_prefixes, set_secret_word_prefixes
+from state.secret_settings import (get_secret_word_prefixes,
+                                   set_secret_word_prefixes)
 from tree.model import JsonTreeModel
 from tree.types import JsonType
 

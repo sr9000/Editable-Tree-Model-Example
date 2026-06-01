@@ -3,15 +3,9 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from validation.error_adapter import (
-    err_context,
-    err_instance_path,
-    err_kind,
-    err_message,
-    err_path,
-    err_schema_path,
-    err_validator,
-)
+from validation.error_adapter import (err_context, err_instance_path, err_kind,
+                                      err_message, err_path, err_schema_path,
+                                      err_validator)
 from validation.issue import ValidationIssue
 
 from . import _engine

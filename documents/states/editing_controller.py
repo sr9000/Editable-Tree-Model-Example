@@ -11,14 +11,16 @@ from documents.controllers.history import TabHistoryController
 from documents.seams.mutation_gateway import DocumentMutationGateway
 from documents.states.editing.command_dispatcher import CommandDispatcher
 from documents.states.editing.context import EditingContext
-from documents.states.editing.inline_edit_controller import InlineEditController
+from documents.states.editing.inline_edit_controller import \
+    InlineEditController
 from documents.states.editing.move_view_state import MoveViewState
 from documents.states.editing.tree_actions import ACTIONS as _ACTIONS
 from documents.states.editing.tree_actions import TreeAction
 from state.affix_mru import AffixMRU
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel
-from tree_actions.structure import insert_child_current, insert_sibling_after, insert_sibling_before
+from tree_actions.structure import (insert_child_current, insert_sibling_after,
+                                    insert_sibling_before)
 from undo.commands import _MoveRowsCmd
 from undo.diff import DiffApplier
 

@@ -11,13 +11,9 @@ import simplejson
 import yaml
 from gmpy2 import mpq
 
-from io_formats.detect import (
-    SAVE_FORMAT_JSON,
-    SAVE_FORMAT_JSONL,
-    SAVE_FORMAT_YAML,
-    SAVE_FORMAT_YAML_MULTI,
-    detect_format,
-)
+from io_formats.detect import (SAVE_FORMAT_JSON, SAVE_FORMAT_JSONL,
+                               SAVE_FORMAT_YAML, SAVE_FORMAT_YAML_MULTI,
+                               detect_format)
 from mpq2py import MpqSafeLoader
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.types import JsonType, parse_json_type

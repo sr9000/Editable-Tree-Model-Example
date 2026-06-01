@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Signal
+from PySide6.QtCore import (QModelIndex, QObject, QPersistentModelIndex,
+                            QSortFilterProxyModel, Signal)
 
 from tree.types import JsonType
 

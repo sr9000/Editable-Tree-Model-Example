@@ -1,7 +1,8 @@
 from PySide6.QtCore import QSettings
 
 from editors.windowed.hex_dialog import QHEXDIALOG_ID, QHexDialog
-from editors.windowed.multiline_dialog import QMULTILINEDIALOG_ID, QMultilineDialog
+from editors.windowed.multiline_dialog import (QMULTILINEDIALOG_ID,
+                                               QMultilineDialog)
 from settings import APPLICATION_ID
 
 

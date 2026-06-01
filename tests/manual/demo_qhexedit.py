@@ -3,7 +3,8 @@
 
 import sys
 
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QMainWindow, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QMainWindow,
+                               QPushButton, QVBoxLayout, QWidget)
 
 from editors.windowed.hexedit import QHexEdit
 

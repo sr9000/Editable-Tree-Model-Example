@@ -9,9 +9,11 @@ from pandas import Timestamp
 from core.datetime_parsing.enums import DateTimeCategory
 from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
-from tree.item_coercion import coerce_value_for_type, compute_editable, normalize_value_for_type
+from tree.item_coercion import (coerce_value_for_type, compute_editable,
+                                normalize_value_for_type)
 from tree.item_names import unique_child_name, validated_child_name
-from tree.types import DATETIME_FAMILY, SECRET_FAMILY, TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
+from tree.types import (DATETIME_FAMILY, SECRET_FAMILY, TEXT_FAMILY, JsonType,
+                        parse_json_type, text_pseudotype_for)
 from tree.types_datetime import convert_datetime
 
 SecretNamePredicate = Callable[[str], bool]

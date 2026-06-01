@@ -7,7 +7,8 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QGuiApplication
 
-from themes import DARK_DEFAULT, LIGHT_DEFAULT, ThemeRegistry, detect_system_mode, load_theme_yaml
+from themes import (DARK_DEFAULT, LIGHT_DEFAULT, ThemeRegistry,
+                    detect_system_mode, load_theme_yaml)
 from themes._contrast import contrast_ratio
 from themes.icon_provider import FileIconProvider
 from themes.loader import parse_theme_mapping

@@ -3,7 +3,8 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from themes import DARK_DEFAULT, LIGHT_DEFAULT, ThemeLoadError, load_theme_yaml, parse_theme_mapping
+from themes import (DARK_DEFAULT, LIGHT_DEFAULT, ThemeLoadError,
+                    load_theme_yaml, parse_theme_mapping)
 from tree.types import JsonType
 
 

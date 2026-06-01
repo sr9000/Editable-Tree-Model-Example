@@ -11,14 +11,11 @@ from documents.tab import JsonTab
 from tree.model import JsonTreeModel
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_from_clipboard
-from tree_actions.selection import (
-    _index_path,
-    _selected_rows,
-    _top_level_selected_rows,
-    selected_source_rows,
-    selection_spans_multiple_parents,
-    top_level_source_rows,
-)
+from tree_actions.selection import (_index_path, _selected_rows,
+                                    _top_level_selected_rows,
+                                    selected_source_rows,
+                                    selection_spans_multiple_parents,
+                                    top_level_source_rows)
 
 # ---------------------------------------------------------------------------
 # Helpers

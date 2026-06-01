@@ -12,7 +12,8 @@ from PySide6.QtCore import QStandardPaths
 
 from app.runtime_compat import meipass_root, traversable_to_path
 from themes._defaults import DARK_DEFAULT, LIGHT_DEFAULT
-from themes.icon_provider import FileIconProvider, IconProvider, StubIconProvider
+from themes.icon_provider import (FileIconProvider, IconProvider,
+                                  StubIconProvider)
 from themes.loader import ThemeLoadError, load_theme_yaml
 from themes.spec import ThemeSpec
 

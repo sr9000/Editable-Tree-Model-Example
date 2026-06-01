@@ -17,17 +17,11 @@ from tree.types import JsonType
 _TYPES_IN_SEED = set(JsonType) - {JsonType.EMPTY_MULTILINE}
 from tree_actions.clipboard import copy_selection
 from tree_actions.paste import paste_from_clipboard
-from tree_actions.structure import (
-    cut_selection,
-    delete_selection,
-    duplicate_selection,
-    insert_child_current,
-    insert_sibling_after,
-    insert_sibling_before,
-    move_selection_down,
-    move_selection_up,
-    sort_selection_keys,
-)
+from tree_actions.structure import (cut_selection, delete_selection,
+                                    duplicate_selection, insert_child_current,
+                                    insert_sibling_after,
+                                    insert_sibling_before, move_selection_down,
+                                    move_selection_up, sort_selection_keys)
 
 
 def _select(tab: JsonTab, index: QModelIndex) -> None:

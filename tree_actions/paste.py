@@ -6,16 +6,10 @@ from PySide6.QtWidgets import QTreeView
 from tree.types import JsonType
 from tree_actions._tab_lookup import find_owning_tab
 from tree_actions.clipboard import _clipboard_entries
-from tree_actions.selection import (
-    _index_path,
-    _resolve_model,
-    _row0,
-    _selected_rows,
-    _to_source_index,
-    _to_view_index,
-    selected_source_rows,
-    top_level_source_rows,
-)
+from tree_actions.selection import (_index_path, _resolve_model, _row0,
+                                    _selected_rows, _to_source_index,
+                                    _to_view_index, selected_source_rows,
+                                    top_level_source_rows)
 
 
 def _tab_of(tree_view: QTreeView):

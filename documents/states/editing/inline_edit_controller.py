@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, Qt, QTimer
+from PySide6.QtCore import (QModelIndex, QObject, QPersistentModelIndex, Qt,
+                            QTimer)
 from PySide6.QtWidgets import QAbstractItemView, QComboBox
 
 from documents.states.editing.context import EditingContext

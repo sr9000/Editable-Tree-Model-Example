@@ -1,8 +1,10 @@
 from PySide6.QtCore import QEvent, QModelIndex, QPersistentModelIndex
 from PySide6.QtGui import QFocusEvent, QIcon, QKeyEvent, QPainter
-from PySide6.QtWidgets import QApplication, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
+from PySide6.QtWidgets import (QApplication, QStyle, QStyledItemDelegate,
+                               QStyleOptionViewItem, QWidget)
 
-from editors.inline.caps_safe_line import _LAYOUT_SWITCH_FOCUS_REASONS, _LOCK_KEYS
+from editors.inline.caps_safe_line import (_LAYOUT_SWITCH_FOCUS_REASONS,
+                                           _LOCK_KEYS)
 
 __all__ = [
     "_TextEditorDelegateBase",

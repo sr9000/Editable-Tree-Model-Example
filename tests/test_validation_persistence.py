@@ -16,7 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from state.validation_settings import clear_schema_path, read_schema_path, write_schema_path
+from state.validation_settings import (clear_schema_path, read_schema_path,
+                                       write_schema_path)
 
 # ── state.validation_settings round-trips ────────────────────────────────
 

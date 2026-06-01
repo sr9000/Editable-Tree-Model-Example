@@ -1,18 +1,10 @@
 from typing import Optional
 
-from PySide6.QtCore import QBuffer, QIODevice, QPoint, QRect, Qt, QTimer, Signal
-from PySide6.QtGui import (
-    QFont,
-    QFontDatabase,
-    QFontMetrics,
-    QKeyEvent,
-    QKeySequence,
-    QMouseEvent,
-    QPainter,
-    QPaintEvent,
-    QPalette,
-    QResizeEvent,
-)
+from PySide6.QtCore import (QBuffer, QIODevice, QPoint, QRect, Qt, QTimer,
+                            Signal)
+from PySide6.QtGui import (QFont, QFontDatabase, QFontMetrics, QKeyEvent,
+                           QKeySequence, QMouseEvent, QPainter, QPaintEvent,
+                           QPalette, QResizeEvent)
 from PySide6.QtWidgets import QAbstractScrollArea, QApplication
 
 from .chunks import Chunks

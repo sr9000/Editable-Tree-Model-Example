@@ -5,7 +5,8 @@ from PySide6.QtWidgets import QApplication, QMenu
 
 from documents.tab import JsonTab
 from tree_actions.context_menu import show_context_menu
-from tree_actions.structure import collapse_selection_recursive, expand_selection_recursive
+from tree_actions.structure import (collapse_selection_recursive,
+                                    expand_selection_recursive)
 
 
 def _set_current_source_row(tab: JsonTab, source_index: QModelIndex) -> None:
