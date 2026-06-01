@@ -173,20 +173,6 @@ def format_with_type(value, json_type: JsonType | None, *, item=None, show_previ
         except Exception:
             return format_default(value)
 
-    if json_type is JsonType.DATETIMEUTC and isinstance(value, str):
-        try:
-            dt = Timestamp(value.replace("Z", "+00:00"))
-            dt = dt.tz_localize("UTC") if dt.tzinfo is None else dt.tz_convert("UTC")
-            if dt.nanosecond:
-                return dt.isoformat(timespec="nanoseconds").replace("+00:00", "Z")
-            if dt.microsecond:
-                return dt.isoformat(timespec="microseconds").replace("+00:00", "Z")
-            if dt.second:
-                return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
-            return dt.isoformat(timespec="minutes").replace("+00:00", "Z")
-        except Exception:
-            return format_default(value)
-
     return format_default(value)
 
 

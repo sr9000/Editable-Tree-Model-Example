@@ -27,7 +27,7 @@ def to_timestamp(value: Any) -> Any:
     if isinstance(value, datetime):
         return pd.Timestamp(value)
     if isinstance(value, str):
-        return pd.Timestamp(value)
+        return pd.Timestamp(value.replace("_", " "))
     raise TypeError(f"Cannot convert {type(value).__name__} to Timestamp")
 
 
