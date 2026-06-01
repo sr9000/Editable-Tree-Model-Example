@@ -6,8 +6,8 @@ from typing import Any, Protocol
 
 from PySide6.QtCore import QObject
 
-from documents.document_protocol import Document
-from documents.tab_marker import JsonTabWidgetMarker
+from documents.composition.marker import JsonTabWidgetMarker
+from documents.seams.document_protocol import Document
 from validation.schema_registry import get_schema_registry
 from validation.schema_types import SchemaSource
 

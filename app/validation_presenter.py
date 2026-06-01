@@ -95,7 +95,7 @@ class DockValidationPresenter(QObject):
             win._validation_status_label.setVisible(False)
 
     def on_tab_validation_changed(self, issue_index) -> None:
-        from documents.tab_status import format_validation_status
+        from documents.controllers.status import format_validation_status
 
         win = self._win
         text = format_validation_status(issue_index)

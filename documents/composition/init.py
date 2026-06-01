@@ -4,17 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from documents.mutation_gateway import DocumentMutationGateway
-from documents.states.editing_controller import EditingController
-from documents.states.io_controller import IoController
-from documents.states.view_state import ViewState
-from documents.tab_appearance import JsonTabAppearanceController
-from documents.tab_demo_data import build_demo_data
-from documents.tab_dependencies import JsonTabServices, build_legacy_json_tab_services
-from documents.tab_editability import JsonTabEditabilityController
-from documents.tab_history import TabHistoryController
-from documents.tab_navigation import JsonTabNavigationController
-from documents.tab_setup import (
+from documents.composition.demo_data import build_demo_data
+from documents.composition.dependencies import JsonTabServices, build_legacy_json_tab_services
+from documents.composition.setup import (
     init_delegates_and_connections,
     init_layout,
     init_model,
@@ -22,8 +14,16 @@ from documents.tab_setup import (
     init_shortcuts,
     init_validation_state,
 )
-from documents.tab_validation import TabValidationController
-from documents.view_controller import ViewController
+from documents.controllers.appearance import JsonTabAppearanceController
+from documents.controllers.editability import JsonTabEditabilityController
+from documents.controllers.history import TabHistoryController
+from documents.controllers.navigation import JsonTabNavigationController
+from documents.controllers.validation import TabValidationController
+from documents.controllers.view import ViewController
+from documents.seams.mutation_gateway import DocumentMutationGateway
+from documents.states.editing_controller import EditingController
+from documents.states.io_controller import IoController
+from documents.states.view_state import ViewState
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec

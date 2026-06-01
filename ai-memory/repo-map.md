@@ -78,54 +78,36 @@ Model".
   across multiple tabs.
 - **Indexing**: `IssueIndex` maps `jsonschema` errors to tree model indexes for the validation dock and in-tree badges.
 
-## 7) `documents/` module layout (post Plan 20)
+## 7) `documents/` module layout (post Plan 20 + responsibility-segregation split)
 
 ```
 documents/
-├── tab.py                   JsonTab QWidget — 607 LOC / 117 methods+properties.
-│                            STILL a God Object internally (Plan 21 target).
-├── tab_data.py              JsonTabData — composes 4 substates + 2 cross-cutting
-│                            controllers + ~30 @property forwards for tests.
-├── tab_init.py              bootstrap() — dense __init__ body extracted from JsonTab.
-├── tab_setup.py             init_layout / init_model / init_delegates / init_shortcuts.
-├── tab_data_facade.py       (deleted in Plan 20 I5; contents merged into tab_data.py)
-│
-├── states/                  (Plan 20 Phase I — passive containers)
-│   ├── io_state.py          IoState   (file_path, save_format, dirty + dirtyChanged)
-│   ├── view_state.py        ViewState (ui, view, search_edit, proxy, 3× delegate)
-│   ├── editing_state.py     EditingState (model, mutations, affix_mru, history,
-│   │                                       last_move_placed)
-│   └── validation_state.py  ValidationState (alias for TabValidationController)
-│
-├── mutation_gateway.py      DocumentMutationGateway — the only entry point for
-│                            tree edits. Has both QModelIndex- and path-typed APIs
-│                            (Plan 20 H1+H2).
-├── view_controller.py       DocumentView — viewport controller. Owns selection /
-│                            expand / scroll; writes go through
-│                            `viewportRequested(kind, payload)` (Plan 20 D-full).
-├── document_protocol.py     Narrow Document Protocol stub (Plan 20 A1). NOT YET the
-│                            advertised return type — see report.
-├── tab_marker.py            JsonTabWidgetMarker isinstance base for tree_actions/
-│                            ancestor walks (Plan 20 G).
-│
-├── tab_appearance.py        JsonTabAppearanceController — fonts, theme, column scale
-├── tab_navigation.py        JsonTabNavigationController — keyboard nav / event filter
-├── tab_editability.py       JsonTabEditabilityController — read-only mode
-├── tab_history.py           TabHistoryController — wraps QUndoStack
-├── tab_io_controller.py     back-compat re-export (`TabIOController = IoState`)
-├── tab_io.py                save / save_as / snapshot primitives
-├── tab_validation.py        TabValidationController (aliased as ValidationState)
-├── tab_validation_view.py   JsonTabValidationViewController — goto-issue navigation
-│
-├── tab_commands.py          Free functions taking `tab` first: push_*. Action layer.
-├── tab_editing.py           Free functions: on_type_changed, edit_from_enter, etc.
-├── tab_tree_actions.py      Free functions: run_tree_action + insert_sibling helpers
-├── tab_move_view_state.py   Free functions: capture/apply move-view caches
-├── tab_paths.py             Free functions: index_path / index_from_path
-├── tab_status.py            Free functions: on_current_changed + size_hint
-├── tab_number_types.py      would_drop_fraction_on_type_change predicate
-├── tab_demo_data.py         build_demo_data for empty new tabs
-└── tab_dependencies.py      JsonTabHost / JsonTabServices DI bundles
+├── tab.py                   JsonTab QWidget — thin-ish facade / routing surface.
+├── composition/             Wiring & construction of a tab.
+│   ├── init.py              bootstrap() — dense __init__ body extracted from JsonTab.
+│   ├── setup.py             init_layout / init_model / init_delegates / init_shortcuts.
+│   ├── factory.py           tab construction helpers.
+│   ├── dependencies.py      JsonTabHost / JsonTabServices DI bundles.
+│   ├── marker.py            JsonTabWidgetMarker isinstance base for ancestor walks.
+│   └── demo_data.py         build_demo_data for empty new tabs.
+├── controllers/             Per-tab controllers (mostly stateful).
+│   ├── appearance.py        fonts / theme / column scale.
+│   ├── navigation.py        keyboard nav / event filter.
+│   ├── editability.py       read-only mode.
+│   ├── validation.py        TabValidationController (aliased ValidationState).
+│   ├── history.py           TabHistoryController — wraps QUndoStack.
+│   ├── view.py              ViewController — viewport (selection/expand/scroll).
+│   ├── status.py            on_current_changed + size_hint.
+│   └── number_types.py      stateless type-change predicates (would_drop_fraction…).
+├── seams/                   Narrow boundaries.
+│   ├── mutation_gateway.py  DocumentMutationGateway — only entry point for tree edits.
+│   └── document_protocol.py narrow Document Protocol.
+└── states/                  Passive substates + editing collaborators (Plan 20/22).
+    ├── io_controller.py     IoState (file_path, save_format, dirty + dirtyChanged).
+    ├── view_state.py        ViewState (ui, view, search_edit, proxy, delegates).
+    ├── editing_controller.py EditingController (still a forwarding shell — Plan §3.2).
+    └── editing/             command_dispatcher / inline_edit_controller /
+                             move_view_state / tree_actions / context.
 ```
 
 ## 8) Status of Plan 20 (decouple-json-tab)

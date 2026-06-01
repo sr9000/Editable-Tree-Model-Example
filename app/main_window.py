@@ -28,8 +28,8 @@ from app.schema_tab_pool import SchemaTabPool
 from app.tab_lifecycle import TabLifecyclePresenter
 from app.theme_controller import ThemeController
 from app.validation_presenter import DockValidationPresenter
-from documents.document_protocol import Document
-from documents.tab_marker import JsonTabWidgetMarker
+from documents.composition.marker import JsonTabWidgetMarker
+from documents.seams.document_protocol import Document
 from io_formats.load import load_file_with_format
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
 from tree_actions.clipboard import clipboard_to_tab_data

@@ -6,9 +6,9 @@ from typing import Any, Callable
 
 from PySide6.QtWidgets import QWidget
 
-from documents.document_protocol import Document
+from documents.composition.dependencies import JsonTabServices
+from documents.seams.document_protocol import Document
 from documents.tab import JsonTab
-from documents.tab_dependencies import JsonTabServices
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
 

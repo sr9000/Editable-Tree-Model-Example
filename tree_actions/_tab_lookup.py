@@ -7,7 +7,7 @@ abstract marker base) so the OOP contract is explicit, a pre-commit
 hook can forbid stringly-typed reflection, and ``tree_actions`` does
 not import the concrete ``documents.tab`` module.
 
-The return type is the :class:`documents.document_protocol.Document`
+The return type is the :class:`documents.seams.document_protocol.Document`
 protocol (per ``plans/21-promote-substates-to-controllers.md`` Phase
 K3); every consumer in ``tree_actions/`` calls only Document-declared
 attributes (Phase K1 audit).
@@ -19,7 +19,7 @@ from typing import cast
 
 from PySide6.QtCore import QObject
 
-from documents.tab_marker import JsonTabWidgetMarker
+from documents.composition.marker import JsonTabWidgetMarker
 
 
 def find_owning_tab(widget: object | None) -> "Document" | None:
@@ -28,7 +28,7 @@ def find_owning_tab(widget: object | None) -> "Document" | None:
     Returns ``None`` when *widget* is not a Qt object or when no
     ``JsonTabWidgetMarker`` ancestor exists (e.g. headless test
     fixtures). The returned value is typed as
-    :class:`documents.document_protocol.Document` -- the structural
+    :class:`documents.seams.document_protocol.Document` -- the structural
     façade exposed by every concrete ``JsonTab``.
     """
     node = widget

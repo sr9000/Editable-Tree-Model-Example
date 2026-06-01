@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from documents.mutation_gateway import DocumentMutationGateway
+from documents.controllers.history import TabHistoryController
+from documents.seams.mutation_gateway import DocumentMutationGateway
 from documents.tab import JsonTab
-from documents.tab_history import TabHistoryController
 
 
 @pytest.fixture(scope="module")

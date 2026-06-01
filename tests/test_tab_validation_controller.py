@@ -7,8 +7,8 @@ import gc
 import pytest
 from PySide6.QtWidgets import QApplication
 
+from documents.controllers.validation import TabValidationController
 from documents.tab import JsonTab
-from documents.tab_validation import TabValidationController
 from validation.schema_source import SchemaRef
 
 

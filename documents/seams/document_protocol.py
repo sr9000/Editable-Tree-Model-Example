@@ -8,10 +8,10 @@ from PySide6.QtCore import QModelIndex, Signal
 from PySide6.QtGui import QUndoStack
 from PySide6.QtWidgets import QLineEdit
 
-from documents.mutation_gateway import DocumentMutationGateway
+from documents.controllers.validation import TabValidationController
+from documents.controllers.view import ViewController
+from documents.seams.mutation_gateway import DocumentMutationGateway
 from documents.states.io_controller import IoController
-from documents.tab_validation import TabValidationController
-from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
 from tree.item import JsonTreeItem
 from tree.model import JsonTreeModel

@@ -6,18 +6,18 @@ from typing import Any, Callable
 from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtWidgets import QLineEdit, QWidget
 
-from documents import tab_init
-from documents.mutation_gateway import DocumentMutationGateway
+from documents.composition import init as tab_init
+from documents.composition.dependencies import JsonTabHost, JsonTabServices
+from documents.composition.marker import JsonTabWidgetMarker
+from documents.controllers.appearance import JsonTabAppearanceController
+from documents.controllers.editability import JsonTabEditabilityController
+from documents.controllers.navigation import JsonTabNavigationController
+from documents.controllers.validation import TabValidationController
+from documents.controllers.view import ViewController
+from documents.seams.mutation_gateway import DocumentMutationGateway
 from documents.states.editing_controller import EditingController
 from documents.states.io_controller import IoController
 from documents.states.view_state import ViewState
-from documents.tab_appearance import JsonTabAppearanceController
-from documents.tab_dependencies import JsonTabHost, JsonTabServices
-from documents.tab_editability import JsonTabEditabilityController
-from documents.tab_marker import JsonTabWidgetMarker
-from documents.tab_navigation import JsonTabNavigationController
-from documents.tab_validation import TabValidationController
-from documents.view_controller import ViewController
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
