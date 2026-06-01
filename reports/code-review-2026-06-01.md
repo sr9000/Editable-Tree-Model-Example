@@ -1,13 +1,267 @@
-# Code Quality Audit — Editable-Tree-Model-Example
+# Code Review — Editable-Tree-Model-Example
 
-**Date:** 2026-06-01  
-**Scope:** Full production codebase (~21 300 LOC across 80+ modules)  
-**Focus:** Responsibility segregation, architectural boundaries, code hygiene  
-**Test surface:** 1 124 collected
+**Project:** Editable-Tree-Model-Example (PySide6 structured-data editor)
+**Date:** 2026-06-01
+**Scope:** Full production codebase (~21 300 LOC across 80+ modules) — architecture
+*and* code quality.
+**Method:** Static reading of source plus the repo's own gates
+(`make check-no-reflection`, `make check-editors-isolation`), formatter checks, and
+test collection (**1 124 tests collected**).
+
+> **How this document is organized.** This is a merge of the former
+> `architecture-review.md` and `code-quality-audit-2026-06-01.md` into one report.
+> - **Part A — Architecture Review** (layering, control/data flow, boundary
+    > enforcement, verdict).
+> - **Part B — Code-Quality Audit** (per-package responsibility segregation,
+    > import map, file sizes, hygiene, test surface, grades).
+>
+> Part B keeps its original section numbers so existing references (e.g. plans
+> citing "Part B §1.2 / §2 / §8") stay stable.
 
 ---
 
-## Executive Summary
+## Consolidated priorities (both parts)
+
+|  # | Priority   | Item                                                                                                                                         | Source                     |
+|---:|:-----------|:---------------------------------------------------------------------------------------------------------------------------------------------|:---------------------------|
+|  1 | **High**   | Resolve the 11 `tree/` upward imports (datetime parsing, codecs, secret-name injection). Tracked by `plans/refactor-tree-upward-imports.md`. | Part B §1.2, §2, §8        |
+|  2 | **High**   | Add a `Document`-conformance test asserting `JsonTab` satisfies the protocol and that gateway/dispatcher method sets line up.                | Part A §6/§7, Part B §5    |
+|  3 | **High**   | Add delegate-matrix tests (editor type per `JsonType`; `setEditorData`/`setModelData` round-trips).                                          | Part B §7, §8              |
+|  4 | **Medium** | Split `tree_actions/structure.py` (774 lines) into move/sort/expand modules.                                                                 | Part B §3, §8              |
+|  5 | **Medium** | Extract a `FileOperationsPresenter` from `MainWindow` (reload/save workflows).                                                               | Part A §6, Part B §1.7, §8 |
+|  6 | **Medium** | Narrow non-defensive `except Exception` (IO open/reload, theme apply); fix bare `except:` in datetime editor.                                | Part A §6, Part B §6, §8   |
+|  7 | **Medium** | Add I/O round-trip property tests across all four formats.                                                                                   | Part B §7, §8              |
+|  8 | **Medium** | Break `bootstrap()` into named phases with ordering asserts.                                                                                 | Part A §6                  |
+|  9 | **Low**    | Remove deprecated shims (`_closed_tabs_stack`, `_MAX_CLOSED_TABS`, `_setup_validation_dock`, `_setup_schemas_menu`).                         | Part A §6, Part B §6, §8   |
+| 10 | **Low**    | Convert theme/font fan-out to a signal-subscription model.                                                                                   | Part A §6                  |
+| 11 | **Low**    | Hoist method-local imports in `app/` to module scope where no cycle exists.                                                                  | Part A §6                  |
+| 12 | **Low**    | Rename underscore-prefixed cross-module helpers in `tree_actions/`.                                                                          | Part B §6, §8              |
+
+---
+
+# Part A — Architecture Review
+
+## A.1 Executive summary
+
+The application is a **cleanly layered PySide6 desktop editor** built around a
+single strong idea: *every document is a tab, and every mutation flows through a
+narrow, undoable seam*. The codebase is unusually disciplined for a desktop Qt
+app — boundaries are not merely conventional, they are **machine-enforced** by
+custom pre-commit gates.
+
+- **Architecture grade: A‑.** Layering is coherent, the dependency direction is
+  consistent (UI → orchestration → data), and the most dangerous areas (undo,
+  type coercion, structural moves) are funneled through single choke points.
+- **Primary strength:** enforced isolation seams (editors can't import the app;
+  mutations can't bypass undo; no reflection).
+- **Primary risks:** (1) the `JsonTab` facade + `Document` protocol surface is
+  large and must be kept in sync by hand; (2) `app/main_window.py` retains many
+  thin forwarding shims; (3) `tree/` has upward imports that invert the intended
+  dependency direction (detailed in Part B §1.2 / §2).
+
+## A.2 Layered model
+
+```
+                         main.py  (entry point: QApplication + icon + MainWindow)
+                            │
+  ┌─────────────────────────┴───────────────────────────────────────────┐
+  │ app/        Global shell: window, menus, tabs, themes, fonts,       │
+  │             validation dock, recent files, settings presenters.     │
+  │             Talks to tabs ONLY through the `Document` protocol.     │
+  └─────────────────────────┬───────────────────────────────────────────┘
+                            │  documents.seams.document_protocol.Document
+  ┌─────────────────────────┴───────────────────────────────────────────┐
+  │ documents/  Per-tab orchestration (JsonTab facade):                 │
+  │   composition/  wiring & construction (bootstrap, DI bundles)       │
+  │   controllers/  appearance, navigation, editability, validation,    │
+  │                 history, view, status, number_types                 │
+  │   states/       io, view_state, editing (+ command dispatch)        │
+  │   seams/        mutation_gateway (the ONLY edit entry), protocol    │
+  └───────┬─────────────────────┬──────────────────────┬────────────────┘
+          │                     │                      │
+  ┌───────┴──────┐     ┌────────┴────────┐    ┌────────┴─────────┐
+  │ tree/        │     │ undo/           │    │ tree_actions/    │
+  │ model, item, │     │ commands, diff  │    │ clipboard, dnd,  │
+  │ types,       │     │ (surgical       │    │ move, sort,      │
+  │ coercion     │     │  replay)        │    │ anchors, paste   │
+  └───────┬──────┘     └─────────────────┘    └──────────────────┘
+          │
+  ┌───────┴───────────────────────────────────────────────────────────────┐
+  │ editors/ (value widgets, app-agnostic)   delegates/ (paint + dispatch)│
+  │ io_formats/ (load/dump/atomic)  validation/ (jsonschema)  themes/     │
+  │ state/ (QSettings persistence)  ui/ (generated)                       │
+  └───────────────────────────────────────────────────────────────────────┘
+```
+
+The dependency arrows are intended to point **downward and inward** only. The two
+enforced seams (`Document` protocol at the app boundary, `DocumentMutationGateway`
+at the data boundary) keep the upper layers from reaching into implementation
+detail. The exception is the `tree/` upward-import leakage catalogued in Part B §2.
+
+## A.3 Control & data flow
+
+### A.3.1 Construction (a tab is born)
+
+`MainWindow._add_tab` → `TabLifecyclePresenter` → `JsonTab.__init__` →
+`documents.composition.init.bootstrap()`. The `__init__` body is intentionally
+*empty of logic*: it just forwards to `bootstrap()`, which assembles the tab in a
+deliberate order — view state → editing controller → appearance/navigation →
+services (DI) → layout → model → history → mutation gateway → validation →
+delegates → shortcuts → view controller. This is a clean **composition root**.
+
+Dependency injection is real but lightweight: `JsonTabServices`
+(`host`, `theme`, `icon_provider`) is a frozen dataclass with null-object
+defaults (`NullJsonTabHost`, `StubIconProvider`). This is why tabs can be
+instantiated headlessly in tests with `JsonTab(lambda *_: None)`.
+
+### A.3.2 The edit flow (the spine of the app)
+
+```
+ValueDelegate (UI)
+  → editors.factory.create_value_editor        # type-dispatched widget
+  → JsonTab.commit_set_data / mutations.*       # the SINGLE seam
+  → DocumentMutationGateway                      # routes by column 0/1/2
+  → CommandDispatcher.push_rename/change_type/edit_value
+  → QUndoCommand (undo/commands.py)
+  → JsonTreeModel.setData → JsonTreeItem.set_data
+```
+
+**Invariant:** nothing mutates the tree except through the gateway. The gateway
+also enforces read-only mode and proxy→source index translation in one place.
+This is the single best architectural decision in the repo — it makes undo/redo
+correctness a *structural* property rather than a discipline that each call site
+must remember.
+
+### A.3.3 Undo / redo replay
+
+Undo/redo does **not** reset the model. `undo/diff.py::DiffApplier` performs a
+surgical diff between the live tree and the target snapshot and emits minimal
+`dataChanged` / row insert/remove signals. This preserves selection, expansion,
+and scroll — UI state that a full `beginResetModel` would destroy. Reload-from-
+disk reuses the very same `DiffApplier`, so external file changes animate into
+the existing tree instead of rebuilding it. Excellent reuse.
+
+### A.3.4 Structural moves
+
+All structural moves (drag-drop, Alt+↑/↓, cut/paste) are expressed via the
+`MoveAnchor` primitive in `tree_actions/anchors.py` and `push_move_rows_anchor`.
+One representation, many gestures — this avoids the classic bug class where
+keyboard-move and drag-move diverge.
+
+### A.3.5 Viewport via signal
+
+The `ViewController` exposes `request_*` methods that emit `viewportRequested`;
+undo commands never call `setCurrentIndex` directly. This decouples "what
+changed" from "where the cursor should go," which is what lets surgical replay
+stay UI-agnostic.
+
+## A.4 Boundary enforcement (the standout quality)
+
+| Seam                      | Mechanism                                                                    | Gate                             |
+|---------------------------|------------------------------------------------------------------------------|----------------------------------|
+| Editors stay app-agnostic | `editors/inline/*`, `editors/windowed/*` may not import `app/documents/tree` | `make check-editors-isolation` ✅ |
+| No mutation bypasses undo | All edits route through `DocumentMutationGateway`                            | convention + protocol            |
+| No reflection             | `getattr`/`hasattr`/`TYPE_CHECKING` banned outside a 3-file allowlist        | `make check-no-reflection` ✅     |
+| App ↔ tab decoupling      | `app/` sees tabs only as `Document` (a `runtime_checkable` Protocol)         | typed protocol                   |
+| No external state reads   | callers reach state via typed `JsonTab.*` properties only                    | pre-commit hook                  |
+
+Both gates pass on the current tree. The "no reflection" rule is notable: by
+banning `getattr`/`hasattr`, the team forces explicit typed accessors, which is
+why the `Document` protocol and `JsonTab` properties exist at all. The cost is a
+**large hand-maintained surface** (see §A.6).
+
+## A.5 Strengths
+
+1. **Single mutation seam.** Undo correctness is structural, not a per-call-site
+   discipline. This is the highest-leverage design choice in the project.
+2. **Surgical model updates** reused across undo/redo *and* reload — preserves UI
+   state and avoids a whole category of "selection jumped" bugs.
+3. **Enforced isolation** of editor widgets and the no-reflection rule give the
+   codebase real, checkable modularity instead of aspirational layering.
+4. **Composition root** (`bootstrap()`) cleanly separates *wiring* from *behavior*;
+   the `JsonTab.__init__` is a one-liner forwarder.
+5. **Lightweight DI with null objects** makes the GUI testable headlessly — the
+   1 124-test suite runs under offscreen Qt without a display.
+6. **Type system as source of truth** (`tree/types.py`, `tree/item_coercion.py`)
+   keeps type logic out of the UI layer.
+7. **Small-module culture.** Most files are well under 300 lines; the `documents/`
+   split into composition/controllers/states/seams reads like a textbook.
+
+## A.6 Risks & weaknesses
+
+1. **Facade surface is large and hand-synced.** `JsonTab` (documents/tab.py) +
+   `Document` (seams/document_protocol.py) + `DocumentMutationGateway` together
+   form a wide, manually-mirrored API. Because reflection is banned, every new
+   capability must be added to the facade, the protocol, and often the gateway.
+   This is a deliberate trade (explicitness over magic) but it is the main place
+   the architecture will rot if discipline slips. *Mitigation:* a small test that
+   asserts `JsonTab` satisfies `Document` and that gateway/dispatcher method sets
+   line up.
+
+2. **`app/main_window.py` (~638 lines) still carries legacy shims.** Many methods
+   are one-line forwarders to presenters (`_limits_menu`, `_setup_validation_dock`
+   marked `# pragma: no cover - retained for back-compat`, deprecated
+   `_closed_tabs_stack`/`_MAX_CLOSED_TABS`). These are harmless but obscure the
+   true responsibilities. A forwarder-pruning pass (with a deprecation sweep of
+   tests) would shrink this to a thin window shell.
+
+3. **`bootstrap()` ordering is implicit and fragile.** The 20-step init sequence
+   has real ordering constraints (e.g. view controller must be created after view
+   and proxy; severity provider before first revalidation). These are encoded only
+   as comments and call order. A regression here fails at runtime, not at the
+   boundary. *Mitigation:* split into named phases with asserts, or document the
+   dependency graph next to the function.
+
+4. **Broad exception handling in defensive paths.** Parse/format/coercion paths use
+   `except Exception` (and a few bare `except:` in the datetime editor). Acceptable
+   as defensive boundaries, but they can mask real bugs; narrowing the
+   non-defensive ones (IO, theme apply) is worthwhile. (See Part B §6.)
+
+5. **Local imports inside methods.** `main_window.py` imports
+   `state.clipboard_settings` / `state.validation_settings` inside methods. Usually
+   done to avoid cycles or startup cost, but it hides real dependencies from the
+   module header and from import-graph tooling.
+
+6. **Theming/font fan-out is push-based.** `_on_theme_applied` iterates all tabs and
+   calls `tab.appearance.set_theme`. Works, but it's an O(tabs) manual broadcast; a
+   subscription/signal model (as already used for validation and dirty state) would
+   be more consistent with the rest of the app.
+
+7. **`tree/` upward imports.** The low-level data package reaches up to `editors/`,
+   `delegates/`, `state/`, and `validation/` (11 imports). Not circular, but the
+   direction is wrong. Catalogued and given a fix plan in Part B §1.2 / §2 and
+   `plans/refactor-tree-upward-imports.md`.
+
+## A.7 Targeted recommendations
+
+| Priority | Recommendation                                                                                                                                          | Effort |
+|---------:|---------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|
+|     High | Add a conformance test: `isinstance(JsonTab(...), Document)` + assert gateway/dispatcher method parity, so the hand-synced facade can't drift silently. |   S    |
+|     High | Prune the back-compat shims in `app/main_window.py` (and the deprecated `_closed_tabs_stack` / `_MAX_CLOSED_TABS`) once tests are migrated.             |   M    |
+|   Medium | Break `bootstrap()` into named phases (`_wire_state`, `_wire_model`, `_wire_validation`, `_wire_view`) with ordering asserts.                           |   M    |
+|   Medium | Convert theme/font fan-out to the same signal-subscription pattern used for validation/dirty.                                                           |   M    |
+|   Medium | Narrow non-defensive `except Exception` (IO open/reload, theme apply) to specific error types.                                                          |   S    |
+|      Low | Hoist method-local imports in `app/` to module scope where no cycle exists; document the ones that must stay.                                           |   S    |
+|      Low | Add an architecture import-direction test (e.g. assert `editors/` never imports `documents/`) to complement the shell gates with a Python-level check.  |   S    |
+
+## A.8 Verdict
+
+This is a **well-architected application** whose defining feature is that its most
+important boundaries are *enforced, not just documented*. The single-seam mutation
+model plus surgical undo replay is the kind of design that prevents whole bug
+classes rather than patching them. The main maintenance tax is the breadth of the
+hand-synced facade/protocol/gateway trio and the residual forwarding shims in the
+window shell — both manageable with small, targeted hardening (a conformance test
+and a shim-pruning pass). No structural redesign is warranted.
+
+---
+
+# Part B — Code-Quality Audit
+
+**Focus:** Responsibility segregation, architectural boundaries, code hygiene.
+**Test surface:** 1 124 collected.
+
+## B — Executive Summary
 
 | Dimension                      | Grade  | Notes                                                                    |
 |:-------------------------------|:------:|:-------------------------------------------------------------------------|
@@ -26,11 +280,9 @@
 has been executed thoroughly, and the architectural seams are genuinely narrow. The remaining issues are mostly about
 tightening a few upward imports and closing test gaps.
 
----
+## B.1 Responsibility Segregation — Detailed Analysis
 
-## 1. Responsibility Segregation — Detailed Analysis
-
-### 1.1 The `documents/` Package (Grade: A)
+### B.1.1 The `documents/` Package (Grade: A)
 
 The `documents/` package is the architectural centrepiece, and it shows the most deliberate segregation work:
 
@@ -99,7 +351,7 @@ documents/
   the dialog could be injected, but this is a low-priority concern since `IoController` is already per-tab and the
   dialog is only reachable from user action.
 
-### 1.2 The `tree/` Package (Grade: B+)
+### B.1.2 The `tree/` Package (Grade: B+)
 
 **Structure:**
 
@@ -157,9 +409,9 @@ impact (no circular import), but the dependency direction is still wrong.
 package that both `tree/` and `editors/` can import. Similarly, move `bytes_codec` decode/encode and `color_codec`
 normalization into `tree/` or a shared `codecs/` package, since they are data-layer concerns, not presentation concerns.
 The `secret_names` and `secret_settings` imports could be resolved by injecting a name-matching predicate into
-`JsonTreeItem.__init__`.
+`JsonTreeItem.__init__`. **This is fully planned in `plans/refactor-tree-upward-imports.md`.**
 
-### 1.3 The `editors/` Package (Grade: A)
+### B.1.3 The `editors/` Package (Grade: A)
 
 **Structure:**
 
@@ -207,7 +459,7 @@ editors/
   editor widget with its own chunk model, commands, and color manager. While large, it's cohesive — splitting it would
   create artificial boundaries inside a single-responsibility widget.
 
-### 1.4 The `delegates/` Package (Grade: A−)
+### B.1.4 The `delegates/` Package (Grade: A−)
 
 **Structure:**
 
@@ -244,7 +496,7 @@ delegates/
   These codec functions are data-layer concerns (encode/decode bytes for storage) that happen to live in the
   presentation package. They should be in `tree/` or a shared `codecs/` package.
 
-### 1.5 The `undo/` Package (Grade: A)
+### B.1.5 The `undo/` Package (Grade: A)
 
 **Structure:**
 
@@ -276,7 +528,7 @@ undo/
 - Undo commands hold a `_tab` reference typed as `"JsonTab"` (string annotation). Since they only call `Document`
   -protocol methods, the type annotation could be narrowed to `Document` for clarity.
 
-### 1.6 The `tree_actions/` Package (Grade: B+)
+### B.1.6 The `tree_actions/` Package (Grade: B+)
 
 **Structure:**
 
@@ -321,7 +573,7 @@ tree_actions/
   import from `tree_actions/` to `state/`, but it's pragmatically fine since `_dump_text` is a pure function that reads
   a QSettings value.
 
-### 1.7 The `app/` Package (Grade: B+)
+### B.1.7 The `app/` Package (Grade: B+)
 
 **Structure:**
 
@@ -367,7 +619,7 @@ app/
 - **`_setup_validation_dock` and `_setup_schemas_menu` are no-op stubs** (lines 200–204) retained for back-compat. Dead
   code.
 
-### 1.8 The `validation/` Package (Grade: A−)
+### B.1.8 The `validation/` Package (Grade: A−)
 
 **Structure:**
 
@@ -403,7 +655,7 @@ validation/
 - `validation/secret_names.py` is imported by `tree/item.py`, creating an upward dependency. Since `name_looks_secret`
   is a pure function with no Qt or app dependency, it could live in a shared `core/` or `utils/` package.
 
-### 1.9 The `state/` Package (Grade: A−)
+### B.1.9 The `state/` Package (Grade: A−)
 
 **Structure:**
 
@@ -434,7 +686,7 @@ state/
   QSettings at call time. This couples the data layer to a Qt persistence mechanism. An injection pattern (passing the
   prefixes as a parameter) would be cleaner.
 
-### 1.10 The `io_formats/` Package (Grade: A)
+### B.1.10 The `io_formats/` Package (Grade: A)
 
 **Structure:**
 
@@ -459,9 +711,7 @@ io_formats/
 
 4. **Tiny modules.** `dump.py` at 47 lines and `load.py` at 83 lines are exemplary in their focus.
 
----
-
-## 2. Cross-Boundary Import Map
+## B.2 Cross-Boundary Import Map
 
 The intended dependency direction is:
 
@@ -493,7 +743,7 @@ tree/ ← (nothing above it)
 **Total: 11 upward imports from `tree/`.** The lazy imports in `item_coercion.py` avoid circular-import crashes, but the
 architectural direction is still wrong.
 
-**Recommended resolution:**
+**Recommended resolution** (planned in `plans/refactor-tree-upward-imports.md`):
 
 1. **Extract `editors/inline/datetime/regex.py` and `enums.py`** into a shared package (e.g., `core/datetime_parsing/`)
    that both `tree/` and `editors/` can import. These modules contain no Qt code — they're pure parsing logic.
@@ -504,9 +754,7 @@ architectural direction is still wrong.
 3. **Inject `get_secret_word_prefixes` and `name_looks_secret`** into `JsonTreeItem.__init__` as optional callables,
    defaulting to the current implementations. This removes the hard upward dependency.
 
----
-
-## 3. File Size Analysis
+## B.3 File Size Analysis
 
 | File                                          | Lines | Assessment                                     |
 |:----------------------------------------------|------:|:-----------------------------------------------|
@@ -527,9 +775,7 @@ file outside generated `mainwindow.py` exceeds ~580 lines" is **inaccurate** —
 `structure.py` at 774, and `main_window.py` at 637. The spirit of the claim (no god classes) holds, but the specific
 number is wrong.
 
----
-
-## 4. Mutation Discipline
+## B.4 Mutation Discipline
 
 **All mutations flow through the gateway:**
 
@@ -554,9 +800,7 @@ except in the headless fallback paths in `tree_actions/structure.py`, which are 
 This triple-check is defensive but not harmful — it ensures that even if a caller bypasses one layer, the model still
 rejects mutations.
 
----
-
-## 5. Protocol & Seam Quality
+## B.5 Protocol & Seam Quality
 
 | Seam                                         | Protocol             | Runtime-checkable |              Enforced by CI              |
 |:---------------------------------------------|:---------------------|:-----------------:|:----------------------------------------:|
@@ -573,29 +817,26 @@ the factory receives a `ValueDelegateProtocol` and calls methods on it. This is 
 **Missing enforcement:** There's no CI check that verifies `JsonTab` actually implements all `Document` protocol
 attributes. A `mypy` check or a dedicated test would catch protocol violations at CI time.
 
----
+## B.6 Code Hygiene Issues
 
-## 6. Code Hygiene Issues
+| Issue                                                                     | Severity | Location                                           |
+|:--------------------------------------------------------------------------|:--------:|:---------------------------------------------------|
+| `tree/item.py` → `editors/`, `state/`, `validation/` upward imports       |  Medium  | `tree/item.py:6-8,13`                              |
+| `tree/item_coercion.py` → `delegates/` upward imports (lazy)              |  Medium  | `tree/item_coercion.py:276,368,475,504,539`        |
+| `tree/types.py` → `editors/` upward import                                |  Medium  | `tree/types.py:12`                                 |
+| `hexedit/widget.py` at 1 130 lines                                        |   Low    | `editors/windowed/hexedit/widget.py`               |
+| `structure.py` at 774 lines                                               |   Low    | `tree_actions/structure.py`                        |
+| `main_window.py` at 637 lines                                             |   Low    | `app/main_window.py`                               |
+| `_closed_tabs_stack` deprecated shim                                      |   Low    | `app/main_window.py:356-358`                       |
+| `_setup_validation_dock` / `_setup_schemas_menu` no-op stubs              |   Low    | `app/main_window.py:200-204`                       |
+| Underscore-prefixed names re-exported across `tree_actions/`              |   Low    | `tree_actions/selection.py`                        |
+| `IoController.save()` catches `Exception` broadly                         |   Low    | `documents/states/io_controller.py:54`             |
+| Bare `except:` in datetime editor (swallows KeyboardInterrupt/SystemExit) |   Low    | `editors/inline/datetime/regex.py`, `validator.py` |
+| `JsonTreeItem.row()` returns 0 for root (footgun)                         | Very Low | `tree/item.py:73`                                  |
+| `ValueDelegate.createEditor` raises `ValueError` for OBJECT/ARRAY/NULL    | Very Low | `editors/factory.py:232`                           |
+| `state.view_state` persists expansion as positional paths                 | Very Low | `state/view_state.py`                              |
 
-| Issue                                                                  | Severity | Location                                    |
-|:-----------------------------------------------------------------------|:--------:|:--------------------------------------------|
-| `tree/item.py` → `editors/`, `state/`, `validation/` upward imports    |  Medium  | `tree/item.py:6-8,13`                       |
-| `tree/item_coercion.py` → `delegates/` upward imports (lazy)           |  Medium  | `tree/item_coercion.py:276,368,475,504,539` |
-| `tree/types.py` → `editors/` upward import                             |  Medium  | `tree/types.py:12`                          |
-| `hexedit/widget.py` at 1 130 lines                                     |   Low    | `editors/windowed/hexedit/widget.py`        |
-| `structure.py` at 774 lines                                            |   Low    | `tree_actions/structure.py`                 |
-| `main_window.py` at 637 lines                                          |   Low    | `app/main_window.py`                        |
-| `_closed_tabs_stack` deprecated shim                                   |   Low    | `app/main_window.py:356-358`                |
-| `_setup_validation_dock` / `_setup_schemas_menu` no-op stubs           |   Low    | `app/main_window.py:200-204`                |
-| Underscore-prefixed names re-exported across `tree_actions/`           |   Low    | `tree_actions/selection.py`                 |
-| `IoController.save()` catches `Exception` broadly                      |   Low    | `documents/states/io_controller.py:54`      |
-| `JsonTreeItem.row()` returns 0 for root (footgun)                      | Very Low | `tree/item.py:73`                           |
-| `ValueDelegate.createEditor` raises `ValueError` for OBJECT/ARRAY/NULL | Very Low | `editors/factory.py:232`                    |
-| `state.view_state` persists expansion as positional paths              | Very Low | `state/view_state.py`                       |
-
----
-
-## 7. Test Surface Assessment
+## B.7 Test Surface Assessment
 
 | Area                              |           Tests | Coverage Quality |
 |:----------------------------------|----------------:|:-----------------|
@@ -615,15 +856,13 @@ attributes. A `mypy` check or a dedicated test would catch protocol violations a
 The test surface is strong for the features added in recent phases (drag-and-drop, validation, file-UX) but has gaps in
 foundational areas (delegate round-trips, I/O property tests, model invariants).
 
----
-
-## 8. Summary of Recommendations
+## B.8 Summary of Recommendations
 
 ### High Priority
 
 1. **Resolve `tree/` upward imports.** Extract `editors/inline/datetime/regex.py` + `enums.py` into a shared package.
    Move `delegates/formatting/bytes_codec.py` and `color_codec.py` into `tree/` or `codecs/`. Inject secret-name
-   matching into `JsonTreeItem`.
+   matching into `JsonTreeItem`. *(Planned: `plans/refactor-tree-upward-imports.md`.)*
 
 2. **Add `make test` target.** Already defined in the Makefile — just needs `pytest-qt` pinned in `requirements.txt`.
 
@@ -655,9 +894,7 @@ foundational areas (delegate round-trips, I/O property tests, model invariants).
 
 12. **Change `ValueDelegate.createEditor` to return `None`** for OBJECT/ARRAY/NULL instead of raising `ValueError`.
 
----
-
-## 9. Grade Justification
+## B.9 Grade Justification
 
 **Responsibility Segregation: A−**
 

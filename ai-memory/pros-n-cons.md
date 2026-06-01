@@ -2,8 +2,8 @@
 
 _Last analysis: **2026-06-01** (branch `strict-responsibility-segregation`).
 Reflects the completed responsibility-segregation refactor (Plan 20 /
-Plan 21, all 8 steps) and the 2026-06-01 code-quality audit
-(`reports/code-quality-audit-2026-06-01.md`, overall grade **A−**)._
+Plan 21, all 8 steps) and the 2026-06-01 code review
+(`reports/code-review-2026-06-01.md`, overall grade **A−**)._
 
 A PySide6 desktop **structured-data editor** (JSON / JSONL / YAML /
 YAML-multi) built on a three-column `Name | Type | Value` tree model,

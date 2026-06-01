@@ -2,7 +2,7 @@
 
 **Status:** Proposed
 **Created:** 2026-06-01
-**Source:** `reports/code-quality-audit-2026-06-01.md` §1.2, §2, §8
+**Source:** `reports/code-review-2026-06-01.md` Part B §1.2, §2, §8
 (High Priority #1)
 **Owner branch suggestion:** `fix-tree-upward-imports`
 
@@ -185,8 +185,8 @@ script, **not** a Python script under `scripts/`):
       `make check-no-reflection` / `make gate` via `.githooks/pre-commit-ci`.
 - [ ] All previously passing suites still pass (1124 collected).
 - [ ] `repo-map.md` documents `core/` and the tree-isolation rule.
-- [ ] Audit table in §2 of the report is fully resolved (0 upward
-      imports).
+- [ ] Audit table in Part B §2 of `reports/code-review-2026-06-01.md` is fully
+      resolved (0 upward imports).
 
 ---
 
@@ -199,4 +199,3 @@ These appear in the same audit but are **not** part of this plan:
 - Narrowing `IoController.save()` exception handling.
 - Delegate-matrix / I/O round-trip / model-invariant test gaps.
 - Pinning `pytest-qt`, coverage snapshot, `Document`-conformance check.
-</content>
