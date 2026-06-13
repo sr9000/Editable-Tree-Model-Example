@@ -14,6 +14,7 @@ from core.datetime_parsing import parse_datetime_text
 from core.datetime_parsing.nano_time import NanoTime
 from core.raw_numeric import RawNumericValue
 from settings import INFERENCE_MAX_COLOR_CHARS, NUMBER_AFFIX_MAX_LEN
+from tree.inference_limits import base64_syntax_valid
 from units.number_affix import AffixKind, NumberAffix, parse_number_affix
 
 LOGGER = logging.getLogger(__name__)
@@ -37,14 +38,19 @@ def looks_like_color_rgba(s: str, *, allow_expensive: bool = False) -> bool:
 def _looks_like_base64(s: str) -> bool:
     """Return True iff *s* is a syntactically valid, non-empty base64 string.
 
+    Uses ``base64_syntax_valid`` as a cheap pre-check (len mod 4 + alphabet
+    regex) before attempting the expensive ``base64.b64decode``. A minimum
+    length of 20 chars is required to avoid false positives on short strings.
+
     No content heuristics are applied: any string that decodes cleanly under
     strict base64 rules is treated as ``BYTES``. Callers that need to
     discriminate against short / human-readable strings (e.g. ``"abcd"``)
     must pin the type explicitly via the type editor.
     """
-    if not s or len(s) % 4 != 0:
+    if not base64_syntax_valid(s):
         return False
-    if _B64_RE.fullmatch(s) is None:
+    # Require minimum 20 chars to avoid false positives on short strings
+    if len(s) < 20:
         return False
     try:
         base64.b64decode(s, validate=True)
