@@ -24,7 +24,7 @@ Add hard safety constants in [`settings.py`](../settings.py) with names beginnin
 
 ## Threshold table
 
-Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-06-13.md`](../reports/parsing-vulnerability-2026-06-13.md). The report measured 640 rows across 16 registry entries and 10 adversarial families at sizes 1024, 4096, 16384, and 65536. All functions pass at 65536 except `decode_bytes` which errors on non-base64 input (expected behavior). The superlinear scaling observations (121 rows) are within acceptable bounds for the configured 3.0 ratio threshold.
+Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-06-13.md`](../reports/parsing-vulnerability-2026-06-13.md). The report measured 832 rows across 16 registry entries and 13 adversarial families (including trace_repetition, source_code_repetition, and escape_heavy for realistic content) at sizes 1024, 4096, 16384, and 65536. All functions pass at 65536 except `decode_bytes` which errors on non-base64 input (expected behavior). The superlinear scaling observations (141 rows) are within acceptable bounds for the configured 3.0 ratio threshold.
 
 | Constant | Guards | Value | Plan 0 justification |
 |---|---|---:|---|

@@ -14,12 +14,15 @@ from tests.perf.string_corpus import (
     FAMILY_REGISTRY,
     base64_like,
     digits,
+    escape_heavy,
     mixed_interleaved,
     near_affix,
     near_color,
     near_datetime,
     pathological_repetition,
     plain_ascii,
+    source_code_repetition,
+    trace_repetition,
     unicode_bulk,
     whitespace,
 )
@@ -50,6 +53,9 @@ class TestRegistryCompleteness:
         "unicode_bulk",
         "pathological_repetition",
         "mixed_interleaved",
+        "trace_repetition",
+        "source_code_repetition",
+        "escape_heavy",
     }
 
     def test_registry_has_all_families(self):
@@ -247,6 +253,63 @@ class TestMixedInterleaved:
     def test_non_empty(self):
         label, text = mixed_interleaved(32)
         assert text != ""
+
+
+class TestTraceRepetition:
+    """Tests for the trace_repetition family."""
+
+    @pytest.mark.parametrize("size", [32, 128, 1024])
+    def test_acceptance_check(self, size: int):
+        label, text = trace_repetition(size)
+        assert label == "trace_repetition"
+        assert len(text) == size
+        # Should contain trace-like content (Traceback, File, line numbers)
+        if size >= 50:
+            assert "Traceback" in text or "File" in text or "line" in text
+
+    def test_non_empty(self):
+        label, text = trace_repetition(32)
+        assert text != ""
+
+
+class TestSourceCodeRepetition:
+    """Tests for the source_code_repetition family."""
+
+    @pytest.mark.parametrize("size", [32, 128, 1024])
+    def test_acceptance_check(self, size: int):
+        label, text = source_code_repetition(size)
+        assert label == "source_code_repetition"
+        assert len(text) == size
+        # Should contain code-like content (import, def, =, etc.)
+        if size >= 50:
+            assert "import" in text or "def" in text or "=" in text or "pygame" in text
+
+    def test_non_empty(self):
+        label, text = source_code_repetition(32)
+        assert text != ""
+
+
+class TestEscapeHeavy:
+    """Tests for the escape_heavy family."""
+
+    @pytest.mark.parametrize("size", [32, 128, 1024])
+    def test_acceptance_check(self, size: int):
+        label, text = escape_heavy(size)
+        assert label == "escape_heavy"
+        assert len(text) == size
+        # Should contain many backslashes from escaping
+        if size >= 50:
+            assert "\\" in text, "escape_heavy should contain backslashes"
+
+    def test_non_empty(self):
+        label, text = escape_heavy(32)
+        assert text != ""
+
+    def test_contains_escaped_sequences(self):
+        """Escape heavy text should contain escaped sequences like \\n, \\"."""
+        label, text = escape_heavy(1024)
+        # Should have escaped newlines or quotes
+        assert "\\n" in text or '\\"' in text or "\\\\" in text
 
 
 # ---------------------------------------------------------------------------

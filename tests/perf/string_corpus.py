@@ -460,6 +460,68 @@ def mixed_interleaved(size: int) -> tuple[str, str]:
     return ("mixed_interleaved", text)
 
 
+def trace_repetition(size: int) -> tuple[str, str]:
+    """Return TRACE_EXAMPLE repeated to reach desired size.
+
+    Extends to array of same format messages by repeating the trace example.
+    This tests performance on realistic multi-line error trace content.
+    """
+    if size < 1:
+        return ("trace_repetition", "")
+    # Repeat the trace example to reach the desired size
+    trace_len = len(TRACE_EXAMPLE)
+    if trace_len == 0:
+        return ("trace_repetition", "")
+    repeats = (size // trace_len) + 1
+    text = (TRACE_EXAMPLE * repeats)[:size]
+    return ("trace_repetition", text)
+
+
+def source_code_repetition(size: int) -> tuple[str, str]:
+    """Return SOURCE_CODE_EXAMPLE repeated to reach desired size.
+
+    Uses concatenation to produce long source code-like content.
+    This tests performance on realistic multi-line code content.
+    """
+    if size < 1:
+        return ("source_code_repetition", "")
+    # Repeat the source code example to reach the desired size
+    source_len = len(SOURCE_CODE_EXAMPLE)
+    if source_len == 0:
+        return ("source_code_repetition", "")
+    repeats = (size // source_len) + 1
+    text = (SOURCE_CODE_EXAMPLE * repeats)[:size]
+    return ("source_code_repetition", text)
+
+
+def escape_heavy(size: int) -> tuple[str, str]:
+    """Return JSON_TO_BE_ESCAPED with heavy escaping (double/triple backslashes).
+
+    Builds escape-heavy strings by applying multiple levels of escaping to the
+    JSON content. This tests performance on strings with many backslash sequences.
+    """
+    if size < 1:
+        return ("escape_heavy", "")
+    # Start with the JSON content and apply escaping
+    base = JSON_TO_BE_ESCAPED.strip()
+    if not base:
+        return ("escape_heavy", "")
+
+    # Apply double escaping: replace backslashes and quotes with escaped versions
+    # This creates strings like \\" and \\\\ which stress escape handling
+    escaped_once = base.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    # Apply triple escaping for even more backslash density
+    escaped_twice = escaped_once.replace("\\", "\\\\").replace('"', '\\"')
+
+    # Concatenate to reach desired size
+    text_len = len(escaped_twice)
+    if text_len == 0:
+        return ("escape_heavy", "")
+    repeats = (size // text_len) + 1
+    text = (escaped_twice * repeats)[:size]
+    return ("escape_heavy", text)
+
+
 # ---------------------------------------------------------------------------
 # Registry of all families
 # ---------------------------------------------------------------------------
@@ -475,6 +537,9 @@ FAMILY_REGISTRY: dict[str, Callable[[int], tuple[str, str]]] = {
     "unicode_bulk": unicode_bulk,
     "pathological_repetition": pathological_repetition,
     "mixed_interleaved": mixed_interleaved,
+    "trace_repetition": trace_repetition,
+    "source_code_repetition": source_code_repetition,
+    "escape_heavy": escape_heavy,
 }
 
 # Default sizes for normal local runs
