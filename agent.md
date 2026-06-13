@@ -14,17 +14,26 @@ A PySide6 desktop **structured-data editor** (JSON, YAML, JSONL) with:
 
 ## 2) Build & Test Commands
 
+**Always activate the venv first** — all tools (pytest, autoflake, isort, black) live in `.venv`:
+
 ```bash
-# Run full test suite (1608 tests, ~25s)
-QT_QPA_PLATFORM=offscreen .venv/bin/pytest tests/ -q
+source .venv/bin/activate
+```
+
+Then use `make` targets (which rely on the activated venv):
+
+```bash
+# Run full test suite (~1655 tests, ~25s)
+QT_QPA_PLATFORM=offscreen pytest tests/ -q
 
 # Run specific test file
-QT_QPA_PLATFORM=offscreen .venv/bin/pytest tests/test_raw_numeric_values.py -xvs
+QT_QPA_PLATFORM=offscreen pytest tests/test_raw_numeric_values.py -xvs
 
 # Lint (autoflake + isort + black)
 make lint
 
 # Full DoD gate (lint → reflection check → isolation checks → tests)
+# ALWAYS run this before committing.
 make gate
 
 # Isolation checks individually
@@ -32,6 +41,8 @@ make check-editors-isolation  # editors/ must not import app/documents/tree
 make check-tree-isolation     # tree/ must not import app/documents/editors/delegates/state/validation
 make check-no-reflection      # no getattr/hasattr outside allowlist
 ```
+
+**Commit discipline:** Run `make gate` and ensure it passes before every commit. Never skip the DoD gate.
 
 ## 3) Key Architecture: Edit Flow
 
