@@ -60,8 +60,9 @@ class ChunkedTreeBuilder(QObject):
         self._model: JsonTreeModel | None = None
         self._total_items = 0
         self._built_items = 0
+        self._latest_path = ""
         self._root_item: JsonTreeItem | None = None
-        self._work_stack: list[tuple[JsonTreeItem, list[tuple[str | int | None, Any]], int]] = []
+        self._work_stack: list[tuple[JsonTreeItem, list[tuple[str | int | None, Any]], int, str]] = []
         self._secret_name_predicate: SecretNamePredicate = _default_secret_name_predicate
 
     def start(self) -> None:
@@ -78,6 +79,7 @@ class ChunkedTreeBuilder(QObject):
         # freeze before chunked construction starts.
         self._total_items = 0
         self._built_items = 0
+        self._latest_path = ""
 
         self._root_item = _make_shallow_item(
             None,
@@ -85,7 +87,7 @@ class ChunkedTreeBuilder(QObject):
             None,
             secret_name_predicate=self._secret_name_predicate,
         )
-        self._push_children(self._root_item, self._data)
+        self._push_children(self._root_item, self._data, "")
 
         # Schedule the first work slice
         QTimer.singleShot(0, self._do_work_slice)
@@ -102,6 +104,7 @@ class ChunkedTreeBuilder(QObject):
 
             self._built_items += 1
             if self._reporter is not None:
+                self._reporter.detail(self._built_items, self._latest_path)
                 self._reporter.tick(0, 0)
             self.progress.emit(self._built_items, self._total_items)
 
@@ -134,7 +137,7 @@ class ChunkedTreeBuilder(QObject):
         self.progress.emit(self._total_items, self._total_items)
         self.finished.emit(self._model)
 
-    def _push_children(self, item: JsonTreeItem, value: Any) -> None:
+    def _push_children(self, item: JsonTreeItem, value: Any, parent_path: str) -> None:
         """Push a child-iteration frame for a container item."""
         if isinstance(value, dict):
             entries = list(value.items())
@@ -143,7 +146,7 @@ class ChunkedTreeBuilder(QObject):
         else:
             return
         if entries:
-            self._work_stack.append((item, entries, 0))
+            self._work_stack.append((item, entries, 0, parent_path))
 
     def _build_one_item(self) -> bool:
         """Build one pending child item.
@@ -151,13 +154,15 @@ class ChunkedTreeBuilder(QObject):
         Returns False when no work remains.
         """
         while self._work_stack:
-            parent_item, entries, index = self._work_stack[-1]
+            parent_item, entries, index, parent_path = self._work_stack[-1]
             if index >= len(entries):
                 self._work_stack.pop()
                 continue
 
-            self._work_stack[-1] = (parent_item, entries, index + 1)
+            self._work_stack[-1] = (parent_item, entries, index + 1, parent_path)
             name, value = entries[index]
+            path_segment: str | int | None = index if name is None else name
+            self._latest_path = _append_json_pointer(parent_path, path_segment)
             child = _make_shallow_item(
                 parent_item,
                 value,
@@ -165,7 +170,7 @@ class ChunkedTreeBuilder(QObject):
                 secret_name_predicate=self._secret_name_predicate,
             )
             parent_item.append_child(child)
-            self._push_children(child, value)
+            self._push_children(child, value, self._latest_path)
             return True
 
         return False
@@ -219,6 +224,21 @@ def _count_items(data: Any) -> int:
             count += 1 + _count_items(value)
         return count
     return 0
+
+
+def _append_json_pointer(parent_path: str, segment: str | int | None) -> str:
+    """Append one segment to a JSON Pointer-style path."""
+    if segment is None:
+        return parent_path
+    token = _escape_json_pointer_token(str(segment))
+    if not parent_path:
+        return f"/{token}"
+    return f"{parent_path}/{token}"
+
+
+def _escape_json_pointer_token(token: str) -> str:
+    """Escape a JSON Pointer token."""
+    return token.replace("~", "~0").replace("/", "~1")
 
 
 def build_model_sync(

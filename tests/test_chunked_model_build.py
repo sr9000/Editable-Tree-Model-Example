@@ -7,7 +7,6 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
 from app.loading.builder import ChunkedTreeBuilder, _count_items, build_model_sync
-from app.loading.progress import NullProgressReporter
 from tree.model import JsonTreeModel
 from tree.types import JsonType
 
@@ -156,6 +155,48 @@ class TestChunkedTreeBuilderNoPartialModel:
 
         assert finished_called[0]
         assert len(progress_updates) > 0
+
+
+class TestChunkedTreeBuilderDetailProgress:
+    """Tests for processed-count and current-path detail reporting."""
+
+    def test_detail_reports_increasing_count_and_pointer_paths(self, qtbot):
+        """Builder emits monotonic processed counts and JSON-pointer-like paths."""
+        data = {
+            "orders": [
+                {"id": 1, "price": 12},
+                {"id": 2, "price": 34},
+            ],
+            "a/b": {"~name": True},
+        }
+
+        details: list[tuple[int, str]] = []
+
+        class TrackingReporter:
+            def stage(self, name: str) -> None:
+                pass
+
+            def tick(self, done: int, total: int) -> None:
+                pass
+
+            def detail(self, processed: int, path: str) -> None:
+                details.append((processed, path))
+
+        finished = [False]
+        builder = ChunkedTreeBuilder(data, reporter=TrackingReporter())
+        builder.finished.connect(lambda _: finished.__setitem__(0, True))
+        builder.start()
+
+        qtbot.waitUntil(lambda: finished[0], timeout=1000)
+
+        assert details
+        processed_values = [processed for processed, _ in details]
+        assert processed_values == sorted(processed_values)
+        assert processed_values[-1] > 0
+        assert all(path.startswith("/") for _, path in details if path)
+        assert any(path.startswith("/orders") for _, path in details)
+        assert any(path == "/a~1b" for _, path in details)
+        assert any(path.startswith("/a~1b/~0name") for _, path in details)
 
 
 class TestCountItems:
