@@ -58,12 +58,18 @@ class ProgressEvent:
     total : int
         Total number of items in the current stage.
         When unknown, both done and total are 0.
+    processed : int
+        Number of fields/values processed for detail reporting.
+    path : str
+        Current JSON-Pointer-style path for detail reporting.
     """
 
     task_id: str
     stage: str
     done: int = 0
     total: int = 0
+    processed: int = 0
+    path: str = ""
 
     @property
     def is_indeterminate(self) -> bool:
@@ -101,6 +107,18 @@ class ProgressReporter(Protocol):
         """
         ...
 
+    def detail(self, processed: int, path: str) -> None:
+        """Report detailed progress metadata.
+
+        Parameters
+        ----------
+        processed : int
+            Number of fields/values processed so far.
+        path : str
+            Current JSON-Pointer-style path.
+        """
+        ...
+
 
 class NullProgressReporter:
     """A no-op progress reporter for testing or when progress is not needed."""
@@ -109,6 +127,9 @@ class NullProgressReporter:
         pass
 
     def tick(self, done: int, total: int) -> None:
+        pass
+
+    def detail(self, processed: int, path: str) -> None:
         pass
 
 

@@ -37,6 +37,21 @@ class TestProgressEvent:
         event = ProgressEvent(task_id="task-1", stage="reading/parsing file")
         assert event.done == 0
         assert event.total == 0
+        assert event.processed == 0
+        assert event.path == ""
+
+    def test_progress_event_detail_fields(self):
+        """ProgressEvent carries detail payload fields."""
+        event = ProgressEvent(
+            task_id="task-1",
+            stage="building item tree",
+            done=0,
+            total=0,
+            processed=1234,
+            path="/orders/1000/price",
+        )
+        assert event.processed == 1234
+        assert event.path == "/orders/1000/price"
 
     def test_progress_event_is_indeterminate(self):
         """is_indeterminate returns True when total is 0."""
@@ -107,6 +122,12 @@ class TestProgressReporterProtocol:
         reporter.tick(5, 10)
         reporter.tick(0, 0)
 
+    def test_null_reporter_accepts_detail(self):
+        """NullProgressReporter.detail() does not raise."""
+        reporter = NullProgressReporter()
+        reporter.detail(321, "/a/1")
+        reporter.detail(0, "")
+
 
 class TestStageTracking:
     """Tests for tracking stage progression."""
@@ -114,6 +135,7 @@ class TestStageTracking:
     def test_stages_emitted_in_order(self):
         """Stages can be tracked in the expected order."""
         observed_stages: list[str] = []
+        observed_details: list[tuple[int, str]] = []
 
         class TrackingReporter:
             def stage(self, name: str) -> None:
@@ -122,13 +144,18 @@ class TestStageTracking:
             def tick(self, done: int, total: int) -> None:
                 pass
 
+            def detail(self, processed: int, path: str) -> None:
+                observed_details.append((processed, path))
+
         reporter = TrackingReporter()
 
         # Simulate emitting stages in order
         for stage_name in OPEN_STAGES:
             reporter.stage(stage_name)
+            reporter.detail(1, "/example")
 
         assert observed_stages == list(OPEN_STAGES)
+        assert len(observed_details) == len(OPEN_STAGES)
 
     def test_tick_values_are_valid(self):
         """tick(done, total) values satisfy 0 <= done <= total."""
@@ -140,6 +167,9 @@ class TestStageTracking:
 
             def tick(self, done: int, total: int) -> None:
                 tick_calls.append((done, total))
+
+            def detail(self, processed: int, path: str) -> None:
+                pass
 
         reporter = TrackingReporter()
 
