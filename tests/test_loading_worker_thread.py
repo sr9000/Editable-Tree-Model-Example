@@ -6,10 +6,14 @@ import time
 from typing import Any
 
 import pytest
-from PySide6.QtCore import QThread, QTimer
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Slot
 from PySide6.QtWidgets import QApplication
 
 from app.loading.worker import ParseWorker, start_parse_worker
+from io_formats.load import _AFFIX_JSON_TYPES, _decode_number_affixes
+from settings import NUMBER_AFFIX_MAX_LEN
+from tree.types import parse_json_type
+from units.number_affix import parse_number_affix
 
 
 @pytest.fixture(scope="module")
@@ -37,6 +41,20 @@ def _failing_parser(error_msg: str):
         raise ValueError(error_msg)
 
     return parser
+
+
+def _decode_number_affixes_recursive_legacy(value: Any) -> Any:
+    if isinstance(value, str):
+        if parse_json_type(value) in _AFFIX_JSON_TYPES:
+            parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
+            if parsed is not None:
+                return parsed
+        return value
+    if isinstance(value, list):
+        return [_decode_number_affixes_recursive_legacy(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _decode_number_affixes_recursive_legacy(v) for k, v in value.items()}
+    return value
 
 
 class TestParseWorkerSuccess:
@@ -76,6 +94,36 @@ class TestParseWorkerSuccess:
 
         assert "reading/parsing file" in stages
         assert "decoding number affixes" in stages
+
+        thread.deleteLater()
+        worker.deleteLater()
+
+    def test_worker_emits_decode_detail_on_gui_thread(self, qtbot, tmp_path):
+        """Decode detail events are delivered on the GUI thread via queued connection."""
+        doc = tmp_path / "data.json"
+        doc.write_text('{"orders":[{"price":"1kg"},{"price":"2kg"}],"meta":{"x":"3kg"}}', encoding="utf-8")
+
+        thread, worker = start_parse_worker(str(doc), parser=None)
+
+        details: list[tuple[int, str]] = []
+        callback_threads: list[QThread] = []
+
+        class Collector(QObject):
+            @Slot(int, str)
+            def on_detail(self, processed: int, path: str) -> None:
+                details.append((processed, path))
+                callback_threads.append(QThread.currentThread())
+
+        collector = Collector()
+        gui_thread = QApplication.instance().thread()
+        worker.detail.connect(collector.on_detail, Qt.ConnectionType.QueuedConnection)
+
+        qtbot.waitUntil(lambda: not thread.isRunning(), timeout=2000)
+        qtbot.wait(20)
+
+        assert details
+        assert any(path.startswith("/orders") for _, path in details)
+        assert all(t is gui_thread for t in callback_threads)
 
         thread.deleteLater()
         worker.deleteLater()
@@ -158,6 +206,21 @@ class TestParseWorkerThreadCleanup:
 
         thread.deleteLater()
         worker.deleteLater()
+
+
+class TestDecodeOutputParity:
+    """Tests ensuring iterative decode matches legacy recursive semantics."""
+
+    def test_iterative_decode_matches_legacy_recursive_output(self):
+        """Decode output remains byte-for-byte equivalent for nested structures."""
+        data = {
+            "root": ["1kg", "plain", {"money": "$12", "nested": ["2m", {"v": "3kg"}], "slash/key": "4kg"}],
+            "other": {"a": "b", "arr": [1, "5kg", False]},
+        }
+
+        actual = _decode_number_affixes(data)
+        expected = _decode_number_affixes_recursive_legacy(data)
+        assert actual == expected
 
     def test_thread_quits_after_failure(self, qtbot):
         """Thread quits after failed parsing."""

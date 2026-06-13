@@ -145,6 +145,7 @@ class LoadCoordinator(QObject):
 
         thread.started.connect(worker.run)
         worker.stage.connect(self._emit_stage, Qt.ConnectionType.QueuedConnection)
+        worker.detail.connect(self.detail, Qt.ConnectionType.QueuedConnection)
         worker.finished.connect(lambda result, task_id=task.task_id: self._parse_succeeded.emit(task_id, result))
         worker.failed.connect(
             lambda error_payload, task_id=task.task_id: self._parse_failed.emit(task_id, error_payload)

@@ -25,11 +25,14 @@ class ParseWorker(QObject):
         ``(error_type, error_message)``.
     stage(stage_name)
         Emitted to report progress stages.
+    detail(processed, path)
+        Emitted during decode/build detail reporting with item count and path.
     """
 
     finished = Signal(object)
     failed = Signal(object)
     stage = Signal(str)
+    detail = Signal(int, str)
 
     def __init__(
         self,
@@ -49,13 +52,24 @@ class ParseWorker(QObject):
         """
         try:
             self.stage.emit("reading/parsing file")
+            decode_stage_emitted = False
+
+            def on_decode_progress(processed: int, path: str) -> None:
+                nonlocal decode_stage_emitted
+                if not decode_stage_emitted:
+                    self.stage.emit("decoding number affixes")
+                    decode_stage_emitted = True
+                self.detail.emit(processed, path)
+
             if self._parser is not None:
                 result = self._parser(self._path)
             else:
                 from io_formats.load import load_file_with_format
 
-                result = load_file_with_format(self._path)
-            self.stage.emit("decoding number affixes")
+                result = load_file_with_format(self._path, on_progress=on_decode_progress)
+
+            if not decode_stage_emitted:
+                self.stage.emit("decoding number affixes")
             self.finished.emit(result)
         except Exception as exc:
             self.failed.emit((type(exc).__name__, str(exc)))

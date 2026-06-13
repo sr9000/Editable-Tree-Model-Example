@@ -29,12 +29,18 @@ QT_QPA_PLATFORM=offscreen pytest tests/ -q
 # Run specific test file
 QT_QPA_PLATFORM=offscreen pytest tests/test_raw_numeric_values.py -xvs
 
+# Recommended for long-running commands in automation to avoid hangs
+timeout 600 QT_QPA_PLATFORM=offscreen pytest tests/ -q
+
 # Lint (autoflake + isort + black)
 make lint
 
 # Full DoD gate (lint → reflection check → isolation checks → tests)
 # ALWAYS run this before committing.
 make gate
+
+# Recommended in CI/agent runs to prevent accidental hangs
+timeout 1200 make gate
 
 # Isolation checks individually
 make check-editors-isolation  # editors/ must not import app/documents/tree
@@ -43,6 +49,8 @@ make check-no-reflection      # no getattr/hasattr outside allowlist
 ```
 
 **Commit discipline:** Run `make gate` and ensure it passes before every commit. Never skip the DoD gate.
+
+**Hang prevention:** Prefer wrapping long-running commands (`pytest`, `make gate`, perf tests) with `timeout` in agent-driven runs.
 
 ## 3) Key Architecture: Edit Flow
 
