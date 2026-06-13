@@ -44,7 +44,7 @@ def describe_reason(reason: str) -> str:
 # allows when a user edits an unsupported numeric literal. Exponent length is
 # bounded so a fresh edit cannot reintroduce an unbounded-magnitude literal
 # (the original raw text is always allowed unchanged regardless of this regex).
-_RAW_NUMERIC_EDIT_RE = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d{1,9})?\Z")
+_RAW_NUMERIC_EDIT_RE = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\Z")
 
 # Non-finite spellings the app is willing to preserve through a raw edit.
 _RAW_NON_FINITE_SPELLINGS = frozenset(

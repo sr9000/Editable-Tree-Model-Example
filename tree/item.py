@@ -267,6 +267,8 @@ class JsonTreeItem:
         """Apply an edit to a value currently held as a raw numeric literal.
 
         - If the edited text parses safely, store it as a normal number.
+          Whole numbers (denominator 1) are stored as INTEGER, not FLOAT,
+          so they display as "42" instead of "42.0".
         - If the text is unchanged, preserve the original raw value exactly.
         - If the text matches the narrow raw-numeric edit grammar but is still
           unsupported, keep it as a raw numeric value with the updated reason.
@@ -278,7 +280,12 @@ class JsonTreeItem:
         result = parse_mpq(text)
         if result.value is not None:
             self.explicit_type = False
-            self._apply_typed_value(parse_json_type(result.value), result.value)
+            # If the parsed value is a whole number (denominator 1), convert to int
+            # so it's stored as INTEGER instead of FLOAT (displaying as "42" not "42.0")
+            parsed = result.value
+            if parsed.denominator == 1:
+                parsed = int(parsed)
+            self._apply_typed_value(parse_json_type(parsed), parsed)
             return True
 
         if text == original.raw:
