@@ -13,7 +13,7 @@ from pandas import Timestamp
 from core.datetime_parsing import parse_datetime_text
 from core.datetime_parsing.nano_time import NanoTime
 from core.raw_numeric import RawNumericValue
-from settings import NUMBER_AFFIX_MAX_LEN
+from settings import INFERENCE_MAX_COLOR_CHARS, NUMBER_AFFIX_MAX_LEN
 from units.number_affix import AffixKind, NumberAffix, parse_number_affix
 
 LOGGER = logging.getLogger(__name__)
@@ -22,11 +22,15 @@ _COLOR_RGB_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _COLOR_RGBA_RE = re.compile(r"^#(?:[0-9a-fA-F]{4}|[0-9a-fA-F]{8})$")
 
 
-def looks_like_color_rgb(s: str) -> bool:
+def looks_like_color_rgb(s: str, *, allow_expensive: bool = False) -> bool:
+    if not allow_expensive and len(s) > INFERENCE_MAX_COLOR_CHARS:
+        return False
     return bool(_COLOR_RGB_RE.fullmatch(s))
 
 
-def looks_like_color_rgba(s: str) -> bool:
+def looks_like_color_rgba(s: str, *, allow_expensive: bool = False) -> bool:
+    if not allow_expensive and len(s) > INFERENCE_MAX_COLOR_CHARS:
+        return False
     return bool(_COLOR_RGBA_RE.fullmatch(s))
 
 
