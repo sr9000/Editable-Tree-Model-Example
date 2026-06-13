@@ -1,6 +1,6 @@
 # Plan 1 — Length limits for expensive inference, with explicit-type bypass
 
-**Goal:** Make automatic type inference cheap for oversized strings by checking `len(text)` before regex, datetime, number-affix, base64, decode, and decompress work. When an input exceeds the configured inference limit, automatic inference returns a text type (`STRING`, `UNICODE`, or `TEXT`) without entering the expensive branch.
+**Goal:** Make automatic type inference cheap for oversized strings by checking `len(text)` before regex, datetime, number-affix, and color work. When an input exceeds the configured inference limit, automatic inference returns a text type (`STRING`, `UNICODE`, or `TEXT`) without entering the expensive branch. For base64/zlib/gzip, use content-based syntax validation (length mod 4 + alphabet regex) instead of a length cap — if the syntax is valid, decoding is allowed regardless of size.
 
 **Critical exception:** An explicit user type change from the Type column is not automatic inference. Explicit coercion must call the target parser/converter with `allow_expensive=True` so the requested target type is attempted even when the source string exceeds the inference limit. The explicit path may still fail with the same validation or conversion failure used today; it must not silently fall back because of an inference gate.
 
@@ -22,7 +22,7 @@ Explicit coercion currently starts when the Type delegate commits a user-selecte
 
 ## Storage decision
 
-Add hard safety constants in [`settings.py`](../settings.py) with names beginning `INFERENCE_`, plus decode/preview caps named below. These values are not user-exposed settings and must not use `QSettings`. They are distinct from `STRING_EDIT_WARNING_LIMIT_CHARS`, `MULTILINE_EDIT_WARNING_LIMIT_CHARS`, and binary editor-opening warning limits, which control manual editor UX rather than load-time inference.
+Add hard safety constants in [`settings.py`](../settings.py) with names beginning `INFERENCE_`, plus a preview cap named below. These values are not user-exposed settings and must not use `QSettings`. They are distinct from `STRING_EDIT_WARNING_LIMIT_CHARS`, `MULTILINE_EDIT_WARNING_LIMIT_CHARS`, and binary editor-opening warning limits, which control manual editor UX rather than load-time inference.
 
 ## Threshold table
 
@@ -31,17 +31,22 @@ The report (`reports/parsing-vulnerability-2026-06-13.md`) measured 832 rows acr
 - The 100ms per-call budget is never exceeded at any measured size.
 - The worst automatic-inference median at 65536 is 36ms (`parse_json_type` on `pathological_repetition`), with a peak allocation of ~1555 bytes.
 - 141 rows are classified `superlinear` (ratio > 3.0); all are on automatic inference paths and will be gated by the constants below.
-- 44 rows are classified `error`: 4 are `parse_number_affix`/`parse_json_type` on `near_affix` at 16384+ hitting a pre-existing 4300-digit integer limit (not a regression; the 256-char affix gate prevents reaching this path); the remaining ~40 are `decode_bytes` on non-base64 input (expected `binascii.Error` failures, not crashes).
+- 44 rows are classified `error`: 4 are `parse_number_affix`/`parse_json_type` on `near_affix` at 16384+ hitting a pre-existing 4300-digit integer limit (not a regression; the 100-char affix gate prevents reaching this path); the remaining ~40 are `decode_bytes` on non-base64 input (expected `binascii.Error` failures, not crashes).
 
 | Constant | Guards | Value | Plan 0 justification |
 |---|---|---:|---|
-| `INFERENCE_MAX_TOTAL_CHARS` | Top of the `str` branch in [`parse_json_type()`](../tree/types.py:125) | no limit for str values | Report: at 65536 the worst automatic-inference median is 36ms (`parse_json_type` on `pathological_repetition`); strings at or above this cap skip all non-text heuristics. |
-| `INFERENCE_MAX_DATETIME_CHARS` | [`parse_datetime_text()`](../core/datetime_parsing/regex.py:36) regex and datetime conversion | `40` enough for any practically meaningful datetime | Report: `DATETIME_RE.fullmatch` median is 0.00ms even at 65536 across all families; 128 is conservative for valid datetime strings. |
-| `INFERENCE_MAX_AFFIX_CHARS` | [`parse_number_affix()`](../units/number_affix.py:79) regex checks | `100` googol is enough | Report: `parse_number_affix` is superlinear on `digits`, `plain_ascii`, `pathological_repetition` at 4096+ (ratio up to 4.89). 256 is well below the pre-existing 4300-digit integer limit, so the gate fires before the error path. |
+| `INFERENCE_MAX_DATETIME_CHARS` | [`parse_datetime_text()`](../core/datetime_parsing/regex.py:36) regex and datetime conversion | `40` | Report: `DATETIME_RE.fullmatch` median is 0.00ms even at 65536 across all families; 40 is enough for any practically meaningful datetime string. |
+| `INFERENCE_MAX_AFFIX_CHARS` | [`parse_number_affix()`](../units/number_affix.py:79) regex checks | `100` | Report: `parse_number_affix` is superlinear on `digits`, `plain_ascii`, `pathological_repetition` at 4096+ (ratio up to 4.89). 100 is well below the pre-existing 4300-digit integer limit, so the gate fires before the error path. |
 | `INFERENCE_MAX_COLOR_CHARS` | [`looks_like_color_rgb()`](../tree/types.py:24) and [`looks_like_color_rgba()`](../tree/types.py:28) | `10` | Maximum length of `#RGB`, `#RRGGBB`, `#RGBA`, and `#RRGGBBAA` color strings. |
-| `INFERENCE_MAX_BASE64_PROBE_CHARS` | `_looks_like_base64()` and base64/zlib/gzip inference branches in [`parse_json_type()`](../tree/types.py:125) | no practical limit, validate string with len mod 4 and regex of allowed alphabet `[…]+` before parsing | Report: `_looks_like_base64` superlinear at 65536 (ratio 4.17 on `mixed_interleaved`); 1MB provides headroom for valid base64 payloads while keeping worst-case decoded allocation under 2MB (well within the 16MB cap). |
-| `EDITABLE_DECODE_LIMIT_BYTES` | [`compute_editable()`](../tree/item_coercion.py:578) decode/decompress checks | if base64 probe guards passed, allow to run decompress | Report: `compute_editable(BYTES)` superlinear at 65536 (ratio 3.88 on `digits`); 1MB provides headroom for valid encoded payloads. The double-call concern (called once per node during model build) is out of scope; the cap bounds each call. |
 | `FORMAT_PREVIEW_DECODE_LIMIT_BYTES` | [`format_with_type()`](../delegates/formatting/value_formatting.py:132) display preview | `100` | Preview needs only enough bytes to render the existing prefix text. |
+
+### Design decisions (removed constants)
+
+- **No `INFERENCE_MAX_TOTAL_CHARS`**: The individual gates (datetime, affix, color) effectively skip all unnecessary checks for oversized strings. A top-level total-length fast path is redundant because once datetime, affix, color, and base64 probes are individually gated, the remaining work in `parse_json_type()` for strings is O(n) text classification (newline check, non-ASCII check, multiline check).
+
+- **No `INFERENCE_MAX_BASE64_PROBE_CHARS`**: Instead of a length cap, base64 inference uses content-based syntax validation: (1) `len(text) % 4 == 0` (base64 encoding always produces length divisible by 4), then (2) regex check against the base64 alphabet `[A-Za-z0-9+/]+={0,2}` (whitespace and other characters are not valid). If both checks pass, the string is syntactically valid base64 and decoding is allowed regardless of size. This avoids false negatives on large valid base64 payloads while still rejecting non-base64 strings cheaply via the regex.
+
+- **No `EDITABLE_DECODE_LIMIT_BYTES`**: If a string passes the base64 syntax validation (len mod 4 + alphabet regex), it is a valid encoded payload and decoding/decompressing is allowed. The `compute_editable()` function only decodes to verify editability; if the syntax is valid, the decode will succeed and the editability result is correct.
 
 ## Isolation rules for this plan
 
@@ -60,8 +65,8 @@ The report (`reports/parsing-vulnerability-2026-06-13.md`) measured 832 rows acr
 **Problem it solves:** Every gate needs one canonical source for threshold values, and those values must be visibly separate from editor-opening warning limits.
 
 **Files it touches:**
-- [`settings.py`](../settings.py) — add the constants listed in the threshold table with integer values.
-- `tests/test_inference_constants.py` — new unit test for constant type, positivity, and distinction from editor-opening warning limits.
+- [`settings.py`](../settings.py) — add the constants listed in the threshold table with integer values. Remove `INFERENCE_MAX_TOTAL_CHARS`, `INFERENCE_MAX_BASE64_PROBE_CHARS`, and `EDITABLE_DECODE_LIMIT_BYTES` (design decisions above).
+- `tests/test_inference_constants.py` — update unit tests to cover only the four remaining constants.
 
 **Expected behavior:** Production and tests import the constants from `settings` without initializing Qt or `QSettings`.
 
@@ -77,14 +82,20 @@ The report (`reports/parsing-vulnerability-2026-06-13.md`) measured 832 rows acr
 **Problem it solves:** Call sites need one policy API for checking whether an expensive inference branch may run, and explicit coercion needs a shared bypass flag.
 
 **Files it touches:**
-- `tree/inference_limits.py` — new module with `datetime_inference_allowed(text, allow_expensive=False)`, `affix_inference_allowed(text, allow_expensive=False)`, `color_inference_allowed(text, allow_expensive=False)`, `base64_probe_allowed(text, allow_expensive=False)`, `total_inference_allowed(text)`, `editable_decode_allowed(byte_count)`, and `format_preview_decode_allowed(byte_count)`.
+- `tree/inference_limits.py` — new module with:
+  - `datetime_inference_allowed(text, allow_expensive=False)` — returns `True` if `len(text) <= INFERENCE_MAX_DATETIME_CHARS` or `allow_expensive` is `True`.
+  - `affix_inference_allowed(text, allow_expensive=False)` — returns `True` if `len(text) <= INFERENCE_MAX_AFFIX_CHARS` or `allow_expensive` is `True`.
+  - `color_inference_allowed(text, allow_expensive=False)` — returns `True` if `len(text) <= INFERENCE_MAX_COLOR_CHARS` or `allow_expensive` is `True`.
+  - `base64_syntax_valid(text)` — returns `True` if `len(text) % 4 == 0` and the text matches the base64 alphabet regex `^[A-Za-z0-9+/]*={0,2}$`. No bypass flag: this is a content validation, not a length gate.
+  - `format_preview_decode_allowed(byte_count)` — returns `True` if `byte_count <= FORMAT_PREVIEW_DECODE_LIMIT_BYTES`. No bypass flag.
 - `tests/test_inference_limits.py` — new tests for boundary lengths at exactly the limit and one character/byte above the limit.
 
-**Expected behavior:** For the four `*_inference_allowed` helpers, `allow_expensive=True` returns `True` regardless of text length. `total_inference_allowed`, `editable_decode_allowed`, and `format_preview_decode_allowed` do not have a bypass because they protect automatic inference or repeated display/editability work.
+**Expected behavior:** For the three `*_inference_allowed` helpers, `allow_expensive=True` returns `True` regardless of text length. `base64_syntax_valid` and `format_preview_decode_allowed` do not have a bypass because they protect content validation or repeated display work.
 
 **Acceptance criteria:**
 - The helper module imports only `settings` and standard-library modules.
-- Boundary tests cover allowed-at-limit and rejected-above-limit for every helper.
+- Boundary tests cover allowed-at-limit and rejected-above-limit for every length-gated helper.
+- `base64_syntax_valid` tests cover: valid base64 at various sizes, invalid length (not mod 4), invalid characters (whitespace, special chars), empty string.
 - Mandatory gate passes, including `make check-tree-isolation`.
 
 ### Commit 1.3 — Trace and test the explicit coercion bypass seam
@@ -156,59 +167,26 @@ The report (`reports/parsing-vulnerability-2026-06-13.md`) measured 832 rows acr
 - Explicit color coercion bypasses the length gate and returns the existing success/failure result.
 - Mandatory gate passes.
 
-### Commit 1.7 — Gate base64, zlib, and gzip inference probes
+### Commit 1.7 — Gate base64, zlib, and gzip inference probes with syntax validation
 - [ ] Completed
 
-**Problem it solves:** Oversized base64-like strings must not allocate decoded buffers or attempt zlib/gzip decompression during automatic inference.
+**Problem it solves:** Non-base64 strings must not allocate decoded buffers or attempt zlib/gzip decompression during automatic inference. The gate uses content-based syntax validation (length mod 4 + alphabet regex) instead of a length cap, so valid large base64 payloads are still decoded.
 
 **Files it touches:**
-- [`tree/types.py`](../tree/types.py:32) — gate `_looks_like_base64(text, allow_expensive=False)` with `base64_probe_allowed`.
-- [`tree/types.py`](../tree/types.py:185) — skip base64 decode, zlib decompress, and gzip decompress branches when `base64_probe_allowed(text, False)` is `False`.
-- [`tree/item_coercion.py`](../tree/item_coercion.py:1) and [`tree/codecs/bytes_codec.py`](../tree/codecs/bytes_codec.py:8) — expose/pass `allow_expensive=True` for explicit binary coercion where target conversion uses the same probe.
-- Existing BYTES/ZLIB/GZIP tests plus a new oversized base64-like regression test.
+- [`tree/types.py`](../tree/types.py:32) — refactor `_looks_like_base64(text)` to use `base64_syntax_valid(text)` from `tree/inference_limits.py` as the cheap pre-check before `base64.b64decode`. The existing `_B64_RE` regex already enforces the base64 alphabet; the refactor extracts the `len % 4` and regex checks into the shared helper.
+- [`tree/types.py`](../tree/types.py:185) — the base64 decode, zlib decompress, and gzip decompress branches are only reached when `base64_syntax_valid(text)` returns `True`. No length cap is applied; if the syntax is valid, decoding proceeds.
+- [`tree/item_coercion.py`](../tree/item_coercion.py:1) and [`tree/codecs/bytes_codec.py`](../tree/codecs/bytes_codec.py:8) — explicit binary coercion uses the same `base64_syntax_valid` check (no bypass needed since it's content validation, not a length gate).
+- Existing BYTES/ZLIB/GZIP tests plus a new test proving that a large valid base64 string is still classified correctly.
 
-**Expected behavior:** Oversized base64-like inference input classifies as `STRING`, `UNICODE`, or `TEXT` without calling `base64.b64decode`, zlib decompress, or gzip decompress. Explicit binary coercion reaches the existing converter and returns the existing result or failure placeholder.
-
-**Acceptance criteria:**
-- Spy test proves no decode/decompress function is called for oversized inference input.
-- Allocation test proves that a 1MB base64-like string does not trigger `base64.b64decode`, `zlib.decompress`, or `gzip.decompress` during automatic inference (peak allocation stays at the regex-probe level, ~1.2KB).
-- Valid BYTES/ZLIB/GZIP fixtures at or below the limit keep current inferred types.
-- Mandatory gate passes.
-
-### Commit 1.8 — Add top-level total-length text fast path
-- [ ] Completed
-
-**Problem it solves:** Oversized strings need one top-level path that skips all non-text heuristics once their length exceeds the total inference cap.
-
-**Files it touches:**
-- [`tree/types.py`](../tree/types.py:151) — at the start of the `str` branch in [`parse_json_type()`](../tree/types.py:125), when `total_inference_allowed(text)` is `False`, return only a text type based on these checks: contains newline -> `TEXT`; contains non-ASCII -> `UNICODE`; otherwise `STRING`.
-- `tests/test_parse_json_type_limits.py` — new fixture corpus asserting small-string behavior is unchanged and oversized strings use the text fast path.
-
-**Expected behavior:** Oversized strings from all ten Plan 0 families classify to a text type without running datetime, affix, color, base64, zlib, or gzip inference branches.
+**Expected behavior:** A string that fails `base64_syntax_valid` (wrong length mod 4 or invalid alphabet characters) classifies as `STRING`, `UNICODE`, or `TEXT` without calling `base64.b64decode`, zlib decompress, or gzip decompress. A large valid base64 string (e.g., 1MB) is still decoded and classified as `BYTES`/`ZLIB`/`GZIP` correctly.
 
 **Acceptance criteria:**
-- Small fixture corpus has identical inferred types before and after this commit.
-- Oversized family tests complete within the Plan 0 budget.
+- Spy test proves `base64.b64decode`, `zlib.decompress`, and `gzip.decompress` are not called for strings that fail syntax validation.
+- Large valid base64 fixture (e.g., 1MB) is correctly classified as `BYTES`.
+- Valid BYTES/ZLIB/GZIP fixtures keep current inferred types.
 - Mandatory gate passes.
 
-### Commit 1.9 — Cap `compute_editable` decode/decompress work
-- [ ] Completed
-
-**Problem it solves:** Load-time editability checks must not fully decode/decompress binary-like values larger than `EDITABLE_DECODE_LIMIT_BYTES`. The cap must hold even when `compute_editable` is called twice on the same node (once from the affix pass, once from model construction).
-
-**Files it touches:**
-- [`tree/item_coercion.py`](../tree/item_coercion.py:578) — use `editable_decode_allowed` before decode/decompress work used only to decide editability.
-- Existing binary editability tests plus a new oversized binary-like test.
-
-**Expected behavior:** A binary-like node above the cap avoids full decode/decompress and receives the conservative editability result defined in the test. Normal binary nodes at or below the cap keep current editability.
-
-**Acceptance criteria:**
-- Spy test proves oversized editability checks do not call full decode/decompress.
-- Double-call test proves that calling `compute_editable` twice on the same oversized node results in at most one decode/decompress invocation (the second call uses cached or cap-skipped metadata).
-- Existing binary editability tests pass.
-- Mandatory gate passes.
-
-### Commit 1.10 — Cap paint-time binary preview decode
+### Commit 1.8 — Cap paint-time binary preview decode
 - [ ] Completed
 
 **Problem it solves:** Display formatting must not fully decode/decompress multi-megabyte binary values during every paint.
@@ -224,7 +202,7 @@ The report (`reports/parsing-vulnerability-2026-06-13.md`) measured 832 rows acr
 - Oversized preview test proves decode/decompress work is capped.
 - Mandatory gate passes.
 
-### Commit 1.11 — Regression sweep against Plan 0 harness
+### Commit 1.9 — Regression sweep against Plan 0 harness
 - [ ] Completed
 
 **Problem it solves:** The gates must eliminate the vulnerabilities measured in Plan 0 under automatic inference, while preserving explicit conversion behavior.
@@ -250,4 +228,4 @@ The following concerns are flagged by the review report and the parsing-vulnerab
 1. **Double classification of strings**: [`_decode_number_affixes()`](../io_formats/load.py:41) and [`JsonTreeItem.__init__()`](../tree/item.py:37) both call [`parse_json_type()`](../tree/types.py:125). A follow-up plan should introduce either a cheaper affix-only predicate or a parse-metadata object to avoid repeated full inference.
 2. **Cooperative cancellation during load**: The GUI thread remains blocked during parse and model build. Plan 2 (progress dialog) and Plan 3 (cancel button) address the user-visible side; the underlying cooperative-checkpoint work is not part of Plan 1.
 3. **Atomic reload cancellation**: [`DiffApplier.apply()`](undo/diff.py:13) is in-place and not safe to interrupt mid-recursion. This is a Plan 3 concern.
-4. **Extended-size perf runs**: Plan 0's acceptance criteria mention extended sizes (262144, 1048576, 10485710) that are not present in the current `reports/parsing-vulnerability-2026-06-13.md`. A follow-up should run and document those sizes before Plan 1 Commit 1.11 runs its regression sweep.
+4. **Extended-size perf runs**: Plan 0's acceptance criteria mention extended sizes (262144, 1048576, 10485710) that are not present in the current `reports/parsing-vulnerability-2026-06-13.md`. A follow-up should run and document those sizes before Plan 1 Commit 1.9 runs its regression sweep.
