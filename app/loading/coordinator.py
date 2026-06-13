@@ -366,6 +366,12 @@ class LoadCoordinator(QObject):
         previous_view_state = view_state.capture_runtime_state(tab)
         changed = True
 
+        if task.token.is_cancelled:
+            if self._current_task_id == task.task_id:
+                self._finish_progress(task.task_id)
+                self._window.statusBar.showMessage("Reload cancelled", 3000)
+            return False
+
         self._emit_stage(STAGE_APPLYING_RELOAD)
         tab.model.replace_root_item(model.root_item, estimated_item_count=model.estimated_item_count)
         if changed:
