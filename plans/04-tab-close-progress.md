@@ -32,7 +32,7 @@ The review report identifies candidate freeze sources: deep `root_data()` traver
 ## Commits
 
 ### Commit 4.1 — Measure and report close-time phases
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** Implementation must target the phase that actually causes close-time freezes.
 
@@ -49,7 +49,7 @@ The review report identifies candidate freeze sources: deep `root_data()` traver
 - Mandatory gate passes.
 
 ### Commit 4.2 — Reuse the shared delayed widget for close with a close delay
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** Tab close needs delayed show/hide behavior; the shared widget already exists, so close must reuse it rather than duplicate timer logic, and a close-specific delay constant must exist.
 
@@ -67,7 +67,7 @@ The review report identifies candidate freeze sources: deep `root_data()` traver
 - Mandatory gate passes.
 
 ### Commit 4.3 — Wrap close phases with progress ownership
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** Close needs a task owner that starts the delayed widget, emits phase text, and guarantees dismissal when close finishes or errors.
 
@@ -84,7 +84,7 @@ The review report identifies candidate freeze sources: deep `root_data()` traver
 - Mandatory gate passes.
 
 ### Commit 4.4 — Make the measured dominant phase repaint-capable
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** Showing a widget is not enough if the dominant close phase blocks painting. The dominant phase from Commit 4.1 must either yield between batches or use the atomic pre-show fallback defined in this plan.
 
@@ -104,7 +104,7 @@ The review report identifies candidate freeze sources: deep `root_data()` traver
 - Mandatory gate passes.
 
 ### Commit 4.5 — Error-safe dismissal and close regression coverage
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** Progress UI must not leave orphan widgets, a busy cursor, or changed reopen behavior after successful or failed close attempts.
 

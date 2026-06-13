@@ -35,7 +35,7 @@ Hard CPU/IO termination of an in-flight parser is not part of this plan. It requ
 ## Commits
 
 ### Commit 3.1 — Cancellation token primitive
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** Coordinator, widget, worker-result handling, and chunked builder need one thread-safe cancellation signal that is independent of Qt widget lifetime.
 
@@ -51,7 +51,7 @@ Hard CPU/IO termination of an in-flight parser is not part of this plan. It requ
 - Mandatory gate passes.
 
 ### Commit 3.2 — Activate the Cancel button on the loading widget
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** [`LoadingProgressDialog`](../app/loading/progress_dialog.py:16) already accepts `cancellable=True` and renders a Cancel button placeholder, but the button is not wired to a token and the coordinator never constructs the widget as cancellable.
 
@@ -69,7 +69,7 @@ Hard CPU/IO termination of an in-flight parser is not part of this plan. It requ
 - Mandatory gate passes.
 
 ### Commit 3.3 — Discard late worker-parse results after cancel
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** A worker parse can finish after the user has cancelled. Its result must not create a tab, push recent files, start validation, or replace a reloading tab, and it must not pop a user-facing error dialog.
 
@@ -86,7 +86,7 @@ Hard CPU/IO termination of an in-flight parser is not part of this plan. It requ
 - Mandatory gate passes.
 
 ### Commit 3.4 — Cooperative cancel during chunked initial-open build
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** After parsing succeeds, initial-open model building runs in self-scheduling [`QTimer`](../app/loading/builder.py:93) slices. It must stop between batches when the token is cancelled and must discard the half-built off-side tree without ever emitting [`finished`](../app/loading/builder.py:43).
 
@@ -103,7 +103,7 @@ Hard CPU/IO termination of an in-flight parser is not part of this plan. It requ
 - Mandatory gate passes.
 
 ### Commit 3.5 — Atomic cancel-safe reload
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** Reload no longer routes through [`DiffApplier.apply()`](../undo/diff.py:13); since [`Plan 2.5`](02.5-loading-progress-details-and-nonblocking-build.md) it builds a prebuilt model off-thread and commits via a single [`JsonTreeModel.replace_root_item()`](../tree/model.py:94) swap inside `beginResetModel()`/`endResetModel()`. Cancellation must be gated before that swap; the swap itself and the deferred [`_finish_reload_apply()`](../app/loading/coordinator.py:337) are non-cancellable.
 
@@ -122,7 +122,7 @@ Hard CPU/IO termination of an in-flight parser is not part of this plan. It requ
 - Mandatory gate passes.
 
 ### Commit 3.6 — No-side-effect cancellation regression suite
-- [ ] Completed
+- [x] Completed
 
 **Problem it solves:** Future refactors must not move side effects before the cancellation gate, and must not move a side effect ahead of a deferred post-build boundary in a way that makes it run for a cancelled task.
 
