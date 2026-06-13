@@ -9,7 +9,8 @@ These plans operationalize [`reports/big-file-loading-cancellation-review-2026-0
 | 0 | [`plans/00-parsing-vulnerability-tests.md`](00-parsing-vulnerability-tests.md) | Measure parsing, regex, decode, formatting, and search hotspots with adversarial strings | None |
 | 1 | [`plans/01-string-parsing-len-limits.md`](01-string-parsing-len-limits.md) | Add `len()` gates for automatic inference and preserve explicit type-change parsing | Plan 0 Commit 0.8 report and threshold confirmation |
 | 2 | [`plans/02-big-file-loading-progress-bar.md`](02-big-file-loading-progress-bar.md) | Show loading progress only after a load remains active for `5000` milliseconds | Plan 1 complete |
-| 3 | [`plans/03-loading-cancel-button.md`](03-loading-cancel-button.md) | Add Cancel to loading progress with no-side-effect semantics before commit points | Plan 2 complete |
+| 2.6 | [`plans/02.6-post-build-freeze-after-jsonmodel-finished.md`](02.6-post-build-freeze-after-jsonmodel-finished.md) | Remove the remaining post-build GUI freeze after the JSON model is built | Plan 2.5 complete |
+| 3 | [`plans/03-loading-cancel-button.md`](03-loading-cancel-button.md) | Add Cancel to loading progress with no-side-effect semantics before commit points | Plan 2.6 complete |
 | 4 | [`plans/04-tab-close-progress.md`](04-tab-close-progress.md) | Show non-cancellable close progress after close remains active for `1500` milliseconds | None; reuses Plan 2 widget when present |
 
 Plan 4 may run before Plans 2 and 3. If it does, Commit 4.2 creates the shared delayed progress widget in `app/loading/progress_dialog.py`; Plan 2 must reuse that module instead of creating a second widget.
