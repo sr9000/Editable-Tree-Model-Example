@@ -9,22 +9,43 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QMessageBox
 
+from app.loading.progress import STAGE_COMPLETE, STAGE_DISCOVERING_SCHEMA, STAGE_VALIDATING_DOCUMENT, ProgressReporter
 from documents.seams.document_protocol import Document
 from io_formats.load import load_file_with_format
 
 
-class LoadCoordinator:
+class LoadCoordinator(QObject):
     """Coordinates file open and reload operations.
 
     The coordinator is the single owner of loading flows. It receives
     callbacks to the main window for tab creation, status updates, and
     error presentation.
+
+    Signals
+    -------
+    stage_changed(stage_name)
+        Emitted when the loading stage changes.
     """
 
-    def __init__(self, window: MainWindow) -> None:
+    stage_changed = Signal(str)
+
+    def __init__(self, window, parent: QObject | None = None) -> None:
+        super().__init__(parent)
         self._window = window
+        self._reporter: ProgressReporter | None = None
+
+    def set_reporter(self, reporter: ProgressReporter | None) -> None:
+        """Set the progress reporter for stage notifications."""
+        self._reporter = reporter
+
+    def _emit_stage(self, stage: str) -> None:
+        """Emit a stage change signal and notify the reporter."""
+        self.stage_changed.emit(stage)
+        if self._reporter is not None:
+            self._reporter.stage(stage)
 
     def open_file(self, path: str) -> bool:
         """Open a file and create a new tab.
@@ -76,6 +97,21 @@ class LoadCoordinator:
         self._window.update_actions()
         self._window.statusBar.showMessage(f"Reloaded: {resolved}", 2000)
         return True
+
+    def run_schema_discovery_and_validation(self, tab: Document) -> None:
+        """Run schema discovery and validation with stage reporting.
+
+        This method emits the discovering schema and validating document
+        stages, then runs the tab's validation revalidate method.
+        """
+        self._emit_stage(STAGE_DISCOVERING_SCHEMA)
+        # Schema discovery happens automatically during tab creation
+        # via the validation controller's initialization
+
+        self._emit_stage(STAGE_VALIDATING_DOCUMENT)
+        tab.validation.revalidate()
+
+        self._emit_stage(STAGE_COMPLETE)
 
 
 __all__ = ["LoadCoordinator"]
