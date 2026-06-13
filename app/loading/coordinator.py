@@ -73,6 +73,7 @@ class LoadCoordinator(QObject):
         self._current_task_id: str | None = None
         self._tasks: dict[str, _LoadTask] = {}
         self._completed_task_results: dict[str, bool] = {}
+        self._cancelled_task_ids: set[str] = set()
         self._parse_succeeded.connect(self._on_parse_finished, Qt.ConnectionType.QueuedConnection)
         self._parse_failed.connect(self._on_parse_failed, Qt.ConnectionType.QueuedConnection)
 
@@ -111,7 +112,27 @@ class LoadCoordinator(QObject):
         self._current_task_id = task.task_id
         if self._progress_dialog is None:
             self._progress_dialog = LoadingProgressDialog(self._window, cancellable=True)
-        self._progress_dialog.start(task.task_id, cancellation_token=task.token)
+        self._progress_dialog.start(task.task_id, cancellation_token=task.token, on_cancel=self.cancel_current)
+
+    def cancel_current(self) -> None:
+        """Cancel the active load task and unblock any blocking caller."""
+        task_id = self._current_task_id
+        if task_id is None:
+            return
+
+        task = self._tasks.get(task_id)
+        if task is None:
+            self._current_task_id = None
+            return
+
+        task.token.cancel()
+        self._cancelled_task_ids.add(task_id)
+        self._finish_progress(task_id)
+        if task.mode == "reload":
+            self._window.statusBar.showMessage("Reload cancelled", 3000)
+        else:
+            self._window.statusBar.showMessage("Open cancelled", 3000)
+        self._complete_task(task_id, False)
 
     def _finish_progress(self, task_id: str) -> None:
         """Finish tracking a load task."""
@@ -229,6 +250,9 @@ class LoadCoordinator(QObject):
 
     def _on_parse_finished(self, task_id: str, result: object) -> None:
         """Resume the load after background parsing succeeds."""
+        if task_id in self._cancelled_task_ids:
+            self._cancelled_task_ids.discard(task_id)
+            return
         task = self._tasks.get(task_id)
         if task is None:
             return
@@ -250,6 +274,9 @@ class LoadCoordinator(QObject):
 
     def _on_parse_failed(self, task_id: str, error_payload: object) -> None:
         """Complete a task through the user-facing error path."""
+        if task_id in self._cancelled_task_ids:
+            self._cancelled_task_ids.discard(task_id)
+            return
         task = self._tasks.get(task_id)
         if task is None:
             return
