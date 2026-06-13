@@ -18,6 +18,7 @@ class TreeFilterProxy(QSortFilterProxyModel):
     def set_filter_text(self, text: str) -> None:
         # Keep a normalized plain-string needle; no regex semantics.
         self._needle = (text or "").strip().casefold()
+        self.setRecursiveFilteringEnabled(bool(self._needle))
         self.invalidate()
 
     def filterAcceptsRow(self, src_row: int, src_parent: QModelIndex) -> bool:  # type: ignore[override]

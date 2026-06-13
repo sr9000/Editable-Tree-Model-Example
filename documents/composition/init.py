@@ -57,6 +57,7 @@ def bootstrap(
     save_format: str | None,
     services: JsonTabServices | None,
     prebuilt_model: JsonTreeModel | None = None,
+    defer_validation_init: bool = False,
 ) -> None:
     """Populate *tab* with controllers, model, view, delegates and validation."""
 
@@ -123,7 +124,8 @@ def bootstrap(
     # Install the severity provider before the first revalidation.
     tab.model.set_issue_index_provider(tab.validation.severity_provider)
     tab.validationChanged.connect(tab.validation.on_validation_changed)
-    init_validation_state(tab, model_data)
+    if not defer_validation_init:
+        init_validation_state(tab, model_data)
 
     tab.undo_stack.cleanChanged.connect(tab.io.on_clean_changed)
     tab.undo_stack.indexChanged.connect(tab.editing.move.on_undo_index_changed)

@@ -3,11 +3,13 @@ from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QSettings, QSortFilterProxyModel, QTimer
 
+import settings
 from documents.seams.document_protocol import Document
 from settings import APPLICATION_ID
 from state.qsettings_coercion import _coerce_int, _coerce_int_list, _coerce_path, _coerce_paths
 
 MAX_EXPANDED_PATHS = 5000
+_RESTORE_BATCH_SIZE = 256
 
 
 def _source_to_view_index(view, source_index: QModelIndex) -> QModelIndex:
@@ -69,6 +71,29 @@ def state_key(path: str) -> str:
     return f"view_state/{digest}"
 
 
+def _is_large_load(tab: Document) -> bool:
+    node_count = tab.model.estimated_item_count
+    return isinstance(node_count, int) and node_count > settings.LOADING_AUTO_EXPAND_MAX_NODES
+
+
+def _request_expand_paths_chunked(tab: Document, paths: list[tuple[int, ...]]) -> None:
+    if not paths:
+        return
+
+    cursor = {"index": 0}
+
+    def _emit_batch() -> None:
+        start = cursor["index"]
+        end = min(start + _RESTORE_BATCH_SIZE, len(paths))
+        for i in range(start, end):
+            tab.view_controller.request_expand(paths[i])
+        cursor["index"] = end
+        if cursor["index"] < len(paths):
+            QTimer.singleShot(0, _emit_batch)
+
+    QTimer.singleShot(0, _emit_batch)
+
+
 def save(tab: Document) -> None:
     if not tab.io.file_path:
         return
@@ -91,7 +116,7 @@ def save(tab: Document) -> None:
     settings.endGroup()
 
 
-def restore(tab: Document) -> bool:
+def restore(tab: Document, *, defer_heavy: bool = False) -> bool:
     if not tab.io.file_path:
         return False
 
@@ -120,13 +145,23 @@ def restore(tab: Document) -> bool:
     if widths is not None:
         tab.view_controller.set_column_widths(widths)
 
+    large_load = defer_heavy or _is_large_load(tab)
+
     if expanded is not None:
         tab.view_controller.request_collapse_all()
-        for path in expanded:
-            tab.view_controller.request_expand(tuple(path))
+        expanded_paths = [tuple(path) for path in expanded]
+        if large_load:
+            _request_expand_paths_chunked(tab, expanded_paths)
+        else:
+            for path in expanded_paths:
+                tab.view_controller.request_expand(path)
 
     if current_path is not None:
-        tab.view_controller.request_select_paths([tuple(current_path)])
+        selected = tuple(current_path)
+        if large_load:
+            tab.view_controller.request_select_paths_deferred([selected])
+        else:
+            tab.view_controller.request_select_paths([selected])
 
     return True
 
@@ -170,14 +205,21 @@ def restore_runtime_state(tab: Document, snapshot: dict[str, object]) -> None:
 
     if expanded_paths:
         tab.view_controller.request_collapse_all()
-        for path in expanded_paths:
-            tab.view_controller.request_expand(path)
+        if _is_large_load(tab):
+            _request_expand_paths_chunked(tab, expanded_paths)
+        else:
+            for path in expanded_paths:
+                tab.view_controller.request_expand(path)
 
     if isinstance(current_path_obj, tuple):
         current_path = tuple(step for step in current_path_obj if isinstance(step, int) and step >= 0)
         if current_path:
-            tab.view_controller.request_select_paths([current_path])
-            tab.view_controller.request_scroll_to(current_path)
+            if _is_large_load(tab):
+                tab.view_controller.request_select_paths_deferred([current_path])
+                tab.view_controller.request_scroll_to_deferred(current_path)
+            else:
+                tab.view_controller.request_select_paths([current_path])
+                tab.view_controller.request_scroll_to(current_path)
 
     h_scroll = int(h_scroll_obj) if isinstance(h_scroll_obj, int) else 0
     v_scroll = int(v_scroll_obj) if isinstance(v_scroll_obj, int) else 0

@@ -73,6 +73,7 @@ class TabLifecyclePresenter(QObject):
         save_format: str | None = None,
         prebuilt_model: JsonTreeModel | None = None,
         defer_first_presentation: bool = False,
+        defer_validation_init: bool = False,
         on_presentation_complete: Callable[[Document], None] | None = None,
     ) -> Document | None:
         from state.validation_settings import auto_rescan_enabled
@@ -86,6 +87,7 @@ class TabLifecyclePresenter(QObject):
                 parent=win,
                 save_format=save_format,
                 prebuilt_model=prebuilt_model,
+                defer_validation_init=defer_validation_init,
                 services=JsonTabServices(
                     host=_MainWindowJsonTabHost(win),
                     theme=win._theme,
@@ -119,15 +121,18 @@ class TabLifecyclePresenter(QObject):
         on_presentation_complete: Callable[[Document], None] | None,
     ) -> None:
         win = self._win
-        if self._should_expand_all_on_open(tab):
+        is_large_open = not self._should_expand_all_on_open(tab)
+        if not is_large_open:
             tab.view_controller.request_expand_all()
         elif tab.root_index().isValid():
             tab.view_controller.request_expand(())
 
         tab.appearance.resize_key_columns()
-        if tab.root_index().isValid():
+        if tab.root_index().isValid() and not is_large_open:
             tab.view_controller.request_select_paths([()])
-        view_state.restore(tab)
+        view_state.restore(tab, defer_heavy=is_large_open)
+        if is_large_open and tab.root_index().isValid():
+            tab.view_controller.request_scroll_to_deferred(())
         # Re-broadcast: ``view_state.restore`` may have rewritten ``_font_pt``
         # from a previously-saved per-tab value; the global controller wins.
         win.fonts.subscribe(tab)

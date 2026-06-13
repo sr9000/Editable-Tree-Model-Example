@@ -303,6 +303,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         save_format: str | None = None,
         prebuilt_model=None,
         defer_first_presentation: bool = False,
+        defer_validation_init: bool = False,
         on_presentation_complete=None,
     ) -> Document | None:
         return self._tab_lifecycle.add_tab(
@@ -311,6 +312,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             save_format=save_format,
             prebuilt_model=prebuilt_model,
             defer_first_presentation=defer_first_presentation,
+            defer_validation_init=defer_validation_init,
             on_presentation_complete=on_presentation_complete,
         )
 

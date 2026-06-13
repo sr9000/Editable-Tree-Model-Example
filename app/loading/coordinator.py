@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import QObject, Qt, QThread, Signal
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 import state.view_state as view_state
@@ -269,14 +269,14 @@ class LoadCoordinator(QObject):
 
         if task.mode == "reload":
             ok = self._apply_reload(task, model)
-            self._complete_task(task_id, ok)
+            if not ok:
+                self._complete_task(task_id, False)
         else:
             self._bind_open(task, model)
 
     def _bind_open(self, task: _LoadTask, model: object) -> None:
         """Create a tab from a prebuilt model and finish open bookkeeping."""
         task_id = task.task_id
-        from app.recent_files import push_recent
 
         self._emit_stage(STAGE_BINDING_UI)
         tab = self._window._add_tab(
@@ -285,6 +285,7 @@ class LoadCoordinator(QObject):
             save_format=task.source_format,
             prebuilt_model=model,
             defer_first_presentation=True,
+            defer_validation_init=True,
             on_presentation_complete=lambda opened_tab: self._finish_open_binding(task_id, opened_tab),
         )
         if tab is None:
@@ -299,7 +300,7 @@ class LoadCoordinator(QObject):
         if task is None:
             return
 
-        self.run_schema_discovery_and_validation(tab)
+        self.run_schema_discovery_and_validation(tab, parsed_data=task.data)
 
         push_recent(self._window, task.path)
         self._window.statusBar.showMessage(f"Opened: {task.path}", 2000)
@@ -318,7 +319,7 @@ class LoadCoordinator(QObject):
             return False
 
         previous_view_state = view_state.capture_runtime_state(tab)
-        changed = tab.root_data() != task.data
+        changed = True
 
         self._emit_stage(STAGE_APPLYING_RELOAD)
         tab.model.replace_root_item(model.root_item, estimated_item_count=model.estimated_item_count)
@@ -330,13 +331,27 @@ class LoadCoordinator(QObject):
 
         view_state.restore_runtime_state(tab, previous_view_state)
 
-        self.run_schema_discovery_and_validation(tab)
+        QTimer.singleShot(0, lambda task_id=task.task_id: self._finish_reload_apply(task_id))
+        return True
+
+    def _finish_reload_apply(self, task_id: str) -> None:
+        """Finalize reload on a later event-loop turn for post-build responsiveness."""
+        task = self._tasks.get(task_id)
+        if task is None:
+            return
+        tab = task.tab
+        if tab is None:
+            self._error_progress(task_id)
+            self._complete_task(task_id, False)
+            return
+
+        self.run_schema_discovery_and_validation(tab, parsed_data=task.data)
 
         self._window._refresh_tab_presentation(tab)
         self._window.update_actions()
         self._window.statusBar.showMessage(f"Reloaded: {task.path}", 2000)
-        self._finish_progress(task.task_id)
-        return True
+        self._finish_progress(task_id)
+        self._complete_task(task_id, True)
 
     def _complete_task(self, task_id: str, ok: bool) -> None:
         """Release task-owned objects and announce completion."""
@@ -344,18 +359,23 @@ class LoadCoordinator(QObject):
         self._completed_task_results[task_id] = ok
         self.task_finished.emit(task_id, ok)
 
-    def run_schema_discovery_and_validation(self, tab: Document) -> None:
+    def run_schema_discovery_and_validation(self, tab: Document, *, parsed_data: Any | None = None) -> None:
         """Run schema discovery and validation with stage reporting.
 
         This method emits the discovering schema and validating document
         stages, then runs the tab's validation revalidate method.
         """
+        doc_path = Path(tab.io.file_path).expanduser().resolve() if tab.io.file_path else None
+
         self._emit_stage(STAGE_DISCOVERING_SCHEMA)
-        # Schema discovery happens automatically during tab creation
-        # via the validation controller's initialization
+        discovery_data = parsed_data if parsed_data is not None else tab.model.root_item.to_json()
+        tab.validation.init_state(discovery_data, doc_path=doc_path, revalidate=False)
 
         self._emit_stage(STAGE_VALIDATING_DOCUMENT)
-        tab.validation.revalidate()
+        if parsed_data is None:
+            tab.validation.revalidate()
+        else:
+            tab.validation.revalidate_loading_data(parsed_data)
 
         self._emit_stage(STAGE_COMPLETE)
 

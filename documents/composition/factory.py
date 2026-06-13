@@ -28,6 +28,7 @@ def create_tab(
     save_format: str | None = None,
     services: JsonTabServices | None = None,
     prebuilt_model: JsonTreeModel | None = None,
+    defer_validation_init: bool = False,
 ) -> Document:
     """Construct a :class:`JsonTab` and expose it as :class:`Document`."""
     if data is None:
@@ -43,6 +44,7 @@ def create_tab(
             save_format=save_format,
             services=services,
             prebuilt_model=prebuilt_model,
+            defer_validation_init=defer_validation_init,
         )
 
     return JsonTab(
@@ -58,6 +60,7 @@ def create_tab(
         save_format=save_format,
         services=services,
         prebuilt_model=prebuilt_model,
+        defer_validation_init=defer_validation_init,
     )
 
 

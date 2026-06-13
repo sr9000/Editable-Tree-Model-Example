@@ -7,6 +7,7 @@ import json
 from PySide6.QtCore import QModelIndex, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+import documents.composition.init as tab_init
 import settings
 from app.main_window import MainWindow
 from documents.controllers.view import ViewController
@@ -410,5 +411,47 @@ def test_small_open_bootstraps_affix_mru_inline(qtbot, monkeypatch):
         tab = win._add_tab(data=payload, prebuilt_model=prebuilt)
         assert tab is not None
         assert "$" in tab.affix_mru.items(AffixKind.CURRENCY)
+    finally:
+        _cleanup(win)
+
+
+def test_regular_tab_creation_initializes_validation_inline(qtbot, monkeypatch):
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    calls = {"count": 0}
+
+    original_init = tab_init.init_validation_state
+
+    def _spy_init_validation_state(tab, model_data):
+        calls["count"] += 1
+        original_init(tab, model_data)
+
+    monkeypatch.setattr(tab_init, "init_validation_state", _spy_init_validation_state)
+    try:
+        tab = win._add_tab(data={"k": 1})
+        assert tab is not None
+        assert calls["count"] == 1
+    finally:
+        _cleanup(win)
+
+
+def test_loading_owned_add_tab_defers_bootstrap_validation_init(qtbot, monkeypatch):
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    calls = {"count": 0}
+
+    original_init = tab_init.init_validation_state
+
+    def _spy_init_validation_state(tab, model_data):
+        calls["count"] += 1
+        original_init(tab, model_data)
+
+    monkeypatch.setattr(tab_init, "init_validation_state", _spy_init_validation_state)
+    try:
+        payload = {"k": 1}
+        prebuilt = JsonTreeModel(payload, show_root=True, estimated_item_count=100)
+        tab = win._add_tab(data=payload, prebuilt_model=prebuilt, defer_validation_init=True)
+        assert tab is not None
+        assert calls["count"] == 0
     finally:
         _cleanup(win)
