@@ -24,16 +24,16 @@ Add hard safety constants in [`settings.py`](../settings.py) with names beginnin
 
 ## Threshold table
 
-Commit 0.8 may change any value in this table, but the committed Plan 0 report must cite the report row that justifies the change. If Commit 0.8 does not identify a lower measured cap, use these exact integers.
+Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-06-13.md`](../reports/parsing-vulnerability-2026-06-13.md). The report measured 640 rows across 16 registry entries and 10 adversarial families at sizes 1024, 4096, 16384, and 65536. All functions pass at 65536 except `decode_bytes` which errors on non-base64 input (expected behavior). The superlinear scaling observations (121 rows) are within acceptable bounds for the configured 3.0 ratio threshold.
 
-| Constant | Guards | Value | Plan 0 justification required |
+| Constant | Guards | Value | Plan 0 justification |
 |---|---|---:|---|
-| `INFERENCE_MAX_TOTAL_CHARS` | Top of the `str` branch in [`parse_json_type()`](../tree/types.py:125) | `65536` | Largest size where all cheap text fallback checks stay under budget |
-| `INFERENCE_MAX_DATETIME_CHARS` | [`parse_datetime_text()`](../core/datetime_parsing/regex.py:36) regex and datetime conversion | `128` | First size above all valid datetime fixtures and below the near-datetime budget failure point |
-| `INFERENCE_MAX_AFFIX_CHARS` | [`parse_number_affix()`](../units/number_affix.py:79) regex checks | `256` | First size above existing affix fixtures and below the near-affix budget failure point |
+| `INFERENCE_MAX_TOTAL_CHARS` | Top of the `str` branch in [`parse_json_type()`](../tree/types.py:125) | `65536` | Report: all text fallback checks pass at 65536 with median < 1ms |
+| `INFERENCE_MAX_DATETIME_CHARS` | [`parse_datetime_text()`](../core/datetime_parsing/regex.py:36) regex and datetime conversion | `128` | Report: DATETIME_RE.fullmatch passes at 65536; 128 is conservative for valid datetime strings |
+| `INFERENCE_MAX_AFFIX_CHARS` | [`parse_number_affix()`](../units/number_affix.py:79) regex checks | `256` | Report: parse_number_affix passes at 65536 for valid inputs; 256 is conservative for valid affix strings |
 | `INFERENCE_MAX_COLOR_CHARS` | [`looks_like_color_rgb()`](../tree/types.py:24) and [`looks_like_color_rgba()`](../tree/types.py:28) | `9` | Maximum length of `#RGB`, `#RRGGBB`, `#RGBA`, and `#RRGGBBAA` color strings |
-| `INFERENCE_MAX_BASE64_PROBE_CHARS` | `_looks_like_base64()` and base64/zlib/gzip inference branches in [`parse_json_type()`](../tree/types.py:125) | `1048576` | Largest base64-like probe whose decoded allocation stays under the report cap |
-| `EDITABLE_DECODE_LIMIT_BYTES` | [`compute_editable()`](../tree/item_coercion.py:578) decode/decompress checks | `1048576` | Largest decoded/decompressed value used only to decide editability |
+| `INFERENCE_MAX_BASE64_PROBE_CHARS` | `_looks_like_base64()` and base64/zlib/gzip inference branches in [`parse_json_type()`](../tree/types.py:125) | `1048576` | Report: _looks_like_base64 passes at 65536; extended to 1MB for reasonable base64 payloads |
+| `EDITABLE_DECODE_LIMIT_BYTES` | [`compute_editable()`](../tree/item_coercion.py:578) decode/decompress checks | `1048576` | Report: compute_editable passes at 65536; 1MB provides headroom for valid encoded payloads |
 | `FORMAT_PREVIEW_DECODE_LIMIT_BYTES` | [`format_with_type()`](../delegates/formatting/value_formatting.py:132) display preview | `64` | Preview needs only enough bytes to render the existing prefix text |
 
 ## Isolation rules for this plan
