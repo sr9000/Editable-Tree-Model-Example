@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication
 import settings
 import state.view_state as view_state
 from app.main_window import MainWindow
+from documents.tab import JsonTab
 
 
 def test_normal_close_finishes_without_showing_progress(qtbot, monkeypatch):
@@ -105,6 +106,78 @@ def test_close_error_hides_progress_and_restores_cursor(qtbot, monkeypatch):
         assert QApplication.overrideCursor() is None
     finally:
         monkeypatch.setattr(view_state, "save", original_save)
+        while QApplication.overrideCursor() is not None:
+            QApplication.restoreOverrideCursor()
+        win.close()
+        win.deleteLater()
+
+
+def test_reopen_preserves_snapshot_for_normal_size_tab(qtbot, monkeypatch):
+    monkeypatch.setattr(settings, "CLOSE_PROGRESS_DELAY_MS", 0)
+
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    monkeypatch.setattr(win, "_confirm_close", lambda _widget: True)
+    try:
+        tab = win._add_tab(data={"alpha": 1, "beta": {"x": True}})
+        assert isinstance(tab, JsonTab)
+        assert win.tabWidget.count() == 1
+
+        win.close_tab(0)
+        assert win.tabWidget.count() == 0
+
+        win.reopen_closed_tab()
+        assert win.tabWidget.count() == 1
+
+        reopened = win._current_tab()
+        assert isinstance(reopened, JsonTab)
+        assert reopened.model.root_item.to_json() == {"alpha": 1, "beta": {"x": True}}
+
+        dialog = win._tab_lifecycle._close_progress_dialog
+        assert dialog is not None
+        assert not dialog.isVisible()
+        assert QApplication.overrideCursor() is None
+    finally:
+        for i in range(win.tabWidget.count()):
+            maybe_tab = win.tabWidget.widget(i)
+            if isinstance(maybe_tab, JsonTab):
+                maybe_tab.undo_stack.setClean()
+        while win.tabWidget.count() > 0:
+            win.close_tab(0)
+        while QApplication.overrideCursor() is not None:
+            QApplication.restoreOverrideCursor()
+        win.close()
+        win.deleteLater()
+
+
+def test_repeated_close_reopen_cycles_leave_no_orphan_progress(qtbot, monkeypatch):
+    monkeypatch.setattr(settings, "CLOSE_PROGRESS_DELAY_MS", 0)
+
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    monkeypatch.setattr(win, "_confirm_close", lambda _widget: True)
+    try:
+        tab = win._add_tab(data={"seed": 1})
+        assert isinstance(tab, JsonTab)
+        assert win.tabWidget.count() == 1
+
+        for _ in range(3):
+            win.close_tab(0)
+            assert win.tabWidget.count() == 0
+            win.reopen_closed_tab()
+            assert win.tabWidget.count() == 1
+
+            dialog = win._tab_lifecycle._close_progress_dialog
+            assert dialog is not None
+            assert not dialog.isVisible()
+            assert QApplication.overrideCursor() is None
+    finally:
+        for i in range(win.tabWidget.count()):
+            maybe_tab = win.tabWidget.widget(i)
+            if isinstance(maybe_tab, JsonTab):
+                maybe_tab.undo_stack.setClean()
+        while win.tabWidget.count() > 0:
+            win.close_tab(0)
         while QApplication.overrideCursor() is not None:
             QApplication.restoreOverrideCursor()
         win.close()
