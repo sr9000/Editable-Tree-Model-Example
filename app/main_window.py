@@ -21,6 +21,7 @@ from app.app_settings import AppSettingsPresenter
 from app.close_confirm import confirm_close
 from app.font_controller import FontController
 from app.history import bind_undo_signals, setup_history_menu
+from app.loading.coordinator import LoadCoordinator
 from app.main_window_actions import setup_connections as setup_main_window_connections
 from app.main_window_actions import update_actions as update_main_window_actions
 from app.recent_files import push_recent, refresh_recent_menu
@@ -30,7 +31,6 @@ from app.theme_controller import ThemeController
 from app.validation_presenter import DockValidationPresenter
 from documents.composition.marker import JsonTabWidgetMarker
 from documents.seams.document_protocol import Document
-from io_formats.load import load_file_with_format
 from settings import APPLICATION_ID, WINDOW_DEFAULT_SIZE
 from tree_actions.clipboard import clipboard_to_tab_data
 from tree_actions.field_case import FIELD_CASE_LABELS, FIELD_CASE_ORDER, FieldCase
@@ -92,6 +92,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._icon_provider = self._theme_controller.icon_provider
         self._schema_tab_pool = SchemaTabPool(self)
         self._tab_lifecycle = TabLifecyclePresenter(self.tabWidget, self)
+        self._load_coordinator = LoadCoordinator(self)
         self._theme_follow_action = self._theme_controller.follow_action
         self._recent_menu = QMenu("Recent", self)
         self.fileMenu.insertMenu(self.appExitAction, self._recent_menu)
@@ -301,21 +302,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._tab_lifecycle.on_tab_dirty(tab)
 
     def _open_path(self, path: str) -> bool:
-        resolved = str(Path(path).resolve())
-        self.statusBar.showMessage(f"Loading: {resolved}", 0)
-        try:
-            data, source_format = load_file_with_format(resolved)
-        except Exception as exc:
-            self.statusBar.showMessage(f"Open failed: {resolved}", 3000)
-            QMessageBox.critical(self, "Open failed", f"Could not open {resolved}:\n{exc}")
-            return False
-
-        tab = self._add_tab(data=data, file_path=resolved, save_format=source_format)
-        if tab is None:
-            return False
-        push_recent(self, resolved)
-        self.statusBar.showMessage(f"Opened: {resolved}", 2000)
-        return True
+        return self._load_coordinator.open_file(path)
 
     def _save_tab(self, tab: Document, *, save_as: bool = False) -> bool:
         from state.validation_settings import clear_schema_path
@@ -360,28 +347,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return "cancel"
 
     def _reload_tab_from_path(self, tab: Document, path: str) -> bool:
-        resolved = str(Path(path).resolve())
-        self.statusBar.showMessage(f"Reloading: {resolved}", 0)
-        try:
-            data, source_format = load_file_with_format(resolved)
-        except Exception as exc:
-            self.statusBar.showMessage(f"Reload failed: {resolved}", 3000)
-            QMessageBox.critical(self, "Reload failed", f"Could not reload {resolved}:\n{exc}")
-            return False
-
-        root_index = tab.root_index()
-        root_item = tab.root_item()
-        changed = tab.editing.diff.apply(root_item, data, root_index)
-        if changed:
-            tab.undo_stack.clear()
-        tab.undo_stack.setClean()
-        tab.io.save_format = source_format
-        tab.io.file_path = resolved
-        tab.validation.revalidate()
-        self._refresh_tab_presentation(tab)
-        self.update_actions()
-        self.statusBar.showMessage(f"Reloaded: {resolved}", 2000)
-        return True
+        return self._load_coordinator.reload_file(tab, path)
 
     def _confirm_close(self, tab: Document, *, prompt_for_untitled_nonempty: bool = True) -> bool:
         return confirm_close(self, tab, prompt_for_untitled_nonempty=prompt_for_untitled_nonempty)
