@@ -132,7 +132,11 @@ class LoadCoordinator(QObject):
             self._window.statusBar.showMessage("Reload cancelled", 3000)
         else:
             self._window.statusBar.showMessage("Open cancelled", 3000)
-        self._complete_task(task_id, False)
+
+        # Parse-stage cancel is completed immediately. Build-stage cancel
+        # completes when the builder observes the token and emits cancelled.
+        if task.builder is None:
+            self._complete_task(task_id, False)
 
     def _finish_progress(self, task_id: str) -> None:
         """Finish tracking a load task."""
@@ -263,6 +267,7 @@ class LoadCoordinator(QObject):
             data,
             show_root=True,
             reporter=self,
+            cancellation_token=task.token,
             icon_provider=self._window._icon_provider,
             parent=self,
         )
@@ -270,6 +275,7 @@ class LoadCoordinator(QObject):
         builder.finished.connect(
             lambda model, finished_task_id=task_id: self._on_build_finished(finished_task_id, model)
         )
+        builder.cancelled.connect(lambda cancelled_task_id=task_id: self._on_build_cancelled(cancelled_task_id))
         builder.start()
 
     def _on_parse_failed(self, task_id: str, error_payload: object) -> None:
@@ -296,12 +302,22 @@ class LoadCoordinator(QObject):
         if task is None:
             return
 
+        task.builder = None
+
         if task.mode == "reload":
             ok = self._apply_reload(task, model)
             if not ok:
                 self._complete_task(task_id, False)
         else:
             self._bind_open(task, model)
+
+    def _on_build_cancelled(self, task_id: str) -> None:
+        """Finalize cooperative cancellation when chunked build aborts."""
+        task = self._tasks.get(task_id)
+        if task is None:
+            return
+        task.builder = None
+        self._complete_task(task_id, False)
 
     def _bind_open(self, task: _LoadTask, model: object) -> None:
         """Create a tab from a prebuilt model and finish open bookkeeping."""
@@ -385,6 +401,7 @@ class LoadCoordinator(QObject):
     def _complete_task(self, task_id: str, ok: bool) -> None:
         """Release task-owned objects and announce completion."""
         self._tasks.pop(task_id, None)
+        self._cancelled_task_ids.discard(task_id)
         self._completed_task_results[task_id] = ok
         self.task_finished.emit(task_id, ok)
 

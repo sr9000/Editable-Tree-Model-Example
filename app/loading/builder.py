@@ -12,6 +12,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from app.loading.cancellation import CancellationToken
 from app.loading.progress import STAGE_BUILDING_TREE, ProgressReporter
 from core.raw_numeric import RawNumericValue
 from tree.item import JsonTreeItem, SecretNamePredicate, _default_secret_name_predicate
@@ -41,6 +42,7 @@ class ChunkedTreeBuilder(QObject):
     """
 
     finished = Signal(object)
+    cancelled = Signal()
     progress = Signal(int, int)
 
     def __init__(
@@ -49,6 +51,7 @@ class ChunkedTreeBuilder(QObject):
         *,
         show_root: bool = False,
         reporter: ProgressReporter | None = None,
+        cancellation_token: CancellationToken | None = None,
         icon_provider=None,
         parent: QObject | None = None,
     ) -> None:
@@ -56,6 +59,7 @@ class ChunkedTreeBuilder(QObject):
         self._data = data
         self._show_root = show_root
         self._reporter = reporter
+        self._cancellation_token = cancellation_token
         self._icon_provider = icon_provider
         self._model: JsonTreeModel | None = None
         self._total_items = 0
@@ -94,10 +98,18 @@ class ChunkedTreeBuilder(QObject):
 
     def _do_work_slice(self) -> None:
         """Process a time slice of work items."""
+        if self._is_cancelled():
+            self._on_cancelled()
+            return
+
         start_time = time.monotonic()
         slice_ms = 0
 
         while slice_ms < TARGET_SLICE_MS:
+            if self._is_cancelled():
+                self._on_cancelled()
+                return
+
             if not self._build_one_item():
                 self._on_build_complete()
                 return
@@ -116,11 +128,25 @@ class ChunkedTreeBuilder(QObject):
             pass
 
         if not self._work_stack:
+            if self._is_cancelled():
+                self._on_cancelled()
+                return
             self._on_build_complete()
             return
 
         # Schedule the next work slice
         QTimer.singleShot(0, self._do_work_slice)
+
+    def _is_cancelled(self) -> bool:
+        return self._cancellation_token is not None and self._cancellation_token.is_cancelled
+
+    def _on_cancelled(self) -> None:
+        """Drop partial build state and notify cooperative cancellation."""
+        self._work_stack.clear()
+        self._root_item = None
+        self._model = None
+        self._latest_path = ""
+        self.cancelled.emit()
 
     def _on_build_complete(self) -> None:
         """Called when the build is complete."""
