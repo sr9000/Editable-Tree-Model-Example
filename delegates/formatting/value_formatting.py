@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime, timezone
 
 from gmpy2 import mpq
@@ -7,7 +8,7 @@ from PySide6.QtWidgets import QStyleOptionViewItem
 
 from core.safe_mpq import safe_mpq_from_any
 from mpq2py import mpq_serialization
-from settings import SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
+from settings import FORMAT_PREVIEW_DECODE_LIMIT_BYTES, SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
 from themes.spec import TypeStyle
 from tree.codecs.bytes_codec import decode_bytes
 from tree.types import EMPTY_FAMILY, SECRET_FAMILY, WS_FAMILY, JsonType
@@ -167,12 +168,46 @@ def format_with_type(value, json_type: JsonType | None, *, item=None, show_previ
 
     if json_type in (JsonType.BYTES, JsonType.ZLIB, JsonType.GZIP):
         try:
-            raw = decode_bytes(value, json_type) if isinstance(value, str) else bytes(value)
-            preview = " ".join(f"{byte:02X}" for byte in raw[:16])
-            if len(raw) > 20:
+            if isinstance(value, str):
+                # Estimate decoded size from base64 length (accounting for padding)
+                padding = value.count("=")
+                estimated_total = (len(value) * 3) // 4 - padding
+                truncated = estimated_total > FORMAT_PREVIEW_DECODE_LIMIT_BYTES
+                if truncated:
+                    # Cap decode work: decode only enough base64 chars for preview.
+                    max_b64_chars = ((FORMAT_PREVIEW_DECODE_LIMIT_BYTES + 2) // 3) * 4
+                    b64_limited = value[:max_b64_chars]
+                    pad_needed = (4 - len(b64_limited) % 4) % 4
+                    b64_limited = b64_limited + "=" * pad_needed
+                    raw = base64.b64decode(b64_limited, validate=False)
+                    if json_type is JsonType.ZLIB:
+                        import zlib
+
+                        try:
+                            raw = zlib.decompress(raw)
+                        except Exception:
+                            pass
+                    elif json_type is JsonType.GZIP:
+                        import gzip
+
+                        try:
+                            raw = gzip.decompress(raw)
+                        except Exception:
+                            pass
+                else:
+                    # Small enough to decode fully
+                    raw = decode_bytes(value, json_type)
+            else:
+                raw = bytes(value)
+                estimated_total = len(raw)
+                truncated = len(raw) > FORMAT_PREVIEW_DECODE_LIMIT_BYTES
+            preview_bytes = raw[:16]
+            preview = " ".join(f"{byte:02X}" for byte in preview_bytes)
+            if len(raw) > 20 or truncated:
                 preview += "..."
-            printable_str = "".join(chr(byte) if 32 <= byte <= 126 else "." for byte in raw[:16])
-            return f"<{format_bytes(len(raw))}> | {preview} (`{printable_str}`)"
+            printable_str = "".join(chr(byte) if 32 <= byte <= 126 else "." for byte in preview_bytes)
+            size_note = " (truncated preview)" if truncated else ""
+            return f"<{format_bytes(estimated_total)}> | {preview} (`{printable_str}`){size_note}"
         except Exception:
             return format_default(value)
 
