@@ -11,6 +11,7 @@ from documents.seams.document_protocol import Document
 from documents.tab import JsonTab
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
+from tree.model import JsonTreeModel
 
 
 def create_tab(
@@ -26,6 +27,7 @@ def create_tab(
     icon_provider: IconProvider | None = None,
     save_format: str | None = None,
     services: JsonTabServices | None = None,
+    prebuilt_model: JsonTreeModel | None = None,
 ) -> Document:
     """Construct a :class:`JsonTab` and expose it as :class:`Document`."""
     if data is None:
@@ -40,6 +42,7 @@ def create_tab(
             icon_provider=icon_provider,
             save_format=save_format,
             services=services,
+            prebuilt_model=prebuilt_model,
         )
 
     return JsonTab(
@@ -54,6 +57,7 @@ def create_tab(
         icon_provider=icon_provider,
         save_format=save_format,
         services=services,
+        prebuilt_model=prebuilt_model,
     )
 
 

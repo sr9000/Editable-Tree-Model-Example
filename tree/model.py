@@ -30,9 +30,10 @@ class JsonTreeModel(QAbstractItemModel):
         *,
         show_root: bool = False,
         icon_provider: IconProvider | None = None,
+        root_item: JsonTreeItem | None = None,
     ) -> None:
         super().__init__(parent)
-        self.root_item = JsonTreeItem(None, data)
+        self.root_item = root_item if root_item is not None else JsonTreeItem(None, data)
         self.show_root = show_root
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
         self._attached_view = None

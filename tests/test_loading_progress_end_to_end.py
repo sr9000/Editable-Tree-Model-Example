@@ -8,7 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from app.loading.progress import (
     STAGE_APPLYING_RELOAD,
@@ -18,6 +19,7 @@ from app.loading.progress import (
     STAGE_READING_PARSING,
     STAGE_VALIDATING_DOCUMENT,
 )
+from app.loading.progress_dialog import LoadingProgressDialog
 from app.main_window import MainWindow
 from documents.tab import JsonTab
 
@@ -168,5 +170,68 @@ class TestLoadingProgressEndToEnd:
                 assert not win._load_coordinator._progress_dialog.isVisible()
         finally:
             tab.undo_stack.setClean()
+            win.close()
+            win.deleteLater()
+
+    def test_async_open_returns_immediately_and_shows_progress(self, qtbot, tmp_path, monkeypatch):
+        """A slow async open keeps the event loop alive and shows progress."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        doc = tmp_path / "data.json"
+        _write_json(doc, {"key": "value"})
+
+        win = MainWindow(yaml_filename="")
+        qtbot.addWidget(win)
+        progress = LoadingProgressDialog(win, delay_ms=50)
+        qtbot.addWidget(progress)
+        win._load_coordinator._progress_dialog = progress
+
+        timer_count = [0]
+
+        def on_timer():
+            timer_count[0] += 1
+
+        timer = QTimer(win)
+        timer.timeout.connect(on_timer)
+        timer.start(20)
+
+        def slow_parser(_path: str):
+            time.sleep(0.2)
+            return {"key": "value"}, "json"
+
+        try:
+            task_id = win._load_coordinator.open_file_async(str(doc), parser=slow_parser)
+            assert task_id is not None
+            assert win.tabWidget.count() == 0
+
+            qtbot.waitUntil(lambda: progress.was_shown, timeout=1000)
+            assert timer_count[0] >= 2
+
+            qtbot.waitUntil(lambda: win.tabWidget.count() == 1, timeout=2000)
+            assert not progress.isVisible()
+            tab = _current_tab(win)
+            assert tab.model.root_item.to_json() == {"key": "value"}
+        finally:
+            timer.stop()
+            for i in range(win.tabWidget.count()):
+                maybe_tab = win.tabWidget.widget(i)
+                if isinstance(maybe_tab, JsonTab):
+                    maybe_tab.undo_stack.setClean()
+            win.close()
+            win.deleteLater()
+
+    def test_open_file_dialog_starts_async_open(self, qtbot, tmp_path, monkeypatch):
+        """The native open dialog returns before loading starts."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        doc = tmp_path / "data.json"
+        _write_json(doc, {"key": "value"})
+
+        win = MainWindow(yaml_filename="")
+        qtbot.addWidget(win)
+        try:
+            with patch.object(QFileDialog, "getOpenFileName", return_value=(str(doc), "")):
+                with patch.object(win._load_coordinator, "open_file_async") as mock_open_async:
+                    win.open_file_dialog()
+                    mock_open_async.assert_called_once_with(str(doc))
+        finally:
             win.close()
             win.deleteLater()

@@ -64,6 +64,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
         save_format: str | None = None,
         *,
         services: JsonTabServices | None = None,
+        prebuilt_model: JsonTreeModel | None = None,
     ):
         super().__init__(parent)
 
@@ -79,6 +80,7 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
             icon_provider=icon_provider,
             save_format=save_format,
             services=services,
+            prebuilt_model=prebuilt_model,
         )
 
     @property

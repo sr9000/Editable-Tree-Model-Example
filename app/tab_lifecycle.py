@@ -19,6 +19,7 @@ from documents.composition.dependencies import JsonTabServices
 from documents.composition.factory import create_tab
 from documents.composition.marker import JsonTabWidgetMarker
 from documents.seams.document_protocol import Document
+from tree.model import JsonTreeModel
 
 
 class _MainWindowJsonTabHost:
@@ -67,6 +68,7 @@ class TabLifecyclePresenter(QObject):
         data=None,
         file_path: str | None = None,
         save_format: str | None = None,
+        prebuilt_model: JsonTreeModel | None = None,
     ) -> Document | None:
         from state.validation_settings import auto_rescan_enabled
 
@@ -78,6 +80,7 @@ class TabLifecyclePresenter(QObject):
                 show_root=True,
                 parent=win,
                 save_format=save_format,
+                prebuilt_model=prebuilt_model,
                 services=JsonTabServices(
                     host=_MainWindowJsonTabHost(win),
                     theme=win._theme,

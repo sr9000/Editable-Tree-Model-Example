@@ -295,8 +295,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _refresh_tab_presentation(self, tab: Document) -> None:
         self._tab_lifecycle.refresh_tab_presentation(tab)
 
-    def _add_tab(self, *, data=None, file_path: str | None = None, save_format: str | None = None) -> Document | None:
-        return self._tab_lifecycle.add_tab(data=data, file_path=file_path, save_format=save_format)
+    def _add_tab(
+        self,
+        *,
+        data=None,
+        file_path: str | None = None,
+        save_format: str | None = None,
+        prebuilt_model=None,
+    ) -> Document | None:
+        return self._tab_lifecycle.add_tab(
+            data=data,
+            file_path=file_path,
+            save_format=save_format,
+            prebuilt_model=prebuilt_model,
+        )
 
     def _on_tab_dirty(self, tab: Document) -> None:
         self._tab_lifecycle.on_tab_dirty(tab)
@@ -361,7 +373,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         if not path:
             return
-        self._open_path(path)
+        self._load_coordinator.open_file_async(path)
 
     def save_file(self) -> None:
         tab = self._current_tab()

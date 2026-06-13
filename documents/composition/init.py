@@ -27,6 +27,7 @@ from documents.states.view_state import ViewState
 from state.affix_mru import AffixMRU
 from themes.icon_provider import IconProvider
 from themes.spec import ThemeSpec
+from tree.model import JsonTreeModel
 
 _DEFAULT_DATA = object()
 
@@ -44,6 +45,7 @@ def bootstrap(
     icon_provider: IconProvider | None,
     save_format: str | None,
     services: JsonTabServices | None,
+    prebuilt_model: JsonTreeModel | None = None,
 ) -> None:
     """Populate *tab* with controllers, model, view, delegates and validation."""
 
@@ -84,7 +86,7 @@ def bootstrap(
     tab._io = IoController(tab, file_path=file_path, save_format=save_format)
     tab._io.dirtyChanged.connect(tab.dirtyChanged.emit)
 
-    init_model(tab, model_data, show_root=show_root)
+    init_model(tab, model_data, show_root=show_root, prebuilt_model=prebuilt_model)
 
     tab._editing.history = TabHistoryController(tab)
     tab._editing.affix_mru.bootstrap_from_tree(tab.model.root_item)

@@ -120,10 +120,16 @@ def init_layout(tab: "JsonTab") -> None:
     tab._appearance.adopt_view_font_defaults(initial_pt)
 
 
-def init_model(tab: "JsonTab", model_data: Any, show_root: bool) -> None:
-    tab.editing.model = JsonTreeModel(
-        model_data, tab.view_state.view, show_root=show_root, icon_provider=tab.appearance.icon_provider
-    )
+def init_model(tab: "JsonTab", model_data: Any, show_root: bool, prebuilt_model: JsonTreeModel | None = None) -> None:
+    if prebuilt_model is None:
+        tab.editing.model = JsonTreeModel(
+            model_data, tab.view_state.view, show_root=show_root, icon_provider=tab.appearance.icon_provider
+        )
+    else:
+        prebuilt_model.setParent(tab.view_state.view)
+        prebuilt_model.show_root = show_root
+        prebuilt_model.set_icon_provider(tab.appearance.icon_provider)
+        tab.editing.model = prebuilt_model
     tab.model.attach_view(tab.view_state.view)
     tab.view_state.proxy = TreeFilterProxy(tab)
     tab.view_state.proxy.setSourceModel(tab.model)
