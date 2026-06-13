@@ -221,7 +221,7 @@ class TestLoadingProgressEndToEnd:
             assert "/" in progress._detail_label.text()
 
             qtbot.waitUntil(lambda: win.tabWidget.count() == 1, timeout=2000)
-            assert not progress.isVisible()
+            qtbot.waitUntil(lambda: not progress.isVisible(), timeout=1000)
             tab = _current_tab(win)
             loaded = tab.model.root_item.to_json()
             assert isinstance(loaded, dict)

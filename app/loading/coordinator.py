@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 import state.view_state as view_state
 from app.loading.builder import ChunkedTreeBuilder
+from app.loading.cancellation import CancellationToken
 from app.loading.progress import (
     STAGE_APPLYING_RELOAD,
     STAGE_BINDING_UI,
@@ -43,6 +44,7 @@ class _LoadTask:
     builder: ChunkedTreeBuilder | None = None
     data: Any = None
     source_format: str | None = None
+    token: CancellationToken = field(default_factory=CancellationToken)
 
 
 class LoadCoordinator(QObject):
@@ -104,12 +106,12 @@ class LoadCoordinator(QObject):
         if self._progress_dialog is not None:
             self._progress_dialog.set_detail(processed, path)
 
-    def _start_progress(self, task_id: str) -> None:
+    def _start_progress(self, task: _LoadTask) -> None:
         """Start tracking a load task with the progress widget."""
-        self._current_task_id = task_id
+        self._current_task_id = task.task_id
         if self._progress_dialog is None:
-            self._progress_dialog = LoadingProgressDialog(self._window)
-        self._progress_dialog.start(task_id)
+            self._progress_dialog = LoadingProgressDialog(self._window, cancellable=True)
+        self._progress_dialog.start(task.task_id, cancellation_token=task.token)
 
     def _finish_progress(self, task_id: str) -> None:
         """Finish tracking a load task."""
@@ -133,7 +135,7 @@ class LoadCoordinator(QObject):
         resolved = str(Path(path).resolve())
         task = _LoadTask(task_id=task_id, mode=mode, path=resolved, tab=tab)
         self._tasks[task_id] = task
-        self._start_progress(task_id)
+        self._start_progress(task)
         return task
 
     def _start_parse_worker(

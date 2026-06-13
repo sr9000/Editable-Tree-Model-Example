@@ -7,9 +7,12 @@ the widget shows, avoiding visual noise.
 
 from __future__ import annotations
 
+from typing import Callable
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget
 
+from app.loading.cancellation import CancellationToken
 from settings import LOADING_PROGRESS_DELAY_MS, LOADING_PROGRESS_DETAIL_REFRESH_MS
 
 
@@ -50,6 +53,9 @@ class LoadingProgressDialog(QWidget):
         self._was_shown = False
         self._pending_processed = 0
         self._pending_path = ""
+        self._cancel_token: CancellationToken | None = None
+        self._cancel_callback: Callable[[], None] | None = None
+        self._cancel_invoked = False
 
         # Build UI
         layout = QVBoxLayout(self)
@@ -65,6 +71,7 @@ class LoadingProgressDialog(QWidget):
 
         if cancellable:
             self._cancel_button = QPushButton("Cancel")
+            self._cancel_button.clicked.connect(self._on_cancel_clicked)
             layout.addWidget(self._cancel_button)
         else:
             self._cancel_button = None
@@ -87,7 +94,13 @@ class LoadingProgressDialog(QWidget):
         """True if the widget was ever shown during the current task."""
         return self._was_shown
 
-    def start(self, task_id: str) -> None:
+    def start(
+        self,
+        task_id: str,
+        *,
+        cancellation_token: CancellationToken | None = None,
+        on_cancel: Callable[[], None] | None = None,
+    ) -> None:
         """Start tracking a task.
 
         Arms the show timer. If the task completes before the timer fires,
@@ -100,6 +113,11 @@ class LoadingProgressDialog(QWidget):
         self._pending_processed = 0
         self._pending_path = ""
         self._detail_label.setText("")
+        self._cancel_token = cancellation_token
+        self._cancel_callback = on_cancel
+        self._cancel_invoked = False
+        if self._cancel_button is not None:
+            self._cancel_button.setEnabled(True)
         self.hide()
         self._show_timer.start(self._delay_ms)
         self._detail_timer.start()
@@ -135,6 +153,8 @@ class LoadingProgressDialog(QWidget):
             return
         self._show_timer.stop()
         self._detail_timer.stop()
+        self._cancel_token = None
+        self._cancel_callback = None
         self._active_task_id = None
         self.hide()
 
@@ -148,8 +168,24 @@ class LoadingProgressDialog(QWidget):
             return
         self._show_timer.stop()
         self._detail_timer.stop()
+        self._cancel_token = None
+        self._cancel_callback = None
         self._active_task_id = None
         self.hide()
+
+    def _on_cancel_clicked(self) -> None:
+        """Handle a user-requested cancellation from the Cancel button."""
+        if self._active_task_id is None or self._cancel_invoked:
+            return
+
+        self._cancel_invoked = True
+        if self._cancel_token is not None:
+            self._cancel_token.cancel()
+        if self._cancel_callback is not None:
+            self._cancel_callback()
+        if self._cancel_button is not None:
+            self._cancel_button.setEnabled(False)
+        self._stage_label.setText("Cancelling…")
 
     def _on_show_timer_timeout(self) -> None:
         """Show the widget when the timer fires and a task is still active."""
