@@ -76,3 +76,10 @@ INFERENCE_MAX_COLOR_CHARS: int = 10
 # format_with_type() display preview decode cap.
 # Preview needs only enough bytes to render the existing prefix text.
 FORMAT_PREVIEW_DECODE_LIMIT_BYTES: int = 100
+
+# ---------------------------------------------------------------------------
+# Loading progress widget (Plan 2 — delayed progress bar for big files)
+# ---------------------------------------------------------------------------
+# The progress widget only appears if a load operation takes longer than this
+# delay. Fast loads complete before the widget shows, avoiding visual noise.
+LOADING_PROGRESS_DELAY_MS: int = 5000
