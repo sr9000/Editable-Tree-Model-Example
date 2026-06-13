@@ -11,6 +11,7 @@ import pytest
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.loading.progress import (
+    STAGE_APPLYING_RELOAD,
     STAGE_BINDING_UI,
     STAGE_COMPLETE,
     STAGE_DISCOVERING_SCHEMA,
@@ -114,9 +115,9 @@ class TestLoadingProgressEndToEnd:
 
             assert win._load_coordinator.reload_file(tab, str(doc))
 
-            # Verify all stages were emitted
+            # Verify all stages were emitted (reload uses APPLYING_RELOAD instead of BINDING_UI)
             assert STAGE_READING_PARSING in stages
-            assert STAGE_BINDING_UI in stages
+            assert STAGE_APPLYING_RELOAD in stages
             assert STAGE_DISCOVERING_SCHEMA in stages
             assert STAGE_VALIDATING_DOCUMENT in stages
             assert STAGE_COMPLETE in stages

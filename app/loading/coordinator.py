@@ -13,6 +13,7 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QMessageBox
 
 from app.loading.progress import (
+    STAGE_APPLYING_RELOAD,
     STAGE_BINDING_UI,
     STAGE_COMPLETE,
     STAGE_DISCOVERING_SCHEMA,
@@ -133,7 +134,7 @@ class LoadCoordinator(QObject):
             QMessageBox.critical(self._window, "Reload failed", f"Could not reload {resolved}:\n{exc}")
             return False
 
-        self._emit_stage(STAGE_BINDING_UI)
+        self._emit_stage(STAGE_APPLYING_RELOAD)
         root_index = tab.root_index()
         root_item = tab.root_item()
         changed = tab.editing.diff.apply(root_item, data, root_index)
