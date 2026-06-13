@@ -28,6 +28,18 @@ class NumberAffix:
     space: bool
     number: int | mpq
 
+    def __str__(self) -> str:
+        try:
+            return format_number_affix(self)
+        except ValueError as e:
+            return str(e)
+
+    def __repr__(self) -> str:
+        try:
+            return format_number_affix(self)
+        except ValueError as e:
+            return str(e)
+
 
 def _is_valid_affix(affix: str, *, kind: AffixKind, max_affix_len: int) -> bool:
     if not affix or len(affix) > max_affix_len:

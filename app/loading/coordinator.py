@@ -22,13 +22,13 @@ from app.loading.progress import (
     STAGE_BINDING_UI,
     STAGE_COMPLETE,
     STAGE_DISCOVERING_SCHEMA,
-    STAGE_READING_PARSING,
     STAGE_VALIDATING_DOCUMENT,
     ProgressReporter,
 )
 from app.loading.progress_dialog import LoadingProgressDialog
 from app.loading.worker import ParseWorker
 from documents.seams.document_protocol import Document
+from settings import LOADING_HARD_TIMEOUT_SECONDS
 from tree.model import JsonTreeModel
 
 
@@ -170,7 +170,7 @@ class LoadCoordinator(QObject):
         if completed is not None:
             return completed
 
-        deadline = time.monotonic() + 60.0
+        deadline = time.monotonic() + LOADING_HARD_TIMEOUT_SECONDS
         while task_id in self._tasks and task_id not in self._completed_task_results:
             if time.monotonic() >= deadline:
                 self._error_progress(task_id)

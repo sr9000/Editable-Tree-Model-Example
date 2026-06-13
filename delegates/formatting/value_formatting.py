@@ -128,6 +128,10 @@ def _format_container_preview(item, json_type: JsonType, *, show_preview: bool) 
 
     if not preview:
         return header
+
+    if len(item.child_items) > _PREVIEW_CHILDREN:
+        preview += "..."
+
     return _elide(f"{header}  {preview}")
 
 

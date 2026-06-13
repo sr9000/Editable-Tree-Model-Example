@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 APPLICATION_ID = "org.jeditor.204b2a8a-e956-4c62-911d-cfb29a4fe257"
 MODAL_WINDOW_SIZE = (600, 440)
 WINDOW_DEFAULT_SIZE = (800, 600)
@@ -91,3 +93,6 @@ LOADING_PROGRESS_DETAIL_REFRESH_MS: int = 1000
 # count above this threshold, first-paint avoids full-tree expand-all and
 # content-based key-column auto-sizing scans.
 LOADING_AUTO_EXPAND_MAX_NODES: int = 10_000
+
+# Helps to define hard deadline, after what loading canceled (10 minutes)
+LOADING_HARD_TIMEOUT_SECONDS = 600.0
