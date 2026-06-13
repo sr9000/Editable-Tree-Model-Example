@@ -108,7 +108,9 @@ def _is_temporal_type(json_type: JsonType | None) -> bool:
     return json_type in (JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE, JsonType.DATETIMEUTC)
 
 
-def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None) -> mpq | None:
+def _epoch_seconds_from_temporal(
+    value: Any, hinted_type: JsonType | None = None, *, allow_expensive: bool = False
+) -> mpq | None:
     """Convert temporal-like input to epoch seconds.
 
     DATETIME/DATE are Unix epoch seconds (UTC for naive values).
@@ -153,7 +155,7 @@ def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None
         )
 
         for category in categories:
-            parsed = parse_datetime_text(raw, category)
+            parsed = parse_datetime_text(raw, category, allow_expensive=allow_expensive)
             if parsed is None:
                 continue
             if isinstance(parsed, Timestamp):
@@ -169,7 +171,7 @@ def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None
     return None
 
 
-def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
+def _try_parse_temporal(json_type: JsonType, value: Any, *, allow_expensive: bool = False) -> str | None:
     """Convert *value* to a canonical ISO string for *json_type*.
 
     Handles Python date/Timestamp/NanoTime objects, int epoch seconds (≥ 10^12 →
@@ -267,12 +269,12 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
             hour, rem = divmod(whole_seconds, 3600)
             minute, second = divmod(rem, 60)
             parsed_time = NanoTime(hour=hour, minute=minute, second=second, nanosecond=nanos)
-            return _try_parse_temporal(json_type, parsed_time)
+            return _try_parse_temporal(json_type, parsed_time, allow_expensive=allow_expensive)
 
         ts = numeric / 1000.0 if isinstance(value, int) and abs(value) >= 10**12 else numeric
         try:
             dt = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
-            return _try_parse_temporal(json_type, dt)
+            return _try_parse_temporal(json_type, dt, allow_expensive=allow_expensive)
         except (ValueError, OSError, OverflowError):
             pass
         return None
@@ -281,21 +283,21 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
     if isinstance(value, str) and value:
         raw = value.strip()
         category = _category_for_temporal_type(json_type)
-        if category is not None and parse_datetime_text(raw, category) is not None:
+        if category is not None and parse_datetime_text(raw, category, allow_expensive=allow_expensive) is not None:
             # Keep exactly what user entered so optional parts (seconds/microseconds)
             # can be added/removed dynamically without being rewritten away.
             return raw
 
         # Try time first (time strings are not valid datetime strings)
         try:
-            return _try_parse_temporal(json_type, NanoTime.fromisoformat(raw))
+            return _try_parse_temporal(json_type, NanoTime.fromisoformat(raw), allow_expensive=allow_expensive)
         except ValueError:
             pass
         # dateutil handles full datetime/date/tz strings
         try:
             from dateutil.parser import isoparse
 
-            return _try_parse_temporal(json_type, isoparse(raw))
+            return _try_parse_temporal(json_type, isoparse(raw), allow_expensive=allow_expensive)
         except Exception:
             pass
 
@@ -337,6 +339,8 @@ def coerce_value_for_type(
     value: Any,
     strict: bool,
     old_type: JsonType | None = None,
+    *,
+    allow_expensive: bool = False,
 ) -> tuple[bool, Any]:
     def _to_mpq_or_none(raw: Any) -> mpq | None:
         return safe_mpq_from_any(raw)
@@ -409,7 +413,7 @@ def coerce_value_for_type(
                 if truncated is None:
                     return False, None
                 return True, truncated
-            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
+            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type, allow_expensive=allow_expensive)
             if temporal_epoch is not None:
                 return True, int(temporal_epoch)
             if _is_temporal_type(old_type):
@@ -440,7 +444,7 @@ def coerce_value_for_type(
                 if q is None:
                     return False, None
                 return True, q
-            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
+            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type, allow_expensive=allow_expensive)
             if temporal_epoch is not None:
                 return True, temporal_epoch
             if _is_temporal_type(old_type):
@@ -460,7 +464,7 @@ def coerce_value_for_type(
         case JsonType.INTEGER_CURRENCY | JsonType.INTEGER_UNITS:
             kind = _affix_kind_for(json_type)
             if isinstance(value, str):
-                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
+                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN, allow_expensive=allow_expensive)
                 if parsed is not None:
                     truncated = _int_from_truncated(parsed.number)
                     if truncated is None:
@@ -483,7 +487,7 @@ def coerce_value_for_type(
         case JsonType.FLOAT_CURRENCY | JsonType.FLOAT_UNITS:
             kind = _affix_kind_for(json_type)
             if isinstance(value, str):
-                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
+                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN, allow_expensive=allow_expensive)
                 if parsed is not None:
                     q = _to_mpq_or_none(parsed.number)
                     if q is None:
@@ -541,7 +545,7 @@ def coerce_value_for_type(
 
         # 3.2: fall back to "now" instead of epoch-zero when value is unparseable
         case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE | JsonType.DATETIMEUTC:
-            parsed = _try_parse_temporal(json_type, value)
+            parsed = _try_parse_temporal(json_type, value, allow_expensive=allow_expensive)
             if parsed is not None:
                 return True, parsed
             return True, _now_for_type(json_type)

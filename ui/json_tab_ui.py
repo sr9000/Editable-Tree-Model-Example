@@ -8,45 +8,70 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
-    QMetaObject, QObject, QPoint, QRect,
-    QSize, QTime, QUrl, Qt)
-from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
-    QFont, QFontDatabase, QGradient, QIcon,
-    QImage, QKeySequence, QLinearGradient, QPainter,
-    QPalette, QPixmap, QRadialGradient, QTransform)
-from PySide6.QtWidgets import (QApplication, QHeaderView, QLineEdit, QSizePolicy,
-    QVBoxLayout, QWidget)
+from PySide6.QtCore import (
+    QCoreApplication,
+    QDate,
+    QDateTime,
+    QLocale,
+    QMetaObject,
+    QObject,
+    QPoint,
+    QRect,
+    QSize,
+    Qt,
+    QTime,
+    QUrl,
+)
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QConicalGradient,
+    QCursor,
+    QFont,
+    QFontDatabase,
+    QGradient,
+    QIcon,
+    QImage,
+    QKeySequence,
+    QLinearGradient,
+    QPainter,
+    QPalette,
+    QPixmap,
+    QRadialGradient,
+    QTransform,
+)
+from PySide6.QtWidgets import QApplication, QHeaderView, QLineEdit, QSizePolicy, QVBoxLayout, QWidget
 
 from tree.view import JsonTreeView
+
 
 class Ui_JsonTab(object):
     def setupUi(self, JsonTab):
         if not JsonTab.objectName():
-            JsonTab.setObjectName(u"JsonTab")
+            JsonTab.setObjectName("JsonTab")
         JsonTab.resize(480, 360)
         self.verticalLayout = QVBoxLayout(JsonTab)
         self.verticalLayout.setSpacing(0)
-        self.verticalLayout.setObjectName(u"verticalLayout")
+        self.verticalLayout.setObjectName("verticalLayout")
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.searchEdit = QLineEdit(JsonTab)
-        self.searchEdit.setObjectName(u"searchEdit")
+        self.searchEdit.setObjectName("searchEdit")
 
         self.verticalLayout.addWidget(self.searchEdit)
 
         self.treeView = JsonTreeView(JsonTab)
-        self.treeView.setObjectName(u"treeView")
+        self.treeView.setObjectName("treeView")
 
         self.verticalLayout.addWidget(self.treeView)
-
 
         self.retranslateUi(JsonTab)
 
         QMetaObject.connectSlotsByName(JsonTab)
+
     # setupUi
 
     def retranslateUi(self, JsonTab):
-        self.searchEdit.setPlaceholderText(QCoreApplication.translate("JsonTab", u"Filter (Ctrl+F)", None))
+        self.searchEdit.setPlaceholderText(QCoreApplication.translate("JsonTab", "Filter (Ctrl+F)", None))
         pass
-    # retranslateUi
 
+    # retranslateUi

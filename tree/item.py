@@ -388,7 +388,7 @@ class JsonTreeItem:
     def _coerce_value_for_type(
         self, json_type: JsonType, value: Any, strict: bool, old_type: JsonType | None = None
     ) -> tuple[bool, Any]:
-        return coerce_value_for_type(json_type, value, strict, old_type=old_type)
+        return coerce_value_for_type(json_type, value, strict, old_type=old_type, allow_expensive=self.explicit_type)
 
     def _compute_editable(self) -> bool:
         return compute_editable(self.json_type, self.value, self.EDITABLE_BLOB_LIMIT)

@@ -3,6 +3,8 @@ from datetime import date, timezone
 
 from dateutil.parser import isoparse
 
+from settings import INFERENCE_MAX_DATETIME_CHARS
+
 from .enums import DateTimeCategory
 from .nano_time import NanoTime
 
@@ -33,7 +35,12 @@ PARTIAL_DATETIME_RE = re.compile(
 )
 
 
-def parse_datetime_text(text: str, category=None):
+def parse_datetime_text(text: str, category=None, *, allow_expensive: bool = False):
+    # Gate expensive regex work for oversized strings during automatic inference.
+    # Explicit coercion passes allow_expensive=True to bypass this gate.
+    if not allow_expensive and len(text) > INFERENCE_MAX_DATETIME_CHARS:
+        return None
+
     match = DATETIME_RE.fullmatch(text)
     if not match:
         return None

@@ -38,3 +38,41 @@ NUMBER_AFFIX_MRU_SIZE = 50
 # - ``MPQ_SAFE_MAX_SIG_DIGITS`` bounds significant digits via precision.
 MPQ_SAFE_MAX_ABS_EXPONENT = 10_000
 MPQ_SAFE_MAX_SIG_DIGITS = 4_300
+
+# ---------------------------------------------------------------------------
+# Inference safety limits (Plan 1 — length limits for expensive inference)
+# ---------------------------------------------------------------------------
+# These constants gate expensive inference work (regex, datetime parsing,
+# color checks) during automatic type classification.
+# They are NOT user-exposed settings and must not use QSettings.
+#
+# Values are justified by reports/parsing-vulnerability-2026-06-13.md which
+# measured 832 rows across 16 registry entries and 13 adversarial families
+# at sizes 1024, 4096, 16384, and 65536.
+#
+# Design decisions:
+# - No INFERENCE_MAX_TOTAL_CHARS: individual gates (datetime, affix, color)
+#   effectively skip all unnecessary checks; a top-level fast path is redundant.
+# - No INFERENCE_MAX_BASE64_PROBE_CHARS: base64 uses content-based syntax
+#   validation (len mod 4 + alphabet regex) instead of a length cap.
+# - No EDITABLE_DECODE_LIMIT_BYTES: if base64 syntax is valid, decode is allowed.
+
+# parse_datetime_text() regex and datetime conversion.
+# Report: DATETIME_RE.fullmatch median is 0.00ms even at 65536 across all
+# families; 40 is enough for any practically meaningful datetime string.
+INFERENCE_MAX_DATETIME_CHARS: int = 40
+
+# parse_number_affix() regex checks.
+# Report: parse_number_affix is superlinear on digits, plain_ascii,
+# pathological_repetition at 4096+ (ratio up to 4.89). 100 is well below
+# the pre-existing 4300-digit integer limit, so the gate fires before the
+# error path.
+INFERENCE_MAX_AFFIX_CHARS: int = 100
+
+# looks_like_color_rgb() and looks_like_color_rgba().
+# Maximum length of #RGB, #RRGGBB, #RGBA, and #RRGGBBAA color strings.
+INFERENCE_MAX_COLOR_CHARS: int = 10
+
+# format_with_type() display preview decode cap.
+# Preview needs only enough bytes to render the existing prefix text.
+FORMAT_PREVIEW_DECODE_LIMIT_BYTES: int = 100

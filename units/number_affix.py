@@ -7,6 +7,7 @@ from enum import StrEnum
 from gmpy2 import mpq
 
 from core.safe_mpq import safe_mpq_from_text
+from settings import INFERENCE_MAX_AFFIX_CHARS
 
 _AFFIX_FORBIDDEN_TOUCH_CHARS = set("+-.")
 _NUMBER_RE = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
@@ -81,7 +82,12 @@ def _format_mpq_decimal(value: mpq) -> str:
     return f"{sign}{digits[:i]}.{digits[i:]}"
 
 
-def parse_number_affix(s: str, *, max_affix_len: int = 16) -> NumberAffix | None:
+def parse_number_affix(s: str, *, max_affix_len: int = 16, allow_expensive: bool = False) -> NumberAffix | None:
+    # Gate expensive regex work for oversized strings during automatic inference.
+    # Explicit coercion passes allow_expensive=True to bypass this gate.
+    if not allow_expensive and len(s) > INFERENCE_MAX_AFFIX_CHARS:
+        return None
+
     m = _CURRENCY_RE.fullmatch(s)
     if m is not None:
         affix = m.group("affix")
