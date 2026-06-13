@@ -11,8 +11,8 @@ import gmpy2
 from pandas import Timestamp
 
 from core.datetime_parsing import parse_datetime_text
-from core.raw_numeric import RawNumericValue
 from core.datetime_parsing.nano_time import NanoTime
+from core.raw_numeric import RawNumericValue
 from settings import NUMBER_AFFIX_MAX_LEN
 from units.number_affix import AffixKind, NumberAffix, parse_number_affix
 

@@ -3,7 +3,6 @@ import yaml
 from gmpy2 import mpq
 
 from core.raw_numeric import REASON_NON_FINITE, RawNumericValue
-
 from mpq2py import MpqSafeDumper, MpqSafeLoader, mpq_json_default
 
 json_floats = """

@@ -1,16 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import (
-    MAX_EMAX,
-    MIN_EMIN,
-    Context,
-    Decimal,
-    Inexact,
-    InvalidOperation,
-    Overflow,
-    Underflow,
-)
+from decimal import MAX_EMAX, MIN_EMIN, Context, Decimal, Inexact, InvalidOperation, Overflow, Underflow
 from typing import Any
 
 from gmpy2 import mpq

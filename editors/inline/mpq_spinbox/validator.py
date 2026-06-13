@@ -5,8 +5,8 @@ from typing import Tuple
 from gmpy2 import mpq
 from PySide6.QtGui import QValidator
 
-from core.safe_mpq import safe_mpq_from_any
 from coalesce import nn
+from core.safe_mpq import safe_mpq_from_any
 
 PARTIAL_FLOAT = re.compile(r"[-+]?\d*\.?\d*e?[-+]?\d*", re.IGNORECASE)
 

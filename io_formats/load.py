@@ -99,9 +99,7 @@ def load_file_with_format(path: str) -> tuple[Any, str]:
                     continue
                 rows.append(
                     _decode_number_affixes(
-                        simplejson.loads(
-                            stripped, parse_float=_safe_parse_float, parse_constant=_safe_parse_constant
-                        )
+                        simplejson.loads(stripped, parse_float=_safe_parse_float, parse_constant=_safe_parse_constant)
                     )
                 )
             return rows, SAVE_FORMAT_JSONL

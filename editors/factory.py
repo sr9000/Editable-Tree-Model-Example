@@ -8,9 +8,9 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSortFilterProxyM
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
+from core.datetime_parsing.enums import DateTimeCategory
 from core.raw_numeric import REASON_UNKNOWN, RawNumericValue
 from core.safe_mpq import safe_mpq_from_any
-from core.datetime_parsing.enums import DateTimeCategory
 from delegates.number_affix_delegate import (
     is_affix_json_type,
     is_integer_json_type,

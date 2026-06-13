@@ -6,9 +6,9 @@ import yaml
 from gmpy2 import mpq
 from pandas import Timestamp
 
+from core.datetime_parsing.nano_time import NanoTime
 from core.raw_numeric import REASON_UNKNOWN, RawNumericValue
 from core.safe_mpq import parse_mpq
-from core.datetime_parsing.nano_time import NanoTime
 from units.number_affix import NumberAffix, format_number_affix
 
 # Strict JSON number grammar. A raw numeric value may only be injected directly

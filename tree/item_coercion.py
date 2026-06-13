@@ -10,9 +10,9 @@ from gmpy2 import mpq
 from pandas import Timestamp
 
 from core.datetime_parsing.enums import DateTimeCategory
-from core.raw_numeric import RawNumericValue
 from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
+from core.raw_numeric import RawNumericValue
 from core.safe_mpq import safe_mpq_from_any
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
