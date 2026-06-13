@@ -87,7 +87,10 @@ class LoadCoordinator(QObject):
         if self._reporter is not None:
             self._reporter.stage(stage)
         if self._progress_dialog is not None:
-            self._progress_dialog.set_stage(stage)
+            try:
+                self._progress_dialog.set_stage(stage)
+            except RuntimeError:
+                self._progress_dialog = None
 
     def stage(self, name: str) -> None:
         """ProgressReporter entry point used by builders."""
@@ -98,21 +101,31 @@ class LoadCoordinator(QObject):
         if self._reporter is not None:
             self._reporter.tick(done, total)
         if self._progress_dialog is not None:
-            self._progress_dialog.set_progress(done, total)
+            try:
+                self._progress_dialog.set_progress(done, total)
+            except RuntimeError:
+                self._progress_dialog = None
 
     def detail(self, processed: int, path: str) -> None:
         """ProgressReporter detail entry point used by builders/workers."""
         if self._reporter is not None and isinstance(self._reporter, ProgressReporter):
             self._reporter.detail(processed, path)
         if self._progress_dialog is not None:
-            self._progress_dialog.set_detail(processed, path)
+            try:
+                self._progress_dialog.set_detail(processed, path)
+            except RuntimeError:
+                self._progress_dialog = None
 
     def _start_progress(self, task: _LoadTask) -> None:
         """Start tracking a load task with the progress widget."""
         self._current_task_id = task.task_id
         if self._progress_dialog is None:
             self._progress_dialog = LoadingProgressDialog(self._window, cancellable=True)
-        self._progress_dialog.start(task.task_id, cancellation_token=task.token, on_cancel=self.cancel_current)
+        try:
+            self._progress_dialog.start(task.task_id, cancellation_token=task.token, on_cancel=self.cancel_current)
+        except RuntimeError:
+            self._progress_dialog = LoadingProgressDialog(self._window, cancellable=True)
+            self._progress_dialog.start(task.task_id, cancellation_token=task.token, on_cancel=self.cancel_current)
 
     def cancel_current(self) -> None:
         """Cancel the active load task and unblock any blocking caller."""
@@ -141,13 +154,19 @@ class LoadCoordinator(QObject):
     def _finish_progress(self, task_id: str) -> None:
         """Finish tracking a load task."""
         if self._progress_dialog is not None:
-            self._progress_dialog.finish(task_id)
+            try:
+                self._progress_dialog.finish(task_id)
+            except RuntimeError:
+                self._progress_dialog = None
         self._current_task_id = None
 
     def _error_progress(self, task_id: str) -> None:
         """Mark a load task as failed."""
         if self._progress_dialog is not None:
-            self._progress_dialog.error(task_id)
+            try:
+                self._progress_dialog.error(task_id)
+            except RuntimeError:
+                self._progress_dialog = None
         self._current_task_id = None
 
     def _begin_task(self, mode: str, path: str, tab: Document | None = None) -> _LoadTask | None:
