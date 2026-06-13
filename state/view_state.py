@@ -1,7 +1,7 @@
 import hashlib
 from pathlib import Path
 
-from PySide6.QtCore import QModelIndex, QSettings, QSortFilterProxyModel, QTimer
+from PySide6.QtCore import QCoreApplication, QModelIndex, QSettings, QSortFilterProxyModel, QTimer
 
 import settings
 from documents.seams.document_protocol import Document
@@ -10,6 +10,7 @@ from state.qsettings_coercion import _coerce_int, _coerce_int_list, _coerce_path
 
 MAX_EXPANDED_PATHS = 5000
 _RESTORE_BATCH_SIZE = 256
+_SAVE_BATCH_SIZE = 256
 
 
 def _source_to_view_index(view, source_index: QModelIndex) -> QModelIndex:
@@ -102,7 +103,13 @@ def save(tab: Document) -> None:
     settings.beginGroup(state_key(tab.io.file_path))
 
     widths = tab.view_controller.column_widths()
-    expanded_paths = [list(path) for path in tab.editing.move.collect_expanded_paths()[:MAX_EXPANDED_PATHS]]
+    expanded_paths: list[list[int]] = []
+    for i, path in enumerate(tab.editing.move.iter_expanded_paths(), start=1):
+        expanded_paths.append(list(path))
+        if len(expanded_paths) >= MAX_EXPANDED_PATHS:
+            break
+        if i % _SAVE_BATCH_SIZE == 0:
+            QCoreApplication.processEvents()
 
     current_path_tuple = tab.view_controller.current_path()
     current_path = list(current_path_tuple) if current_path_tuple is not None else []
