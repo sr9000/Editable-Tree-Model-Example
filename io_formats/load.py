@@ -6,13 +6,12 @@ secret_line / secret_text again.
 """
 
 from typing import Any
-from decimal import Decimal, InvalidOperation
 
 import simplejson
 import yaml
 
-from core.frozen_value import FrozenValue
-from core.safe_mpq import safe_mpq_from_text
+from core.raw_numeric import REASON_NON_FINITE, REASON_UNKNOWN, RawNumericValue
+from core.safe_mpq import parse_mpq
 from io_formats.detect import (
     SAVE_FORMAT_JSON,
     SAVE_FORMAT_JSONL,
@@ -41,21 +40,21 @@ _AFFIX_JSON_TYPES = frozenset(
 
 
 def _safe_parse_float(text: str):
-    parsed = safe_mpq_from_text(text)
-    if parsed is not None:
-        return parsed
+    """Parse a JSON float token into a safe ``mpq`` or a ``RawNumericValue``.
 
-    # Keep invalid-literal classification for direct callers/tests while
-    # avoiding binary-float parsing semantics.
-    candidate = text.replace("_", "").strip()
-    try:
-        d = Decimal(candidate)
-    except InvalidOperation:
-        return FrozenValue(raw=text, reason="json-float-invalid")
-    if not d.is_finite():
-        return FrozenValue(raw=text, reason="json-float-invalid")
+    Successful safe parses become exact rationals. Anything the safe parser
+    rejects (overflow, underflow, non-finite, precision, format) is preserved
+    verbatim as raw, editable text instead of constructing an unsafe value.
+    """
+    result = parse_mpq(text)
+    if result.value is not None:
+        return result.value
+    return RawNumericValue(raw=text, reason=result.reason or REASON_UNKNOWN, source_syntax="json")
 
-    return FrozenValue(raw=text, reason="json-float-overflow")
+
+def _safe_parse_constant(name: str):
+    """Preserve non-standard JSON constants (NaN / Infinity) as raw text."""
+    return RawNumericValue(raw=name, reason=REASON_NON_FINITE, source_syntax="json")
 
 
 def _decode_number_affixes(value: Any) -> Any:
@@ -86,14 +85,25 @@ def load_file_with_format(path: str) -> tuple[Any, str]:
     fmt = detect_format(path)
     with open(path, "r", encoding="utf-8") as fh:
         if fmt == SAVE_FORMAT_JSON:
-            return _decode_number_affixes(simplejson.load(fh, parse_float=_safe_parse_float)), SAVE_FORMAT_JSON
+            return (
+                _decode_number_affixes(
+                    simplejson.load(fh, parse_float=_safe_parse_float, parse_constant=_safe_parse_constant)
+                ),
+                SAVE_FORMAT_JSON,
+            )
         if fmt == SAVE_FORMAT_JSONL:
             rows = []
             for line in fh:
                 stripped = line.strip()
                 if not stripped:
                     continue
-                rows.append(_decode_number_affixes(simplejson.loads(stripped, parse_float=_safe_parse_float)))
+                rows.append(
+                    _decode_number_affixes(
+                        simplejson.loads(
+                            stripped, parse_float=_safe_parse_float, parse_constant=_safe_parse_constant
+                        )
+                    )
+                )
             return rows, SAVE_FORMAT_JSONL
 
         docs = [_decode_number_affixes(doc) for doc in yaml.load_all(fh, Loader=MpqSafeLoader)]

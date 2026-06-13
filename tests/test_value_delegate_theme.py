@@ -5,6 +5,7 @@ from gmpy2 import mpq
 from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionViewItem
 
+from core.raw_numeric import RawNumericValue
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
 from documents.tab import JsonTab
@@ -36,13 +37,16 @@ def _index_for_type(json_type: JsonType):
     # user-selectable via the type combobox. To put an item into one of those
     # states we seed the value with content that text_pseudotype_for collapses
     # to the desired pseudo while the item is already in its parent shape.
-    pseudo_seeds: dict[JsonType, tuple[JsonType, str]] = {
+    pseudo_seeds: dict[JsonType, tuple[JsonType, object]] = {
         JsonType.EMPTY_STRING: (JsonType.STRING, ""),
         JsonType.EMPTY_MULTILINE: (JsonType.MULTILINE, ""),
         JsonType.WS_STRING: (JsonType.STRING, "   "),
         JsonType.WS_UNICODE: (JsonType.STRING, " \u00a0 "),
         JsonType.WS_MULTILINE: (JsonType.MULTILINE, "  \n  "),
         JsonType.WS_TEXT: (JsonType.MULTILINE, " \u00a0\n\u3000 "),
+        # RAW_FLOAT is a content-derived pseudo numeric type: seed it by setting
+        # a raw, unsupported numeric literal on a FLOAT-shaped item.
+        JsonType.RAW_FLOAT: (JsonType.FLOAT, RawNumericValue("31e-327018450730")),
     }
     if json_type in pseudo_seeds:
         parent, seed = pseudo_seeds[json_type]

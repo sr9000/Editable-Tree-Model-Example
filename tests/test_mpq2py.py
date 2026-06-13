@@ -1,8 +1,8 @@
-import math
-
 import simplejson as json
 import yaml
 from gmpy2 import mpq
+
+from core.raw_numeric import REASON_NON_FINITE, RawNumericValue
 
 from mpq2py import MpqSafeDumper, MpqSafeLoader, mpq_json_default
 
@@ -43,9 +43,14 @@ def test_mpq_with_yaml():
     assert res == yaml_floats
 
 
-def test_yaml_special_floats_fall_back_to_native_yaml_float_constructor() -> None:
+def test_yaml_special_floats_become_raw_numeric_values() -> None:
     data = yaml.load("pinf: .inf\nninf: -.inf\nnanv: .nan\n", Loader=MpqSafeLoader)
 
-    assert math.isinf(data["pinf"]) and data["pinf"] > 0
-    assert math.isinf(data["ninf"]) and data["ninf"] < 0
-    assert math.isnan(data["nanv"])
+    for key in ("pinf", "ninf", "nanv"):
+        assert isinstance(data[key], RawNumericValue)
+        assert data[key].reason == REASON_NON_FINITE
+
+    # The original literal is preserved exactly.
+    assert data["pinf"].raw == ".inf"
+    assert data["ninf"].raw == "-.inf"
+    assert data["nanv"].raw == ".nan"

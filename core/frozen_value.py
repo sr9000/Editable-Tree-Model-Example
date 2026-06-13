@@ -1,12 +1,10 @@
-from dataclasses import dataclass
+"""Backwards-compatibility shim.
 
+``FrozenValue`` was the original name for the raw-literal wrapper. It now aliases
+:class:`core.raw_numeric.RawNumericValue`, which preserves unsupported numeric
+literals as editable raw text.
+"""
 
-@dataclass(frozen=True, slots=True)
-class FrozenValue:
-    """Raw scalar literal that is preserved as-is and treated as read-only."""
+from core.raw_numeric import RawNumericValue as FrozenValue
 
-    raw: str
-    reason: str = "unsafe-mpq-literal"
-
-    def __str__(self) -> str:
-        return self.raw
+__all__ = ["FrozenValue"]

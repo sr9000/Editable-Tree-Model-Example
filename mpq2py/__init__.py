@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 import simplejson
@@ -5,32 +6,19 @@ import yaml
 from gmpy2 import mpq
 from pandas import Timestamp
 
-from core.frozen_value import FrozenValue
-from core.safe_mpq import safe_mpq_from_text
+from core.raw_numeric import REASON_UNKNOWN, RawNumericValue
+from core.safe_mpq import parse_mpq
 from core.datetime_parsing.nano_time import NanoTime
 from units.number_affix import NumberAffix, format_number_affix
 
-_YAML_SPECIAL_FLOAT_LITERALS = frozenset(
-    {
-        ".inf",
-        "+.inf",
-        "-.inf",
-        ".nan",
-        "inf",
-        "+inf",
-        "-inf",
-        "infinity",
-        "+infinity",
-        "-infinity",
-        "nan",
-        "+nan",
-        "-nan",
-    }
-)
+# Strict JSON number grammar. A raw numeric value may only be injected directly
+# into JSON output when its literal is a valid JSON number; otherwise saving as
+# JSON must fail loudly rather than emit invalid JSON or silently quote it.
+_JSON_NUMBER_TOKEN_RE = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?\Z")
 
 
-def _is_yaml_special_float_literal(text: str) -> bool:
-    return text.replace("_", "").strip().lower() in _YAML_SPECIAL_FLOAT_LITERALS
+def raw_numeric_is_json_safe(raw: str) -> bool:
+    return bool(_JSON_NUMBER_TOKEN_RE.match(raw.strip()))
 
 
 def mpq_serialization(q: mpq) -> tuple[float | Decimal, mpq]:
@@ -85,8 +73,13 @@ def mpq_json_default(obj):
     if isinstance(obj, mpq):
         # Emit only the scalar value; the helper's denominator metadata is not JSON-serializable.
         return mpq_serialization(obj)[0]
-    if isinstance(obj, FrozenValue):
-        return simplejson.RawJSON(obj.raw)
+    if isinstance(obj, RawNumericValue):
+        if raw_numeric_is_json_safe(obj.raw):
+            return simplejson.RawJSON(obj.raw.strip())
+        raise ValueError(
+            f"Raw numeric value {obj.raw!r} (reason: {obj.reason}) is not a valid "
+            "JSON number; convert it to a supported number or save as YAML."
+        )
     if isinstance(obj, Decimal):
         # ``mpq_serialization`` returns ``Decimal`` for terminating fractions. The stdlib
         # ``json`` module re-invokes this default on the Decimal because it is not natively
@@ -111,14 +104,14 @@ class MpqSafeLoader(yaml.SafeLoader):
 
 
 def mpq_yaml_float_construct(loader: MpqSafeLoader, node: yaml.ScalarNode):
-    parsed = safe_mpq_from_text(node.value)
-    if parsed is not None:
-        return parsed
+    result = parse_mpq(node.value)
+    if result.value is not None:
+        return result.value
 
-    if _is_yaml_special_float_literal(node.value):
-        return yaml.constructor.SafeConstructor.construct_yaml_float(loader, node)
-
-    return FrozenValue(raw=node.value.strip(), reason="yaml-float-overflow")
+    # Preserve the original literal exactly (including non-finite spellings such
+    # as ``.inf`` / ``.nan``) as editable raw text instead of constructing a
+    # Python float, so rendering and validation never depend on float quirks.
+    return RawNumericValue(raw=node.value, reason=result.reason or REASON_UNKNOWN, source_syntax="yaml")
 
 
 MpqSafeLoader.add_constructor("tag:yaml.org,2002:float", mpq_yaml_float_construct)
@@ -155,8 +148,8 @@ def _nanotime_yaml_represent(dumper: MpqSafeDumper, data: NanoTime):
 MpqSafeDumper.add_representer(NanoTime, _nanotime_yaml_represent)
 
 
-def _frozen_value_yaml_represent(dumper: MpqSafeDumper, data: FrozenValue):
+def _raw_numeric_yaml_represent(dumper: MpqSafeDumper, data: RawNumericValue):
     return dumper.represent_scalar("tag:yaml.org,2002:float", data.raw)
 
 
-MpqSafeDumper.add_representer(FrozenValue, _frozen_value_yaml_represent)
+MpqSafeDumper.add_representer(RawNumericValue, _raw_numeric_yaml_represent)

@@ -4,6 +4,7 @@ import gmpy2
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
+from core.raw_numeric import RawNumericValue, describe_reason
 from core.safe_mpq import safe_mpq_from_any
 from mpq2py import mpq_serialization
 from settings import SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
@@ -26,6 +27,14 @@ def font_role_for_name(item, is_root_item: bool) -> QFont | None:
 def tooltip_role_for_value(item) -> str | None:
     if item.json_type in SECRET_FAMILY:
         return SECRET_MASK_CHAR * SECRET_MASK_GLYPHS
+
+    if item.json_type is JsonType.RAW_FLOAT and isinstance(item.value, RawNumericValue):
+        return (
+            "Unsupported as a regular number: "
+            f"{describe_reason(item.value.reason)}.\n"
+            "Edit it into a normal number, or leave it unchanged to preserve "
+            "the raw value for external software that accepts it."
+        )
 
     raw = item.data(2)
     text = "" if raw is None else str(raw)

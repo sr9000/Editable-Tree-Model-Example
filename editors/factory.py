@@ -8,6 +8,7 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSortFilterProxyM
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
+from core.raw_numeric import REASON_UNKNOWN, RawNumericValue
 from core.safe_mpq import safe_mpq_from_any
 from core.datetime_parsing.enums import DateTimeCategory
 from delegates.number_affix_delegate import (
@@ -23,6 +24,7 @@ from editors.inline.bigint_spinbox import QBigIntSpinBox
 from editors.inline.caps_safe_line import _CapsLockSafeLineEdit
 from editors.inline.datetime.better_dt_editor import BetterDateTimeEditor
 from editors.inline.mpq_spinbox import QMpqSpinBox
+from editors.inline.raw_numeric_line import RawNumericLineEdit
 from editors.inline.secret_line import _SecretEditorWatcher, _SecretLineEdit
 from editors.windowed.color_dialog import ColorPickerDialog
 from editors.windowed.hex_dialog import QHexDialog
@@ -109,6 +111,12 @@ def create_value_editor(
             editor = QBigIntSpinBox(parent)
         case JsonType.FLOAT:
             editor = QMpqSpinBox(parent, item.value)
+        case JsonType.RAW_FLOAT:
+            # Unsupported numeric literal: edit as plain raw text and warn the
+            # user (once, when the editor opens) about the unsupported state.
+            reason = item.value.reason if isinstance(item.value, RawNumericValue) else REASON_UNKNOWN
+            delegate._context_for(parent).warn_raw_numeric_edit(parent, reason=reason)
+            editor = RawNumericLineEdit(parent)
         case JsonType.PERCENT:
             editor = QMpqSpinBox(
                 parent,

@@ -11,7 +11,7 @@ import gmpy2
 from pandas import Timestamp
 
 from core.datetime_parsing import parse_datetime_text
-from core.frozen_value import FrozenValue
+from core.raw_numeric import RawNumericValue
 from core.datetime_parsing.nano_time import NanoTime
 from settings import NUMBER_AFFIX_MAX_LEN
 from units.number_affix import AffixKind, NumberAffix, parse_number_affix
@@ -149,8 +149,8 @@ def parse_json_type(value: Any) -> "JsonType":
                 return JsonType.PERCENT
             return JsonType.FLOAT
 
-        case FrozenValue():
-            return JsonType.FLOAT
+        case RawNumericValue():
+            return JsonType.RAW_FLOAT
 
         case str(s):
             if s == "":
@@ -234,6 +234,9 @@ class JsonType(StrEnum):
 
     # Extra Number
     PERCENT = "percent"
+    # Raw, unsupported numeric literal preserved as editable text. Pseudo-type:
+    # derived from value content, never user-selectable.
+    RAW_FLOAT = "raw float"
     INTEGER_UNITS = "int units"
     FLOAT_UNITS = "float units"
     INTEGER_CURRENCY = "int currency"
@@ -327,9 +330,27 @@ def canonical_text_type(json_type: JsonType) -> JsonType:
     return PSEUDO_TEXT_PARENT.get(json_type, json_type)
 
 
-# Types the user can pick from the type combobox. Pseudo text types are
-# excluded because they are derived purely from content.
-USER_SELECTABLE_TYPES: tuple[JsonType, ...] = tuple(t for t in JsonType if t not in PSEUDO_TEXT_FAMILY)
+# Parent (canonical, user-selectable) type for each non-text pseudo type.
+# RAW_FLOAT collapses to FLOAT in the type combo so the user sees the type they
+# could pick, while editing/coercion keep treating it as raw text.
+PSEUDO_NUMERIC_PARENT: dict[JsonType, JsonType] = {
+    JsonType.RAW_FLOAT: JsonType.FLOAT,
+}
+
+
+def canonical_type(json_type: JsonType) -> JsonType:
+    """Return the user-selectable parent for any pseudo type, else *json_type*."""
+    if json_type in PSEUDO_NUMERIC_PARENT:
+        return PSEUDO_NUMERIC_PARENT[json_type]
+    return PSEUDO_TEXT_PARENT.get(json_type, json_type)
+
+
+# Non-user-selectable pseudo types (derived purely from content).
+PSEUDO_FAMILY: frozenset[JsonType] = PSEUDO_TEXT_FAMILY | frozenset({JsonType.RAW_FLOAT})
+
+# Types the user can pick from the type combobox. Pseudo types are excluded
+# because they are derived purely from content.
+USER_SELECTABLE_TYPES: tuple[JsonType, ...] = tuple(t for t in JsonType if t not in PSEUDO_FAMILY)
 SECRET_FAMILY: frozenset[JsonType] = frozenset({JsonType.SECRET_LINE, JsonType.SECRET_TEXT})
 COLOR_FAMILY: frozenset[JsonType] = frozenset({JsonType.COLOR_RGB, JsonType.COLOR_RGBA})
 DATETIME_FAMILY: frozenset[JsonType] = frozenset(

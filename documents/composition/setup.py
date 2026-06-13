@@ -65,6 +65,21 @@ class JsonTabEditContext(DefaultEditContext):
         )
         return answer == QMessageBox.StandardButton.Yes
 
+    def warn_raw_numeric_edit(self, parent, *, reason: str) -> None:  # type: ignore[override]
+        from core.raw_numeric import describe_reason
+
+        QMessageBox.warning(
+            parent if parent is not None else self._tab,
+            "Unsupported numeric value",
+            "This value is currently unsupported as a regular float / number "
+            f"({describe_reason(reason)}).\n\n"
+            "You can change it into a normally parseable number, or leave the "
+            "raw value unchanged to preserve it for external software that "
+            "accepts such values.",
+            QMessageBox.StandardButton.Ok,
+            QMessageBox.StandardButton.Ok,
+        )
+
     def confirm_large_binary_edit(self, parent, payload_size: int) -> bool:  # type: ignore[override]
         from state.edit_limits import get_binary_edit_warning_limit_bytes
 

@@ -17,6 +17,7 @@ LOGGER = logging.getLogger(__name__)
 _TYPE_KEYS: dict[str, JsonType] = {
     "integer": JsonType.INTEGER,
     "float": JsonType.FLOAT,
+    "raw_float": JsonType.RAW_FLOAT,
     "percent": JsonType.PERCENT,
     "int_currency": JsonType.INTEGER_CURRENCY,
     "int_units": JsonType.INTEGER_UNITS,

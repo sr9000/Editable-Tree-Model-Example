@@ -10,7 +10,7 @@ from gmpy2 import mpq
 from pandas import Timestamp
 
 from core.datetime_parsing.enums import DateTimeCategory
-from core.frozen_value import FrozenValue
+from core.raw_numeric import RawNumericValue
 from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
 from core.safe_mpq import safe_mpq_from_any
@@ -323,7 +323,7 @@ def _looks_valid_for(json_type: JsonType, value: str) -> bool:
 
 
 def normalize_value_for_type(json_type: JsonType, value: Any) -> Any:
-    if isinstance(value, FrozenValue):
+    if isinstance(value, RawNumericValue):
         return value
     if (json_type in TEXT_FAMILY or json_type in (JsonType.SECRET_LINE, JsonType.SECRET_TEXT)) and not isinstance(
         value, str
@@ -364,6 +364,27 @@ def coerce_value_for_type(
         if target in (JsonType.INTEGER_CURRENCY, JsonType.FLOAT_CURRENCY):
             return AffixKind.CURRENCY
         return AffixKind.UNITS
+
+    # Targeting the RAW_FLOAT pseudo-type: always keep the value as a raw
+    # numeric literal (this path is only reachable programmatically; the type
+    # is not user-selectable).
+    if json_type is JsonType.RAW_FLOAT:
+        if isinstance(value, RawNumericValue):
+            return True, value
+        return True, RawNumericValue(raw="" if value is None else str(value))
+
+    # Raw, unsupported numeric literals: keep them as raw text on numeric
+    # targets when still unparseable (the model redirects to RAW_FLOAT). For
+    # any other target, fall back to the exact raw string so conversion never
+    # silently substitutes a numeric stub for the user's data.
+    if isinstance(value, RawNumericValue):
+        recovered = safe_mpq_from_any(value.raw)
+        if recovered is not None:
+            value = recovered
+        elif json_type in (JsonType.FLOAT, JsonType.PERCENT):
+            return True, value
+        else:
+            value = value.raw
 
     match json_type:
         case JsonType.NULL:
@@ -571,8 +592,9 @@ def coerce_value_for_type(
 
 
 def compute_editable(json_type: JsonType, value: Any, editable_blob_limit: int) -> bool:
-    if isinstance(value, FrozenValue):
-        return False
+    if isinstance(value, RawNumericValue):
+        # Unsupported numeric literals are editable as plain raw text.
+        return True
 
     if json_type in (JsonType.NULL, JsonType.ARRAY, JsonType.OBJECT):
         return False

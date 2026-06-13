@@ -16,6 +16,7 @@ from typing import Any
 from pandas import Timestamp
 
 from core.datetime_parsing.nano_time import NanoTime
+from core.raw_numeric import RawNumericValue
 
 _log = logging.getLogger(__name__)
 
@@ -61,6 +62,12 @@ def to_jsonschema_input(value: Any, *, _lossy: list[bool] | None = None) -> Any:
 
 
 def _coerce(value: Any, lossy: list[bool]) -> Any:  # noqa: PLR0911
+    # ── raw, unsupported numeric literals → raw string ────────────────────
+    # Validation sees the literal as text so schemas expecting a number report
+    # a normal type mismatch instead of crashing. Stored data is untouched.
+    if isinstance(value, RawNumericValue):
+        return value.raw
+
     # ── gmpy2 exact numerics ──────────────────────────────────────────────
     try:
         import gmpy2  # noqa: PLC0415
