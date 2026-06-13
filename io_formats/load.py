@@ -6,11 +6,13 @@ secret_line / secret_text again.
 """
 
 from typing import Any
+from decimal import Decimal, InvalidOperation
 
 import simplejson
 import yaml
-from gmpy2 import mpq
 
+from core.frozen_value import FrozenValue
+from core.safe_mpq import safe_mpq_from_text
 from io_formats.detect import (
     SAVE_FORMAT_JSON,
     SAVE_FORMAT_JSONL,
@@ -36,6 +38,24 @@ _AFFIX_JSON_TYPES = frozenset(
         JsonType.FLOAT_UNITS,
     }
 )
+
+
+def _safe_parse_float(text: str):
+    parsed = safe_mpq_from_text(text)
+    if parsed is not None:
+        return parsed
+
+    # Keep invalid-literal classification for direct callers/tests while
+    # avoiding binary-float parsing semantics.
+    candidate = text.replace("_", "").strip()
+    try:
+        d = Decimal(candidate)
+    except InvalidOperation:
+        return FrozenValue(raw=text, reason="json-float-invalid")
+    if not d.is_finite():
+        return FrozenValue(raw=text, reason="json-float-invalid")
+
+    return FrozenValue(raw=text, reason="json-float-overflow")
 
 
 def _decode_number_affixes(value: Any) -> Any:
@@ -66,14 +86,14 @@ def load_file_with_format(path: str) -> tuple[Any, str]:
     fmt = detect_format(path)
     with open(path, "r", encoding="utf-8") as fh:
         if fmt == SAVE_FORMAT_JSON:
-            return _decode_number_affixes(simplejson.load(fh, parse_float=mpq)), SAVE_FORMAT_JSON
+            return _decode_number_affixes(simplejson.load(fh, parse_float=_safe_parse_float)), SAVE_FORMAT_JSON
         if fmt == SAVE_FORMAT_JSONL:
             rows = []
             for line in fh:
                 stripped = line.strip()
                 if not stripped:
                     continue
-                rows.append(_decode_number_affixes(simplejson.loads(stripped, parse_float=mpq)))
+                rows.append(_decode_number_affixes(simplejson.loads(stripped, parse_float=_safe_parse_float)))
             return rows, SAVE_FORMAT_JSONL
 
         docs = [_decode_number_affixes(doc) for doc in yaml.load_all(fh, Loader=MpqSafeLoader)]

@@ -10,8 +10,10 @@ from gmpy2 import mpq
 from pandas import Timestamp
 
 from core.datetime_parsing.enums import DateTimeCategory
+from core.frozen_value import FrozenValue
 from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
+from core.safe_mpq import safe_mpq_from_any
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
 from tree.codecs.color_codec import normalize_color_string
@@ -321,6 +323,8 @@ def _looks_valid_for(json_type: JsonType, value: str) -> bool:
 
 
 def normalize_value_for_type(json_type: JsonType, value: Any) -> Any:
+    if isinstance(value, FrozenValue):
+        return value
     if (json_type in TEXT_FAMILY or json_type in (JsonType.SECRET_LINE, JsonType.SECRET_TEXT)) and not isinstance(
         value, str
     ):
@@ -335,12 +339,7 @@ def coerce_value_for_type(
     old_type: JsonType | None = None,
 ) -> tuple[bool, Any]:
     def _to_mpq_or_none(raw: Any) -> mpq | None:
-        if isinstance(raw, mpq):
-            return raw
-        try:
-            return mpq(str(raw))
-        except (ValueError, TypeError):
-            return None
+        return safe_mpq_from_any(raw)
 
     def _int_from_exact(raw: Any) -> int | None:
         if isinstance(raw, int):
@@ -426,19 +425,15 @@ def coerce_value_for_type(
             if _is_temporal_type(old_type):
                 # Same safety rule as INTEGER for non-applicable temporal transitions.
                 return (False, None) if strict else (True, stub_float())
-            try:
-                return True, mpq(str(value))
-            except (ValueError, TypeError):
-                pass
+            q = _to_mpq_or_none(value)
+            if q is not None:
+                return True, q
             return (False, None) if strict else (True, stub_float())
 
         case JsonType.PERCENT:
-            try:
-                v = mpq(str(value))
-                if 0 <= v <= 1:
-                    return True, v
-            except (ValueError, TypeError):
-                pass
+            v = _to_mpq_or_none(value)
+            if v is not None and 0 <= v <= 1:
+                return True, v
             return (False, None) if strict else (True, stub_percent())
 
         case JsonType.INTEGER_CURRENCY | JsonType.INTEGER_UNITS:
@@ -576,6 +571,9 @@ def coerce_value_for_type(
 
 
 def compute_editable(json_type: JsonType, value: Any, editable_blob_limit: int) -> bool:
+    if isinstance(value, FrozenValue):
+        return False
+
     if json_type in (JsonType.NULL, JsonType.ARRAY, JsonType.OBJECT):
         return False
 

@@ -5,6 +5,7 @@ from typing import Tuple
 from gmpy2 import mpq
 from PySide6.QtGui import QValidator
 
+from core.safe_mpq import safe_mpq_from_any
 from coalesce import nn
 
 PARTIAL_FLOAT = re.compile(r"[-+]?\d*\.?\d*e?[-+]?\d*", re.IGNORECASE)
@@ -18,9 +19,15 @@ def _to_mpq(x) -> mpq:
     if isinstance(x, mpq):
         return x
     if isinstance(x, Decimal):
-        return mpq(str(x))  # avoid binary float artifacts
+        parsed = safe_mpq_from_any(str(x))
+        if parsed is None:
+            raise ValueError("Unsafe numeric literal")
+        return parsed
 
-    return mpq(x)
+    parsed = safe_mpq_from_any(x)
+    if parsed is None:
+        raise ValueError("Unsafe numeric literal")
+    return parsed
 
 
 class MpqValidator(QValidator):
@@ -59,7 +66,7 @@ class MpqValidator(QValidator):
 
             # 1) Try as plain number (no requirement to already contain prefix/suffix)
             try:
-                n = mpq(s)
+                n = _to_mpq(s)
                 if in_range(minv, n, maxv):
                     return (
                         QValidator.State.Acceptable,
@@ -86,7 +93,7 @@ class MpqValidator(QValidator):
                 return QValidator.State.Intermediate, s, pos
 
             try:
-                n = mpq(number)
+                n = _to_mpq(number)
                 if in_range(minv, n, maxv):
                     return QValidator.State.Acceptable, s, pos
                 else:

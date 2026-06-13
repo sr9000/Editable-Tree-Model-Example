@@ -8,6 +8,7 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSortFilterProxyM
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
+from core.safe_mpq import safe_mpq_from_any
 from core.datetime_parsing.enums import DateTimeCategory
 from delegates.number_affix_delegate import (
     is_affix_json_type,
@@ -266,9 +267,8 @@ def set_value_editor_data(delegate: ValueDelegateProtocol, editor: QWidget, inde
         return
 
     if isinstance(editor, QMpqSpinBox):
-        try:
-            v = mpq(str(value)) if not isinstance(value, mpq) else value
-        except (TypeError, ValueError):
+        v = value if isinstance(value, mpq) else safe_mpq_from_any(value)
+        if v is None:
             v = mpq(0)
         if item.json_type is JsonType.PERCENT:
             v = v * 100

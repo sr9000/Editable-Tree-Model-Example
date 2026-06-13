@@ -1,11 +1,36 @@
 from decimal import Decimal
 
+import simplejson
 import yaml
 from gmpy2 import mpq
 from pandas import Timestamp
 
+from core.frozen_value import FrozenValue
+from core.safe_mpq import safe_mpq_from_text
 from core.datetime_parsing.nano_time import NanoTime
 from units.number_affix import NumberAffix, format_number_affix
+
+_YAML_SPECIAL_FLOAT_LITERALS = frozenset(
+    {
+        ".inf",
+        "+.inf",
+        "-.inf",
+        ".nan",
+        "inf",
+        "+inf",
+        "-inf",
+        "infinity",
+        "+infinity",
+        "-infinity",
+        "nan",
+        "+nan",
+        "-nan",
+    }
+)
+
+
+def _is_yaml_special_float_literal(text: str) -> bool:
+    return text.replace("_", "").strip().lower() in _YAML_SPECIAL_FLOAT_LITERALS
 
 
 def mpq_serialization(q: mpq) -> tuple[float | Decimal, mpq]:
@@ -60,6 +85,8 @@ def mpq_json_default(obj):
     if isinstance(obj, mpq):
         # Emit only the scalar value; the helper's denominator metadata is not JSON-serializable.
         return mpq_serialization(obj)[0]
+    if isinstance(obj, FrozenValue):
+        return simplejson.RawJSON(obj.raw)
     if isinstance(obj, Decimal):
         # ``mpq_serialization`` returns ``Decimal`` for terminating fractions. The stdlib
         # ``json`` module re-invokes this default on the Decimal because it is not natively
@@ -84,11 +111,14 @@ class MpqSafeLoader(yaml.SafeLoader):
 
 
 def mpq_yaml_float_construct(loader: MpqSafeLoader, node: yaml.ScalarNode):
-    try:
-        return mpq(node.value.replace("_", "").lower().strip())
-    except Exception:
-        # If mpq can't parse some odd form, fall back to default behavior
+    parsed = safe_mpq_from_text(node.value)
+    if parsed is not None:
+        return parsed
+
+    if _is_yaml_special_float_literal(node.value):
         return yaml.constructor.SafeConstructor.construct_yaml_float(loader, node)
+
+    return FrozenValue(raw=node.value.strip(), reason="yaml-float-overflow")
 
 
 MpqSafeLoader.add_constructor("tag:yaml.org,2002:float", mpq_yaml_float_construct)
@@ -123,3 +153,10 @@ def _nanotime_yaml_represent(dumper: MpqSafeDumper, data: NanoTime):
 
 
 MpqSafeDumper.add_representer(NanoTime, _nanotime_yaml_represent)
+
+
+def _frozen_value_yaml_represent(dumper: MpqSafeDumper, data: FrozenValue):
+    return dumper.represent_scalar("tag:yaml.org,2002:float", data.raw)
+
+
+MpqSafeDumper.add_representer(FrozenValue, _frozen_value_yaml_represent)

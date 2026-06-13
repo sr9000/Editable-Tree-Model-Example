@@ -6,6 +6,8 @@ from enum import StrEnum
 
 from gmpy2 import mpq
 
+from core.safe_mpq import safe_mpq_from_text
+
 _AFFIX_FORBIDDEN_TOUCH_CHARS = set("+-.")
 _NUMBER_RE = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
 
@@ -41,7 +43,10 @@ def _is_valid_affix(affix: str, *, kind: AffixKind, max_affix_len: int) -> bool:
 def _parse_number(num_text: str) -> int | mpq:
     if re.fullmatch(r"[+-]?\d+", num_text):
         return int(num_text)
-    return mpq(num_text)
+    parsed = safe_mpq_from_text(num_text)
+    if parsed is None:
+        raise ValueError("Unsafe numeric literal")
+    return parsed
 
 
 def _format_mpq_decimal(value: mpq) -> str:
@@ -82,11 +87,15 @@ def parse_number_affix(s: str, *, max_affix_len: int = 16) -> NumberAffix | None
         affix = m.group("affix")
         if not _is_valid_affix(affix, kind=AffixKind.CURRENCY, max_affix_len=max_affix_len):
             return None
+        try:
+            number = _parse_number(m.group("num"))
+        except ValueError:
+            return None
         return NumberAffix(
             kind=AffixKind.CURRENCY,
             affix=affix,
             space=(m.group("sp") == " "),
-            number=_parse_number(m.group("num")),
+            number=number,
         )
 
     m = _UNITS_RE.fullmatch(s)
@@ -94,11 +103,15 @@ def parse_number_affix(s: str, *, max_affix_len: int = 16) -> NumberAffix | None
         affix = m.group("affix")
         if not _is_valid_affix(affix, kind=AffixKind.UNITS, max_affix_len=max_affix_len):
             return None
+        try:
+            number = _parse_number(m.group("num"))
+        except ValueError:
+            return None
         return NumberAffix(
             kind=AffixKind.UNITS,
             affix=affix,
             space=(m.group("sp") == " "),
-            number=_parse_number(m.group("num")),
+            number=number,
         )
 
     return None

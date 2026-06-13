@@ -4,6 +4,7 @@ import gmpy2
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
+from core.safe_mpq import safe_mpq_from_any
 from mpq2py import mpq_serialization
 from settings import SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
 from tree.types import SECRET_FAMILY, JsonType
@@ -45,11 +46,9 @@ def display_role_value(item, column: int, is_root_item: bool) -> str:
 
     data = item.data(column)
     if column == 2 and item.json_type is JsonType.PERCENT:
-        try:
-            q = data if isinstance(data, gmpy2.mpq) else gmpy2.mpq(str(data))
+        q = data if isinstance(data, gmpy2.mpq) else safe_mpq_from_any(data)
+        if q is not None:
             return f"{float(q * 100):g}%"
-        except (TypeError, ValueError):
-            pass
 
     match data:
         case bool():

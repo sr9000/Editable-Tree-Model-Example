@@ -26,3 +26,15 @@ SECRET_REVEAL_INACTIVITY_MS = 0
 # Number-affix parsing/editor limits.
 NUMBER_AFFIX_MAX_LEN = 20
 NUMBER_AFFIX_MRU_SIZE = 50
+
+# gmpy2/mpq safety limits. Very large scientific exponents can trigger
+# low-level GMP aborts (not regular Python exceptions) while building mpz
+# intermediates for powers-of-ten.
+#
+# Limits are enforced through ``decimal.Context`` traps in
+# ``core.safe_mpq`` (Overflow / Underflow / Inexact / InvalidOperation),
+# not regex filtering:
+# - ``MPQ_SAFE_MAX_ABS_EXPONENT`` bounds context Emax/Emin.
+# - ``MPQ_SAFE_MAX_SIG_DIGITS`` bounds significant digits via precision.
+MPQ_SAFE_MAX_ABS_EXPONENT = 10_000
+MPQ_SAFE_MAX_SIG_DIGITS = 4_300

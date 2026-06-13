@@ -1,3 +1,5 @@
+import math
+
 import simplejson as json
 import yaml
 from gmpy2 import mpq
@@ -39,3 +41,11 @@ def test_mpq_with_yaml():
     res = yaml.dump(data, Dumper=MpqSafeDumper, sort_keys=False)
 
     assert res == yaml_floats
+
+
+def test_yaml_special_floats_fall_back_to_native_yaml_float_constructor() -> None:
+    data = yaml.load("pinf: .inf\nninf: -.inf\nnanv: .nan\n", Loader=MpqSafeLoader)
+
+    assert math.isinf(data["pinf"]) and data["pinf"] > 0
+    assert math.isinf(data["ninf"]) and data["ninf"] < 0
+    assert math.isnan(data["nanv"])

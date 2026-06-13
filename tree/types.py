@@ -11,6 +11,7 @@ import gmpy2
 from pandas import Timestamp
 
 from core.datetime_parsing import parse_datetime_text
+from core.frozen_value import FrozenValue
 from core.datetime_parsing.nano_time import NanoTime
 from settings import NUMBER_AFFIX_MAX_LEN
 from units.number_affix import AffixKind, NumberAffix, parse_number_affix
@@ -146,6 +147,9 @@ def parse_json_type(value: Any) -> "JsonType":
         case gmpy2.mpq() as q:
             if 0 <= q <= 1:
                 return JsonType.PERCENT
+            return JsonType.FLOAT
+
+        case FrozenValue():
             return JsonType.FLOAT
 
         case str(s):

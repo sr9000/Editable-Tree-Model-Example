@@ -5,6 +5,7 @@ from pandas import Timestamp
 from PySide6.QtGui import QBrush, QPalette
 from PySide6.QtWidgets import QStyleOptionViewItem
 
+from core.safe_mpq import safe_mpq_from_any
 from mpq2py import mpq_serialization
 from settings import SECRET_MASK_CHAR, SECRET_MASK_GLYPHS
 from themes.spec import TypeStyle
@@ -147,7 +148,9 @@ def format_with_type(value, json_type: JsonType | None, *, item=None, show_previ
 
     if json_type is JsonType.PERCENT:
         try:
-            q = value if isinstance(value, mpq) else mpq(str(value))
+            q = value if isinstance(value, mpq) else safe_mpq_from_any(value)
+            if q is None:
+                raise ValueError
             return f"{float(q * 100):g}%"
         except (TypeError, ValueError):
             return format_default(value)
