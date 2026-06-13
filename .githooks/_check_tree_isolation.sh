@@ -15,8 +15,8 @@ set -euo pipefail
 
 # Allowlisted lines: file:linenumber pairs that are permitted.
 ALLOWLIST=(
-    "tree/item.py:28"
-    "tree/item.py:29"
+    "tree/item.py:30"
+    "tree/item.py:31"
 )
 
 is_allowlisted() {
