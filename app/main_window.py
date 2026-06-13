@@ -302,12 +302,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         file_path: str | None = None,
         save_format: str | None = None,
         prebuilt_model=None,
+        defer_first_presentation: bool = False,
+        on_presentation_complete=None,
     ) -> Document | None:
         return self._tab_lifecycle.add_tab(
             data=data,
             file_path=file_path,
             save_format=save_format,
             prebuilt_model=prebuilt_model,
+            defer_first_presentation=defer_first_presentation,
+            on_presentation_complete=on_presentation_complete,
         )
 
     def _on_tab_dirty(self, tab: Document) -> None:

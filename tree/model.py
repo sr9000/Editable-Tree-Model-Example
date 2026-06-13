@@ -31,11 +31,15 @@ class JsonTreeModel(QAbstractItemModel):
         show_root: bool = False,
         icon_provider: IconProvider | None = None,
         root_item: JsonTreeItem | None = None,
+        estimated_item_count: int | None = None,
     ) -> None:
         super().__init__(parent)
         self.root_item = root_item if root_item is not None else JsonTreeItem(None, data)
         self.show_root = show_root
         self._icon_provider: IconProvider = icon_provider or StubIconProvider()
+        self.estimated_item_count: int | None = (
+            int(estimated_item_count) if isinstance(estimated_item_count, int) and estimated_item_count > 0 else None
+        )
         self._attached_view = None
         self._drag_source_rows: list[QModelIndex] = []
         self._issue_index_provider: Callable[[tuple[int, ...]], str | None] | None = None
@@ -86,6 +90,19 @@ class JsonTreeModel(QAbstractItemModel):
         done inside the model.
         """
         self._issue_index_provider = provider
+
+    def replace_root_item(self, root_item: JsonTreeItem, *, estimated_item_count: int | None = None) -> None:
+        """Atomically replace ``root_item`` between reset signals."""
+        self.beginResetModel()
+        try:
+            root_item.parent_item = None
+            self.root_item = root_item
+            if isinstance(estimated_item_count, int) and estimated_item_count > 0:
+                self.estimated_item_count = int(estimated_item_count)
+            else:
+                self.estimated_item_count = None
+        finally:
+            self.endResetModel()
 
     def _root_index(self) -> QModelIndex:
         if not self.show_root:

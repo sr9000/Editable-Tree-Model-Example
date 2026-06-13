@@ -4,6 +4,7 @@ from typing import Protocol
 
 from PySide6.QtCore import QModelIndex, QSize, Qt
 
+import settings
 from delegates.name_delegate import NameDelegate
 from delegates.type_delegate import JsonTypeDelegate
 from delegates.value import ValueDelegate
@@ -176,9 +177,17 @@ class JsonTabAppearanceController:
         self._programmatic_column_resize = True
         try:
             view = self._require_view()
+            model = self._require_model()
+            is_large_tree = (
+                isinstance(model.estimated_item_count, int)
+                and model.estimated_item_count > settings.LOADING_AUTO_EXPAND_MAX_NODES
+            )
             for col in (0, 1):
                 if force or col not in self._user_sized_columns:
-                    view.resizeColumnToContents(col)
+                    if is_large_tree:
+                        view.setColumnWidth(col, 280 if col == 0 else 160)
+                    else:
+                        view.resizeColumnToContents(col)
         finally:
             self._programmatic_column_resize = False
 

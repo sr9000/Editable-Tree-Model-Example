@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QModelIndex
+from PySide6.QtCore import QModelIndex, QTimer
 from PySide6.QtWidgets import QApplication
 
 from app.loading.progress import (
     STAGE_APPLYING_RELOAD,
     STAGE_BINDING_UI,
+    STAGE_BUILDING_TREE,
     STAGE_COMPLETE,
     STAGE_DISCOVERING_SCHEMA,
     STAGE_READING_PARSING,
@@ -125,7 +127,104 @@ class TestReloadSwapDataIntegrity:
 
             # Verify updated data
             assert tab.model.root_item.to_json() == {"version": 2, "items": [4, 5, 6, 7]}
+            assert tab.model.estimated_item_count is not None
         finally:
+            tab.undo_stack.setClean()
+            win.close()
+            win.deleteLater()
+
+    def test_reload_preserves_model_identity_and_replaces_root(self, qtbot, tmp_path, monkeypatch):
+        """Reload keeps the same model object but swaps in a new root item."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        doc = tmp_path / "data.json"
+        _write_json(doc, {"version": 1, "nested": {"value": 1}})
+
+        win = MainWindow(yaml_filename="")
+        qtbot.addWidget(win)
+        try:
+            assert win._open_path(str(doc))
+            tab = _current_tab(win)
+            model_identity = tab.model
+            old_root = tab.model.root_item
+
+            _write_json(doc, {"version": 2, "nested": {"value": 2}, "new": [1, 2, 3]})
+
+            assert win._load_coordinator.reload_file(tab, str(doc))
+
+            assert tab.model is model_identity
+            assert tab.model.root_item is not old_root
+            assert tab.model.root_item.to_json() == {"version": 2, "nested": {"value": 2}, "new": [1, 2, 3]}
+        finally:
+            tab.undo_stack.setClean()
+            win.close()
+            win.deleteLater()
+
+    def test_async_reload_keeps_old_state_until_applying_stage(self, qtbot, tmp_path, monkeypatch):
+        """Before `applying reload`, data/dirty/undo remain unchanged while event loop keeps ticking."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        doc = tmp_path / "data.json"
+        _write_json(doc, {"version": 1})
+
+        win = MainWindow(yaml_filename="")
+        qtbot.addWidget(win)
+        try:
+            assert win._open_path(str(doc))
+            tab = _current_tab(win)
+
+            a_name = tab.model.index(0, 0, tab.model.index(0, 0, QModelIndex()))
+            a_value = a_name.siblingAtColumn(2)
+            assert tab.editing.commands.push_edit_value(a_value, 99, label="dirty")
+            dirty_snapshot = tab.model.root_item.to_json()
+            undo_snapshot = tab.undo_stack.count()
+            assert tab.io.dirty
+
+            _write_json(doc, {"version": 2, "items": list(range(200))})
+
+            stages: list[str] = []
+            win._load_coordinator.stage_changed.connect(lambda stage: stages.append(stage))
+
+            sampled_data: list[dict] = []
+            sampled_undo: list[int] = []
+            sampled_dirty: list[bool] = []
+            tick_count = [0]
+
+            probe = QTimer(win)
+
+            def _probe() -> None:
+                tick_count[0] += 1
+                if STAGE_APPLYING_RELOAD in stages:
+                    return
+                sampled_data.append(tab.model.root_item.to_json())
+                sampled_undo.append(tab.undo_stack.count())
+                sampled_dirty.append(tab.io.dirty)
+
+            probe.timeout.connect(_probe)
+            probe.start(10)
+
+            def slow_parser(_path: str):
+                time.sleep(0.2)
+                return {"version": 2, "items": list(range(200))}, "json"
+
+            task_id = win._load_coordinator.reload_file_async(tab, str(doc), parser=slow_parser)
+            assert task_id is not None
+
+            qtbot.waitUntil(lambda: STAGE_BUILDING_TREE in stages, timeout=2000)
+            qtbot.waitUntil(lambda: STAGE_APPLYING_RELOAD in stages, timeout=4000)
+            qtbot.waitUntil(lambda: task_id not in win._load_coordinator._tasks, timeout=4000)
+
+            assert sampled_data
+            assert sampled_undo
+            assert sampled_dirty
+            assert all(sample == dirty_snapshot for sample in sampled_data)
+            assert all(sample == undo_snapshot for sample in sampled_undo)
+            assert all(sample is True for sample in sampled_dirty)
+            assert tick_count[0] >= 2
+
+            assert tab.model.root_item.to_json() == {"version": 2, "items": list(range(200))}
+            assert tab.undo_stack.count() == 0
+            assert not tab.io.dirty
+        finally:
+            probe.stop()
             tab.undo_stack.setClean()
             win.close()
             win.deleteLater()

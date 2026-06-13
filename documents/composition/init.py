@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from PySide6.QtCore import QTimer
+
+import settings
 from documents.composition.demo_data import build_demo_data
 from documents.composition.dependencies import JsonTabServices, build_legacy_json_tab_services
 from documents.composition.setup import (
@@ -30,6 +33,14 @@ from themes.spec import ThemeSpec
 from tree.model import JsonTreeModel
 
 _DEFAULT_DATA = object()
+
+
+def _bootstrap_affix_mru(tab: "JsonTab") -> None:
+    node_count = tab.model.estimated_item_count
+    if isinstance(node_count, int) and node_count > settings.LOADING_AUTO_EXPAND_MAX_NODES:
+        QTimer.singleShot(0, lambda: tab._editing.affix_mru.bootstrap_from_tree(tab.model.root_item))
+        return
+    tab._editing.affix_mru.bootstrap_from_tree(tab.model.root_item)
 
 
 def bootstrap(
@@ -89,7 +100,7 @@ def bootstrap(
     init_model(tab, model_data, show_root=show_root, prebuilt_model=prebuilt_model)
 
     tab._editing.history = TabHistoryController(tab)
-    tab._editing.affix_mru.bootstrap_from_tree(tab.model.root_item)
+    _bootstrap_affix_mru(tab)
     tab._editing.mutations = DocumentMutationGateway(tab)
 
     tab._validation = TabValidationController(

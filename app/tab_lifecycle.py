@@ -11,9 +11,12 @@ dock/undo binding/status bar) without duplicating their state.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject
+from typing import Callable
+
+from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QMessageBox, QTabWidget
 
+import settings
 import state.view_state as view_state
 from documents.composition.dependencies import JsonTabServices
 from documents.composition.factory import create_tab
@@ -69,6 +72,8 @@ class TabLifecyclePresenter(QObject):
         file_path: str | None = None,
         save_format: str | None = None,
         prebuilt_model: JsonTreeModel | None = None,
+        defer_first_presentation: bool = False,
+        on_presentation_complete: Callable[[Document], None] | None = None,
     ) -> Document | None:
         from state.validation_settings import auto_rescan_enabled
 
@@ -99,7 +104,26 @@ class TabLifecyclePresenter(QObject):
         win.fonts.subscribe(tab)
         tab.dirtyChanged.connect(lambda _dirty, t=tab: self.on_tab_dirty(t))
 
-        tab.view_controller.request_expand_all()
+        if defer_first_presentation:
+            QTimer.singleShot(
+                0,
+                lambda t=tab, cb=on_presentation_complete: self._run_initial_presentation(t, cb),
+            )
+        else:
+            self._run_initial_presentation(tab, on_presentation_complete)
+        return tab
+
+    def _run_initial_presentation(
+        self,
+        tab: Document,
+        on_presentation_complete: Callable[[Document], None] | None,
+    ) -> None:
+        win = self._win
+        if self._should_expand_all_on_open(tab):
+            tab.view_controller.request_expand_all()
+        elif tab.root_index().isValid():
+            tab.view_controller.request_expand(())
+
         tab.appearance.resize_key_columns()
         if tab.root_index().isValid():
             tab.view_controller.request_select_paths([()])
@@ -110,7 +134,15 @@ class TabLifecyclePresenter(QObject):
 
         win._bind_undo_signals(tab)
         win.update_actions()
-        return tab
+        if on_presentation_complete is not None:
+            on_presentation_complete(tab)
+
+    @staticmethod
+    def _should_expand_all_on_open(tab: Document) -> bool:
+        node_count = tab.model.estimated_item_count
+        if isinstance(node_count, int):
+            return node_count <= settings.LOADING_AUTO_EXPAND_MAX_NODES
+        return True
 
     # ── current-tab change ────────────────────────────────────────────────
 

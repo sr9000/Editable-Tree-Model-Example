@@ -1,7 +1,7 @@
 import hashlib
 from pathlib import Path
 
-from PySide6.QtCore import QModelIndex, QSettings, QSortFilterProxyModel
+from PySide6.QtCore import QModelIndex, QSettings, QSortFilterProxyModel, QTimer
 
 from documents.seams.document_protocol import Document
 from settings import APPLICATION_ID
@@ -134,3 +134,56 @@ def restore(tab: Document) -> bool:
 def discard(path: str) -> None:
     settings = QSettings(APPLICATION_ID, "view_state")
     settings.remove(state_key(path))
+
+
+def capture_runtime_state(tab: Document) -> dict[str, object]:
+    """Capture in-memory view state for model-root swaps."""
+    return {
+        "col_widths": tab.view_controller.column_widths(),
+        "expanded": tab.editing.move.collect_expanded_paths()[:MAX_EXPANDED_PATHS],
+        "current_path": tab.view_controller.current_path(),
+        "h_scroll": int(tab.view.horizontalScrollBar().value()),
+        "v_scroll": int(tab.view.verticalScrollBar().value()),
+    }
+
+
+def restore_runtime_state(tab: Document, snapshot: dict[str, object]) -> None:
+    """Restore in-memory view state captured by :func:`capture_runtime_state`."""
+    col_widths_obj = snapshot.get("col_widths")
+    expanded_obj = snapshot.get("expanded")
+    current_path_obj = snapshot.get("current_path")
+    h_scroll_obj = snapshot.get("h_scroll")
+    v_scroll_obj = snapshot.get("v_scroll")
+
+    if isinstance(col_widths_obj, list):
+        widths = [int(width) for width in col_widths_obj if isinstance(width, int)]
+        if widths:
+            tab.view_controller.set_column_widths(widths)
+
+    expanded_paths: list[tuple[int, ...]] = []
+    if isinstance(expanded_obj, list):
+        for path in expanded_obj:
+            if not isinstance(path, tuple):
+                continue
+            normalized = tuple(step for step in path if isinstance(step, int) and step >= 0)
+            expanded_paths.append(normalized)
+
+    if expanded_paths:
+        tab.view_controller.request_collapse_all()
+        for path in expanded_paths:
+            tab.view_controller.request_expand(path)
+
+    if isinstance(current_path_obj, tuple):
+        current_path = tuple(step for step in current_path_obj if isinstance(step, int) and step >= 0)
+        if current_path:
+            tab.view_controller.request_select_paths([current_path])
+            tab.view_controller.request_scroll_to(current_path)
+
+    h_scroll = int(h_scroll_obj) if isinstance(h_scroll_obj, int) else 0
+    v_scroll = int(v_scroll_obj) if isinstance(v_scroll_obj, int) else 0
+
+    def _restore_scrollbars() -> None:
+        tab.view.horizontalScrollBar().setValue(h_scroll)
+        tab.view.verticalScrollBar().setValue(v_scroll)
+
+    QTimer.singleShot(0, _restore_scrollbars)

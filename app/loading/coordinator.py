@@ -15,6 +15,7 @@ from typing import Any, Callable
 from PySide6.QtCore import QObject, Qt, QThread, Signal
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+import state.view_state as view_state
 from app.loading.builder import ChunkedTreeBuilder
 from app.loading.progress import (
     STAGE_APPLYING_RELOAD,
@@ -28,6 +29,7 @@ from app.loading.progress import (
 from app.loading.progress_dialog import LoadingProgressDialog
 from app.loading.worker import ParseWorker
 from documents.seams.document_protocol import Document
+from tree.model import JsonTreeModel
 
 
 @dataclass
@@ -266,14 +268,14 @@ class LoadCoordinator(QObject):
             return
 
         if task.mode == "reload":
-            ok = self._apply_reload(task)
+            ok = self._apply_reload(task, model)
+            self._complete_task(task_id, ok)
         else:
-            ok = self._bind_open(task, model)
+            self._bind_open(task, model)
 
-        self._complete_task(task_id, ok)
-
-    def _bind_open(self, task: _LoadTask, model: object) -> bool:
+    def _bind_open(self, task: _LoadTask, model: object) -> None:
         """Create a tab from a prebuilt model and finish open bookkeeping."""
+        task_id = task.task_id
         from app.recent_files import push_recent
 
         self._emit_stage(STAGE_BINDING_UI)
@@ -282,34 +284,51 @@ class LoadCoordinator(QObject):
             file_path=task.path,
             save_format=task.source_format,
             prebuilt_model=model,
+            defer_first_presentation=True,
+            on_presentation_complete=lambda opened_tab: self._finish_open_binding(task_id, opened_tab),
         )
         if tab is None:
             self._error_progress(task.task_id)
-            return False
+            self._complete_task(task.task_id, False)
+
+    def _finish_open_binding(self, task_id: str, tab: Document) -> None:
+        """Finalize an open task after deferred first-presentation work."""
+        from app.recent_files import push_recent
+
+        task = self._tasks.get(task_id)
+        if task is None:
+            return
 
         self.run_schema_discovery_and_validation(tab)
 
         push_recent(self._window, task.path)
         self._window.statusBar.showMessage(f"Opened: {task.path}", 2000)
-        self._finish_progress(task.task_id)
-        return True
+        self._finish_progress(task_id)
+        self._complete_task(task_id, True)
 
-    def _apply_reload(self, task: _LoadTask) -> bool:
+    def _apply_reload(self, task: _LoadTask, model: object) -> bool:
         """Apply parsed reload data to the target tab at the commit point."""
         tab = task.tab
         if tab is None:
             self._error_progress(task.task_id)
             return False
 
+        if not isinstance(model, JsonTreeModel):
+            self._error_progress(task.task_id)
+            return False
+
+        previous_view_state = view_state.capture_runtime_state(tab)
+        changed = tab.root_data() != task.data
+
         self._emit_stage(STAGE_APPLYING_RELOAD)
-        root_index = tab.root_index()
-        root_item = tab.root_item()
-        changed = tab.editing.diff.apply(root_item, task.data, root_index)
+        tab.model.replace_root_item(model.root_item, estimated_item_count=model.estimated_item_count)
         if changed:
             tab.undo_stack.clear()
         tab.undo_stack.setClean()
         tab.io.save_format = task.source_format
         tab.io.file_path = task.path
+
+        view_state.restore_runtime_state(tab, previous_view_state)
 
         self.run_schema_discovery_and_validation(tab)
 

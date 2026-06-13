@@ -131,6 +131,7 @@ class ChunkedTreeBuilder(QObject):
                 show_root=self._show_root,
                 icon_provider=self._icon_provider,
                 root_item=self._root_item,
+                estimated_item_count=self._built_items + 1,
             )
         if self._reporter is not None:
             self._reporter.tick(0, 0)

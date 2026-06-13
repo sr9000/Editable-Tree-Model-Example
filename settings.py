@@ -86,3 +86,8 @@ LOADING_PROGRESS_DELAY_MS: int = 5000
 
 # Maximum repaint cadence for loading detail text (processed count + current path).
 LOADING_PROGRESS_DETAIL_REFRESH_MS: int = 1000
+
+# Large-load presentation guardrails. When the prebuilt model reports a node
+# count above this threshold, first-paint avoids full-tree expand-all and
+# content-based key-column auto-sizing scans.
+LOADING_AUTO_EXPAND_MAX_NODES: int = 10_000
