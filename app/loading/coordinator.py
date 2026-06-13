@@ -97,7 +97,10 @@ class LoadCoordinator(QObject):
 
     def detail(self, processed: int, path: str) -> None:
         """ProgressReporter detail entry point used by builders/workers."""
-        _ = (processed, path)
+        if self._reporter is not None and isinstance(self._reporter, ProgressReporter):
+            self._reporter.detail(processed, path)
+        if self._progress_dialog is not None:
+            self._progress_dialog.set_detail(processed, path)
 
     def _start_progress(self, task_id: str) -> None:
         """Start tracking a load task with the progress widget."""

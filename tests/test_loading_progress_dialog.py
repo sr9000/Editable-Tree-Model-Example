@@ -148,6 +148,49 @@ class TestLoadingProgressDialogStageAndProgress:
         assert dialog._progress_bar.value() == 5
 
 
+class TestLoadingProgressDialogDetailRefresh:
+    """Tests for detail-label rendering and throttling."""
+
+    def test_detail_updates_only_on_refresh_tick(self, qtbot):
+        """Many detail updates are collapsed into timer-driven repaint."""
+        dialog = LoadingProgressDialog(delay_ms=10, detail_refresh_ms=40)
+        qtbot.addWidget(dialog)
+
+        dialog.start("task-1")
+        dialog.set_detail(1, "/a")
+        dialog.set_detail(50, "/b")
+        dialog.set_detail(1234, "/orders/1000/price")
+
+        # No repaint before the refresh tick.
+        qtbot.wait(10)
+        assert dialog._detail_label.text() == ""
+
+        # One refresh tick applies the latest values.
+        qtbot.wait(60)
+        assert "1,234" in dialog._detail_label.text()
+        assert "/orders/1000/price" in dialog._detail_label.text()
+
+    def test_detail_resets_on_start_and_freezes_after_finish(self, qtbot):
+        """Detail text resets when task starts and no longer updates after finish."""
+        dialog = LoadingProgressDialog(delay_ms=10, detail_refresh_ms=25)
+        qtbot.addWidget(dialog)
+
+        dialog.start("task-1")
+        dialog.set_detail(42, "/x")
+        qtbot.wait(40)
+        assert "/x" in dialog._detail_label.text()
+
+        dialog.finish("task-1")
+        frozen = dialog._detail_label.text()
+
+        dialog.set_detail(999, "/y")
+        qtbot.wait(40)
+        assert dialog._detail_label.text() == frozen
+
+        dialog.start("task-2")
+        assert dialog._detail_label.text() == ""
+
+
 class TestLoadingProgressDialogTaskIdMatching:
     """Tests for task ID matching on finish/error."""
 

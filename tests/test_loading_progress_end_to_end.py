@@ -181,7 +181,7 @@ class TestLoadingProgressEndToEnd:
 
         win = MainWindow(yaml_filename="")
         qtbot.addWidget(win)
-        progress = LoadingProgressDialog(win, delay_ms=50)
+        progress = LoadingProgressDialog(win, delay_ms=50, detail_refresh_ms=20)
         qtbot.addWidget(progress)
         win._load_coordinator._progress_dialog = progress
 
@@ -194,9 +194,19 @@ class TestLoadingProgressEndToEnd:
         timer.timeout.connect(on_timer)
         timer.start(20)
 
+        payload = {
+            "items": [
+                {
+                    "id": i,
+                    "value": f"item_{i}",
+                }
+                for i in range(300)
+            ]
+        }
+
         def slow_parser(_path: str):
             time.sleep(0.2)
-            return {"key": "value"}, "json"
+            return payload, "json"
 
         try:
             task_id = win._load_coordinator.open_file_async(str(doc), parser=slow_parser)
@@ -206,10 +216,17 @@ class TestLoadingProgressEndToEnd:
             qtbot.waitUntil(lambda: progress.was_shown, timeout=1000)
             assert timer_count[0] >= 2
 
+            qtbot.waitUntil(lambda: progress._detail_label.text() != "", timeout=2000)
+            assert "Processed" in progress._detail_label.text()
+            assert "/" in progress._detail_label.text()
+
             qtbot.waitUntil(lambda: win.tabWidget.count() == 1, timeout=2000)
             assert not progress.isVisible()
             tab = _current_tab(win)
-            assert tab.model.root_item.to_json() == {"key": "value"}
+            loaded = tab.model.root_item.to_json()
+            assert isinstance(loaded, dict)
+            assert "items" in loaded
+            assert len(loaded["items"]) == 300
         finally:
             timer.stop()
             for i in range(win.tabWidget.count()):

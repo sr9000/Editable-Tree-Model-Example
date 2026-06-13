@@ -10,7 +10,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget
 
-from settings import LOADING_PROGRESS_DELAY_MS
+from settings import LOADING_PROGRESS_DELAY_MS, LOADING_PROGRESS_DETAIL_REFRESH_MS
 
 
 class LoadingProgressDialog(QWidget):
@@ -35,6 +35,7 @@ class LoadingProgressDialog(QWidget):
         *,
         cancellable: bool = False,
         delay_ms: int | None = None,
+        detail_refresh_ms: int | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Loading")
@@ -42,8 +43,13 @@ class LoadingProgressDialog(QWidget):
 
         self._cancellable = cancellable
         self._delay_ms = delay_ms if delay_ms is not None else LOADING_PROGRESS_DELAY_MS
+        self._detail_refresh_ms = (
+            detail_refresh_ms if detail_refresh_ms is not None else LOADING_PROGRESS_DETAIL_REFRESH_MS
+        )
         self._active_task_id: str | None = None
         self._was_shown = False
+        self._pending_processed = 0
+        self._pending_path = ""
 
         # Build UI
         layout = QVBoxLayout(self)
@@ -53,6 +59,9 @@ class LoadingProgressDialog(QWidget):
         self._progress_bar = QProgressBar()
         self._progress_bar.setRange(0, 0)  # Indeterminate
         layout.addWidget(self._progress_bar)
+
+        self._detail_label = QLabel("")
+        layout.addWidget(self._detail_label)
 
         if cancellable:
             self._cancel_button = QPushButton("Cancel")
@@ -64,6 +73,11 @@ class LoadingProgressDialog(QWidget):
         self._show_timer = QTimer(self)
         self._show_timer.setSingleShot(True)
         self._show_timer.timeout.connect(self._on_show_timer_timeout)
+
+        self._detail_timer = QTimer(self)
+        self._detail_timer.setSingleShot(False)
+        self._detail_timer.setInterval(self._detail_refresh_ms)
+        self._detail_timer.timeout.connect(self._flush_detail_label)
 
         # Start hidden
         self.hide()
@@ -83,8 +97,12 @@ class LoadingProgressDialog(QWidget):
         self._was_shown = False
         self._stage_label.setText("Loading...")
         self._progress_bar.setRange(0, 0)
+        self._pending_processed = 0
+        self._pending_path = ""
+        self._detail_label.setText("")
         self.hide()
         self._show_timer.start(self._delay_ms)
+        self._detail_timer.start()
 
     def set_stage(self, stage: str) -> None:
         """Update the stage text displayed to the user."""
@@ -102,6 +120,11 @@ class LoadingProgressDialog(QWidget):
             self._progress_bar.setRange(0, total)
             self._progress_bar.setValue(done)
 
+    def set_detail(self, processed: int, path: str) -> None:
+        """Store detail progress values; rendering is throttled by timer."""
+        self._pending_processed = processed
+        self._pending_path = path
+
     def finish(self, task_id: str) -> None:
         """Mark a task as finished.
 
@@ -111,6 +134,7 @@ class LoadingProgressDialog(QWidget):
         if task_id != self._active_task_id:
             return
         self._show_timer.stop()
+        self._detail_timer.stop()
         self._active_task_id = None
         self.hide()
 
@@ -123,6 +147,7 @@ class LoadingProgressDialog(QWidget):
         if task_id != self._active_task_id:
             return
         self._show_timer.stop()
+        self._detail_timer.stop()
         self._active_task_id = None
         self.hide()
 
@@ -133,6 +158,15 @@ class LoadingProgressDialog(QWidget):
             self.show()
             self.raise_()
             self.activateWindow()
+
+    def _flush_detail_label(self) -> None:
+        """Render pending detail values at a bounded cadence."""
+        if self._active_task_id is None:
+            return
+        if self._pending_path:
+            self._detail_label.setText(f"Processed {self._pending_processed:,} fields/values | {self._pending_path}")
+            return
+        self._detail_label.setText(f"Processed {self._pending_processed:,} fields/values")
 
 
 __all__ = ["LoadingProgressDialog"]
