@@ -1,226 +1,231 @@
-# Plan 1 — `len()`-based limits for expensive parsing, with explicit-type bypass
+# Plan 1 — Length limits for expensive inference, with explicit-type bypass
 
-**Goal:** Make automatic type **inference** cheap and safe by short-circuiting
-expensive parsing/regex/decode work when the input string is longer than a
-per-kind `len()` threshold. Inference of a giant string must fall back to a
-safe text type (`STRING` / `UNICODE` / `TEXT`) quickly.
+**Goal:** Make automatic type inference cheap for oversized strings by checking `len(text)` before regex, datetime, number-affix, base64, decode, and decompress work. When an input exceeds the configured inference limit, automatic inference returns a text type (`STRING`, `UNICODE`, or `TEXT`) without entering the expensive branch.
 
-**Critical exception:** When the **user explicitly changes a field's type** via
-the Type column, the app must run the **full, expensive parser for that target
-kind regardless of length** (the user asked for it). The length gates apply only
-to *automatic inference*, never to *explicit coercion*.
+**Critical exception:** An explicit user type change from the Type column is not automatic inference. Explicit coercion must call the target parser/converter with `allow_expensive=True` so the requested target type is attempted even when the source string exceeds the inference limit. The explicit path may still fail with the same validation or conversion failure used today; it must not silently fall back because of an inference gate.
 
-See [`plans/index.md`](index.md) for the **mandatory gate** every commit must pass.
+**Dependency:** Start this plan only after [`Plan 0`](00-parsing-vulnerability-tests.md) Commit 0.8 has produced `reports/parsing-vulnerability-<YYYY-MM-DD>.md` and confirmed or changed the threshold values below.
 
-## Background (where inference vs explicit coercion happen)
+See [`plans/index.md`](index.md) for the mandatory gate every commit must pass.
 
-- Automatic inference runs in:
-  - [`_decode_number_affixes()`](../io_formats/load.py:41) (calls `parse_json_type` per string during load),
-  - [`JsonTreeItem.__init__()`](../tree/item.py:37) → `parse_json_type(value)` per node during model build,
-  - [`infer_text_json_type()`](../tree/types.py:81) / container conversions.
-- Explicit coercion runs when the user picks a type in the Type column. The
-  request flows delegate → `commit_set_data` → `DocumentMutationGateway` →
-  `QUndoCommand` → model → item, with `explicit_type` set on the item
-  ([`tree/item.py`](../tree/item.py:49)) and conversion handled in
-  [`tree/item_coercion.py`](../tree/item_coercion.py:1).
+## Inference and coercion boundaries
 
-> **Design constraint:** The length gate must live where `tree/` isolation holds
-> — pure helpers in `tree/`, `core/`, or `tree/codecs/`, importing only
-> `settings.py`. No `app/`, `documents/`, `editors/`, etc.
+Automatic inference currently runs in these locations:
 
-## Threshold storage — DECISION (default chosen, revisit allowed)
+- [`_decode_number_affixes()`](../io_formats/load.py:41), which calls [`parse_json_type()`](../tree/types.py:125) while loading data.
+- [`JsonTreeItem.__init__()`](../tree/item.py:37), which calls [`parse_json_type()`](../tree/types.py:125) while building model items.
+- [`infer_text_json_type()`](../tree/types.py:81), which classifies string text fallback cases.
 
-The report asks: fixed constants, persisted `state/edit_limits.py` settings, or
-hard non-UI safety limits?
+Explicit coercion currently starts when the Type delegate commits a user-selected type and flows through [`delegates/type_delegate.py`](../delegates/type_delegate.py:1), `commit_set_data`, [`DocumentMutationGateway`](../documents/seams/mutation_gateway.py:1), `QUndoCommand`, [`JsonTreeModel.setData()`](../tree/model.py:1), [`JsonTreeItem.set_data()`](../tree/item.py:1), and [`tree/item_coercion.py`](../tree/item_coercion.py:1). This path must pass `allow_expensive=True` to target-specific conversion helpers.
 
-**Default decision for this plan:** add **hard safety constants** in
-[`settings.py`](../settings.py) (named `INFERENCE_*`), *not* user-exposed. These
-are correctness/DoS guards, distinct from the existing UX warning limits
-(`STRING_EDIT_WARNING_LIMIT_CHARS`, etc.) which gate *editor opening*, not parsing.
-If product later wants them tunable, a follow-up can mirror them into
-`state/edit_limits.py`. This keeps Plan 1 self-contained and avoids QSettings I/O
-inside hot parsing loops.
+## Storage decision
 
-## Threshold values — **TBD from [`Plan 0`](00-parsing-vulnerability-tests.md)**
+Add hard safety constants in [`settings.py`](../settings.py) with names beginning `INFERENCE_`, plus decode/preview caps named below. These values are not user-exposed settings and must not use `QSettings`. They are distinct from `STRING_EDIT_WARNING_LIMIT_CHARS`, `MULTILINE_EDIT_WARNING_LIMIT_CHARS`, and binary editor-opening warning limits, which control manual editor UX rather than load-time inference.
 
-| Constant | Guards | Provisional default | Final value |
-|---|---|---|---|
-| `INFERENCE_MAX_TOTAL_CHARS` | overall cap before `parse_json_type` attempts any non-trivial branch | 64 * 1024 | TBD (Plan 0) |
-| `INFERENCE_MAX_DATETIME_CHARS` | `parse_datetime_text` precheck | 64 | TBD |
-| `INFERENCE_MAX_AFFIX_CHARS` | `parse_number_affix` precheck | 64 | TBD |
-| `INFERENCE_MAX_COLOR_CHARS` | color regex precheck | 9 | TBD |
-| `INFERENCE_MAX_BASE64_PROBE_CHARS` | base64 syntactic + decode probe | 1 * 1024 * 1024 | TBD |
-| `EDITABLE_DECODE_LIMIT_BYTES` | `compute_editable` decode/decompress cap | reuse `BINARY_EDIT_WARNING_LIMIT_BYTES`? TBD | TBD |
-| `FORMAT_PREVIEW_DECODE_LIMIT_BYTES` | `format_with_type` paint-time decode cap | small (only need first 16 bytes) | TBD |
+## Threshold table
 
-> Provisional defaults let development proceed before Plan 0 completes, but the
-> final values **must** be confirmed against the Plan 0 report. Color cap is safe
-> to finalize immediately (a valid color is ≤ 9 chars).
+Commit 0.8 may change any value in this table, but the committed Plan 0 report must cite the report row that justifies the change. If Commit 0.8 does not identify a lower measured cap, use these exact integers.
+
+| Constant | Guards | Value | Plan 0 justification required |
+|---|---|---:|---|
+| `INFERENCE_MAX_TOTAL_CHARS` | Top of the `str` branch in [`parse_json_type()`](../tree/types.py:125) | `65536` | Largest size where all cheap text fallback checks stay under budget |
+| `INFERENCE_MAX_DATETIME_CHARS` | [`parse_datetime_text()`](../core/datetime_parsing/regex.py:36) regex and datetime conversion | `128` | First size above all valid datetime fixtures and below the near-datetime budget failure point |
+| `INFERENCE_MAX_AFFIX_CHARS` | [`parse_number_affix()`](../units/number_affix.py:79) regex checks | `256` | First size above existing affix fixtures and below the near-affix budget failure point |
+| `INFERENCE_MAX_COLOR_CHARS` | [`looks_like_color_rgb()`](../tree/types.py:24) and [`looks_like_color_rgba()`](../tree/types.py:28) | `9` | Maximum length of `#RGB`, `#RRGGBB`, `#RGBA`, and `#RRGGBBAA` color strings |
+| `INFERENCE_MAX_BASE64_PROBE_CHARS` | `_looks_like_base64()` and base64/zlib/gzip inference branches in [`parse_json_type()`](../tree/types.py:125) | `1048576` | Largest base64-like probe whose decoded allocation stays under the report cap |
+| `EDITABLE_DECODE_LIMIT_BYTES` | [`compute_editable()`](../tree/item_coercion.py:578) decode/decompress checks | `1048576` | Largest decoded/decompressed value used only to decide editability |
+| `FORMAT_PREVIEW_DECODE_LIMIT_BYTES` | [`format_with_type()`](../delegates/formatting/value_formatting.py:132) display preview | `64` | Preview needs only enough bytes to render the existing prefix text |
+
+## Isolation rules for this plan
+
+- New inference helpers under `tree/`, `core/`, or `tree/codecs/` may import [`settings.py`](../settings.py) and standard-library modules only.
+- Files under `tree/` must not import `app/`, `documents/`, `editors/`, `delegates/`, `state/`, or `validation/`.
+- Files under `core/` must remain Qt-free.
+- UI and delegate files may call bounded helpers but must not own inference policy.
 
 ---
 
 ## Commits
 
-### Commit 1.1 — Add `INFERENCE_*` constants to settings
+### Commit 1.1 — Add safety constants to settings
 - [ ] Completed
 
-**Problem it solves:** Every subsequent gate in this plan reads a per-kind `len()` threshold. Those thresholds need a single canonical home, with provisional defaults, so that helpers and call sites can import them without scattering magic numbers. The constants must be visibly distinct from the existing *editor-opening* warning limits.
+**Problem it solves:** Every gate needs one canonical source for threshold values, and those values must be visibly separate from editor-opening warning limits.
 
 **Files it touches:**
-- [`settings.py`](../settings.py) — add the `INFERENCE_*` constants with provisional defaults and comments distinguishing them from the existing edit-warning limits.
-- A new unit test (e.g. `tests/test_inference_constants.py`) — asserts the constants are positive ints and documents the inference-vs-edit-warning distinction.
+- [`settings.py`](../settings.py) — add the constants listed in the threshold table with integer values.
+- `tests/test_inference_constants.py` — new unit test for constant type, positivity, and distinction from editor-opening warning limits.
 
-**DoD and gates:**
-- Constants are importable from `settings`.
-- Unit test asserts positive ints and documents the inference-vs-edit-warning distinction.
+**Expected behavior:** Production and tests import the constants from `settings` without initializing Qt or `QSettings`.
+
+**Acceptance criteria:**
+- Each constant is an `int` greater than zero.
+- Test names explicitly state that inference limits are load-time safety limits, not editor-warning limits.
 - Mandatory gate passes.
 
-### Commit 1.2 — Pure length-gate helpers (tree-isolation safe)
+### Commit 1.2 — Add pure length-gate helpers with bypass flag
 - [ ] Completed
 
-**Problem it solves:** Call sites in `parse_json_type` and the parse helpers need a uniform way to ask "is this string short enough to attempt the expensive parse?". Embedding raw `len(s) > N` checks at every call site would scatter policy and break tree isolation if done inside `app/`/etc.
+**Problem it solves:** Call sites need one policy API for checking whether an expensive inference branch may run, and explicit coercion needs a shared bypass flag.
 
 **Files it touches:**
-- `tree/inference_limits.py` — new module (or `tree/types.py` extension) with small pure predicates: `datetime_inference_allowed(s)`, `affix_inference_allowed(s)`, `color_inference_allowed(s)`, `base64_probe_allowed(s)`. Each is a cheap `len()` check against the relevant `INFERENCE_*` constant. Imports only `settings`.
-- A new unit test — covers boundary lengths (exactly at / just over limit) for each helper.
+- `tree/inference_limits.py` — new module with `datetime_inference_allowed(text, allow_expensive=False)`, `affix_inference_allowed(text, allow_expensive=False)`, `color_inference_allowed(text, allow_expensive=False)`, `base64_probe_allowed(text, allow_expensive=False)`, `total_inference_allowed(text)`, `editable_decode_allowed(byte_count)`, and `format_preview_decode_allowed(byte_count)`.
+- `tests/test_inference_limits.py` — new tests for boundary lengths at exactly the limit and one character/byte above the limit.
 
-**DoD and gates:**
-- Helpers import only `settings`; no `app/`, `documents/`, `editors/`, `delegates/`, `state/`, `validation/` imports.
-- Boundary tests pass.
-- Mandatory gate passes (including `make check-tree-isolation`).
+**Expected behavior:** For the four `*_inference_allowed` helpers, `allow_expensive=True` returns `True` regardless of text length. `total_inference_allowed`, `editable_decode_allowed`, and `format_preview_decode_allowed` do not have a bypass because they protect automatic inference or repeated display/editability work.
 
-### Commit 1.3 — Gate `parse_datetime_text`
+**Acceptance criteria:**
+- The helper module imports only `settings` and standard-library modules.
+- Boundary tests cover allowed-at-limit and rejected-above-limit for every helper.
+- Mandatory gate passes, including `make check-tree-isolation`.
+
+### Commit 1.3 — Trace and test the explicit coercion bypass seam
 - [ ] Completed
 
-**Problem it solves:** A giant near-date string (e.g. 10 MB of digits prefixed date-like) currently makes `parse_datetime_text` attempt `DATETIME_RE.fullmatch` and possibly the pandas/dateutil fallback — both expensive. We must short-circuit on length before the regex.
+**Problem it solves:** Gates added in later commits must not change explicit type-change behavior. The implementation needs a tested seam before any parser starts rejecting oversized inference inputs.
 
 **Files it touches:**
-- [`core/datetime_parsing/regex.py`](../core/datetime_parsing/regex.py:36) — add `len()` precheck using `INFERENCE_MAX_DATETIME_CHARS` *before* `DATETIME_RE.fullmatch`. Keep `core/` Qt-free.
-- Or alternatively, gate at the call site in [`parse_json_type`](../tree/types.py:166).
-- A new unit test — proves a giant near-date string returns "not a datetime" without invoking the regex/pandas path (assert via Plan 0 timing budget and/or a spy).
+- [`tree/item_coercion.py`](../tree/item_coercion.py:1) — identify the explicit-coercion entry point and pass `allow_expensive=True` to target-specific converters introduced or updated by later commits.
+- [`tree/item.py`](../tree/item.py:49) — use the existing `explicit_type` state to distinguish user-selected types from inferred types.
+- `tests/test_explicit_type_bypass.py` — new tests with monkeypatched target converters that record the `allow_expensive` value for automatic inference versus explicit coercion.
 
-**DoD and gates:**
-- Giant near-date string returns not-a-datetime in O(1).
-- Existing datetime tests still pass.
+**Expected behavior:** Automatic inference passes `allow_expensive=False`. Explicit type changes pass `allow_expensive=True` before any length gate is evaluated.
+
+**Acceptance criteria:**
+- Tests cover at least datetime, number-affix, color, and binary target conversions.
+- No public `parse_json_type()` signature change is required for the explicit path.
 - Mandatory gate passes.
 
-### Commit 1.4 — Gate `parse_number_affix`
+### Commit 1.4 — Gate datetime inference
 - [ ] Completed
 
-**Problem it solves:** A long currency/unit prefix combined with a huge digit run can make `_CURRENCY_RE` / `_UNITS_RE` slow. The existing `NUMBER_AFFIX_MAX_LEN` guards the affix length, but a giant *string total length* with a near-affix prefix can still be expensive. We need a guard on the total input length.
+**Problem it solves:** Oversized near-date strings must not run `DATETIME_RE.fullmatch` or datetime conversion during automatic inference.
 
 **Files it touches:**
-- [`units/number_affix.py`](../units/number_affix.py:79) — add `len()` precheck (string total length) before `_CURRENCY_RE` / `_UNITS_RE` `fullmatch`.
-- Existing affix tests in [`tests/test_io_number_affix.py`](../tests/test_io_number_affix.py:1) — must continue to pass.
+- [`core/datetime_parsing/regex.py`](../core/datetime_parsing/regex.py:36) — add an `allow_expensive=False` parameter to [`parse_datetime_text()`](../core/datetime_parsing/regex.py:36) and return the existing not-a-datetime result before regex work when `datetime_inference_allowed(text, allow_expensive)` is `False`.
+- Call sites in [`tree/types.py`](../tree/types.py:125) and [`tree/item_coercion.py`](../tree/item_coercion.py:1) — pass `allow_expensive=False` for inference and `True` for explicit coercion.
+- `tests/test_datetime_inference_limits.py` — new tests for oversized automatic inference and explicit bypass.
 
-**DoD and gates:**
-- Giant near-affix string returns `None` fast.
-- Existing affix round-trip tests pass.
+**Expected behavior:** A near-date string longer than `INFERENCE_MAX_DATETIME_CHARS` returns not-a-datetime during inference without invoking the regex. The same string reaches the datetime parser when explicitly coerced.
+
+**Acceptance criteria:**
+- Spy test proves `DATETIME_RE.fullmatch` is not called for oversized inference input.
+- Existing datetime tests pass unchanged for strings at or below the limit.
 - Mandatory gate passes.
 
-### Commit 1.5 — Gate color inference
+### Commit 1.5 — Gate number-affix inference
 - [ ] Completed
 
-**Problem it solves:** `"#" + "f" * N` makes the color regexes scan arbitrarily long inputs. A valid color is ≤ 9 chars, so a hard cap is safe to finalize immediately.
+**Problem it solves:** Oversized near-affix strings must not run `_CURRENCY_RE.fullmatch` or `_UNITS_RE.fullmatch` during automatic inference.
 
 **Files it touches:**
-- `tree/types.py` — short-circuit `looks_like_color_rgb` / `looks_like_color_rgba` when `len(s) > INFERENCE_MAX_COLOR_CHARS`.
-- Existing color tests — must continue to pass.
+- [`units/number_affix.py`](../units/number_affix.py:79) — add `allow_expensive=False` to [`parse_number_affix()`](../units/number_affix.py:79) and return `None` before regex work when `affix_inference_allowed(text, allow_expensive)` is `False`.
+- Call sites in [`io_formats/load.py`](../io_formats/load.py:41), [`tree/types.py`](../tree/types.py:125), and [`tree/item_coercion.py`](../tree/item_coercion.py:1) — pass the correct flag for inference versus explicit coercion.
+- Existing affix tests in [`tests/test_io_number_affix.py`](../tests/test_io_number_affix.py:1) plus a new oversized-inference test.
 
-**DoD and gates:**
-- `"#" + "f"*N` returns not-a-color in O(1).
-- Color tests pass.
+**Expected behavior:** A near-affix string longer than `INFERENCE_MAX_AFFIX_CHARS` returns `None` during inference before regex matching. Existing valid affix strings at or below the limit keep their current parse result.
+
+**Acceptance criteria:**
+- Spy test proves neither affix regex is called for oversized inference input.
+- Explicit type change to an affix target reaches the converter with `allow_expensive=True`.
 - Mandatory gate passes.
 
-### Commit 1.6 — Gate base64 / decompress probe
+### Commit 1.6 — Gate color inference
 - [ ] Completed
 
-**Problem it solves:** The base64→zlib/gzip decode probe in `parse_json_type` can be tricked into allocating giant decoded buffers for huge base64-like strings. We must cap the probe by total input length and fall back to text classification above the cap.
+**Problem it solves:** Strings longer than the maximum valid color length must not scan color regexes during automatic inference.
 
 **Files it touches:**
-- [`tree/types.py`](../tree/types.py:32) — in `_looks_like_base64()` and the base64→zlib/gzip branch of [`parse_json_type`](../tree/types.py:185), skip decode/decompress when `len(s) > INFERENCE_MAX_BASE64_PROBE_CHARS`; classify as text instead.
-- Existing BYTES / ZLIB / GZIP tests — must continue to pass.
+- [`tree/types.py`](../tree/types.py:24) — gate `looks_like_color_rgb(text, allow_expensive=False)` and [`looks_like_color_rgba()`](../tree/types.py:28) with `color_inference_allowed`.
+- [`tree/item_coercion.py`](../tree/item_coercion.py:1) — pass `allow_expensive=True` for explicit color coercion.
+- Existing color tests plus `tests/test_color_inference_limits.py`.
 
-**DoD and gates:**
-- Huge base64-like string classifies as `STRING`/`UNICODE` without allocating a giant decoded buffer.
-- Existing BYTES/ZLIB/GZIP tests pass.
+**Expected behavior:** `"#" + "f" * 1000` returns not-a-color during inference before regex work. Strings of length `3`, `4`, `7`, and `9` keep their current behavior.
+
+**Acceptance criteria:**
+- Oversized inference test proves the regex wrapper is not called.
+- Explicit color coercion bypasses the length gate and returns the existing success/failure result.
 - Mandatory gate passes.
 
-### Commit 1.7 — Top-level total-length fast path in `parse_json_type`
+### Commit 1.7 — Gate base64, zlib, and gzip inference probes
 - [ ] Completed
 
-**Problem it solves:** Even with per-branch gates, a giant string still walks through several cheap-but-not-free checks (multiline, ws-only, ASCII). We need an O(1) fast path at the top of the `str` branch that, above `INFERENCE_MAX_TOTAL_CHARS`, skips every heuristic and returns only the cheap text classification (multiline vs line, ASCII vs unicode).
+**Problem it solves:** Oversized base64-like strings must not allocate decoded buffers or attempt zlib/gzip decompression during automatic inference.
 
 **Files it touches:**
-- [`tree/types.py`](../tree/types.py:151) — at the start of the `str` branch in `parse_json_type`, when `len(s) > INFERENCE_MAX_TOTAL_CHARS`, skip all heuristic branches and return only the cheap text classification.
-- A new regression test — diffs the inferred type for a fixture corpus before/after, asserting small strings keep current behavior exactly and giant strings classify to a text type within budget.
+- [`tree/types.py`](../tree/types.py:32) — gate `_looks_like_base64(text, allow_expensive=False)` with `base64_probe_allowed`.
+- [`tree/types.py`](../tree/types.py:185) — skip base64 decode, zlib decompress, and gzip decompress branches when `base64_probe_allowed(text, False)` is `False`.
+- [`tree/item_coercion.py`](../tree/item_coercion.py:1) and [`tree/codecs/bytes_codec.py`](../tree/codecs/bytes_codec.py:8) — expose/pass `allow_expensive=True` for explicit binary coercion where target conversion uses the same probe.
+- Existing BYTES/ZLIB/GZIP tests plus a new oversized base64-like regression test.
 
-**DoD and gates:**
-- Giant strings of every Plan 0 family classify to a text type within budget.
-- Small strings keep current behavior exactly (regression test).
+**Expected behavior:** Oversized base64-like inference input classifies as `STRING`, `UNICODE`, or `TEXT` without calling `base64.b64decode`, zlib decompress, or gzip decompress. Explicit binary coercion reaches the existing converter and returns the existing result or failure placeholder.
+
+**Acceptance criteria:**
+- Spy test proves no decode/decompress function is called for oversized inference input.
+- Valid BYTES/ZLIB/GZIP fixtures at or below the limit keep current inferred types.
 - Mandatory gate passes.
 
-### Commit 1.8 — Cap `compute_editable` decode/decompress
+### Commit 1.8 — Add top-level total-length text fast path
 - [ ] Completed
 
-**Problem it solves:** Load-time per-node editability checks can call full decode/decompress of a binary-like value to decide whether the field is editable. For a giant binary node this is unnecessarily expensive; we must bound the decode by `EDITABLE_DECODE_LIMIT_BYTES` (or trust already-known metadata) so the per-node check stays cheap.
+**Problem it solves:** Oversized strings need one top-level path that skips all non-text heuristics once their length exceeds the total inference cap.
 
 **Files it touches:**
-- [`tree/item_coercion.py`](../tree/item_coercion.py:578) — bound the decode/decompress used to decide editability by `EDITABLE_DECODE_LIMIT_BYTES`.
-- Existing binary-editability tests — must continue to pass.
+- [`tree/types.py`](../tree/types.py:151) — at the start of the `str` branch in [`parse_json_type()`](../tree/types.py:125), when `total_inference_allowed(text)` is `False`, return only a text type based on these checks: contains newline -> `TEXT`; contains non-ASCII -> `UNICODE`; otherwise `STRING`.
+- `tests/test_parse_json_type_limits.py` — new fixture corpus asserting small-string behavior is unchanged and oversized strings use the text fast path.
 
-**DoD and gates:**
-- A binary-like node above the cap is handled without full decompress.
-- Editability of normal binary nodes is unchanged.
+**Expected behavior:** Oversized strings from all ten Plan 0 families classify to a text type without running datetime, affix, color, base64, zlib, or gzip inference branches.
+
+**Acceptance criteria:**
+- Small fixture corpus has identical inferred types before and after this commit.
+- Oversized family tests complete within the Plan 0 budget.
 - Mandatory gate passes.
 
-### Commit 1.9 — Cap `format_with_type` paint-time decode
+### Commit 1.9 — Cap `compute_editable` decode/decompress work
 - [ ] Completed
 
-**Problem it solves:** `format_with_type` is called on every paint of a binary value, and a full decompression of a multi-MB binary on every paint is wasted work. Only the first ~16 bytes are needed for the preview, so the decode must be bounded by `FORMAT_PREVIEW_DECODE_LIMIT_BYTES`.
+**Problem it solves:** Load-time editability checks must not fully decode/decompress binary-like values larger than `EDITABLE_DECODE_LIMIT_BYTES`.
 
 **Files it touches:**
-- [`delegates/formatting/value_formatting.py`](../delegates/formatting/value_formatting.py:132) — only decode what the preview needs (first ~16 bytes) and bound work by `FORMAT_PREVIEW_DECODE_LIMIT_BYTES`; avoid full decompression on every paint.
-- A snapshot test — asserts preview text for normal values is unchanged.
+- [`tree/item_coercion.py`](../tree/item_coercion.py:578) — use `editable_decode_allowed` before decode/decompress work used only to decide editability.
+- Existing binary editability tests plus a new oversized binary-like test.
 
-**DoD and gates:**
-- Preview for a huge binary value renders within budget.
-- Preview text for normal values is unchanged (snapshot test).
+**Expected behavior:** A binary-like node above the cap avoids full decode/decompress and receives the conservative editability result defined in the test. Normal binary nodes at or below the cap keep current editability.
+
+**Acceptance criteria:**
+- Spy test proves oversized editability checks do not call full decode/decompress.
+- Existing binary editability tests pass.
 - Mandatory gate passes.
 
-### Commit 1.10 — MILESTONE: explicit type-change bypasses the gates
+### Commit 1.10 — Cap paint-time binary preview decode
 - [ ] Completed
 
-**Problem it solves:** The gates added in Commits 1.3–1.9 protect *automatic inference* on load. But when the user explicitly picks a target type in the Type column, the app must run the **full, expensive parser for that target kind** — the user asked for it. We must thread a "force / allow_expensive" signal through coercion so explicit type-changes bypass the gates while inference still short-circuits. Getting the seam wrong silently re-introduces the bug for the user-driven path.
-
-**Required investigations:**
-- Trace the explicit type-change path from the Type delegate ([`delegates/type_delegate.py`](../delegates/type_delegate.py:1)) through `commit_set_data` → [`DocumentMutationGateway`](../documents/seams/mutation_gateway.py:1) → model → [`tree/item_coercion.py`](../tree/item_coercion.py:1).
-- Identify where coercion currently decides whether to parse (e.g. the `explicit_type` flag on [`JsonTreeItem`](../tree/item.py:49)) and which function performs target-kind conversion (color/datetime/affix/base64).
-- Decide the bypass mechanism: a `force: bool` / `allow_expensive: bool` parameter threaded into the gated helpers (default `False` = inference, `True` = explicit coercion), **without** widening `parse_json_type`'s public signature in a way that breaks tree isolation.
-- After investigation, expand this commit into concrete sub-commits (e.g. "add `force` param to gated helpers", "pass `force=True` from coercion", "wire explicit path").
+**Problem it solves:** Display formatting must not fully decode/decompress multi-megabyte binary values during every paint.
 
 **Files it touches:**
-- The gated helpers from Commits 1.3–1.9 — accept a new `force` / `allow_expensive` parameter (default `False`).
-- The coercion path in [`tree/item_coercion.py`](../tree/item_coercion.py:1) and the `explicit_type` flag plumbing in [`tree/item.py`](../tree/item.py:49) — pass `force=True` from the explicit-coercion entry point.
-- New tests — assert both paths.
+- [`delegates/formatting/value_formatting.py`](../delegates/formatting/value_formatting.py:132) — decode at most `FORMAT_PREVIEW_DECODE_LIMIT_BYTES` bytes needed for the existing preview format.
+- `tests/test_value_formatting_preview_limits.py` — new snapshot tests for normal previews and oversized binary previews.
 
-**DoD and gates (target behavior):**
-- Changing a 10 MB string field's type to `datetime` / `bytes` / `currency` runs the real target parser and either converts or shows the normal failure/placeholder — it does **not** silently fall back due to the length gate.
-- Inference of the same value (on load) still short-circuits.
+**Expected behavior:** Normal preview text is unchanged. Oversized binary preview returns the same prefix format with an explicit truncation marker and does not decode beyond the preview cap.
+
+**Acceptance criteria:**
+- Snapshot tests cover BYTES, ZLIB, and GZIP preview text at normal sizes.
+- Oversized preview test proves decode/decompress work is capped.
 - Mandatory gate passes.
 
-### Commit 1.11 — Regression sweep vs Plan 0 harness
+### Commit 1.11 — Regression sweep against Plan 0 harness
 - [ ] Completed
 
-**Problem it solves:** We have added nine per-branch gates; we must prove they actually fixed the Plan 0 findings (no candidate function remains super-linear under inference) and capture the before/after numbers in the report for posterity.
+**Problem it solves:** The gates must eliminate the vulnerabilities measured in Plan 0 under automatic inference, while preserving explicit conversion behavior.
 
 **Files it touches:**
-- The Plan 0 scaling/budget tests in `tests/perf/` — re-run against the now-gated functions.
-- `reports/parsing-vulnerability-<date>.md` — append a before/after section.
-- Plan 1's threshold table — confirm final values now match the report.
+- `tests/perf/` — rerun Plan 0 perf tests against the gated implementation.
+- `reports/parsing-vulnerability-<YYYY-MM-DD>.md` — append a before/after section with the same row schema used by Plan 0.
+- This threshold table — update any value changed by the before/after run and cite the row that justifies it.
 
-**DoD and gates:**
-- No candidate function from Plan 0 remains super-linear under inference.
-- Report is updated with before/after numbers.
-- Full test suite is green.
-- Mandatory gate passes.
+**Expected behavior:** Automatic inference rows for target functions are no longer classified as `superlinear` or `allocation_exceeded`. Rows for explicit conversion tests show the target parser/converter was reached.
+
+**Acceptance criteria:**
+- Plan 0 opt-in report contains before/after rows for every original vulnerable function.
+- No automatic-inference row remains `superlinear` or `allocation_exceeded` after gates.
+- Full test suite and mandatory gate pass.

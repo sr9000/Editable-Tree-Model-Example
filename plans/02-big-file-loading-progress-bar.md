@@ -1,189 +1,183 @@
-# Plan 2 — Loading progress bar that appears only after 5 seconds
+# Plan 2 — Loading progress widget shown after 5 seconds
 
-**Goal:** When opening or reloading a file takes longer than **5 seconds**, show
-a progress widget. The 5s is purely a *trigger to reveal* the widget — fast loads
-must show nothing. This plan adds the coordinator, the delayed widget, and the
-off-GUI-thread / chunked work needed for the widget to actually paint. **No cancel
-button yet** (that is [`Plan 3`](03-loading-cancel-button.md)).
+**Goal:** When opening or reloading a file remains active for at least `5000` milliseconds, show a loading progress widget with stage text. Loads that finish before `5000` milliseconds show no widget. This plan adds the coordinator, delayed widget, worker parse, progress protocol, chunked model build, validation tracking, and reload build-then-swap behavior. It does not add a Cancel button; cancellation is [`Plan 3`](03-loading-cancel-button.md).
 
-> Prerequisite: [`Plan 1`](01-string-parsing-len-limits.md) should land first.
-> Without it, per-node inference can still dominate load time; with it, progress
-> stages reflect genuine structural work.
+**Prerequisite:** [`Plan 1`](01-string-parsing-len-limits.md) must land first so per-node inference is capped before loading work is moved into longer-lived orchestration.
 
-See [`plans/index.md`](index.md) for the **mandatory gate** every commit must pass.
+See [`plans/index.md`](index.md) for the mandatory gate every commit must pass.
 
-## Current blocking flow (from the report)
+## Current blocking flow
 
-Everything runs synchronously on the GUI thread:
-[`MainWindow._open_path()`](../app/main_window.py:303) →
-[`load_file_with_format()`](../io_formats/load.py:64) →
-[`_add_tab()`](../app/main_window.py:297) →
-[`TabLifecyclePresenter.add_tab()`](../app/tab_lifecycle.py:64) →
-[`create_tab()`](../documents/composition/factory.py:16) →
-[`bootstrap()`](../documents/composition/init.py:34) →
-[`init_model()`](../documents/composition/setup.py:108) →
-recursive [`JsonTreeItem.__init__()`](../tree/item.py:37).
+The review report identifies this synchronous GUI-thread chain:
 
-A delayed dialog **cannot appear** while this blocks the GUI thread, so the work
-must move off-thread or be chunked with event-loop yielding.
+[`MainWindow._open_path()`](../app/main_window.py:303) → [`load_file_with_format()`](../io_formats/load.py:64) → [`_add_tab()`](../app/main_window.py:297) → [`TabLifecyclePresenter.add_tab()`](../app/tab_lifecycle.py:64) → [`create_tab()`](../documents/composition/factory.py:16) → [`bootstrap()`](../documents/composition/init.py:34) → [`init_model()`](../documents/composition/setup.py:108) → recursive [`JsonTreeItem.__init__()`](../tree/item.py:37).
 
-## Worker strategy — DECISION (default chosen; confirm at Commit 2.3)
+A delayed widget cannot appear while this chain blocks the GUI thread. This plan therefore moves file parsing to a worker thread and converts model/tree construction into GUI-thread chunks that yield between batches.
 
-The report lists three options. **Default decision:**
+## Worker and build decisions
 
-- **File parse → `QThread` worker.** `simplejson.load` / `yaml.load_all` are not
-  cooperative and not interruptible in-thread, but a worker keeps the GUI
-  responsive; on cancel (Plan 3) we discard late results.
-- **Model/tree build → chunked cooperative build on the GUI thread.** Building Qt
-  model items off-thread is fragile; instead build in time-sliced batches that
-  yield to the event loop so the progress widget paints and (later) Cancel works.
-- **Worker *process*** (hard CPU kill) is explicitly deferred to a Plan 3
-  milestone; not required for the 5s-trigger progress bar.
+- **File parse:** Run [`load_file_with_format()`](../io_formats/load.py:64) in a `QThread` worker. The worker must create no Qt widgets and emit only plain Python parse results or exception data back to the GUI thread.
+- **Model/tree build:** Build the item tree/model on the GUI thread in time-sliced batches. Do not bind a partial model to the view. Bind only after the complete tree/model exists.
+- **Worker process:** Hard CPU termination of a wedged parser is out of scope for Plan 2. Plan 3 keeps cooperative cancellation with late-result discard; process termination remains a separate future plan.
+- **Validation/schema:** Include initial schema discovery and first validation in the tracked loading task. The progress widget must not close before validation work finishes if validation runs synchronously as part of opening/reloading.
 
-This split is a recommendation; Commit 2.3 confirms feasibility before deeper work.
+## Required progress stages
 
-## Progress stages (coarse, from the report)
+The coordinator must emit these stages in order when the corresponding work is present:
 
-`reading → parsing → decoding affixes → building item tree → binding UI → (validation?)`
+1. `reading/parsing file`
+2. `decoding number affixes`
+3. `building item tree`
+4. `binding UI`
+5. `discovering schema`
+6. `validating document`
+7. `complete`
 
-Whether validation/schema discovery is inside the 5s-tracked work is a **scope
-decision** finalized at Commit 2.8.
+Reload uses the same stages, replacing `binding UI` with `applying reload` at the atomic commit point.
 
 ---
 
 ## Commits
 
-### Commit 2.1 — LoadCoordinator scaffold (no behavior change)
+### Commit 2.1 — LoadCoordinator scaffold with unchanged behavior
 - [ ] Completed
 
-**Problem it solves:** Every later change in this plan (worker parse, chunked build, delayed widget, cancel) needs a single owner to route open/reload through. Today the call chain runs synchronously across `MainWindow`, `load_file_with_format`, and `TabLifecyclePresenter.add_tab` — there is no seam to intercept.
+**Problem it solves:** Open and reload need one owner before worker parsing, progress, and cancellation can be added.
 
 **Files it touches:**
-- `app/loading/coordinator.py` — new module with a `LoadCoordinator` that today simply calls the existing synchronous open/reload and returns the same result.
+- `app/loading/coordinator.py` — new `LoadCoordinator` class that delegates to the current synchronous open/reload behavior.
 - [`app/main_window.py`](../app/main_window.py:303) — route `_open_path()` through the coordinator.
 - [`app/main_window.py`](../app/main_window.py:362) — route `_reload_tab_from_path()` through the coordinator.
+- Existing open/reload tests in [`tests/test_file_io_phase4.py`](../tests/test_file_io_phase4.py:1) and [`tests/test_reload_from_disk.py`](../tests/test_reload_from_disk.py:1).
 
-**DoD and gates:**
-- Behavior is byte-for-byte identical to the pre-existing open/reload path.
-- Existing open/reload tests ([`tests/test_file_io_phase4.py`](../tests/test_file_io_phase4.py:1), [`tests/test_reload_from_disk.py`](../tests/test_reload_from_disk.py:1)) pass unchanged.
+**Expected behavior:** Opening and reloading produce the same tabs, recent-file updates, status messages, dirty state, validation behavior, and exceptions as before this commit.
+
+**Acceptance criteria:**
+- Tests assert coordinator methods are invoked for open and reload.
+- Existing open/reload tests pass without changed assertions.
 - Mandatory gate passes.
 
-### Commit 2.2 — Delayed progress widget (timer only, not yet shown for real work)
+### Commit 2.2 — Shared delayed progress widget without Cancel
 - [ ] Completed
 
-**Problem it solves:** The 5s-trigger contract requires a widget that arms a `QTimer` and only reveals itself if the task is still active when the timer fires. We need that widget in isolation (driven by a fake/advanced timer) before wiring it to real loads.
+**Problem it solves:** Loading needs a widget that appears only when a task is still active after `5000` milliseconds.
 
 **Files it touches:**
-- `app/loading/progress_dialog.py` — new module; an indeterminate progress widget owned by the coordinator, armed by a single-shot `QTimer` (`LOADING_PROGRESS_DELAY_MS = 5000` in [`settings.py`](../settings.py)); shown only if the task is still active when the timer fires; hidden on finish/error.
-- A new unit test (e.g. `tests/test_loading_progress_dialog.py`) — uses a fake/advanced timer to prove: task < 5s ⇒ widget never shown; task ≥ 5s ⇒ widget shown then hidden.
+- `app/loading/progress_dialog.py` — new delayed progress widget using single-shot `QTimer` and `LOADING_PROGRESS_DELAY_MS = 5000` from [`settings.py`](../settings.py). Constructor accepts `cancellable=False`; in this plan the Cancel button is absent.
+- [`settings.py`](../settings.py) — add `LOADING_PROGRESS_DELAY_MS = 5000`.
+- `tests/test_loading_progress_dialog.py` — new tests with controllable timer behavior.
 
-**DoD and gates:**
-- Unit test with a fake/advanced timer proves the < 5s vs ≥ 5s contract.
-- No real loading wired yet.
+**Expected behavior:** `start(task_id)` arms the timer. If `finish(task_id)` happens before the timer fires, the widget never becomes visible. If the timer fires while the task is active, the widget becomes visible and hides on finish or error.
+
+**Acceptance criteria:**
+- Test covers task duration `< 5000 ms`: widget is never shown.
+- Test covers task duration `>= 5000 ms`: widget is shown once and hidden on finish.
+- Test confirms no Cancel button exists when `cancellable=False`.
 - Mandatory gate passes.
 
-### Commit 2.3 — MILESTONE: move file parse to a worker thread
+### Commit 2.3 — Run file parsing in a worker thread
 - [ ] Completed
 
-**Problem it solves:** The delayed widget from Commit 2.2 cannot paint while the GUI thread is blocked inside `simplejson.load` / `yaml.load_all`. The parse must move to a `QThread` worker so the GUI thread keeps spinning events and the widget can render. This is the load-bearing change for the whole plan.
-
-**Required investigations:**
-- Confirm `simplejson` / `yaml` / `gmpy2.mpq` / `MpqSafeLoader` are safe to run in a `QThread` worker and that the resulting Python object can cross the thread boundary (it's plain Python data — verify no Qt objects are created during parse).
-- Choose marshaling: `QThread` + worker `QObject` with `finished(result)` / `failed(exc)` signals delivered to the GUI thread.
-- Decide error-propagation parity with the current `QMessageBox.critical` behavior.
-- After investigation, expand this commit into concrete sub-commits.
+**Problem it solves:** The GUI event loop must continue processing while JSON/YAML parsing and affix decoding run.
 
 **Files it touches:**
-- `app/loading/coordinator.py` — runs [`load_file_with_format()`](../io_formats/load.py:64) in the worker; on success it resumes the existing (still synchronous) tab build on the GUI thread.
-- New worker `QObject` in `app/loading/worker.py` (or inline) — emits `finished(result)` / `failed(exc)`.
-- A new test — asserts the GUI thread processes events while a slow fake parser runs (event loop not blocked).
+- `app/loading/worker.py` — new worker `QObject` with `finished(result)`, `failed(error_payload)`, and `stage(str)` signals. It calls [`load_file_with_format()`](../io_formats/load.py:64) and emits plain Python data.
+- `app/loading/coordinator.py` — starts/stops the `QThread`, receives worker signals on the GUI thread, and resumes tab build only after successful parse.
+- `tests/test_loading_worker_thread.py` — new test with a slow fake parser.
 
-**DoD and gates:**
-- Open/reload still produce identical results.
-- GUI thread no longer blocks during file parse (test asserts the event loop processes events while a slow fake parser runs).
+**Expected behavior:** During a slow fake parser, a zero-delay GUI timer fires at least twice before parsing finishes. Parser exceptions are delivered to the same user-facing error path used before this commit.
+
+**Acceptance criteria:**
+- Test proves the GUI event loop processes events during parsing.
+- Successful parse opens/reloads the same data as the synchronous path.
+- Failed parse shows the same error text category as the existing `QMessageBox.critical` path.
+- Worker thread is quit and deleted after success or failure.
 - Mandatory gate passes.
 
 ### Commit 2.4 — Progress reporting protocol
 - [ ] Completed
 
-**Problem it solves:** The widget needs a way to receive coarse stage updates ("reading", "parsing", "building tree", …) from the coordinator, but we don't want the coordinator to know about the widget. A small, Qt-thread-safe protocol decouples them and keeps signal-slot delivery idiomatic.
+**Problem it solves:** The coordinator, worker, builder, and widget need a small stage/tick contract without coupling worker code to widget classes.
 
 **Files it touches:**
-- `app/loading/progress.py` (or a sub-module) — new `ProgressReporter` protocol with `stage(name)` and `tick(done, total)`.
-- `app/loading/coordinator.py` — emits coarse stages; the widget renders the current stage text. Use signals to stay Qt-thread-safe.
+- `app/loading/progress.py` — new `ProgressEvent` dataclass with `task_id`, `stage`, `done`, and `total`, plus a `ProgressReporter` protocol with `stage(name)` and `tick(done, total)`.
+- `app/loading/coordinator.py` — converts worker/builder signals into `ProgressEvent` values.
+- `tests/test_loading_progress_events.py` — new test for stage order.
 
-**DoD and gates:**
-- A test asserts stages fire in the expected order for a normal open.
+**Expected behavior:** Stage events are emitted on the GUI thread in the order listed in this plan. `tick(done, total)` uses integer counts with `0 <= done <= total`; when total is unknown, both values are `0`.
+
+**Acceptance criteria:**
+- Normal open test observes `reading/parsing file`, `decoding number affixes`, `building item tree`, `binding UI`, schema/validation stages when applicable, and `complete`.
+- No widget class is imported by the worker.
 - Mandatory gate passes.
 
-### Commit 2.5 — MILESTONE: chunked cooperative model build
+### Commit 2.5 — Chunked cooperative model/tree build
 - [ ] Completed
 
-**Problem it solves:** Even with the parse moved off-thread, model/tree construction is fully recursive in [`JsonTreeItem.__init__()`](../tree/item.py:37) and runs on the GUI thread, which would still freeze long enough to prevent the progress widget from painting and (in Plan 3) Cancel from working. We need to build incrementally with event-loop yielding, but **without** ever binding a partial/garbage model to the view.
-
-**Required investigations:**
-- Determine how to build [`JsonTreeModel`](../tree/model.py:25) / [`JsonTreeItem`](../tree/item.py:37) incrementally. Today construction is fully recursive in `__init__`. Options: (a) build the item tree in time-sliced batches *before* constructing the model, yielding via `QCoreApplication.processEvents()` between batches; (b) build fully but emit `tick` progress and rely on Plan 1 to keep per-node cost low.
-- Decide a batch size / time-slice (e.g. yield every ~16 ms) and how to count total nodes for the progress fraction without a full pre-walk (estimate vs two-pass).
-- Confirm no partial/garbage model is ever bound to the view (build off to the side, bind once complete) — this also sets up Plan 3 cancel and reload swap.
-- After investigation, expand this commit into concrete sub-commits.
+**Problem it solves:** After worker parse succeeds, recursive model construction still blocks the GUI thread. The build must yield between batches so the delayed widget can paint and Plan 3 can check cancellation between batches.
 
 **Files it touches:**
-- `app/loading/coordinator.py` (or a new `app/loading/builder.py`) — chunked cooperative build with yields.
-- [`tree/model.py`](../tree/model.py:25) / [`tree/item.py`](../tree/item.py:37) — possibly a builder entry point, but **only** if it does not break tree isolation.
-- A new test (fixture comparison) — asserts results are identical to the synchronous build.
+- `app/loading/builder.py` — new chunked builder that constructs the item tree/model off to the side using an explicit work stack and yields control after each time slice.
+- [`tree/item.py`](../tree/item.py:37) and [`tree/model.py`](../tree/model.py:25) — add a builder entry point only if the new builder cannot use existing constructors without binding partial state.
+- `tests/test_chunked_model_build.py` — new fixture comparison against the synchronous build.
 
-**DoD and gates:**
-- Opening a large file keeps the UI responsive and reports build progress.
-- The view is only bound to a fully-built model.
-- Results are identical to the synchronous build (fixture comparison).
+**Expected behavior:** The builder processes batches with a target time slice of `16` milliseconds and yields after no more than `50` milliseconds in tests. The view receives no model until the build result is complete.
+
+**Acceptance criteria:**
+- Fixture comparison proves root data, item types, names, and values match the synchronous build.
+- Event-loop test observes timer callbacks during a large build.
+- Test asserts no partial model is assigned to the view before completion.
 - Mandatory gate passes.
 
-### Commit 2.6 — Wire stages to the delayed widget for real loads
+### Commit 2.6 — Include schema discovery and validation in loading progress
 - [ ] Completed
 
-**Problem it solves:** The delayed widget (Commit 2.2), the worker parse (Commit 2.3), the progress protocol (Commit 2.4), and the chunked build (Commit 2.5) all exist in isolation. We must connect them end-to-end so a slow real load actually shows the widget with advancing stage text, while a fast load shows nothing.
+**Problem it solves:** Initial schema discovery and first validation can add visible work after model build. The loading widget must track that work instead of closing early and leaving a second GUI freeze.
 
 **Files it touches:**
-- `app/loading/coordinator.py` — wires worker-parse stages and chunked-build ticks into the 5s-delayed widget.
-- A new test — uses a deliberately slow (>5s) fake load to assert the widget appears with advancing stage text, and a fast load to assert the widget never appears.
+- `app/loading/coordinator.py` — emit `discovering schema` and `validating document` stages around the current schema/validation calls.
+- [`documents/controllers/validation.py`](../documents/controllers/validation.py:145) — expose a coordinator-callable validation entry point if the current call path cannot be staged without duplication.
+- [`validation/schema_source.py`](../validation/schema_source.py:89) — no behavior change unless a progress hook is needed for stage boundaries.
+- `tests/test_loading_validation_progress.py` — new tests for stage presence and widget lifetime.
 
-**DoD and gates:**
-- A deliberately slow (>5s) fake load shows the widget with advancing stage text.
-- A fast load shows nothing.
+**Expected behavior:** The progress widget remains active until schema discovery and first validation complete. There is no second delayed loading widget after the first one hides.
+
+**Acceptance criteria:**
+- Test observes validation/schema stages for a tab with schema discovery enabled.
+- Test observes no duplicate show/hide cycle when validation runs longer than `5000` milliseconds.
 - Mandatory gate passes.
 
-### Commit 2.7 — Reload via build-then-swap (no cancel yet)
+### Commit 2.7 — Wire delayed widget to real open/reload tasks
 - [ ] Completed
 
-**Problem it solves:** Reload currently mutates the live tab in place, so a slow reload (or an interrupted one) leaves the tab in a half-updated state. Plan 3 will require a fully-built replacement before any commit point; this commit lays the groundwork (without cancel) so Plan 3 can drop in cancel-safety later.
+**Problem it solves:** Worker parsing, progress events, chunked build, and validation stages must drive the delayed widget for actual open and reload operations.
 
 **Files it touches:**
-- [`app/main_window.py`](../app/main_window.py:362) — change `_reload_tab_from_path()` to build the new data/model off to the side (with progress) and then apply.
-- [`undo/diff.py`](../undo/diff.py:13) — possibly a thin shim around `DiffApplier.apply()`; the apply step stays isolated so Plan 3 can make it cancel-safe.
-- Reload tests ([`tests/test_reload_from_disk.py`](../tests/test_reload_from_disk.py:1)) — must still pass.
+- `app/loading/coordinator.py` — creates one progress widget per active load task, forwards stage/tick updates, and closes it on success or error.
+- `tests/test_loading_progress_end_to_end.py` — new tests with fast and slow fake loads.
 
-**DoD and gates:**
-- Reload still preserves view state where it did before.
-- Slow reload (>5s) shows the progress widget.
-- Reload tests pass.
+**Expected behavior:** A fake load shorter than `5000` milliseconds shows no widget. A fake load longer than `5000` milliseconds shows one widget with changing stage text and hides it after completion/error.
+
+**Acceptance criteria:**
+- Slow-open test observes widget visible after the delay and hidden on completion.
+- Fast-open test observes zero widget shows.
+- Error test observes widget hidden and the existing error path used.
 - Mandatory gate passes.
 
-### Commit 2.8 — DECISION: validation/schema scope inside the 5s window
+### Commit 2.8 — Reload build-then-swap without cancellation
 - [ ] Completed
 
-**Problem it solves:** Post-build validation and schema discovery can be expensive on a large doc. We must decide whether they are part of the 5s-tracked work (and therefore potentially shown in the progress widget) or run after the widget closes. The wrong choice either double-flashes the widget or hides real work from the user.
-
-**Required investigations:**
-- Measure typical validation cost (e.g. on a 100 MB doc) for [`TabValidationController.revalidate()`](../documents/controllers/validation.py:145) and [`discover_schema()`](../validation/schema_source.py:89) to decide.
-- Implement the chosen behavior; document it in this file.
-- (No implementation sub-commits needed if the decision is "run after the widget closes".)
+**Problem it solves:** Plan 3 requires reload to have a single commit point. This commit changes reload to build the replacement data/model off to the side and apply it only after the replacement is complete.
 
 **Files it touches:**
-- `app/loading/coordinator.py` — possibly stage validation, possibly defer it past `widget.hide()`.
-- [`documents/controllers/validation.py`](../documents/controllers/validation.py:145) — possibly re-ordering.
-- A new test — asserts the chosen behavior (stage present or explicitly excluded) and asserts no double-shown / again-after-close flicker.
+- [`app/main_window.py`](../app/main_window.py:362) and `app/loading/coordinator.py` — route reload through worker parse, chunked build, validation staging, and one final `applying reload` commit.
+- [`state/view_state.py`](../state/view_state.py:1) — capture and restore expanded paths, selection, and scroll position around the swap.
+- [`undo/diff.py`](../undo/diff.py:13) — keep existing undo/redo diff behavior; reload must not call diff mutation until the atomic commit decision has been made.
+- [`tests/test_reload_from_disk.py`](../tests/test_reload_from_disk.py:1) plus `tests/test_loading_reload_swap.py`.
 
-**DoD and gates:**
-- Behavior is documented in this file and tested.
-- No double-shown / again-after-close flicker.
+**Expected behavior:** Slow reload shows loading progress. Until the `applying reload` stage starts, the old tab data, dirty flag, undo stack, validation state, and view state remain unchanged. Completed reload preserves the view state that the old reload path preserved.
+
+**Acceptance criteria:**
+- Test snapshots old data, dirty flag, undo stack count, validation state, expanded paths, selection, and scroll before reload; all remain unchanged before commit.
+- Completed reload updates data and preserves view state according to existing reload tests.
 - Mandatory gate passes.

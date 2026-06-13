@@ -1,36 +1,20 @@
-# Plan 3 — Cancel button on the loading progress bar
+# Plan 3 — Cancel button for loading progress
 
-**Goal:** Add a **Cancel** button to the loading progress widget from
-[`Plan 2`](02-big-file-loading-progress-bar.md) with *real* no-side-effect
-semantics: cancelling an open adds no tab, pushes no recent file, registers no
-schema/validation state; cancelling a reload leaves the existing tab fully intact.
+**Goal:** Add a Cancel button to the loading progress widget from [`Plan 2`](02-big-file-loading-progress-bar.md) with no-side-effect semantics. Cancelling an initial open before commit adds no tab, pushes no recent-file entry, registers no schema/validation state, and leaves dirty state untouched. Cancelling a reload before commit leaves the existing tab data, dirty flag, undo stack, validation state, and view state unchanged.
 
-> Hard prerequisite: Plan 2 (coordinator, delayed widget, worker parse, chunked
-> build, build-then-swap reload) must be in place.
+**Prerequisite:** [`Plan 2`](02-big-file-loading-progress-bar.md) must be complete, including coordinator ownership, delayed widget, worker parse, chunked build, schema/validation progress, and reload build-then-swap.
 
-See [`plans/index.md`](index.md) for the **mandatory gate** every commit must pass.
+See [`plans/index.md`](index.md) for the mandatory gate every commit must pass.
 
-## Definition of "REALLY cancel" (from the report)
+## Cancellation semantics
 
-- **Initial open** — on cancel before commit: no tab added
-  ([`TabLifecyclePresenter.add_tab()`](../app/tab_lifecycle.py:64) never called or
-  fully unwound), no [`push_recent()`](../app/main_window.py:316), no validation/
-  schema registration, dirty state untouched, status bar shows a "cancelled" message.
-- **Reload** — on cancel before atomic commit: existing tab data, dirty flag,
-  undo stack, validation state, and view state remain exactly as before. Current
-  [`DiffApplier.apply()`](../undo/diff.py:13) mutates in place and is **not**
-  safe to interrupt mid-recursion, so reload commit must be atomic (build-then-swap
-  from Plan 2, Commit 2.7).
-- **Worker parse** — a cancel while `simplejson`/`yaml` is mid-parse cannot abort
-  the C/Python call in-thread. First-cut semantics: the UI stops waiting, the
-  late result is **discarded** on arrival. (Hard CPU kill = optional milestone.)
+- **Initial open:** If the cancellation token is set before the add-tab commit, [`TabLifecyclePresenter.add_tab()`](../app/tab_lifecycle.py:64) is not called, [`push_recent()`](../app/main_window.py:316) is not called, schema/validation state is not registered, and the status bar shows `Open cancelled`.
+- **Reload:** If the cancellation token is set before the `applying reload` commit stage, old data, dirty flag, undo stack, validation state, expanded paths, selection, and scroll position remain equal to the pre-reload snapshot.
+- **Worker parse:** JSON/YAML parsing inside a `QThread` cannot be interrupted. Cancel sets the token, hides the widget, stops the coordinator from waiting for that task, and discards the worker result or error when it arrives later.
+- **Chunked build:** The builder checks the token between batches and raises the cancellation sentinel before binding UI state or registering validation.
+- **Commit point:** Once initial open starts adding a tab, or reload starts the final swap/apply step, that commit is non-cancellable and must finish or surface the existing error path.
 
-## Cancel scope decision (default)
-
-**Default:** cooperative, no-side-effect cancellation with discarded late results.
-Hard CPU/IO termination of an in-flight parser (worker process) is deferred to the
-optional milestone at the end of this plan, since it is heavier and not required
-for responsive UX.
+Hard CPU/IO termination of an in-flight parser is not part of this plan. It requires a worker process or `QProcess` design in a separate future plan.
 
 ---
 
@@ -39,113 +23,104 @@ for responsive UX.
 ### Commit 3.1 — Cancellation token primitive
 - [ ] Completed
 
-**Problem it solves:** Every later change in this plan (button, cooperative build, late-result discard, atomic reload) needs a single, thread-safe way to signal "cancel" and observe "is cancelled?" from many call sites. Ad-hoc flags or Qt-only `QAtomicInt` are either error-prone or not importable from non-Qt modules.
+**Problem it solves:** Coordinator, widget, worker-result handling, and chunked builder need one thread-safe cancellation signal.
 
 **Files it touches:**
-- `app/loading/cancellation.py` — new module with a thread-safe `CancellationToken` (`cancel()`, `is_cancelled`) and a `CancelledError`/sentinel for cooperative checkpoints. Uses whatever Qt primitives are needed for thread-safety, but exposes a plain Python API.
-- A new unit test (e.g. `tests/test_loading_cancellation.py`) — covers set/observe across threads.
+- `app/loading/cancellation.py` — new `CancellationToken` with `cancel()`, `is_cancelled`, and `raise_if_cancelled()` plus `CancelledError`.
+- `tests/test_loading_cancellation.py` — new tests for same-thread and cross-thread set/observe.
 
-**DoD and gates:**
-- Unit tests cover set/observe across threads.
-- `make check-no-reflection` is clean.
+**Expected behavior:** Calling `cancel()` once makes all future `is_cancelled` reads return `True`. Repeated `cancel()` calls leave the token in the cancelled state. `raise_if_cancelled()` raises `CancelledError` only after cancellation.
+
+**Acceptance criteria:**
+- Cross-thread test starts one observer thread and one cancelling thread; observer sees cancellation without polling shared Qt widgets.
+- Module exposes a plain Python API and does not require callers outside `app/loading` to import Qt synchronization classes.
 - Mandatory gate passes.
 
-### Commit 3.2 — Add Cancel button to the progress widget
+### Commit 3.2 — Add Cancel button to the loading widget
 - [ ] Completed
 
-**Problem it solves:** The widget from Plan 2 has no way for the user to ask for cancel. We need a button that flips the cancellation token and shows a "cancelling…" state, while staying hidden/disabled in phases that are non-cancellable (e.g. mid worker parse where we only discard later).
+**Problem it solves:** Users need a visible control to request cancellation for a load task that has exceeded the 5-second display delay.
 
 **Files it touches:**
-- `app/loading/progress_dialog.py` — extend the Plan 2 widget with a Cancel button; the button triggers the token; show a "cancelling…" state after click.
-- A new test — drives the button and asserts the token flips.
+- `app/loading/progress_dialog.py` — enable `cancellable=True`, render a Cancel button, call `token.cancel()` on click, disable the button after the first click, and update the stage label to `Cancelling…`.
+- `tests/test_loading_progress_cancel_button.py` — new widget tests.
 
-**DoD and gates:**
-- Clicking Cancel sets the token.
-- Widget shows a "cancelling…" state.
-- Test drives the button and asserts the token flips.
+**Expected behavior:** The button is visible only when the widget is constructed with `cancellable=True`. Clicking it sets the token exactly once, disables the button, and leaves the widget visible until the coordinator acknowledges cancellation or completion.
+
+**Acceptance criteria:**
+- Test drives the button and asserts the token is cancelled.
+- Test asserts a second click does not emit a second cancel action.
+- Test asserts `cancellable=False` mode has no Cancel button.
 - Mandatory gate passes.
 
-### Commit 3.3 — Cooperative cancel in chunked model build (initial open)
+### Commit 3.3 — Discard late worker-parse results after cancel
 - [ ] Completed
 
-**Problem it solves:** The chunked build from Plan 2 / Commit 2.5 yields to the event loop, which means we can check the cancellation token between batches. We must wire that check in so a mid-build cancel aborts the build, discards the half-built off-side tree, and leaves the world looking like the user never clicked Open.
+**Problem it solves:** A worker parse can finish after the user has cancelled. Its result must not create a tab, push recent files, start validation, or replace a reloading tab.
 
 **Files it touches:**
-- `app/loading/coordinator.py` (or `app/loading/builder.py`) — check the token between batches; on cancel, abort the build, discard the half-built off-side tree, do **not** add a tab, do **not** push recent, restore status bar.
-- A new test — cancels mid-build and asserts: tab count unchanged, recent list unchanged, no schema/validation registered, no exception surfaced to the user.
+- `app/loading/coordinator.py` — assign each task a task id/generation id, mark cancelled tasks, hide the widget on cancel acknowledgement, and ignore `finished`/`failed` signals whose task id is cancelled or stale.
+- `tests/test_loading_cancel_during_parse.py` — new tests for initial open and reload.
 
-**DoD and gates:**
-- Test cancels mid-build and asserts: tab count unchanged, recent list unchanged, no schema/validation registered, no exception surfaced to the user.
+**Expected behavior:** Cancelling during parse returns the UI to the pre-load state. When the worker later emits success or failure, the coordinator drops the signal and records no user-facing error for the cancelled task.
+
+**Acceptance criteria:**
+- Initial-open test cancels during a slow fake parser, then emits late success; tab count and recent list remain unchanged.
+- Reload test cancels during a slow fake parser, then emits late success; old tab snapshot remains unchanged.
+- Late failure after cancel does not show an error dialog.
 - Mandatory gate passes.
 
-### Commit 3.4 — Discard late worker-parse results on cancel
+### Commit 3.4 — Cooperative cancel during chunked initial-open build
 - [ ] Completed
 
-**Problem it solves:** `simplejson`/`yaml` cannot be interrupted in-thread (Commit 2.3). If the user clicks Cancel during parse, the worker will eventually emit `finished(result)` for a parse the user no longer wants. We must drop that result instead of building a tab from it.
+**Problem it solves:** After parsing succeeds, initial-open model building must stop between batches when the token is cancelled and must discard the half-built off-side tree.
 
 **Files it touches:**
-- `app/loading/coordinator.py` — when the worker parse finishes after a cancel, drop the result instead of building a tab.
-- A new test — simulates cancel during parse, then a late `finished` signal; asserts no tab added and no recent push.
+- `app/loading/builder.py` — check `token.raise_if_cancelled()` between batches.
+- `app/loading/coordinator.py` — handle `CancelledError` from the builder by discarding build state and skipping add-tab/recent/validation commit steps.
+- `tests/test_loading_cancel_during_build.py` — new initial-open build-cancel test.
 
-**DoD and gates:**
-- Test simulates cancel during parse, then a late `finished` signal; asserts no tab added and no recent push.
+**Expected behavior:** Cancelling during build leaves the application as if the user never selected the file, except for the status bar message `Open cancelled`.
+
+**Acceptance criteria:**
+- Test asserts tab count unchanged, recent list unchanged, schema registry unchanged for that path, validation state not created, and no exception dialog shown.
+- Test asserts any temporary builder state is released by the coordinator.
 - Mandatory gate passes.
 
-### Commit 3.5 — MILESTONE: atomic, cancel-safe reload
+### Commit 3.5 — Atomic cancel-safe reload
 - [ ] Completed
 
-**Problem it solves:** A cancelled reload must leave the old tab fully intact — data, dirty flag, undo stack, validation state, and view state must all be byte-identical to the pre-reload snapshot. Today [`DiffApplier.apply()`](../undo/diff.py:13) mutates in place and is not safe to interrupt mid-recursion, so the commit point must become atomic. Getting this wrong silently corrupts user data on a Cancel click.
-
-**Required investigations:**
-- Confirm the Plan 2 / Commit 2.7 build-then-swap reload path produces a complete new model/tree before any mutation of the live tab.
-- Decide the apply step: (a) swap to the freshly built model (simplest atomicity, may lose minimal-diff view-state preservation), or (b) keep [`DiffApplier.apply()`](../undo/diff.py:13) but only start it **after** the cancellable build phase, treating the diff apply itself as the non-cancellable commit point.
-- If view-state preservation must survive a swap, define capture/restore of expanded paths / selection / scroll around the swap ([`state/view_state.py`](../state/view_state.py:1)).
-- After investigation, expand this commit into concrete sub-commits.
+**Problem it solves:** Reload cancellation must not interrupt [`DiffApplier.apply()`](../undo/diff.py:13) or any in-place mutation. Cancellation is allowed only before the final reload commit point.
 
 **Files it touches:**
-- `app/loading/coordinator.py` — gate the apply step behind the cancellation token; only run the apply (swap or `DiffApplier.apply()`) if not cancelled.
-- [`undo/diff.py`](../undo/diff.py:13) — possibly a thin shim that confirms it is being called only at the commit point.
-- [`state/view_state.py`](../state/view_state.py:1) — possibly capture/restore helpers.
-- A new test — asserts cancelling reload before the commit point leaves data, dirty flag, undo stack, validation, and view state identical; completing reload behaves as today.
+- `app/loading/coordinator.py` — check the token immediately before `applying reload`; skip the commit if cancelled.
+- [`state/view_state.py`](../state/view_state.py:1) — use the capture/restore helpers from Plan 2 to compare view state before and after cancelled reload.
+- [`undo/diff.py`](../undo/diff.py:13) — no mid-diff cancellation; add a narrow assertion/helper only if tests need to prove diff/apply is called after the cancellation gate.
+- `tests/test_loading_cancel_reload_atomic.py` — new reload cancellation tests.
 
-**DoD and gates:**
-- Cancelling reload before the commit point leaves data, dirty flag, undo stack, validation, and view state identical (tests assert each).
-- Completing reload behaves as today.
+**Expected behavior:** Cancelling before `applying reload` leaves old tab data, dirty flag, undo stack count and clean index, validation state, expanded paths, selection, and scroll equal to the pre-reload snapshot. Completing reload without cancellation behaves like Plan 2 reload.
+
+**Acceptance criteria:**
+- Test cancels at parse, build, and immediately-before-commit checkpoints; each preserves the full snapshot.
+- Test completes reload without cancellation and asserts existing reload expectations still pass.
 - Mandatory gate passes.
 
-### Commit 3.6 — No-side-effect regression suite
+### Commit 3.6 — No-side-effect cancellation regression suite
 - [ ] Completed
 
-**Problem it solves:** Cancel invariants are easy to break with a future refactor (e.g. accidentally re-introducing `push_recent` before the commit point). We need a single focused test module that asserts all cancel invariants in one place, complementing the existing reload and smoke tests.
+**Problem it solves:** Future refactors must not move side effects before the cancellation gate.
 
 **Files it touches:**
-- A new test module (e.g. `tests/test_loading_cancel_invariants.py`) — covers open-cancel (no tab / no recent / no schema), reload-cancel (data, dirty, undo, validation, view state preserved), late result discarded, dirty unchanged.
-- Existing tests ([`tests/test_reload_from_disk.py`](../tests/test_reload_from_disk.py:1), [`tests/test_smoke_mainwindow.py`](../tests/test_smoke_mainwindow.py:1)) — remain as complements.
+- `tests/test_loading_cancel_invariants.py` — new focused regression module covering open-cancel, reload-cancel, late success discard, late failure discard, dirty-state preservation, recent-list preservation, and validation/schema non-registration.
+- Existing tests in [`tests/test_reload_from_disk.py`](../tests/test_reload_from_disk.py:1) and [`tests/test_smoke_mainwindow.py`](../tests/test_smoke_mainwindow.py:1) remain complementary.
 
-**DoD and gates:**
-- Suite is green.
-- Covers both open and reload cancel paths.
+**Expected behavior:** Every side effect listed in this plan occurs only after the coordinator has checked that the task is not cancelled and is not stale.
+
+**Acceptance criteria:**
+- Regression suite includes one test for each cancellation invariant in the semantics section.
+- Suite passes with `QT_QPA_PLATFORM=offscreen`.
 - Mandatory gate passes.
 
-### Commit 3.7 — OPTIONAL MILESTONE: hard CPU cancellation via worker process
-- [ ] Completed
+## Deferred out of scope — hard parser termination
 
-**Problem it solves:** Cooperative cancel (Commits 3.3, 3.4) cannot free the CPU while `simplejson.load` / `yaml.load_all` are wedged. If a giant file wedges inside the parser for an unacceptable time, the only fix is to run the parser in a separate process that we can `terminate()`. This is heavier (IPC, serialization) and is kept as optional.
-
-**Required investigations:**
-- Evaluate a `multiprocessing` / `QProcess` parser that can be terminated.
-- Measure IPC cost of returning parsed Python data to the GUI process.
-- Decide serialization: pickle vs re-parse in child and stream parsed chunks.
-- Confirm `gmpy2.mpq` values survive IPC (they must round-trip across the boundary).
-- After investigation, expand this commit into concrete sub-commits or split it into its own plan if it's larger than expected.
-
-**Files it touches:**
-- New `app/loading/parser_process.py` (or similar) — wraps the parser in a `multiprocessing.Process` / `QProcess` with a `terminate()`-friendly lifecycle.
-- `app/loading/coordinator.py` — switches to the process-based parser when the feature flag / env var is set.
-- A new test — asserts clicking Cancel during a wedged parse frees CPU within a bounded time; no orphaned processes; results parity with the in-thread parser.
-
-**DoD and gates:**
-- Clicking Cancel during a wedged parse frees CPU within a bounded time.
-- No orphaned processes.
-- Results parity with in-thread parse.
-- Mandatory gate passes.
+Cooperative cancel does not stop CPU use while [`simplejson.load()`](../io_formats/load.py:64) or [`yaml.load_all()`](../io_formats/load.py:64) is executing inside the worker thread. If product requirements later demand CPU termination within a bounded interval, create a separate plan for a `multiprocessing` or `QProcess` parser with IPC serialization, orphan-process tests, and parity tests for parsed results.
