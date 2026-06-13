@@ -17,6 +17,272 @@ except ImportError:
     _AFFIX_LIMIT = 20
 
 
+TRACE_EXAMPLE = """
+AttributeErro                            Traceback (most recent call last)
+Cell In[2], line 1
+----> 1 json.load("models_output.xlsx")
+
+File /usr/lib/python3.12/json/__init__.py:293, in load(fp, cls, object_hook, parse_float, parse_int, parse_constant, object_pairs_hook, **kw)
+    274 def load(fp, *, cls=None, object_hook=None, parse_float=None,
+    275         parse_int=None, parse_constant=None, object_pairs_hook=None, **kw):
+    276     \"""Deserialize ``fp`` (a ``.read()``-supporting file-like object containing
+277     a JSON document) to a Python object.
+278
+(...)
+291     kwarg; otherwise ``JSONDecoder`` is used.
+292     \"""
+--> 293     return loads(fp.read(),
+    294         cls=cls, object_hook=object_hook,
+    295         parse_float=parse_float, parse_int=parse_int,
+    296         parse_constant=parse_constant, object_pairs_hook=object_pairs_hook, **kw)
+
+AttributeErro: 'str' object has no attribute 'read'
+
+"""
+
+SOURCE_CODE_EXAMPLE = """
+import sys
+import pygame
+
+# Initialize core modules
+pygame.init()
+
+# Game display settings
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Pygame Movement Example")
+
+# Timing control
+clock = pygame.time.Clock()
+FPS = 60
+
+# Character definitions
+player_color = (0, 128, 255)  # Blue
+player_width = 50
+player_height = 50
+player_x = (SCREEN_WIDTH - player_width) // 2
+player_y = (SCREEN_HEIGHT - player_height) // 2
+player_speed = 5
+
+# Main game loop
+running = True
+while running:
+    # 1. Event Handling
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    # 2. Input Handling & Screen Boundaries
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT] and player_x > 0:
+        player_x -= player_speed
+    if keys[pygame.K_RIGHT] and player_x < SCREEN_WIDTH - player_width:
+        player_x += player_speed
+    if keys[pygame.K_UP] and player_y > 0:
+        player_y -= player_speed
+    if keys[pygame.K_DOWN] and player_y < SCREEN_HEIGHT - player_height:
+        player_y += player_speed
+
+    # 3. Graphics Rendering
+    screen.fill((30, 30, 30))  # Dark gray background
+
+    # Draw the player square
+    pygame.draw.rect(
+        screen,
+        player_color,
+        (player_x, player_y, player_width, player_height),
+    )
+
+    # Refresh screen display
+    pygame.display.flip()
+
+    # Maintain constant frame rate
+    clock.tick(FPS)
+
+# Clean exit
+pygame.quit()
+sys.exit()
+
+"""
+
+JSON_TO_BE_ESCAPED = """
+{
+  "status": "success",
+  "code": 200,
+  "message": "Data retrieved successfully",
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "title": "Wireless Bluetooth Headphones",
+        "description": "Premium quality wireless headphones with active noise cancellation and 30-hour battery life",
+        "price": 199.99,
+        "originalPrice": 249.99,
+        "discount": 20,
+        "category": "electronics",
+        "brand": "AudioTech",
+        "inStock": true,
+        "quantity": 45,
+        "tags": [
+          "popular",
+          "new",
+          "featured",
+          "wireless",
+          "noise-cancelling"
+        ],
+        "ratings": {
+          "average": 4.5,
+          "count": 128,
+          "distribution": {
+            "5": 78,
+            "4": 32,
+            "3": 12,
+            "2": 4,
+            "1": 2
+          }
+        },
+        "images": [
+          "https://example.com/products/headphones-1.jpg",
+          "https://example.com/products/headphones-2.jpg"
+        ],
+        "specifications": {
+          "color": [
+            "Black",
+            "White",
+            "Blue"
+          ],
+          "weight": "250g",
+          "batteryLife": "30 hours",
+          "connectivity": [
+            "Bluetooth 5",
+            "3.5mm jack"
+          ]
+        }
+      },
+      {
+        "id": 2,
+        "title": "Smart Fitness Watch",
+        "description": "Advanced fitness tracking with heart rate monitor, GPS, and smartphone integration",
+        "price": 299.99,
+        "originalPrice": 349.99,
+        "discount": 15,
+        "category": "wearables",
+        "brand": "FitTech",
+        "inStock": false,
+        "quantity": 0,
+        "tags": [
+          "bestseller",
+          "fitness",
+          "smartwatch",
+          "gps"
+        ],
+        "ratings": {
+          "average": 4.2,
+          "count": 89,
+          "distribution": {
+            "5": 45,
+            "4": 28,
+            "3": 12,
+            "2": 3,
+            "1": 1
+          }
+        },
+        "images": [
+          "https://example.com/products/watch-1.jpg",
+          "https://example.com/products/watch-2.jpg"
+        ],
+        "specifications": {
+          "color": [
+            "Black",
+            "Silver",
+            "Rose Gold"
+          ],
+          "weight": "45g",
+          "batteryLife": "7 days",
+          "waterResistance": "50m"
+        }
+      },
+      {
+        "id": 3,
+        "title": "4K Webcam Pro",
+        "description": "Professional 4K webcam with auto-focus, built-in microphone, and studio-quality video",
+        "price": 149.99,
+        "originalPrice": 199.99,
+        "discount": 25,
+        "category": "accessories",
+        "brand": "StreamTech",
+        "inStock": true,
+        "quantity": 23,
+        "tags": [
+          "professional",
+          "4k",
+          "streaming",
+          "webcam"
+        ],
+        "ratings": {
+          "average": 4.8,
+          "count": 256,
+          "distribution": {
+            "5": 205,
+            "4": 38,
+            "3": 9,
+            "2": 3,
+            "1": 1
+          }
+        },
+        "images": [
+          "https://example.com/products/webcam-1.jpg",
+          "https://example.com/products/webcam-2.jpg"
+        ],
+        "specifications": {
+          "resolution": "4K 30fps",
+          "fieldOfView": "90 degrees",
+          "microphone": "Built-in stereo",
+          "compatibility": [
+            "Windows",
+            "Mac",
+            "Linux"
+          ]
+        }
+      }
+    ],
+    "pagination": {
+      "currentPage": 1,
+      "totalPages": 10,
+      "totalItems": 30,
+      "itemsPerPage": 3,
+      "hasNext": true,
+      "hasPrevious": false,
+      "nextPage": 2
+    },
+    "filters": {
+      "category": "all",
+      "priceRange": {
+        "min": 0,
+        "max": 1000
+      },
+      "inStock": "all",
+      "sortBy": "popularity",
+      "sortOrder": "desc",
+      "brands": [
+        "AudioTech",
+        "FitTech",
+        "StreamTech"
+      ]
+    }
+  },
+  "meta": {
+    "requestId": "req_abc123def456",
+    "timestamp": "2024-01-20T15:30:00Z",
+    "executionTime": 42,
+    "version": "v2.1",
+    "server": "api-prod-1",
+    "cache": false
+  }
+}
+"""
+
 # ---------------------------------------------------------------------------
 # Family generators
 # ---------------------------------------------------------------------------
