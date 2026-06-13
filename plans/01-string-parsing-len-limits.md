@@ -16,6 +16,8 @@ Automatic inference currently runs in these locations:
 - [`JsonTreeItem.__init__()`](../tree/item.py:37), which calls [`parse_json_type()`](../tree/types.py:125) while building model items.
 - [`infer_text_json_type()`](../tree/types.py:81), which classifies string text fallback cases.
 
+**Note on double classification (out of scope for this plan):** The review report flags that [`_decode_number_affixes()`](../io_formats/load.py:41) calls [`parse_json_type()`](../tree/types.py:125) for every string, and [`JsonTreeItem.__init__()`](../tree/item.py:37) calls it again on the same value during model construction. The parsing-vulnerability report confirms both paths exhibit the same superlinear scaling (e.g., 32–36ms at 65536 on `digits` and `pathological_repetition`). This plan addresses the **length** dimension only. A follow-up plan should consider either a cheaper affix-only predicate for [`_decode_number_affixes()`](../io_formats/load.py:41) or a parse-metadata object that avoids repeated full inference. That follow-up is **not** part of Plan 1.
+
 Explicit coercion currently starts when the Type delegate commits a user-selected type and flows through [`delegates/type_delegate.py`](../delegates/type_delegate.py:1), `commit_set_data`, [`DocumentMutationGateway`](../documents/seams/mutation_gateway.py:1), `QUndoCommand`, [`JsonTreeModel.setData()`](../tree/model.py:1), [`JsonTreeItem.set_data()`](../tree/item.py:1), and [`tree/item_coercion.py`](../tree/item_coercion.py:1). This path must pass `allow_expensive=True` to target-specific conversion helpers.
 
 ## Storage decision
@@ -24,17 +26,22 @@ Add hard safety constants in [`settings.py`](../settings.py) with names beginnin
 
 ## Threshold table
 
-Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-06-13.md`](../reports/parsing-vulnerability-2026-06-13.md). The report measured 832 rows across 16 registry entries and 13 adversarial families (including trace_repetition, source_code_repetition, and escape_heavy for realistic content) at sizes 1024, 4096, 16384, and 65536. All functions pass at 65536 except `decode_bytes` which errors on non-base64 input (expected behavior). The superlinear scaling observations (141 rows) are within acceptable bounds for the configured 3.0 ratio threshold.
+The report (`reports/parsing-vulnerability-2026-06-13.md`) measured 832 rows across 16 registry entries and 13 adversarial families (including `trace_repetition`, `source_code_repetition`, and `escape_heavy` for realistic content) at sizes 1024, 4096, 16384, and 65536. Key findings driving the threshold values:
+
+- The 100ms per-call budget is never exceeded at any measured size.
+- The worst automatic-inference median at 65536 is 36ms (`parse_json_type` on `pathological_repetition`), with a peak allocation of ~1555 bytes.
+- 141 rows are classified `superlinear` (ratio > 3.0); all are on automatic inference paths and will be gated by the constants below.
+- 44 rows are classified `error`: 4 are `parse_number_affix`/`parse_json_type` on `near_affix` at 16384+ hitting a pre-existing 4300-digit integer limit (not a regression; the 256-char affix gate prevents reaching this path); the remaining ~40 are `decode_bytes` on non-base64 input (expected `binascii.Error` failures, not crashes).
 
 | Constant | Guards | Value | Plan 0 justification |
 |---|---|---:|---|
-| `INFERENCE_MAX_TOTAL_CHARS` | Top of the `str` branch in [`parse_json_type()`](../tree/types.py:125) | `65536` | Report: all text fallback checks pass at 65536 with median < 1ms |
-| `INFERENCE_MAX_DATETIME_CHARS` | [`parse_datetime_text()`](../core/datetime_parsing/regex.py:36) regex and datetime conversion | `128` | Report: DATETIME_RE.fullmatch passes at 65536; 128 is conservative for valid datetime strings |
-| `INFERENCE_MAX_AFFIX_CHARS` | [`parse_number_affix()`](../units/number_affix.py:79) regex checks | `256` | Report: parse_number_affix passes at 65536 for valid inputs; 256 is conservative for valid affix strings |
-| `INFERENCE_MAX_COLOR_CHARS` | [`looks_like_color_rgb()`](../tree/types.py:24) and [`looks_like_color_rgba()`](../tree/types.py:28) | `9` | Maximum length of `#RGB`, `#RRGGBB`, `#RGBA`, and `#RRGGBBAA` color strings |
-| `INFERENCE_MAX_BASE64_PROBE_CHARS` | `_looks_like_base64()` and base64/zlib/gzip inference branches in [`parse_json_type()`](../tree/types.py:125) | `1048576` | Report: _looks_like_base64 passes at 65536; extended to 1MB for reasonable base64 payloads |
-| `EDITABLE_DECODE_LIMIT_BYTES` | [`compute_editable()`](../tree/item_coercion.py:578) decode/decompress checks | `1048576` | Report: compute_editable passes at 65536; 1MB provides headroom for valid encoded payloads |
-| `FORMAT_PREVIEW_DECODE_LIMIT_BYTES` | [`format_with_type()`](../delegates/formatting/value_formatting.py:132) display preview | `64` | Preview needs only enough bytes to render the existing prefix text |
+| `INFERENCE_MAX_TOTAL_CHARS` | Top of the `str` branch in [`parse_json_type()`](../tree/types.py:125) | `65536` | Report: at 65536 the worst automatic-inference median is 36ms (`parse_json_type` on `pathological_repetition`); strings at or above this cap skip all non-text heuristics. |
+| `INFERENCE_MAX_DATETIME_CHARS` | [`parse_datetime_text()`](../core/datetime_parsing/regex.py:36) regex and datetime conversion | `128` | Report: `DATETIME_RE.fullmatch` median is 0.00ms even at 65536 across all families; 128 is conservative for valid datetime strings. |
+| `INFERENCE_MAX_AFFIX_CHARS` | [`parse_number_affix()`](../units/number_affix.py:79) regex checks | `256` | Report: `parse_number_affix` is superlinear on `digits`, `plain_ascii`, `pathological_repetition` at 4096+ (ratio up to 4.89). 256 is well below the pre-existing 4300-digit integer limit, so the gate fires before the error path. |
+| `INFERENCE_MAX_COLOR_CHARS` | [`looks_like_color_rgb()`](../tree/types.py:24) and [`looks_like_color_rgba()`](../tree/types.py:28) | `9` | Maximum length of `#RGB`, `#RRGGBB`, `#RGBA`, and `#RRGGBBAA` color strings. |
+| `INFERENCE_MAX_BASE64_PROBE_CHARS` | `_looks_like_base64()` and base64/zlib/gzip inference branches in [`parse_json_type()`](../tree/types.py:125) | `1048576` | Report: `_looks_like_base64` superlinear at 65536 (ratio 4.17 on `mixed_interleaved`); 1MB provides headroom for valid base64 payloads while keeping worst-case decoded allocation under 2MB (well within the 16MB cap). |
+| `EDITABLE_DECODE_LIMIT_BYTES` | [`compute_editable()`](../tree/item_coercion.py:578) decode/decompress checks | `1048576` | Report: `compute_editable(BYTES)` superlinear at 65536 (ratio 3.88 on `digits`); 1MB provides headroom for valid encoded payloads. The double-call concern (called once per node during model build) is out of scope; the cap bounds each call. |
+| `FORMAT_PREVIEW_DECODE_LIMIT_BYTES` | [`format_with_type()`](../delegates/formatting/value_formatting.py:132) display preview | `64` | Preview needs only enough bytes to render the existing prefix text. |
 
 ## Isolation rules for this plan
 
@@ -61,6 +68,7 @@ Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-
 **Acceptance criteria:**
 - Each constant is an `int` greater than zero.
 - Test names explicitly state that inference limits are load-time safety limits, not editor-warning limits.
+- Each constant's docstring cites the specific report row(s) that justify its value.
 - Mandatory gate passes.
 
 ### Commit 1.2 — Add pure length-gate helpers with bypass flag
@@ -116,7 +124,7 @@ Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-
 ### Commit 1.5 — Gate number-affix inference
 - [ ] Completed
 
-**Problem it solves:** Oversized near-affix strings must not run `_CURRENCY_RE.fullmatch` or `_UNITS_RE.fullmatch` during automatic inference.
+**Problem it solves:** Oversized near-affix strings must not run `_CURRENCY_RE.fullmatch` or `_UNITS_RE.fullmatch` during automatic inference. The gate must fire **before** the pre-existing 4300-digit integer limit so automatic inference never reaches the error path.
 
 **Files it touches:**
 - [`units/number_affix.py`](../units/number_affix.py:79) — add `allow_expensive=False` to [`parse_number_affix()`](../units/number_affix.py:79) and return `None` before regex work when `affix_inference_allowed(text, allow_expensive)` is `False`.
@@ -127,6 +135,7 @@ Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-
 
 **Acceptance criteria:**
 - Spy test proves neither affix regex is called for oversized inference input.
+- Spy test proves the gate fires before the pre-existing 4300-digit integer limit; the error path ("Exceeds the limit (4300 digits) for integer string") is not reached for automatic inference.
 - Explicit type change to an affix target reaches the converter with `allow_expensive=True`.
 - Mandatory gate passes.
 
@@ -162,6 +171,7 @@ Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-
 
 **Acceptance criteria:**
 - Spy test proves no decode/decompress function is called for oversized inference input.
+- Allocation test proves that a 1MB base64-like string does not trigger `base64.b64decode`, `zlib.decompress`, or `gzip.decompress` during automatic inference (peak allocation stays at the regex-probe level, ~1.2KB).
 - Valid BYTES/ZLIB/GZIP fixtures at or below the limit keep current inferred types.
 - Mandatory gate passes.
 
@@ -184,7 +194,7 @@ Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-
 ### Commit 1.9 — Cap `compute_editable` decode/decompress work
 - [ ] Completed
 
-**Problem it solves:** Load-time editability checks must not fully decode/decompress binary-like values larger than `EDITABLE_DECODE_LIMIT_BYTES`.
+**Problem it solves:** Load-time editability checks must not fully decode/decompress binary-like values larger than `EDITABLE_DECODE_LIMIT_BYTES`. The cap must hold even when `compute_editable` is called twice on the same node (once from the affix pass, once from model construction).
 
 **Files it touches:**
 - [`tree/item_coercion.py`](../tree/item_coercion.py:578) — use `editable_decode_allowed` before decode/decompress work used only to decide editability.
@@ -194,6 +204,7 @@ Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-
 
 **Acceptance criteria:**
 - Spy test proves oversized editability checks do not call full decode/decompress.
+- Double-call test proves that calling `compute_editable` twice on the same oversized node results in at most one decode/decompress invocation (the second call uses cached or cap-skipped metadata).
 - Existing binary editability tests pass.
 - Mandatory gate passes.
 
@@ -227,5 +238,16 @@ Commit 0.8 confirmed these values based on [`reports/parsing-vulnerability-2026-
 
 **Acceptance criteria:**
 - Plan 0 opt-in report contains before/after rows for every original vulnerable function.
+- The before/after report shows that the 4 `parse_number_affix`/`parse_json_type` `near_affix` error rows from the original report are eliminated for automatic inference paths.
+- The before/after report shows that the 141 `superlinear` rows from the original report are reduced to 0 for automatic inference paths (explicit-coercion rows are not affected).
 - No automatic-inference row remains `superlinear` or `allocation_exceeded` after gates.
 - Full test suite and mandatory gate pass.
+
+## Out of scope (deferred to follow-up plans)
+
+The following concerns are flagged by the review report and the parsing-vulnerability data but are **not** addressed by Plan 1:
+
+1. **Double classification of strings**: [`_decode_number_affixes()`](../io_formats/load.py:41) and [`JsonTreeItem.__init__()`](../tree/item.py:37) both call [`parse_json_type()`](../tree/types.py:125). A follow-up plan should introduce either a cheaper affix-only predicate or a parse-metadata object to avoid repeated full inference.
+2. **Cooperative cancellation during load**: The GUI thread remains blocked during parse and model build. Plan 2 (progress dialog) and Plan 3 (cancel button) address the user-visible side; the underlying cooperative-checkpoint work is not part of Plan 1.
+3. **Atomic reload cancellation**: [`DiffApplier.apply()`](undo/diff.py:13) is in-place and not safe to interrupt mid-recursion. This is a Plan 3 concern.
+4. **Extended-size perf runs**: Plan 0's acceptance criteria mention extended sizes (262144, 1048576, 10485710) that are not present in the current `reports/parsing-vulnerability-2026-06-13.md`. A follow-up should run and document those sizes before Plan 1 Commit 1.11 runs its regression sweep.
