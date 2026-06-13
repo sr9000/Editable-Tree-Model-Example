@@ -86,6 +86,10 @@ FORMAT_PREVIEW_DECODE_LIMIT_BYTES: int = 100
 # delay. Fast loads complete before the widget shows, avoiding visual noise.
 LOADING_PROGRESS_DELAY_MS: int = 5000
 
+# Tab-close progress appears only when close/teardown runs longer than this
+# threshold. This is informational-only (non-cancellable) UI.
+CLOSE_PROGRESS_DELAY_MS: int = 1500
+
 # Maximum repaint cadence for loading detail text (processed count + current path).
 LOADING_PROGRESS_DETAIL_REFRESH_MS: int = 1000
 
