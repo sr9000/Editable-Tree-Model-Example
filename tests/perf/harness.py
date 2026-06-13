@@ -118,7 +118,11 @@ def measure_call(
     Returns:
         A MeasurementResult with timing and allocation data.
     """
-    func_name = function_name or getattr(callable_fn, "__name__", "unknown")  # allow: perf harness needs function name from callable
+    func_name = function_name or getattr(  # allow: perf harness needs function name from callable
+        callable_fn,
+        "__name__",
+        "unknown",
+    )
     wrap_name = wrapper_name or func_name
 
     # Warmup calls
