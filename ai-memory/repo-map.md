@@ -2,8 +2,8 @@
 
 _This is a condensed index and architectural summary. LLM agents should refer to direct source files for implementation
 details._
-**Last updated:** 2026-06-01 (after tree-upward-imports refactor; added `core/`, `tree/codecs/`,
-tree-isolation rule, and `check-tree-isolation` target).
+**Last updated:** 2026-06-13 (after raw-numeric edit-flow fix; added DiffApplier RAW_FLOAT routing,
+integer promotion for whole-number mpq edits, and `agent.md`).
 
 ## 1) High-level Purpose
 
@@ -25,7 +25,7 @@ Model".
 | **Type System**     | `tree/types.py` (Definitions), `tree/item_coercion.py` (Conversion)                                             |
 | **Editor Widgets**  | `editors/factory.py` (dispatch), `editors/inline/`, `editors/windowed/`                                         |
 | **Delegates**       | `delegates/value.py` (paint + createEditor → editors.factory), `delegates/formatting/`                          |
-| **Undo System**     | `undo/commands.py` (Operations), `undo/diff.py` (Surgical replay)                                               |
+| **Undo System**     | `undo/commands.py` (Operations), `undo/diff.py` (Surgical replay + RAW_FLOAT routing)                            |
 | **Structural Ops**  | `tree_actions/` (Clipboard, DnD, Move, Sort, Anchors)                                                           |
 | **Validation**      | `validation/` (JSON-Schema), `app/validation_presenter.py`                                                      |
 | **Theming**         | `themes/`, `app/theme_controller.py`                                                                            |
@@ -43,6 +43,15 @@ Model".
   how data is handled. Don't scatter type logic in the UI.
 - **Surgical Model Updates**: The `DiffApplier` (`undo/diff.py`) is used during Undo/Redo to emit minimal Qt signals.
   This preserves UI state like selection and expansion that would be lost on a full model reset.
+  **Important**: `DiffApplier.apply()` bypasses `JsonTreeItem.set_data()` — special type handling (e.g., `RAW_FLOAT`
+  routing to `_set_raw_numeric_value`) must be added to `DiffApplier.apply()` explicitly.
+- **Edit flow path**: Editor → `editors/factory.set_value_model_data()` → `DefaultEditContext.commit()` →
+  `DocumentMutationGateway.commit_set_data()` → `CommandDispatcher.push_edit_value()` → `_EditValueCmd` →
+  `DiffApplier.apply()` → `JsonTreeItem._apply_typed_value()` / `_set_raw_numeric_value()`.
+- **Raw numeric values**: Unsupported numeric literals (overflow, underflow, non-finite) are preserved as
+  `RawNumericValue` (`core/raw_numeric.py`) with type `JsonType.RAW_FLOAT`. Edits go through
+  `JsonTreeItem._set_raw_numeric_value()` which handles: safe-parse → int/float conversion, unchanged → preserve,
+  regex-match → keep raw, regex-violate → reject. Whole-number mpq results are promoted to `int` for `INTEGER` type.
 - **No external `data_store.*` reads** (Plan 20). External callers (`app/`, `undo/`, `tree_actions/`, `state/`) must
   reach state through typed `JsonTab.*` properties. The pre-commit hook
   `.githooks/_check_data_store_leaks.sh` enforces this for 17 retired attributes.
@@ -138,6 +147,7 @@ editors/
 │   ├── mpq_spinbox/         QMpqSpinBox (spinbox.py + validator.py).
 │   ├── datetime/            BetterDateTimeEditor + validator (enums/regex imported from core/).
 │   ├── affix_composite.py   AffixCompositeEditor (prefix/suffix + spinbox).
+│   ├── raw_numeric_line.py  RawNumericLineEdit + RawNumericValidator for RAW_FLOAT.
 │   ├── secret_line.py       _SecretLineEdit + _SecretEditorWatcher.
 │   └── caps_safe_line.py    _CapsLockSafeLineEdit + lock-key constants.
 └── windowed/                Modal dialog editors (no app/documents/tree imports).
@@ -153,6 +163,9 @@ editors/
 ```
 core/
 ├── __init__.py
+├── raw_numeric.py           RawNumericValue dataclass + narrow edit regex validator.
+├── safe_mpq.py              Safe mpq parsing (parse_mpq, safe_mpq_from_text, MpqParseResult).
+├── frozen_value.py          Legacy FrozenValue alias → RawNumericValue (compatibility).
 └── datetime_parsing/        Pure datetime parsing (no Qt dependency).
     ├── __init__.py          Re-exports DateTimeCategory, parse_datetime_text, etc.
     ├── enums.py             DateTimeCategory enum.

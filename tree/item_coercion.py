@@ -12,6 +12,8 @@ from pandas import Timestamp
 from core.datetime_parsing.enums import DateTimeCategory
 from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
+from core.raw_numeric import RawNumericValue
+from core.safe_mpq import safe_mpq_from_any
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
 from tree.codecs.color_codec import normalize_color_string
@@ -106,7 +108,9 @@ def _is_temporal_type(json_type: JsonType | None) -> bool:
     return json_type in (JsonType.DATE, JsonType.TIME, JsonType.DATETIME, JsonType.DATETIMEZONE, JsonType.DATETIMEUTC)
 
 
-def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None) -> mpq | None:
+def _epoch_seconds_from_temporal(
+    value: Any, hinted_type: JsonType | None = None, *, allow_expensive: bool = False
+) -> mpq | None:
     """Convert temporal-like input to epoch seconds.
 
     DATETIME/DATE are Unix epoch seconds (UTC for naive values).
@@ -151,7 +155,7 @@ def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None
         )
 
         for category in categories:
-            parsed = parse_datetime_text(raw, category)
+            parsed = parse_datetime_text(raw, category, allow_expensive=allow_expensive)
             if parsed is None:
                 continue
             if isinstance(parsed, Timestamp):
@@ -167,7 +171,7 @@ def _epoch_seconds_from_temporal(value: Any, hinted_type: JsonType | None = None
     return None
 
 
-def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
+def _try_parse_temporal(json_type: JsonType, value: Any, *, allow_expensive: bool = False) -> str | None:
     """Convert *value* to a canonical ISO string for *json_type*.
 
     Handles Python date/Timestamp/NanoTime objects, int epoch seconds (≥ 10^12 →
@@ -265,12 +269,12 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
             hour, rem = divmod(whole_seconds, 3600)
             minute, second = divmod(rem, 60)
             parsed_time = NanoTime(hour=hour, minute=minute, second=second, nanosecond=nanos)
-            return _try_parse_temporal(json_type, parsed_time)
+            return _try_parse_temporal(json_type, parsed_time, allow_expensive=allow_expensive)
 
         ts = numeric / 1000.0 if isinstance(value, int) and abs(value) >= 10**12 else numeric
         try:
             dt = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
-            return _try_parse_temporal(json_type, dt)
+            return _try_parse_temporal(json_type, dt, allow_expensive=allow_expensive)
         except (ValueError, OSError, OverflowError):
             pass
         return None
@@ -279,21 +283,21 @@ def _try_parse_temporal(json_type: JsonType, value: Any) -> str | None:
     if isinstance(value, str) and value:
         raw = value.strip()
         category = _category_for_temporal_type(json_type)
-        if category is not None and parse_datetime_text(raw, category) is not None:
+        if category is not None and parse_datetime_text(raw, category, allow_expensive=allow_expensive) is not None:
             # Keep exactly what user entered so optional parts (seconds/microseconds)
             # can be added/removed dynamically without being rewritten away.
             return raw
 
         # Try time first (time strings are not valid datetime strings)
         try:
-            return _try_parse_temporal(json_type, NanoTime.fromisoformat(raw))
+            return _try_parse_temporal(json_type, NanoTime.fromisoformat(raw), allow_expensive=allow_expensive)
         except ValueError:
             pass
         # dateutil handles full datetime/date/tz strings
         try:
             from dateutil.parser import isoparse
 
-            return _try_parse_temporal(json_type, isoparse(raw))
+            return _try_parse_temporal(json_type, isoparse(raw), allow_expensive=allow_expensive)
         except Exception:
             pass
 
@@ -321,6 +325,8 @@ def _looks_valid_for(json_type: JsonType, value: str) -> bool:
 
 
 def normalize_value_for_type(json_type: JsonType, value: Any) -> Any:
+    if isinstance(value, RawNumericValue):
+        return value
     if (json_type in TEXT_FAMILY or json_type in (JsonType.SECRET_LINE, JsonType.SECRET_TEXT)) and not isinstance(
         value, str
     ):
@@ -333,14 +339,11 @@ def coerce_value_for_type(
     value: Any,
     strict: bool,
     old_type: JsonType | None = None,
+    *,
+    allow_expensive: bool = False,
 ) -> tuple[bool, Any]:
     def _to_mpq_or_none(raw: Any) -> mpq | None:
-        if isinstance(raw, mpq):
-            return raw
-        try:
-            return mpq(str(raw))
-        except (ValueError, TypeError):
-            return None
+        return safe_mpq_from_any(raw)
 
     def _int_from_exact(raw: Any) -> int | None:
         if isinstance(raw, int):
@@ -366,6 +369,27 @@ def coerce_value_for_type(
             return AffixKind.CURRENCY
         return AffixKind.UNITS
 
+    # Targeting the RAW_FLOAT pseudo-type: always keep the value as a raw
+    # numeric literal (this path is only reachable programmatically; the type
+    # is not user-selectable).
+    if json_type is JsonType.RAW_FLOAT:
+        if isinstance(value, RawNumericValue):
+            return True, value
+        return True, RawNumericValue(raw="" if value is None else str(value))
+
+    # Raw, unsupported numeric literals: keep them as raw text on numeric
+    # targets when still unparseable (the model redirects to RAW_FLOAT). For
+    # any other target, fall back to the exact raw string so conversion never
+    # silently substitutes a numeric stub for the user's data.
+    if isinstance(value, RawNumericValue):
+        recovered = safe_mpq_from_any(value.raw)
+        if recovered is not None:
+            value = recovered
+        elif json_type in (JsonType.FLOAT, JsonType.PERCENT):
+            return True, value
+        else:
+            value = value.raw
+
     match json_type:
         case JsonType.NULL:
             return True, None
@@ -389,7 +413,7 @@ def coerce_value_for_type(
                 if truncated is None:
                     return False, None
                 return True, truncated
-            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
+            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type, allow_expensive=allow_expensive)
             if temporal_epoch is not None:
                 return True, int(temporal_epoch)
             if _is_temporal_type(old_type):
@@ -420,31 +444,27 @@ def coerce_value_for_type(
                 if q is None:
                     return False, None
                 return True, q
-            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type)
+            temporal_epoch = _epoch_seconds_from_temporal(value, hinted_type=old_type, allow_expensive=allow_expensive)
             if temporal_epoch is not None:
                 return True, temporal_epoch
             if _is_temporal_type(old_type):
                 # Same safety rule as INTEGER for non-applicable temporal transitions.
                 return (False, None) if strict else (True, stub_float())
-            try:
-                return True, mpq(str(value))
-            except (ValueError, TypeError):
-                pass
+            q = _to_mpq_or_none(value)
+            if q is not None:
+                return True, q
             return (False, None) if strict else (True, stub_float())
 
         case JsonType.PERCENT:
-            try:
-                v = mpq(str(value))
-                if 0 <= v <= 1:
-                    return True, v
-            except (ValueError, TypeError):
-                pass
+            v = _to_mpq_or_none(value)
+            if v is not None and 0 <= v <= 1:
+                return True, v
             return (False, None) if strict else (True, stub_percent())
 
         case JsonType.INTEGER_CURRENCY | JsonType.INTEGER_UNITS:
             kind = _affix_kind_for(json_type)
             if isinstance(value, str):
-                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
+                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN, allow_expensive=allow_expensive)
                 if parsed is not None:
                     truncated = _int_from_truncated(parsed.number)
                     if truncated is None:
@@ -467,7 +487,7 @@ def coerce_value_for_type(
         case JsonType.FLOAT_CURRENCY | JsonType.FLOAT_UNITS:
             kind = _affix_kind_for(json_type)
             if isinstance(value, str):
-                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN)
+                parsed = parse_number_affix(value, max_affix_len=NUMBER_AFFIX_MAX_LEN, allow_expensive=allow_expensive)
                 if parsed is not None:
                     q = _to_mpq_or_none(parsed.number)
                     if q is None:
@@ -525,7 +545,7 @@ def coerce_value_for_type(
 
         # 3.2: fall back to "now" instead of epoch-zero when value is unparseable
         case JsonType.DATE | JsonType.TIME | JsonType.DATETIME | JsonType.DATETIMEZONE | JsonType.DATETIMEUTC:
-            parsed = _try_parse_temporal(json_type, value)
+            parsed = _try_parse_temporal(json_type, value, allow_expensive=allow_expensive)
             if parsed is not None:
                 return True, parsed
             return True, _now_for_type(json_type)
@@ -576,6 +596,10 @@ def coerce_value_for_type(
 
 
 def compute_editable(json_type: JsonType, value: Any, editable_blob_limit: int) -> bool:
+    if isinstance(value, RawNumericValue):
+        # Unsupported numeric literals are editable as plain raw text.
+        return True
+
     if json_type in (JsonType.NULL, JsonType.ARRAY, JsonType.OBJECT):
         return False
 

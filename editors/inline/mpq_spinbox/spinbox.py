@@ -4,6 +4,7 @@ from PySide6.QtGui import QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import QAbstractSpinBox
 
 from coalesce import nn
+from core.safe_mpq import safe_mpq_from_text
 from editors.inline.mpq_spinbox.validator import MpqValidator, _to_mpq
 from mpq2py import mpq_serialization
 
@@ -178,20 +179,18 @@ class QMpqSpinBox(QAbstractSpinBox):
         text = self.lineEdit().text()
 
         # 1) Try as plain number
-        try:
-            self.setValue(mpq(text))
+        parsed = safe_mpq_from_text(text)
+        if parsed is not None:
+            self.setValue(parsed)
             return
-        except ValueError:
-            pass
 
         # 2) Try number with prefix/suffix
         if text.startswith(self._prefix) and text.endswith(self._suffix):
             number = text[(len(self._prefix)) : -len(self._suffix) or None]
-            try:
-                self.setValue(mpq(number))
+            parsed = safe_mpq_from_text(number)
+            if parsed is not None:
+                self.setValue(parsed)
                 return
-            except ValueError:
-                pass
 
         # 3) Revert
         self.setValue(self._value)

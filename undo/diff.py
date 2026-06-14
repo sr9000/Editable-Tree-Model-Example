@@ -26,6 +26,14 @@ class DiffApplier:
             self.convert_to_leaf(item, item_index, target)
             return True
 
+        # Raw numeric edits: route through the dedicated recovery path so
+        # string edits from RawNumericLineEdit are properly parsed / kept raw.
+        if item.json_type is JsonType.RAW_FLOAT:
+            if item._set_raw_numeric_value(target):
+                self.emit_row_changed(item_index)
+                return True
+            return False
+
         if item.value == target:
             return True
         if type(item.value) is type(target) and not isinstance(target, str):

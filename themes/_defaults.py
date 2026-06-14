@@ -55,6 +55,7 @@ def _theme(
 _LIGHT_TYPES: dict[JsonType, TypeStyle] = {
     JsonType.INTEGER: TypeStyle(fg=_c("#268bd2")),
     JsonType.FLOAT: TypeStyle(fg=_c("#1f8f89")),
+    JsonType.RAW_FLOAT: TypeStyle(fg=_c("#cb4b16"), italic=True),
     JsonType.PERCENT: TypeStyle(fg=_c("#1f8f89"), italic=True),
     JsonType.INTEGER_CURRENCY: TypeStyle(fg=_c("#268bd2"), italic=True),
     JsonType.INTEGER_UNITS: TypeStyle(fg=_c("#268bd2"), italic=True),
@@ -85,6 +86,7 @@ _LIGHT_TYPES: dict[JsonType, TypeStyle] = {
 _DARK_TYPES: dict[JsonType, TypeStyle] = {
     JsonType.INTEGER: TypeStyle(fg=_c("#7aa2f7")),
     JsonType.FLOAT: TypeStyle(fg=_c("#73daca")),
+    JsonType.RAW_FLOAT: TypeStyle(fg=_c("#ff9e64"), italic=True),
     JsonType.PERCENT: TypeStyle(fg=_c("#73daca"), italic=True),
     JsonType.INTEGER_CURRENCY: TypeStyle(fg=_c("#7aa2f7"), italic=True),
     JsonType.INTEGER_UNITS: TypeStyle(fg=_c("#7aa2f7"), italic=True),

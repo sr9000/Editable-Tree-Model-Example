@@ -40,6 +40,8 @@ class EditorContextProtocol(Protocol):
 
     def confirm_large_binary_edit(self, parent, payload_size: int) -> bool: ...
 
+    def warn_raw_numeric_edit(self, parent, *, reason: str) -> None: ...
+
     def confirm_large_text_edit(
         self,
         parent,

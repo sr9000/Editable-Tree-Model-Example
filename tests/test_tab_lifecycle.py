@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import json
 
-from PySide6.QtCore import QModelIndex
+from PySide6.QtCore import QModelIndex, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+import documents.composition.init as tab_init
+import settings
 from app.main_window import MainWindow
+from documents.controllers.view import ViewController
 from documents.tab import JsonTab
+from tree.model import JsonTreeModel
+from units.number_affix import AffixKind, NumberAffix
 
 
 def _current_tab(win: MainWindow) -> JsonTab | None:
@@ -277,5 +282,176 @@ def test_reopen_after_discard_does_not_resurrect_dirty_data(qtbot, monkeypatch, 
         assert tab is not None
         data = tab.model.root_item.to_json()
         assert data == {"original": True}  # NOT the dirty value
+    finally:
+        _cleanup(win)
+
+
+def test_deferred_first_presentation_yields_event_loop_turn(qtbot):
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        turn_fired = {"value": False}
+        presented = {"value": False}
+
+        QTimer.singleShot(0, lambda: turn_fired.__setitem__("value", True))
+        tab = win._tab_lifecycle.add_tab(
+            data={"k": 1},
+            defer_first_presentation=True,
+            on_presentation_complete=lambda _tab: presented.__setitem__("value", True),
+        )
+        assert tab is not None
+        assert not presented["value"]
+
+        qtbot.waitUntil(lambda: presented["value"], timeout=1000)
+        assert turn_fired["value"]
+    finally:
+        _cleanup(win)
+
+
+def test_large_open_skips_expand_all_and_expands_root_only(qtbot, monkeypatch):
+    monkeypatch.setattr(settings, "LOADING_AUTO_EXPAND_MAX_NODES", 1)
+    calls_expand_all: list[int] = []
+    calls_expand: list[tuple[int, ...]] = []
+    monkeypatch.setattr(ViewController, "request_expand_all", lambda self: calls_expand_all.append(1))
+    monkeypatch.setattr(ViewController, "request_expand", lambda self, path: calls_expand.append(path))
+
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        payload = {"k": 1}
+        prebuilt = JsonTreeModel(payload, show_root=True, estimated_item_count=100)
+        tab = win._add_tab(data=payload, prebuilt_model=prebuilt)
+        assert tab is not None
+        assert calls_expand_all == []
+        assert () in calls_expand
+    finally:
+        _cleanup(win)
+
+
+def test_small_open_keeps_expand_all_behavior(qtbot, monkeypatch):
+    monkeypatch.setattr(settings, "LOADING_AUTO_EXPAND_MAX_NODES", 1000)
+    calls_expand_all: list[int] = []
+    monkeypatch.setattr(ViewController, "request_expand_all", lambda self: calls_expand_all.append(1))
+
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        payload = {"k": 1}
+        prebuilt = JsonTreeModel(payload, show_root=True, estimated_item_count=2)
+        tab = win._add_tab(data=payload, prebuilt_model=prebuilt)
+        assert tab is not None
+        assert calls_expand_all
+    finally:
+        _cleanup(win)
+
+
+def test_large_open_uses_bounded_column_sizing(qtbot, monkeypatch):
+    monkeypatch.setattr(settings, "LOADING_AUTO_EXPAND_MAX_NODES", 1)
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        payload = {"k": 1}
+        prebuilt = JsonTreeModel(payload, show_root=True, estimated_item_count=100)
+        tab = win._add_tab(data=payload, prebuilt_model=prebuilt)
+        assert tab is not None
+
+        calls: list[int] = []
+        monkeypatch.setattr(tab.view, "resizeColumnToContents", lambda col: calls.append(col))
+        tab.appearance.resize_key_columns(force=True)
+        assert calls == []
+    finally:
+        _cleanup(win)
+
+
+def test_small_open_keeps_content_based_column_sizing(qtbot, monkeypatch):
+    monkeypatch.setattr(settings, "LOADING_AUTO_EXPAND_MAX_NODES", 1000)
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        payload = {"k": 1}
+        prebuilt = JsonTreeModel(payload, show_root=True, estimated_item_count=2)
+        tab = win._add_tab(data=payload, prebuilt_model=prebuilt)
+        assert tab is not None
+
+        calls: list[int] = []
+        monkeypatch.setattr(tab.view, "resizeColumnToContents", lambda col: calls.append(col))
+        tab.appearance.resize_key_columns(force=True)
+        assert 0 in calls and 1 in calls
+    finally:
+        _cleanup(win)
+
+
+def test_large_open_defers_affix_mru_bootstrap_but_populates(qtbot, monkeypatch):
+    monkeypatch.setattr(settings, "LOADING_AUTO_EXPAND_MAX_NODES", 1)
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        payload = {
+            "price": NumberAffix(kind=AffixKind.CURRENCY, affix="$", space=False, number=7),
+        }
+        prebuilt = JsonTreeModel(payload, show_root=True, estimated_item_count=100)
+        tab = win._add_tab(data=payload, prebuilt_model=prebuilt)
+        assert tab is not None
+
+        assert tab.affix_mru.items(AffixKind.CURRENCY) == []
+        qtbot.waitUntil(lambda: "$" in tab.affix_mru.items(AffixKind.CURRENCY), timeout=1000)
+    finally:
+        _cleanup(win)
+
+
+def test_small_open_bootstraps_affix_mru_inline(qtbot, monkeypatch):
+    monkeypatch.setattr(settings, "LOADING_AUTO_EXPAND_MAX_NODES", 1000)
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        payload = {
+            "price": NumberAffix(kind=AffixKind.CURRENCY, affix="$", space=False, number=7),
+        }
+        prebuilt = JsonTreeModel(payload, show_root=True, estimated_item_count=2)
+        tab = win._add_tab(data=payload, prebuilt_model=prebuilt)
+        assert tab is not None
+        assert "$" in tab.affix_mru.items(AffixKind.CURRENCY)
+    finally:
+        _cleanup(win)
+
+
+def test_regular_tab_creation_initializes_validation_inline(qtbot, monkeypatch):
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    calls = {"count": 0}
+
+    original_init = tab_init.init_validation_state
+
+    def _spy_init_validation_state(tab, model_data):
+        calls["count"] += 1
+        original_init(tab, model_data)
+
+    monkeypatch.setattr(tab_init, "init_validation_state", _spy_init_validation_state)
+    try:
+        tab = win._add_tab(data={"k": 1})
+        assert tab is not None
+        assert calls["count"] == 1
+    finally:
+        _cleanup(win)
+
+
+def test_loading_owned_add_tab_defers_bootstrap_validation_init(qtbot, monkeypatch):
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    calls = {"count": 0}
+
+    original_init = tab_init.init_validation_state
+
+    def _spy_init_validation_state(tab, model_data):
+        calls["count"] += 1
+        original_init(tab, model_data)
+
+    monkeypatch.setattr(tab_init, "init_validation_state", _spy_init_validation_state)
+    try:
+        payload = {"k": 1}
+        prebuilt = JsonTreeModel(payload, show_root=True, estimated_item_count=100)
+        tab = win._add_tab(data=payload, prebuilt_model=prebuilt, defer_validation_init=True)
+        assert tab is not None
+        assert calls["count"] == 0
     finally:
         _cleanup(win)

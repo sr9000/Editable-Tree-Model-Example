@@ -7,6 +7,8 @@ from typing import Any
 
 import gmpy2
 
+from core.raw_numeric import RawNumericValue
+
 
 def build_demo_data() -> dict[str, Any]:
     """Default sample document used when ``JsonTab`` is constructed without data."""
@@ -14,6 +16,8 @@ def build_demo_data() -> dict[str, Any]:
         "question": "The Ultimate Question of Life, the Universe, and Everything.",
         "answer": 42,
         "integer": 9223372036854775808,
+        # Unsupported numeric literal preserved as editable raw text (RAW_FLOAT).
+        "raw float": RawNumericValue("31e-327018450730"),
         "int units": "10 m/s",
         "float units": "3.45s",
         "int currency": "$10",

@@ -11,14 +11,20 @@ dock/undo binding/status bar) without duplicating their state.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QMessageBox, QTabWidget
+from typing import Callable
+from uuid import uuid4
 
+from PySide6.QtCore import QObject, Qt, QTimer
+from PySide6.QtWidgets import QApplication, QMessageBox, QTabWidget
+
+import settings
 import state.view_state as view_state
+from app.loading.progress_dialog import LoadingProgressDialog
 from documents.composition.dependencies import JsonTabServices
 from documents.composition.factory import create_tab
 from documents.composition.marker import JsonTabWidgetMarker
 from documents.seams.document_protocol import Document
+from tree.model import JsonTreeModel
 
 
 class _MainWindowJsonTabHost:
@@ -45,6 +51,36 @@ class TabLifecyclePresenter(QObject):
         self._tab_widget = tab_widget
         self._win = main_window
         self.closed_tabs_stack: list[dict] = []
+        self._close_progress_dialog: LoadingProgressDialog | None = None
+
+    def _ensure_close_progress_dialog(self) -> LoadingProgressDialog:
+        dialog = self._close_progress_dialog
+        if dialog is None:
+            dialog = LoadingProgressDialog(
+                self._win,
+                cancellable=False,
+                delay_ms=settings.CLOSE_PROGRESS_DELAY_MS,
+            )
+            dialog.setWindowTitle("Closing tab")
+            self._close_progress_dialog = dialog
+        return dialog
+
+    @staticmethod
+    def _set_close_stage(dialog: LoadingProgressDialog, stage: str) -> None:
+        try:
+            dialog.set_stage(stage)
+        except RuntimeError:
+            pass
+
+    @staticmethod
+    def _finish_close_progress(dialog: LoadingProgressDialog, task_id: str, *, failed: bool) -> None:
+        try:
+            if failed:
+                dialog.error(task_id)
+            else:
+                dialog.finish(task_id)
+        except RuntimeError:
+            pass
 
     # ── presentation helpers ──────────────────────────────────────────────
 
@@ -67,6 +103,10 @@ class TabLifecyclePresenter(QObject):
         data=None,
         file_path: str | None = None,
         save_format: str | None = None,
+        prebuilt_model: JsonTreeModel | None = None,
+        defer_first_presentation: bool = False,
+        defer_validation_init: bool = False,
+        on_presentation_complete: Callable[[Document], None] | None = None,
     ) -> Document | None:
         from state.validation_settings import auto_rescan_enabled
 
@@ -78,6 +118,8 @@ class TabLifecyclePresenter(QObject):
                 show_root=True,
                 parent=win,
                 save_format=save_format,
+                prebuilt_model=prebuilt_model,
+                defer_validation_init=defer_validation_init,
                 services=JsonTabServices(
                     host=_MainWindowJsonTabHost(win),
                     theme=win._theme,
@@ -96,18 +138,48 @@ class TabLifecyclePresenter(QObject):
         win.fonts.subscribe(tab)
         tab.dirtyChanged.connect(lambda _dirty, t=tab: self.on_tab_dirty(t))
 
-        tab.view_controller.request_expand_all()
+        if defer_first_presentation:
+            QTimer.singleShot(
+                0,
+                lambda t=tab, cb=on_presentation_complete: self._run_initial_presentation(t, cb),
+            )
+        else:
+            self._run_initial_presentation(tab, on_presentation_complete)
+        return tab
+
+    def _run_initial_presentation(
+        self,
+        tab: Document,
+        on_presentation_complete: Callable[[Document], None] | None,
+    ) -> None:
+        win = self._win
+        is_large_open = not self._should_expand_all_on_open(tab)
+        if not is_large_open:
+            tab.view_controller.request_expand_all()
+        elif tab.root_index().isValid():
+            tab.view_controller.request_expand(())
+
         tab.appearance.resize_key_columns()
-        if tab.root_index().isValid():
+        if tab.root_index().isValid() and not is_large_open:
             tab.view_controller.request_select_paths([()])
-        view_state.restore(tab)
+        view_state.restore(tab, defer_heavy=is_large_open)
+        if is_large_open and tab.root_index().isValid():
+            tab.view_controller.request_scroll_to_deferred(())
         # Re-broadcast: ``view_state.restore`` may have rewritten ``_font_pt``
         # from a previously-saved per-tab value; the global controller wins.
         win.fonts.subscribe(tab)
 
         win._bind_undo_signals(tab)
         win.update_actions()
-        return tab
+        if on_presentation_complete is not None:
+            on_presentation_complete(tab)
+
+    @staticmethod
+    def _should_expand_all_on_open(tab: Document) -> bool:
+        node_count = tab.model.estimated_item_count
+        if isinstance(node_count, int):
+            return node_count <= settings.LOADING_AUTO_EXPAND_MAX_NODES
+        return True
 
     # ── current-tab change ────────────────────────────────────────────────
 
@@ -139,48 +211,75 @@ class TabLifecyclePresenter(QObject):
         win = self._win
         widget = self._tab_widget.widget(index)
 
-        snapshot = None
         if isinstance(widget, JsonTabWidgetMarker):
-            was_dirty = widget.io.dirty
             if not win._confirm_close(widget):
                 return
-            # Build reopen snapshot: if user discarded dirty edits, remember file path only.
-            if was_dirty and widget.io.dirty:
-                # Discard chosen — don't resurrect dirty state on reopen.
-                if widget.io.file_path:
+
+        dialog = self._ensure_close_progress_dialog()
+        close_task_id = uuid4().hex
+        failed = False
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        dialog.start(close_task_id)
+
+        snapshot = None
+        try:
+            if isinstance(widget, JsonTabWidgetMarker):
+                was_dirty = widget.io.dirty
+                self._set_close_stage(dialog, "snapshot")
+
+                # Build reopen snapshot: if user discarded dirty edits, remember file path only.
+                if was_dirty and widget.io.dirty:
+                    # Discard chosen — don't resurrect dirty state on reopen.
+                    if widget.io.file_path:
+                        snapshot = {
+                            "data": None,
+                            "file_path": widget.io.file_path,
+                            "save_format": widget.io.save_format,
+                        }
+                else:
+                    try:
+                        snap_data = widget.root_data()
+                    except Exception:  # noqa: BLE001
+                        snap_data = {}
                     snapshot = {
-                        "data": None,
+                        "data": snap_data,
                         "file_path": widget.io.file_path,
                         "save_format": widget.io.save_format,
                     }
-            else:
-                try:
-                    snap_data = widget.root_data()
-                except Exception:  # noqa: BLE001
-                    snap_data = {}
-                snapshot = {
-                    "data": snap_data,
-                    "file_path": widget.io.file_path,
-                    "save_format": widget.io.save_format,
-                }
-            win._schema_tab_pool.unregister(widget)
-            view_state.save(widget)
-        if widget is win._bound_undo_tab:
-            win._bind_undo_signals(None)
-        self._tab_widget.removeTab(index)
-        if widget is not None:
-            widget.deleteLater()
 
-        if snapshot is not None:
-            self.closed_tabs_stack.append(snapshot)
-            if len(self.closed_tabs_stack) > self.MAX_CLOSED_TABS:
-                self.closed_tabs_stack.pop(0)
+                self._set_close_stage(dialog, "unregistering schema")
+                win._schema_tab_pool.unregister(widget)
 
-        win.update_actions()
-        current = win._current_tab()
-        win._bind_undo_signals(current)
-        win._dock_validation.bind_validation_status(current)
-        win.validation_dock.attach_tab(current)
+                self._set_close_stage(dialog, "saving view state")
+                view_state.save(widget)
+
+            if widget is win._bound_undo_tab:
+                win._bind_undo_signals(None)
+
+            self._set_close_stage(dialog, "removing tab")
+            self._tab_widget.removeTab(index)
+
+            if widget is not None:
+                self._set_close_stage(dialog, "destroying tab")
+                widget.deleteLater()
+
+            if snapshot is not None:
+                self.closed_tabs_stack.append(snapshot)
+                if len(self.closed_tabs_stack) > self.MAX_CLOSED_TABS:
+                    self.closed_tabs_stack.pop(0)
+
+            win.update_actions()
+            current = win._current_tab()
+            win._bind_undo_signals(current)
+            win._dock_validation.bind_validation_status(current)
+            win.validation_dock.attach_tab(current)
+        except Exception:  # noqa: BLE001
+            failed = True
+            raise
+        finally:
+            self._finish_close_progress(dialog, close_task_id, failed=failed)
+            while QApplication.overrideCursor() is not None:
+                QApplication.restoreOverrideCursor()
 
     # ── reopen ────────────────────────────────────────────────────────────
 

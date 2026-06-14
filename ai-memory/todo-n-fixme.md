@@ -1,9 +1,8 @@
 # TODO & FIXME
 
-_Last updated: **2026-06-01** (post code-quality audit). Minor smells
-and speculative wishlist entries were pruned; only actionable,
-meaningful work remains. Format:
-`- [ ] [scope] description — file:symbol`._
+_Last updated: **2026-06-13** (post raw-numeric edit-flow fix). Added
+completed entry for DiffApplier RAW_FLOAT routing and integer promotion.
+Format: `- [ ] [scope] description — file:symbol`._
 
 ## High priority — architecture (audit §8)
 
@@ -42,6 +41,11 @@ meaningful work remains. Format:
 
 ## Low priority — hygiene & dead code (audit §6)
 
+- [x] [bug] Fix raw numeric edit flow: `DiffApplier.apply()` now routes
+  `RAW_FLOAT` edits through `_set_raw_numeric_value()` instead of
+  bypassing it; whole-number mpq results are promoted to `int` for
+  `INTEGER` type (displaying "42" not "42.0").
+  — `undo/diff.py:apply`, `tree/item.py:_set_raw_numeric_value`
 - [x] [hygiene] Remove deprecated shims `_closed_tabs_stack` /
   `_MAX_CLOSED_TABS` and the no-op stubs `_setup_validation_dock` /
   `_setup_schemas_menu` — tests and production code now call the

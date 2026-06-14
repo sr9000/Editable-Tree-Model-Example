@@ -25,8 +25,15 @@ class MoveViewState(QObject):
 
     def collect_expanded_paths(self) -> list[tuple[int, ...]]:
         """Return paths of every currently expanded row."""
+        return list(self.iter_expanded_paths())
+
+    def iter_expanded_paths(self):
+        """Yield paths of currently expanded rows.
+
+        This iterator allows callers to process large expansion sets in batches
+        and yield to the event loop between batches.
+        """
         tab = self._context.tab
-        paths: list[tuple[int, ...]] = []
 
         def visit(parent_index: QModelIndex) -> None:
             for r in range(tab.model.rowCount(parent_index)):
@@ -35,11 +42,10 @@ class MoveViewState(QObject):
                     continue
                 view_child = tab.view_controller.source_to_view(child)
                 if tab.view_state.view.isExpanded(view_child):
-                    paths.append(tab.view_controller.index_path(child))
-                    visit(child)
+                    yield tab.view_controller.index_path(child)
+                    yield from visit(child)
 
-        visit(QModelIndex())
-        return paths
+        yield from visit(QModelIndex())
 
     def capture_move_view_state(self, sources: list) -> dict[str, Any]:
         tab = self._context.tab

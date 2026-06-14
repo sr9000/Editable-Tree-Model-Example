@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Signal
+from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, QTimer, Signal
 
 from tree.types import JsonType
 
@@ -209,6 +209,13 @@ class ViewController(QObject):
             return
         self.viewportRequested.emit(KIND_SELECT_PATHS, list(paths))
 
+    def request_select_paths_deferred(self, paths: list[tuple[int, ...]]) -> None:
+        """Queue ``request_select_paths`` for the next event-loop turn."""
+        if not paths:
+            return
+        queued = list(paths)
+        QTimer.singleShot(0, lambda: self.request_select_paths(queued))
+
     def request_expand(self, path: tuple[int, ...]) -> None:
         """Ask the viewport to expand ``path``."""
         self.viewportRequested.emit(KIND_EXPAND_PATH, tuple(path))
@@ -224,6 +231,11 @@ class ViewController(QObject):
     def request_scroll_to(self, path: tuple[int, ...]) -> None:
         """Ask the viewport to scroll ``path`` into view."""
         self.viewportRequested.emit(KIND_SCROLL_TO, tuple(path))
+
+    def request_scroll_to_deferred(self, path: tuple[int, ...]) -> None:
+        """Queue ``request_scroll_to`` for the next event-loop turn."""
+        queued = tuple(path)
+        QTimer.singleShot(0, lambda: self.request_scroll_to(queued))
 
     def apply_request(self, kind: str, payload: object) -> None:
         """Apply a queued viewport request to the tree view."""

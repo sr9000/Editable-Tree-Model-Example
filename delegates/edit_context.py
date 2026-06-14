@@ -16,6 +16,7 @@ from typing import Any, Callable, Optional, Protocol, runtime_checkable
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt
 from PySide6.QtWidgets import QMessageBox, QWidget
 
+from core.raw_numeric import describe_reason
 from state.edit_limits import (
     get_binary_edit_warning_limit_bytes,
     get_multiline_edit_warning_limit_chars,
@@ -70,6 +71,8 @@ class DelegateEditContext(Protocol):
     ) -> bool: ...
 
     def confirm_large_binary_edit(self, parent: QWidget | None, payload_size: int) -> bool: ...
+
+    def warn_raw_numeric_edit(self, parent: QWidget | None, *, reason: str) -> None: ...
 
 
 def _to_index(index: QModelIndex | QPersistentModelIndex) -> QModelIndex:
@@ -145,6 +148,19 @@ class DefaultEditContext:
             QMessageBox.StandardButton.No,
         )
         return answer == QMessageBox.StandardButton.Yes
+
+    def warn_raw_numeric_edit(self, parent: QWidget | None, *, reason: str) -> None:
+        QMessageBox.warning(
+            parent,
+            "Unsupported numeric value",
+            "This value is currently unsupported as a regular float / number "
+            f"({describe_reason(reason)}).\n\n"
+            "You can change it into a normally parseable number, or leave the "
+            "raw value unchanged to preserve it for external software that "
+            "accepts such values.",
+            QMessageBox.StandardButton.Ok,
+            QMessageBox.StandardButton.Ok,
+        )
 
     def confirm_large_binary_edit(self, parent: QWidget | None, payload_size: int) -> bool:
         limit = get_binary_edit_warning_limit_bytes()

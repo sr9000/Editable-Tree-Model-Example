@@ -12,7 +12,9 @@ from pandas import Timestamp
 
 from core.datetime_parsing import parse_datetime_text
 from core.datetime_parsing.nano_time import NanoTime
-from settings import NUMBER_AFFIX_MAX_LEN
+from core.raw_numeric import RawNumericValue
+from settings import INFERENCE_MAX_COLOR_CHARS, NUMBER_AFFIX_MAX_LEN
+from tree.inference_limits import base64_syntax_valid
 from units.number_affix import AffixKind, NumberAffix, parse_number_affix
 
 LOGGER = logging.getLogger(__name__)
@@ -21,25 +23,34 @@ _COLOR_RGB_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _COLOR_RGBA_RE = re.compile(r"^#(?:[0-9a-fA-F]{4}|[0-9a-fA-F]{8})$")
 
 
-def looks_like_color_rgb(s: str) -> bool:
+def looks_like_color_rgb(s: str, *, allow_expensive: bool = False) -> bool:
+    if not allow_expensive and len(s) > INFERENCE_MAX_COLOR_CHARS:
+        return False
     return bool(_COLOR_RGB_RE.fullmatch(s))
 
 
-def looks_like_color_rgba(s: str) -> bool:
+def looks_like_color_rgba(s: str, *, allow_expensive: bool = False) -> bool:
+    if not allow_expensive and len(s) > INFERENCE_MAX_COLOR_CHARS:
+        return False
     return bool(_COLOR_RGBA_RE.fullmatch(s))
 
 
 def _looks_like_base64(s: str) -> bool:
     """Return True iff *s* is a syntactically valid, non-empty base64 string.
 
+    Uses ``base64_syntax_valid`` as a cheap pre-check (len mod 4 + alphabet
+    regex) before attempting the expensive ``base64.b64decode``. A minimum
+    length of 20 chars is required to avoid false positives on short strings.
+
     No content heuristics are applied: any string that decodes cleanly under
     strict base64 rules is treated as ``BYTES``. Callers that need to
     discriminate against short / human-readable strings (e.g. ``"abcd"``)
     must pin the type explicitly via the type editor.
     """
-    if not s or len(s) % 4 != 0:
+    if not base64_syntax_valid(s):
         return False
-    if _B64_RE.fullmatch(s) is None:
+    # Require minimum 20 chars to avoid false positives on short strings
+    if len(s) < 20:
         return False
     try:
         base64.b64decode(s, validate=True)
@@ -148,6 +159,9 @@ def parse_json_type(value: Any) -> "JsonType":
                 return JsonType.PERCENT
             return JsonType.FLOAT
 
+        case RawNumericValue():
+            return JsonType.RAW_FLOAT
+
         case str(s):
             if s == "":
                 return JsonType.EMPTY_STRING
@@ -230,6 +244,9 @@ class JsonType(StrEnum):
 
     # Extra Number
     PERCENT = "percent"
+    # Raw, unsupported numeric literal preserved as editable text. Pseudo-type:
+    # derived from value content, never user-selectable.
+    RAW_FLOAT = "raw float"
     INTEGER_UNITS = "int units"
     FLOAT_UNITS = "float units"
     INTEGER_CURRENCY = "int currency"
@@ -323,9 +340,27 @@ def canonical_text_type(json_type: JsonType) -> JsonType:
     return PSEUDO_TEXT_PARENT.get(json_type, json_type)
 
 
-# Types the user can pick from the type combobox. Pseudo text types are
-# excluded because they are derived purely from content.
-USER_SELECTABLE_TYPES: tuple[JsonType, ...] = tuple(t for t in JsonType if t not in PSEUDO_TEXT_FAMILY)
+# Parent (canonical, user-selectable) type for each non-text pseudo type.
+# RAW_FLOAT collapses to FLOAT in the type combo so the user sees the type they
+# could pick, while editing/coercion keep treating it as raw text.
+PSEUDO_NUMERIC_PARENT: dict[JsonType, JsonType] = {
+    JsonType.RAW_FLOAT: JsonType.FLOAT,
+}
+
+
+def canonical_type(json_type: JsonType) -> JsonType:
+    """Return the user-selectable parent for any pseudo type, else *json_type*."""
+    if json_type in PSEUDO_NUMERIC_PARENT:
+        return PSEUDO_NUMERIC_PARENT[json_type]
+    return PSEUDO_TEXT_PARENT.get(json_type, json_type)
+
+
+# Non-user-selectable pseudo types (derived purely from content).
+PSEUDO_FAMILY: frozenset[JsonType] = PSEUDO_TEXT_FAMILY | frozenset({JsonType.RAW_FLOAT})
+
+# Types the user can pick from the type combobox. Pseudo types are excluded
+# because they are derived purely from content.
+USER_SELECTABLE_TYPES: tuple[JsonType, ...] = tuple(t for t in JsonType if t not in PSEUDO_FAMILY)
 SECRET_FAMILY: frozenset[JsonType] = frozenset({JsonType.SECRET_LINE, JsonType.SECRET_TEXT})
 COLOR_FAMILY: frozenset[JsonType] = frozenset({JsonType.COLOR_RGB, JsonType.COLOR_RGBA})
 DATETIME_FAMILY: frozenset[JsonType] = frozenset(

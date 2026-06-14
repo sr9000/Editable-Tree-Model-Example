@@ -25,6 +25,8 @@ from validation.yaml_validate import validate_yaml_documents
 class TabValidationController(QObject):
     """Own schema state, issue tracking, and revalidation for one tab."""
 
+    _REPAINT_BATCH_SIZE = 256
+
     def __init__(
         self,
         tab,
@@ -45,6 +47,12 @@ class TabValidationController(QObject):
         self._schema: dict[str, Any] | None = None
         self._issue_index = IssueIndex([], initial_data)
         self._auto_rescan: bool = False
+        self._last_affected_paths: set[tuple[int, ...]] = set()
+        self._pending_repaint_paths: list[tuple[int, ...]] = []
+
+        self._repaint_timer = QTimer(self)
+        self._repaint_timer.setSingleShot(True)
+        self._repaint_timer.timeout.connect(self._flush_repaint_batch)
 
         self.debounce_timer = QTimer(self)
         self.debounce_timer.setSingleShot(True)
@@ -81,7 +89,14 @@ class TabValidationController(QObject):
     def auto_rescan(self) -> bool:
         return self._auto_rescan
 
-    def init_state(self, model_data: Any, *, doc_path: Path | None = None) -> None:
+    def init_state(
+        self,
+        model_data: Any,
+        *,
+        doc_path: Path | None = None,
+        revalidate: bool = True,
+        validation_data: Any | None = None,
+    ) -> None:
         from state.validation_settings import _is_url, read_schema_ref_str
 
         if doc_path is None and self._tab.io.file_path:
@@ -105,13 +120,31 @@ class TabValidationController(QObject):
                     else:
                         ref = SchemaRef(path=Path(persisted), inline=dict(loaded), origin="manual")
 
-        self.set_schema(ref)
+        self.set_schema(ref, revalidate=False)
+        if not revalidate:
+            return
+        if validation_data is None:
+            self.revalidate()
+            return
+        self.revalidate_with_data(validation_data)
 
-    def set_schema(self, ref: SchemaRef) -> None:
-        self._swap_source(SchemaSource.from_ref(ref), ref)
+    def set_schema(
+        self,
+        ref: SchemaRef,
+        *,
+        revalidate: bool = True,
+        validation_data: Any | None = None,
+    ) -> None:
+        self._swap_source(SchemaSource.from_ref(ref), ref, revalidate=revalidate, validation_data=validation_data)
 
-    def set_schema_from_source(self, source: SchemaSource) -> None:
-        self._swap_source(source, source.as_ref())
+    def set_schema_from_source(
+        self,
+        source: SchemaSource,
+        *,
+        revalidate: bool = True,
+        validation_data: Any | None = None,
+    ) -> None:
+        self._swap_source(source, source.as_ref(), revalidate=revalidate, validation_data=validation_data)
 
     def clear_schema(self) -> None:
         self.set_schema(SchemaRef(path=None, inline=None, origin="none"))
@@ -124,7 +157,14 @@ class TabValidationController(QObject):
         )
         self._on_schema_changed(self._schema_ref)
 
-    def _swap_source(self, source: SchemaSource | None, ref: SchemaRef) -> None:
+    def _swap_source(
+        self,
+        source: SchemaSource | None,
+        ref: SchemaRef,
+        *,
+        revalidate: bool,
+        validation_data: Any | None,
+    ) -> None:
         if self._schema_source is not None:
             get_schema_registry().release(self._schema_source, self._tab)
 
@@ -140,18 +180,41 @@ class TabValidationController(QObject):
         else:
             self._schema = entry.inline if entry is not None else None
         self._on_schema_changed(self._schema_ref)
+        if not revalidate:
+            return
+        if validation_data is not None:
+            self.revalidate_with_data(validation_data)
+            return
+        if self._schema is None:
+            self._clear_issues_without_snapshot()
+            return
         self.revalidate()
 
     def revalidate(self) -> None:
-        root_data = self._model.root_item.to_json()
+        self.revalidate_with_data(self._model.root_item.to_json())
+
+    def revalidate_loading_data(self, parsed_data: Any) -> None:
+        self.revalidate_with_data(parsed_data)
+
+    def revalidate_with_data(self, root_data: Any) -> None:
+        if self._schema is None:
+            self._clear_issues_without_snapshot(root_data=root_data)
+            return
+
         issues: list[ValidationIssue] = []
-        if self._schema is not None:
-            sanitized = to_jsonschema_input(root_data)
-            if self._tab.io.save_format == SAVE_FORMAT_YAML_MULTI and isinstance(sanitized, list):
-                issues = validate_yaml_documents(sanitized, self._schema)
-            else:
-                issues = validate_document(sanitized, self._schema)
+        sanitized = to_jsonschema_input(root_data)
+        if self._tab.io.save_format == SAVE_FORMAT_YAML_MULTI and isinstance(sanitized, list):
+            issues = validate_yaml_documents(sanitized, self._schema)
+        else:
+            issues = validate_document(sanitized, self._schema)
         self._issue_index = IssueIndex(issues, root_data)
+        self._on_validation_changed(self._issue_index)
+
+    def _clear_issues_without_snapshot(self, *, root_data: Any | None = None) -> None:
+        if self._issue_index.is_empty():
+            return
+        empty_root = {} if root_data is None else root_data
+        self._issue_index = IssueIndex([], empty_root)
         self._on_validation_changed(self._issue_index)
 
     def set_auto_rescan(self, enabled: bool) -> None:
@@ -191,6 +254,8 @@ class TabValidationController(QObject):
         self._released = True
 
         self.debounce_timer.stop()
+        self._repaint_timer.stop()
+        self._pending_repaint_paths = []
 
         if self._schema_source is not None:
             get_schema_registry().release(self._schema_source, self._tab)
@@ -257,20 +322,39 @@ class TabValidationController(QObject):
         return self.severity_for(model_path)
 
     def on_validation_changed(self, _index: IssueIndex) -> None:
-        """Emit recursive dataChanged so all visible rows repaint their badges."""
+        """Emit bounded dataChanged updates for paths affected by issue changes."""
+        new_paths = _index.affected_paths()
+        changed_paths = sorted(self._last_affected_paths | new_paths, key=lambda path: (len(path), path))
+        self._last_affected_paths = set(new_paths)
+        if not changed_paths:
+            return
 
-        def emit_ranges(parent: QModelIndex) -> None:
-            model = self._tab.model
-            rows = model.rowCount(parent)
-            if rows <= 0:
-                return
-            top_left = model.index(0, 0, parent)
-            bottom_right = model.index(rows - 1, model.columnCount(parent) - 1, parent)
+        if len(changed_paths) <= self._REPAINT_BATCH_SIZE:
+            self._emit_path_repaints(changed_paths)
+            return
+
+        self._pending_repaint_paths = changed_paths
+        if not self._repaint_timer.isActive():
+            self._repaint_timer.start(0)
+
+    def _emit_path_repaints(self, paths: list[tuple[int, ...]]) -> None:
+        model = self._tab.model
+        for path in paths:
+            index = self._tab.view_controller.index_from_path(path)
+            if not index.isValid():
+                continue
+            top_left = index.siblingAtColumn(0)
+            bottom_right = index.siblingAtColumn(model.columnCount(index.parent()) - 1)
             model.dataChanged.emit(top_left, bottom_right, [VALIDATION_SEVERITY_ROLE])
-            for row in range(rows):
-                emit_ranges(model.index(row, 0, parent))
 
-        emit_ranges(QModelIndex())
+    def _flush_repaint_batch(self) -> None:
+        if not self._pending_repaint_paths:
+            return
+        batch = self._pending_repaint_paths[: self._REPAINT_BATCH_SIZE]
+        self._pending_repaint_paths = self._pending_repaint_paths[self._REPAINT_BATCH_SIZE :]
+        self._emit_path_repaints(batch)
+        if self._pending_repaint_paths:
+            self._repaint_timer.start(0)
 
 
 __all__ = ["TabValidationController"]

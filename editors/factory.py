@@ -9,6 +9,8 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
 from core.datetime_parsing.enums import DateTimeCategory
+from core.raw_numeric import REASON_UNKNOWN, RawNumericValue
+from core.safe_mpq import safe_mpq_from_any
 from delegates.number_affix_delegate import (
     is_affix_json_type,
     is_integer_json_type,
@@ -22,6 +24,7 @@ from editors.inline.bigint_spinbox import QBigIntSpinBox
 from editors.inline.caps_safe_line import _CapsLockSafeLineEdit
 from editors.inline.datetime.better_dt_editor import BetterDateTimeEditor
 from editors.inline.mpq_spinbox import QMpqSpinBox
+from editors.inline.raw_numeric_line import RawNumericLineEdit
 from editors.inline.secret_line import _SecretEditorWatcher, _SecretLineEdit
 from editors.windowed.color_dialog import ColorPickerDialog
 from editors.windowed.hex_dialog import QHexDialog
@@ -108,6 +111,12 @@ def create_value_editor(
             editor = QBigIntSpinBox(parent)
         case JsonType.FLOAT:
             editor = QMpqSpinBox(parent, item.value)
+        case JsonType.RAW_FLOAT:
+            # Unsupported numeric literal: edit as plain raw text and warn the
+            # user (once, when the editor opens) about the unsupported state.
+            reason = item.value.reason if isinstance(item.value, RawNumericValue) else REASON_UNKNOWN
+            delegate._context_for(parent).warn_raw_numeric_edit(parent, reason=reason)
+            editor = RawNumericLineEdit(parent)
         case JsonType.PERCENT:
             editor = QMpqSpinBox(
                 parent,
@@ -266,9 +275,8 @@ def set_value_editor_data(delegate: ValueDelegateProtocol, editor: QWidget, inde
         return
 
     if isinstance(editor, QMpqSpinBox):
-        try:
-            v = mpq(str(value)) if not isinstance(value, mpq) else value
-        except (TypeError, ValueError):
+        v = value if isinstance(value, mpq) else safe_mpq_from_any(value)
+        if v is None:
             v = mpq(0)
         if item.json_type is JsonType.PERCENT:
             v = v * 100

@@ -6,13 +6,59 @@ import yaml
 from PySide6.QtCore import QMimeData
 from PySide6.QtWidgets import QApplication, QTreeView
 
-from mpq2py import MpqSafeDumper, mpq_json_default
+from core.raw_numeric import REASON_UNKNOWN, RawNumericValue
+from mpq2py import MpqSafeDumper, mpq_json_default, raw_numeric_is_json_safe
 from tree.model import JsonTreeModel
 from tree.types import JsonType
 from tree_actions.selection import _index_path, _is_ancestor, _resolve_model, _selected_rows, selection_shape
 from tree_actions.selection import top_level_source_rows as _top_level_selected_rows
 
 MIME_JSON_TREE = "application/x-json-tree"
+
+
+def _clipboard_text_default(obj: Any):
+    """Lenient default for *human-readable* clipboard text.
+
+    Raw numeric values are emitted as JSON number tokens when valid, otherwise
+    as a quoted string so copying never produces invalid JSON. High-fidelity
+    round-tripping is handled separately by the tagged MIME metadata.
+    """
+    if isinstance(obj, RawNumericValue):
+        if raw_numeric_is_json_safe(obj.raw):
+            return simplejson.RawJSON(obj.raw.strip())
+        return obj.raw
+    return mpq_json_default(obj)
+
+
+def _mime_meta_default(obj: Any):
+    """Strict, lossless default for app-internal MIME metadata.
+
+    Raw numeric values are encoded as a tagged object so paste can reconstruct
+    the exact :class:`RawNumericValue` (and keep it as RAW_FLOAT).
+    """
+    if isinstance(obj, RawNumericValue):
+        return {
+            "__raw_numeric__": True,
+            "raw": obj.raw,
+            "reason": obj.reason,
+            "source_syntax": obj.source_syntax,
+        }
+    return mpq_json_default(obj)
+
+
+def _revive_raw_numeric(value: Any) -> Any:
+    """Reconstruct tagged raw numeric objects produced by ``_mime_meta_default``."""
+    if isinstance(value, dict):
+        if value.get("__raw_numeric__") is True and isinstance(value.get("raw"), str):
+            return RawNumericValue(
+                raw=value["raw"],
+                reason=value.get("reason") or REASON_UNKNOWN,
+                source_syntax=value.get("source_syntax") or "",
+            )
+        return {k: _revive_raw_numeric(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_revive_raw_numeric(v) for v in value]
+    return value
 
 
 def _dump_text(payload: Any) -> str:
@@ -25,9 +71,9 @@ def _dump_text(payload: Any) -> str:
         except yaml.representer.RepresenterError:
             # Some app-native values (for example NumberAffix) are JSON-serializable
             # via mpq_json_default but do not have direct YAML representers.
-            normalized = json.loads(simplejson.dumps(payload, default=mpq_json_default))
+            normalized = json.loads(simplejson.dumps(payload, default=_clipboard_text_default))
             return yaml.dump(normalized, Dumper=MpqSafeDumper, allow_unicode=True, default_flow_style=False).rstrip()
-    return simplejson.dumps(payload, default=mpq_json_default, indent=2)
+    return simplejson.dumps(payload, default=_clipboard_text_default, indent=2)
 
 
 def _get_val_str(item) -> str:
@@ -193,7 +239,7 @@ def build_tree_mime(model: JsonTreeModel, source_rows) -> QMimeData | None:
     text_payload = _entries_text_payload(model, rows, entries)
 
     source_paths = [list(_path_relative_to_root(model, idx)) for idx in rows]
-    metadata = simplejson.dumps({"entries": entries, "source_paths": source_paths}, default=mpq_json_default)
+    metadata = simplejson.dumps({"entries": entries, "source_paths": source_paths}, default=_mime_meta_default)
     text = _dump_text(text_payload)
 
     mime = QMimeData()
@@ -225,13 +271,18 @@ def entries_from_mime(mime: QMimeData) -> list[dict[str, Any]] | None:
                         if not isinstance(entry, dict) or "value" not in entry:
                             continue
                         name = entry.get("name")
-                        normalized.append({"name": name if isinstance(name, str) else None, "value": entry["value"]})
+                        normalized.append(
+                            {
+                                "name": name if isinstance(name, str) else None,
+                                "value": _revive_raw_numeric(entry["value"]),
+                            }
+                        )
                     if normalized:
                         return normalized
 
                 items = parsed.get("items")
                 if isinstance(items, list):
-                    return [{"name": None, "value": value} for value in items]
+                    return [{"name": None, "value": _revive_raw_numeric(value)} for value in items]
         except Exception:
             pass
 
@@ -377,12 +428,10 @@ def copy_selection_with_name(tree_view: QTreeView) -> bool:
         return False
 
     entries = _build_copy_entries(model, rows)
-
-    entries = _build_copy_entries(model, rows)
     text_payload = _entries_text_payload(model, rows, entries)
     text = _dump_text(text_payload)
 
-    metadata = simplejson.dumps({"entries": entries}, default=mpq_json_default)
+    metadata = simplejson.dumps({"entries": entries}, default=_mime_meta_default)
     mime = QMimeData()
     mime.setData(MIME_JSON_TREE, metadata.encode("utf-8"))
     mime.setText(text)

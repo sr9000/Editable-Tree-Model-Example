@@ -9,6 +9,8 @@ from pandas import Timestamp
 from core.datetime_parsing.enums import DateTimeCategory
 from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
+from core.raw_numeric import REASON_UNKNOWN, RawNumericValue, raw_numeric_text_is_acceptable
+from core.safe_mpq import parse_mpq
 from tree.item_coercion import coerce_value_for_type, compute_editable, normalize_value_for_type
 from tree.item_names import unique_child_name, validated_child_name
 from tree.types import DATETIME_FAMILY, SECRET_FAMILY, TEXT_FAMILY, JsonType, parse_json_type, text_pseudotype_for
@@ -170,6 +172,17 @@ class JsonTreeItem:
             return True
 
         if column == 2:
+            # Internal paste / programmatic set of a raw numeric literal: keep
+            # it raw regardless of the current type.
+            if isinstance(value, RawNumericValue):
+                self.explicit_type = False
+                self._apply_typed_value(JsonType.RAW_FLOAT, value)
+                return True
+            # Editing an existing raw numeric value goes through the dedicated
+            # raw-text recovery path.
+            if self.json_type is JsonType.RAW_FLOAT:
+                return self._set_raw_numeric_value(value)
+
             if self.explicit_type:
                 ok, coerced = self._coerce_value_for_type(self.json_type, value, strict=True)
                 if not ok:
@@ -250,7 +263,54 @@ class JsonTreeItem:
     def _normalize_value_for_type(self, value: Any) -> Any:
         return normalize_value_for_type(self.json_type, value)
 
+    def _set_raw_numeric_value(self, value: Any) -> bool:
+        """Apply an edit to a value currently held as a raw numeric literal.
+
+        - If the edited text parses safely, store it as a normal number.
+          Whole numbers (denominator 1) are stored as INTEGER, not FLOAT,
+          so they display as "42" instead of "42.0".
+        - If the text is unchanged, preserve the original raw value exactly.
+        - If the text matches the narrow raw-numeric edit grammar but is still
+          unsupported, keep it as a raw numeric value with the updated reason.
+        - Otherwise reject the edit.
+        """
+        original = self.value if isinstance(self.value, RawNumericValue) else RawNumericValue(str(self.value))
+        text = value if isinstance(value, str) else str(value)
+
+        result = parse_mpq(text)
+        if result.value is not None:
+            self.explicit_type = False
+            # If the parsed value is a whole number (denominator 1), convert to int
+            # so it's stored as INTEGER instead of FLOAT (displaying as "42" not "42.0")
+            parsed = result.value
+            if parsed.denominator == 1:
+                parsed = int(parsed)
+            self._apply_typed_value(parse_json_type(parsed), parsed)
+            return True
+
+        if text == original.raw:
+            self._apply_typed_value(JsonType.RAW_FLOAT, original)
+            return True
+
+        if raw_numeric_text_is_acceptable(text):
+            self._apply_typed_value(
+                JsonType.RAW_FLOAT,
+                RawNumericValue(
+                    raw=text,
+                    reason=result.reason or REASON_UNKNOWN,
+                    source_syntax=original.source_syntax,
+                ),
+            )
+            return True
+
+        return False
+
     def _apply_typed_value(self, json_type: JsonType, value: Any) -> None:
+        # A raw numeric literal can only live under the RAW_FLOAT pseudo-type;
+        # never let it be stored under a regular numeric (or other) type.
+        if isinstance(value, RawNumericValue) and json_type not in TEXT_FAMILY and json_type not in SECRET_FAMILY:
+            json_type = JsonType.RAW_FLOAT
+
         self.json_type = json_type
         self.child_items = []
         self._children_dirty = True
@@ -328,7 +388,7 @@ class JsonTreeItem:
     def _coerce_value_for_type(
         self, json_type: JsonType, value: Any, strict: bool, old_type: JsonType | None = None
     ) -> tuple[bool, Any]:
-        return coerce_value_for_type(json_type, value, strict, old_type=old_type)
+        return coerce_value_for_type(json_type, value, strict, old_type=old_type, allow_expensive=self.explicit_type)
 
     def _compute_editable(self) -> bool:
         return compute_editable(self.json_type, self.value, self.EDITABLE_BLOB_LIMIT)
