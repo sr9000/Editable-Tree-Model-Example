@@ -14,6 +14,7 @@ from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
 from core.raw_numeric import RawNumericValue
 from core.safe_mpq import safe_mpq_from_any
+from mpq2py import mpq_serialization
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
 from tree.codecs.color_codec import normalize_color_string
@@ -541,6 +542,8 @@ def coerce_value_for_type(
                     return True, text
                 # Fallback: base64-encode raw bytes so the user can still see/edit them.
                 return True, base64.b64encode(bytes(value)).decode("ascii")
+            if isinstance(value, mpq):
+                return True, str(mpq_serialization(value)[0])
             return True, str(value)
 
         # 3.2: fall back to "now" instead of epoch-zero when value is unparseable
