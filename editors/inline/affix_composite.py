@@ -42,10 +42,22 @@ class AffixCompositeEditor(QWidget):
         self.space_button.toggled.connect(self._on_space_toggled)
         self._update_space_button_width()
 
+        self.width_button = QPushButton("Width", parent=self)
+        self.width_button.setCheckable(True)
+        self.width_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+        self.width_button.setToolTip("Preserve leading zeros")
+        self.width_button.toggled.connect(self._on_width_toggled)
+
         if is_integer:
             self.number_editor = QBigIntSpinBox(self)
+            self.precision_button = None
         else:
             self.number_editor = QMpqSpinBox(self)
+            self.precision_button = QPushButton("Precision", parent=self)
+            self.precision_button.setCheckable(True)
+            self.precision_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+            self.precision_button.setToolTip("Preserve trailing zeros")
+            self.precision_button.toggled.connect(self._on_precision_toggled)
         self.number_editor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.value_label = QLabel("Value: ", self)
@@ -59,6 +71,9 @@ class AffixCompositeEditor(QWidget):
                 self.affix_combo.addItem(affix)
 
         layout.addWidget(self.space_button)
+        layout.addWidget(self.width_button)
+        if self.precision_button:
+            layout.addWidget(self.precision_button)
         layout.addWidget(self.affix_label)
         layout.addWidget(self.affix_combo)
         layout.addWidget(self.value_label)
@@ -70,6 +85,12 @@ class AffixCompositeEditor(QWidget):
 
     def _on_space_toggled(self, checked: bool) -> None:
         self.space_button.setText(self._space_button_text(bool(checked)))
+
+    def _on_width_toggled(self, checked: bool) -> None:
+        self.width_button.setText("Width" if checked else "Short")
+
+    def _on_precision_toggled(self, checked: bool) -> None:
+        self.precision_button.setText("Precision" if checked else "Strip")
 
     def _update_space_button_width(self) -> None:
         metrics = QFontMetrics(self.space_button.font())
@@ -106,14 +127,38 @@ class AffixCompositeEditor(QWidget):
         if self.affix_combo.lineEdit() is not None:
             self.affix_combo.lineEdit().setText(text)
         self.space_button.setChecked(bool(value.space))
+
+        if isinstance(self.number_editor, QMpqSpinBox):
+            if value.fractional_digits >= 0:
+                self.number_editor.setSingleStep(mpq(1, 10**value.fractional_digits))
+
         self.number_editor.setValue(value.number)
         self.set_invalid(False)
 
+        # Store for unmodified round-trip
+        self._integral_digits = value.integral_digits
+        self._fractional_digits = value.fractional_digits
+        self.width_button.setChecked(self._integral_digits > 0)
+        self._on_width_toggled(self._integral_digits > 0)
+        if self.precision_button:
+            self.precision_button.setChecked(self._fractional_digits >= 0)
+            self._on_precision_toggled(self._fractional_digits >= 0)
+
     def build_value(self) -> NumberAffix:
         affix = self.affix_combo.currentText()
+        new_integral = self._integral_digits if self.width_button.isChecked() else 0
+
+        new_fractional = -1
+        if self.precision_button and self.precision_button.isChecked():
+            new_fractional = self._fractional_digits
+            if new_fractional < 0:
+                new_fractional = 1
+
         return NumberAffix(
             kind=self.kind,
             affix=affix,
             space=self.space_button.isChecked(),
             number=self.number_editor.value(),
+            integral_digits=new_integral,
+            fractional_digits=new_fractional,
         )
