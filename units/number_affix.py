@@ -27,6 +27,8 @@ class NumberAffix:
     affix: str
     space: bool
     number: int | mpq
+    integral_digits: int = 0
+    fractional_digits: int = -1
 
     def __str__(self) -> str:
         try:
@@ -100,37 +102,48 @@ def parse_number_affix(s: str, *, max_affix_len: int = 16, allow_expensive: bool
     if not allow_expensive and len(s) > INFERENCE_MAX_AFFIX_CHARS:
         return None
 
-    m = _CURRENCY_RE.fullmatch(s)
-    if m is not None:
-        affix = m.group("affix")
-        if not _is_valid_affix(affix, kind=AffixKind.CURRENCY, max_affix_len=max_affix_len):
-            return None
-        try:
-            number = _parse_number(m.group("num"))
-        except ValueError:
-            return None
-        return NumberAffix(
-            kind=AffixKind.CURRENCY,
-            affix=affix,
-            space=(m.group("sp") == " "),
-            number=number,
-        )
+    for regex, kind in [(_CURRENCY_RE, AffixKind.CURRENCY), (_UNITS_RE, AffixKind.UNITS)]:
+        m = regex.fullmatch(s)
+        if m is not None:
+            affix = m.group("affix")
+            if not _is_valid_affix(affix, kind=kind, max_affix_len=max_affix_len):
+                return None
+            num_text = m.group("num")
 
-    m = _UNITS_RE.fullmatch(s)
-    if m is not None:
-        affix = m.group("affix")
-        if not _is_valid_affix(affix, kind=AffixKind.UNITS, max_affix_len=max_affix_len):
-            return None
-        try:
-            number = _parse_number(m.group("num"))
-        except ValueError:
-            return None
-        return NumberAffix(
-            kind=AffixKind.UNITS,
-            affix=affix,
-            space=(m.group("sp") == " "),
-            number=number,
-        )
+            if kind == AffixKind.CURRENCY and num_text.startswith(("-", "+")) and m.group("sp") == "":
+                # Bug 1: values like `abc-1` require whitespace before minus, e.g. `abc -1`
+                return None
+
+            try:
+                number = _parse_number(num_text)
+            except ValueError:
+                return None
+
+            digits_str = num_text.lstrip("+-")
+            integral_digits = 0
+            fractional_digits = -1
+
+            if "." in digits_str or "e" in digits_str.lower():
+                parts = digits_str.lower().split("e")[0].split(".")
+                int_part = parts[0]
+                if int_part.startswith("0") and len(int_part) > 1:
+                    integral_digits = len(int_part)
+                if len(parts) > 1:
+                    frac_part = parts[1]
+                    if frac_part.endswith("0"):
+                        fractional_digits = len(frac_part)
+            else:
+                if digits_str.startswith("0") and len(digits_str) > 1:
+                    integral_digits = len(digits_str)
+
+            return NumberAffix(
+                kind=kind,
+                affix=affix,
+                space=(m.group("sp") == " "),
+                number=number,
+                integral_digits=integral_digits,
+                fractional_digits=fractional_digits,
+            )
 
     return None
 
@@ -139,7 +152,39 @@ def format_number_affix(na: NumberAffix) -> str:
     if not _is_valid_affix(na.affix, kind=na.kind, max_affix_len=len(na.affix)):
         raise ValueError("Invalid affix")
 
-    number_text = str(na.number) if isinstance(na.number, int) else _format_mpq_decimal(na.number)
+    if isinstance(na.number, int):
+        number_text = str(na.number)
+        if na.integral_digits > 0:
+            if na.number < 0:
+                number_text = "-" + number_text[1:].zfill(na.integral_digits)
+            else:
+                number_text = number_text.zfill(na.integral_digits)
+    else:
+        number_text = _format_mpq_decimal(na.number)
+        parts = number_text.split(".")
+        int_part = parts[0]
+        frac_part = parts[1] if len(parts) > 1 else ""
+
+        if na.integral_digits > 0:
+            sign = "-" if int_part.startswith("-") else ""
+            digits = int_part.lstrip("-")
+            if len(digits) < na.integral_digits:
+                int_part = sign + digits.zfill(na.integral_digits)
+
+        if na.fractional_digits >= 0:
+            if len(frac_part) < na.fractional_digits:
+                frac_part = frac_part.ljust(na.fractional_digits, "0")
+
+        if na.fractional_digits >= 0 or frac_part:
+            if not frac_part and na.fractional_digits > 0:
+                frac_part = "0" * na.fractional_digits
+            if frac_part:
+                number_text = f"{int_part}.{frac_part}"
+            else:
+                number_text = int_part
+        else:
+            number_text = int_part
+
     gap = " " if na.space else ""
 
     if na.kind is AffixKind.CURRENCY:
