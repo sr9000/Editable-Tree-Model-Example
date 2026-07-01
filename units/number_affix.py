@@ -9,7 +9,7 @@ from gmpy2 import mpq
 from core.safe_mpq import safe_mpq_from_text
 from settings import INFERENCE_MAX_AFFIX_CHARS
 
-_AFFIX_FORBIDDEN_TOUCH_CHARS = set("+-.")
+_AFFIX_FORBIDDEN_TOUCH_CHARS = set(".")
 _NUMBER_RE = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
 
 _CURRENCY_RE = re.compile(rf"^(?P<affix>[^\d\s+\-.][^\s]*?)(?P<sp> ?)(?P<num>{_NUMBER_RE})$")
@@ -110,8 +110,15 @@ def parse_number_affix(s: str, *, max_affix_len: int = 16, allow_expensive: bool
                 return None
             num_text = m.group("num")
 
-            if kind == AffixKind.CURRENCY and num_text.startswith(("-", "+")) and m.group("sp") == "":
-                # Bug 1: values like `abc-1` require whitespace before minus, e.g. `abc -1`
+            if kind == AffixKind.CURRENCY and m.group("sp") == "" and num_text.startswith(("-", "+")):
+                # When integer-type affix string meets a negative directly, reject parsing.
+                # e.g., "abc-001" fails integer matching gracefully because "abc" must not
+                # eat the sign and leave "001".
+                # To be precise, currency and sign should just completely fail when squished
+                # unless explicitly configured differently elsewhere (but we are reverting early).
+                return None
+
+            if not _is_valid_affix(affix, kind=kind, max_affix_len=max_affix_len):
                 return None
 
             try:

@@ -129,6 +129,8 @@ class AffixCompositeEditor(QWidget):
         self.space_button.setChecked(bool(value.space))
 
         if isinstance(self.number_editor, QMpqSpinBox):
+            from gmpy2 import mpq
+
             if value.fractional_digits >= 0:
                 self.number_editor.setSingleStep(mpq(1, 10**value.fractional_digits))
 
