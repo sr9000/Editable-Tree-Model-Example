@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from gmpy2 import mpq
 from PySide6.QtGui import QFont, QFontMetrics
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpinBox, QWidget
 
 from editors.inline.bigint_spinbox import QBigIntSpinBox
 from editors.inline.mpq_spinbox import QMpqSpinBox
@@ -20,6 +21,8 @@ class AffixCompositeEditor(QWidget):
     def __init__(self, parent: QWidget, *, kind: AffixKind, is_integer: bool, mru_items: Iterable[str]) -> None:
         super().__init__(parent)
         self.kind = kind
+        self._integral_digits = 0
+        self._fractional_digits = -1
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -48,9 +51,17 @@ class AffixCompositeEditor(QWidget):
         self.width_button.setToolTip("Preserve leading zeros")
         self.width_button.toggled.connect(self._on_width_toggled)
 
+        self.width_spinbox = QSpinBox(self)
+        self.width_spinbox.setRange(1, 999_999)
+        self.width_spinbox.setValue(1)
+        self.width_spinbox.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+        self.width_spinbox.setToolTip("Number of integral digits to preserve")
+        self.width_spinbox.setVisible(False)
+
         if is_integer:
             self.number_editor = QBigIntSpinBox(self)
             self.precision_button = None
+            self.precision_spinbox = None
         else:
             self.number_editor = QMpqSpinBox(self)
             self.precision_button = QPushButton("Precision", parent=self)
@@ -58,6 +69,13 @@ class AffixCompositeEditor(QWidget):
             self.precision_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
             self.precision_button.setToolTip("Preserve trailing zeros")
             self.precision_button.toggled.connect(self._on_precision_toggled)
+            self.precision_spinbox = QSpinBox(self)
+            self.precision_spinbox.setRange(0, 999_999)
+            self.precision_spinbox.setValue(0)
+            self.precision_spinbox.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+            self.precision_spinbox.setToolTip("Number of fractional digits to preserve")
+            self.precision_spinbox.setVisible(False)
+            self.precision_spinbox.valueChanged.connect(self._on_precision_digits_changed)
         self.number_editor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.value_label = QLabel("Value: ", self)
@@ -72,8 +90,10 @@ class AffixCompositeEditor(QWidget):
 
         layout.addWidget(self.space_button)
         layout.addWidget(self.width_button)
+        layout.addWidget(self.width_spinbox)
         if self.precision_button:
             layout.addWidget(self.precision_button)
+            layout.addWidget(self.precision_spinbox)
         layout.addWidget(self.affix_label)
         layout.addWidget(self.affix_combo)
         layout.addWidget(self.value_label)
@@ -88,9 +108,45 @@ class AffixCompositeEditor(QWidget):
 
     def _on_width_toggled(self, checked: bool) -> None:
         self.width_button.setText("Width" if checked else "Short")
+        self.width_spinbox.setVisible(bool(checked))
+        if checked and self._integral_digits <= 0 and self.width_spinbox.value() == 1:
+            self.width_spinbox.setValue(self._infer_integral_digits())
 
     def _on_precision_toggled(self, checked: bool) -> None:
         self.precision_button.setText("Precision" if checked else "Strip")
+        self.precision_spinbox.setVisible(bool(checked))
+        if checked and self._fractional_digits < 0 and self.precision_spinbox.value() == 0:
+            self.precision_spinbox.setValue(self._infer_fractional_digits())
+        self._apply_fractional_step()
+
+    def _on_precision_digits_changed(self, _value: int) -> None:
+        self._apply_fractional_step()
+
+    def _infer_integral_digits(self) -> int:
+        text = self.number_editor.cleanText()
+        digits = text.lstrip("+-").split(".", 1)[0]
+        return max(1, len(digits))
+
+    def _infer_fractional_digits(self) -> int:
+        text = self.number_editor.cleanText()
+        parts = text.split(".", 1)
+        if len(parts) == 2:
+            return len(parts[1])
+        return 0
+
+    def _apply_fractional_step(self) -> None:
+        if not isinstance(self.number_editor, QMpqSpinBox):
+            return
+
+        digits = self._infer_fractional_digits()
+        if self.precision_button and self.precision_button.isChecked() and self.precision_spinbox is not None:
+            digits = self.precision_spinbox.value()
+
+        if digits <= 0:
+            self.number_editor.setSingleStep(mpq(1))
+            return
+
+        self.number_editor.setSingleStep(mpq(1, 10**digits))
 
     def _update_space_button_width(self) -> None:
         metrics = QFontMetrics(self.space_button.font())
@@ -128,33 +184,32 @@ class AffixCompositeEditor(QWidget):
             self.affix_combo.lineEdit().setText(text)
         self.space_button.setChecked(bool(value.space))
 
-        if isinstance(self.number_editor, QMpqSpinBox):
-            from gmpy2 import mpq
-
-            if value.fractional_digits >= 0:
-                self.number_editor.setSingleStep(mpq(1, 10**value.fractional_digits))
-
         self.number_editor.setValue(value.number)
         self.set_invalid(False)
 
-        # Store for unmodified round-trip
         self._integral_digits = value.integral_digits
         self._fractional_digits = value.fractional_digits
+
+        self.width_spinbox.setValue(
+            self._integral_digits if self._integral_digits > 0 else self._infer_integral_digits()
+        )
         self.width_button.setChecked(self._integral_digits > 0)
-        self._on_width_toggled(self._integral_digits > 0)
+
         if self.precision_button:
+            self.precision_spinbox.setValue(
+                self._fractional_digits if self._fractional_digits >= 0 else self._infer_fractional_digits()
+            )
             self.precision_button.setChecked(self._fractional_digits >= 0)
-            self._on_precision_toggled(self._fractional_digits >= 0)
+
+        self._apply_fractional_step()
 
     def build_value(self) -> NumberAffix:
         affix = self.affix_combo.currentText()
-        new_integral = self._integral_digits if self.width_button.isChecked() else 0
+        new_integral = self.width_spinbox.value() if self.width_button.isChecked() else 0
 
         new_fractional = -1
-        if self.precision_button and self.precision_button.isChecked():
-            new_fractional = self._fractional_digits
-            if new_fractional < 0:
-                new_fractional = 1
+        if self.precision_button and self.precision_button.isChecked() and self.precision_spinbox is not None:
+            new_fractional = self.precision_spinbox.value()
 
         return NumberAffix(
             kind=self.kind,
