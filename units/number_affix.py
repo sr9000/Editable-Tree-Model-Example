@@ -64,6 +64,27 @@ def _parse_number(num_text: str) -> int | mpq:
     return parsed
 
 
+def _split_squashed_currency_sign(
+    affix: str,
+    num_text: str,
+    *,
+    has_space: bool,
+    max_affix_len: int,
+) -> tuple[str, str] | None:
+    if has_space or not num_text or num_text[0] not in "+-":
+        return None
+
+    unsigned = num_text[1:]
+    if not re.fullmatch(r"0\d+", unsigned):
+        return None
+
+    shifted_affix = affix + num_text[0]
+    if not _is_valid_affix(shifted_affix, kind=AffixKind.CURRENCY, max_affix_len=max_affix_len):
+        return None
+
+    return shifted_affix, unsigned
+
+
 def _format_mpq_decimal(value: mpq) -> str:
     # Inputs accepted by parse_number_affix are finite base-10 numerals,
     # so this exact decimal conversion is lossless.
@@ -110,13 +131,17 @@ def parse_number_affix(s: str, *, max_affix_len: int = 16, allow_expensive: bool
                 return None
             num_text = m.group("num")
 
-            if kind == AffixKind.CURRENCY and m.group("sp") == "" and num_text.startswith(("-", "+")):
-                # When integer-type affix string meets a negative directly, reject parsing.
-                # e.g., "abc-001" fails integer matching gracefully because "abc" must not
-                # eat the sign and leave "001".
-                # To be precise, currency and sign should just completely fail when squished
-                # unless explicitly configured differently elsewhere (but we are reverting early).
-                return None
+            if kind == AffixKind.CURRENCY:
+                squashed = _split_squashed_currency_sign(
+                    affix,
+                    num_text,
+                    has_space=(m.group("sp") == " "),
+                    max_affix_len=max_affix_len,
+                )
+                if squashed is not None:
+                    affix, num_text = squashed
+                elif m.group("sp") == "" and num_text.startswith(("-", "+")):
+                    return None
 
             if not _is_valid_affix(affix, kind=kind, max_affix_len=max_affix_len):
                 return None
