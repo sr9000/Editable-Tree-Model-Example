@@ -29,10 +29,17 @@ def test_parse_units_float_with_space_and_exponent() -> None:
     assert parsed.number == mpq("-314")
 
 
-def test_parse_negative_currency_without_space_rejected() -> None:
-    # "abc-1" should be rejected as currency, requires "abc -1"
-    assert parse_number_affix("abc-1") is None
+def test_parse_hyphenated_currency_without_space_prefers_affix_boundary() -> None:
+    parsed = parse_number_affix("abc-1")
+    assert parsed == NumberAffix(AffixKind.CURRENCY, "abc-", False, 1, 0, -1)
+    assert format_number_affix(parsed) == "abc-1"
     assert parse_number_affix("abc -1") is not None
+
+
+def test_parse_hyphenated_currency_without_space_is_not_limited_to_zero_padding() -> None:
+    parsed = parse_number_affix("prod-200")
+    assert parsed == NumberAffix(AffixKind.CURRENCY, "prod-", False, 200, 0, -1)
+    assert format_number_affix(parsed) == "prod-200"
 
 
 def test_parse_currency_affix_ending_with_dash_for_zero_padded_int() -> None:

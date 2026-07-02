@@ -74,8 +74,8 @@ def test_parse_json_type_is_total_and_has_narrower_heuristics():
     assert parse_json_type("1234") is JsonType.STRING
     assert parse_json_type("hello world") is JsonType.STRING
 
-    # A pure base64 string (regex + padding + clean decode) is BYTES.
-    assert parse_json_type("bXkgbG92ZWx5IGJ5dGVzIQ==") is JsonType.BYTES
+    # Short base64-like strings stay STRING until the base64 minimum-length guard is met.
+    assert parse_json_type("bXkgbG92ZWx5IGJ5dGVzIQ==") is JsonType.STRING
     # Strings that aren't valid base64 stay STRING.
     assert parse_json_type("hi\n") is JsonType.STRING
     assert parse_json_type("hello") is JsonType.STRING

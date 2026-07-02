@@ -29,7 +29,7 @@ def _value_at(tab: JsonTab, path: tuple[int, ...]) -> str:
 
 
 def test_attach_base64_from_file_replaces_value(qtbot, tmp_path, monkeypatch):
-    initial = base64.b64encode(b"seed payload for bytes").decode("ascii")
+    initial = base64.b64encode(b"seed payload for bytes " * 5).decode("ascii")
     tab = _make_tab(qtbot, {"blob": initial})
     _select_value_cell(tab, (0,))
 
@@ -47,7 +47,7 @@ def test_attach_base64_from_file_replaces_value(qtbot, tmp_path, monkeypatch):
 
 
 def test_attach_base64_from_file_warns_and_can_cancel_large_file(qtbot, tmp_path, monkeypatch):
-    initial = base64.b64encode(b"seed payload for bytes").decode("ascii")
+    initial = base64.b64encode(b"seed payload for bytes " * 5).decode("ascii")
     tab = _make_tab(qtbot, {"blob": initial})
     _select_value_cell(tab, (0,))
 
@@ -74,7 +74,7 @@ def test_attach_base64_from_file_warns_and_can_cancel_large_file(qtbot, tmp_path
 
 
 def test_save_base64_as_file_writes_decoded_payload(qtbot, tmp_path, monkeypatch):
-    payload = b"content to save"
+    payload = b"content to save " * 5
     encoded = base64.b64encode(payload).decode("ascii")
     tab = _make_tab(qtbot, {"blob": encoded})
     _select_value_cell(tab, (0,))

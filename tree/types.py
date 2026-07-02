@@ -9,18 +9,31 @@ from typing import Any
 
 import gmpy2
 from pandas import Timestamp
+from PySide6.QtCore import QSettings
 
 from core.datetime_parsing import parse_datetime_text
 from core.datetime_parsing.nano_time import NanoTime
 from core.raw_numeric import RawNumericValue
-from settings import INFERENCE_MAX_COLOR_CHARS, NUMBER_AFFIX_MAX_LEN
+from settings import APPLICATION_ID, BASE64_INFERENCE_MIN_LENGTH_CHARS, INFERENCE_MAX_COLOR_CHARS, NUMBER_AFFIX_MAX_LEN
 from tree.inference_limits import base64_syntax_valid
 from units.number_affix import AffixKind, NumberAffix, parse_number_affix
 
 LOGGER = logging.getLogger(__name__)
+# Compatibility-only regex kept for perf probes/import stability.
+# Actual base64 inference now uses ``base64_syntax_valid()`` plus the persisted
+# minimum-length guard in ``_looks_like_base64()``.
 _B64_RE = re.compile(r"^[A-Za-z0-9+/]{20,}={0,2}$")
 _COLOR_RGB_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _COLOR_RGBA_RE = re.compile(r"^#(?:[0-9a-fA-F]{4}|[0-9a-fA-F]{8})$")
+
+
+def _base64_inference_min_length_chars() -> int:
+    value = QSettings(APPLICATION_ID, "app").value("edit_limits/base64_min_length_chars")
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return BASE64_INFERENCE_MIN_LENGTH_CHARS
+    return number if number > 0 else BASE64_INFERENCE_MIN_LENGTH_CHARS
 
 
 def looks_like_color_rgb(s: str, *, allow_expensive: bool = False) -> bool:
@@ -39,8 +52,8 @@ def _looks_like_base64(s: str) -> bool:
     """Return True iff *s* is a syntactically valid, non-empty base64 string.
 
     Uses ``base64_syntax_valid`` as a cheap pre-check (len mod 4 + alphabet
-    regex) before attempting the expensive ``base64.b64decode``. A minimum
-    length of 20 chars is required to avoid false positives on short strings.
+    regex) before attempting the expensive ``base64.b64decode``. A configurable
+    minimum length guard avoids false positives on short strings.
 
     No content heuristics are applied: any string that decodes cleanly under
     strict base64 rules is treated as ``BYTES``. Callers that need to
@@ -49,8 +62,7 @@ def _looks_like_base64(s: str) -> bool:
     """
     if not base64_syntax_valid(s):
         return False
-    # Require minimum 20 chars to avoid false positives on short strings
-    if len(s) < 20:
+    if len(s) < _base64_inference_min_length_chars():
         return False
     try:
         base64.b64decode(s, validate=True)

@@ -406,7 +406,7 @@ def test_bool_to_string_undo_redo(qtbot):
 
 
 def test_bytes_to_zlib_undo_redo(qtbot):
-    raw = b"my lovely bytes!"
+    raw = b"my lovely bytes! " * 5
     bytes_b64 = encode_bytes(raw, JsonType.BYTES)
     tab = JsonTab(lambda *_: None, data={"blob": bytes_b64})
     qtbot.addWidget(tab)
@@ -514,3 +514,40 @@ def test_integer_currency_to_integer_units_flips_kind_preserving_payload():
     assert model.setData(type_idx, JsonType.INTEGER_UNITS)
     item = model.get_item(model.index(0, 0, QModelIndex()))
     assert item.value == NumberAffix(AffixKind.UNITS, "$", True, 42)
+
+
+@pytest.mark.parametrize(
+    ("original", "string_type", "target_type"),
+    [
+        (
+            NumberAffix(AffixKind.CURRENCY, "lvl", True, 7, 4, -1, True),
+            JsonType.STRING,
+            JsonType.INTEGER_CURRENCY,
+        ),
+        (
+            NumberAffix(AffixKind.CURRENCY, "lvl", True, mpq("3/2"), 4, 3, True),
+            JsonType.STRING,
+            JsonType.FLOAT_CURRENCY,
+        ),
+        (
+            NumberAffix(AffixKind.UNITS, "kg", False, 12, 3, -1, False),
+            JsonType.STRING,
+            JsonType.INTEGER_UNITS,
+        ),
+        (
+            NumberAffix(AffixKind.UNITS, "%", False, mpq("1999/20"), 0, 3, False),
+            JsonType.STRING,
+            JsonType.FLOAT_UNITS,
+        ),
+    ],
+    ids=["int-currency", "float-currency", "int-units", "float-units"],
+)
+def test_type_switch_string_round_trip_preserves_affix_metadata(original, string_type, target_type):
+    model = JsonTreeModel({"v": original})
+    type_idx = model.index(0, 1, QModelIndex())
+
+    assert model.setData(type_idx, string_type)
+    assert model.setData(type_idx, target_type)
+
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.value == original

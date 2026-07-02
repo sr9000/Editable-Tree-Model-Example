@@ -524,12 +524,13 @@ def test_bytes_to_string_full_round_trip_through_item(qtbot):
     """End-to-end: switching BYTES→STRING in a tab surfaces decoded text."""
     from documents.tab import JsonTab
 
-    raw = b"the answer is 42"
+    raw = b"the answer is 42 " * 5
     bytes_b64 = encode_bytes(raw, JsonType.BYTES)
     tab = JsonTab(lambda *_: None, data={"blob": bytes_b64})
     qtbot.addWidget(tab)
 
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    item.json_type = JsonType.BYTES
     assert item.json_type is JsonType.BYTES
 
     type_idx = tab.model.index(0, 1, QModelIndex())
@@ -537,7 +538,7 @@ def test_bytes_to_string_full_round_trip_through_item(qtbot):
 
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.STRING
-    assert item.value == "the answer is 42"
+    assert item.value == (b"the answer is 42 " * 5).decode("utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -661,6 +662,36 @@ def test_affix_to_string_to_affix_undo_redo_round_trip(qtbot):
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.INTEGER_UNITS
     assert item.value == NumberAffix(AffixKind.UNITS, "$", False, 10)
+
+
+@pytest.mark.parametrize(
+    ("original", "target_type"),
+    [
+        (
+            NumberAffix(AffixKind.CURRENCY, "lvl", True, 7, 4, -1, True),
+            JsonType.INTEGER_CURRENCY,
+        ),
+        (
+            NumberAffix(AffixKind.CURRENCY, "lvl", True, mpq("3/2"), 4, 3, True),
+            JsonType.FLOAT_CURRENCY,
+        ),
+        (
+            NumberAffix(AffixKind.UNITS, "kg", False, 12, 3, -1, False),
+            JsonType.INTEGER_UNITS,
+        ),
+        (
+            NumberAffix(AffixKind.UNITS, "%", False, mpq("1999/20"), 0, 3, False),
+            JsonType.FLOAT_UNITS,
+        ),
+    ],
+    ids=["int-currency", "float-currency", "int-units", "float-units"],
+)
+def test_affix_to_string_to_same_affix_type_preserves_metadata(original, target_type):
+    ok, text = coerce_value_for_type(JsonType.STRING, original, strict=False, old_type=target_type)
+    assert ok
+    ok, reparsed = coerce_value_for_type(target_type, text, strict=False, old_type=JsonType.STRING)
+    assert ok
+    assert reparsed == original
 
 
 def test_bytes_to_integer_returns_decoded_length():

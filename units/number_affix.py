@@ -65,21 +65,39 @@ def _parse_number(num_text: str) -> int | mpq:
     return parsed
 
 
-def _split_squashed_currency_sign(
+def _resolve_currency_no_space_boundary(
     affix: str,
     num_text: str,
     *,
     has_space: bool,
     max_affix_len: int,
 ) -> tuple[str, str] | None:
-    if has_space or not num_text or num_text[0] != "-":
+    """Resolve ambiguous ``prefix-number`` boundaries for no-space currency text.
+
+    Prefix currency syntax has an unavoidable ambiguity for strings like
+    ``prod-200``: the ``-`` can be read either as part of the numeric sign or as
+    the final character of the affix. This parser treats *spaced* negatives as
+    the explicit negative form (``prod -200``) and, for *no-space* forms,
+    prefers the affix boundary when that yields a valid currency affix.
+
+    That keeps parsing structurally consistent for hyphenated affixes instead of
+    relying on special cases such as zero-padded numbers only.
+    """
+    if has_space or not num_text.startswith("-"):
+        return None
+
+    # Keep single-symbol / punctuation-led currency prefixes on the historical
+    # path: ``$-1`` should remain an invalid no-space negative currency form.
+    # The ambiguity fix is for textual/hyphenatable affixes such as
+    # ``prod-200`` where the dash naturally belongs to the affix token.
+    if not affix[-1].isalnum():
         return None
 
     unsigned = num_text[1:]
-    if not re.fullmatch(r"0\d+", unsigned):
+    if not re.fullmatch(r"\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?", unsigned):
         return None
 
-    shifted_affix = affix + num_text[0]
+    shifted_affix = affix + "-"
     if not _is_valid_affix(shifted_affix, kind=AffixKind.CURRENCY, max_affix_len=max_affix_len):
         return None
 
@@ -133,14 +151,14 @@ def parse_number_affix(s: str, *, max_affix_len: int = 16, allow_expensive: bool
             num_text = m.group("num")
 
             if kind == AffixKind.CURRENCY:
-                squashed = _split_squashed_currency_sign(
+                resolved = _resolve_currency_no_space_boundary(
                     affix,
                     num_text,
                     has_space=(m.group("sp") == " "),
                     max_affix_len=max_affix_len,
                 )
-                if squashed is not None:
-                    affix, num_text = squashed
+                if resolved is not None:
+                    affix, num_text = resolved
                 elif m.group("sp") == "" and num_text.startswith("-"):
                     return None
 

@@ -15,6 +15,8 @@ import zlib
 
 import pytest
 
+import settings
+from state.edit_limits import set_base64_inference_min_length_chars
 from tests.perf.harness import classify_rows, measure_call, scaling_rows
 from tests.perf.string_corpus import DEFAULT_SIZES, base64_like, plain_ascii
 
@@ -31,28 +33,37 @@ from tree.types import JsonType, _looks_like_base64, parse_json_type
 _collected_rows: list = []
 
 
+@pytest.fixture(autouse=True)
+def _lower_base64_inference_threshold_for_perf_valid_fixtures():
+    previous = settings.BASE64_INFERENCE_MIN_LENGTH_CHARS
+    set_base64_inference_min_length_chars(20)
+    try:
+        yield
+    finally:
+        set_base64_inference_min_length_chars(previous)
+
+
 # ---------------------------------------------------------------------------
 # Valid small fixtures for successful decode paths
 # ---------------------------------------------------------------------------
 
 
 def _make_valid_bytes_fixture() -> str:
-    """Create a valid base64-encoded BYTES fixture (at least 20 chars for _B64_RE)."""
-    # Need at least 20 chars to match _B64_RE pattern
+    """Create a valid base64-encoded BYTES fixture long enough to pass the default minimum-length guard."""
     raw = b"Hello, World! This is a longer test message for base64 encoding."
     return base64.b64encode(raw).decode("ascii")
 
 
 def _make_valid_zlib_fixture() -> str:
     """Create a valid base64-encoded ZLIB fixture."""
-    raw = b"Hello, World! This is compressed data."
+    raw = b"Hello, World! This is compressed data. " * 8
     compressed = zlib.compress(raw)
     return base64.b64encode(compressed).decode("ascii")
 
 
 def _make_valid_gzip_fixture() -> str:
     """Create a valid base64-encoded GZIP fixture."""
-    raw = b"Hello, World! This is gzip compressed data."
+    raw = b"Hello, World! This is gzip compressed data. " * 8
     compressed = gzip.compress(raw)
     return base64.b64encode(compressed).decode("ascii")
 
@@ -135,13 +146,13 @@ class TestValidFixtures:
         """Valid ZLIB fixture should decompress successfully."""
         fixture = _make_valid_zlib_fixture()
         result = decode_bytes(fixture, JsonType.ZLIB)
-        assert result == b"Hello, World! This is compressed data."
+        assert result == (b"Hello, World! This is compressed data. " * 8)
 
     def test_valid_gzip_fixture_decodes(self):
         """Valid GZIP fixture should decompress successfully."""
         fixture = _make_valid_gzip_fixture()
         result = decode_bytes(fixture, JsonType.GZIP)
-        assert result == b"Hello, World! This is gzip compressed data."
+        assert result == (b"Hello, World! This is gzip compressed data. " * 8)
 
     def test_parse_json_type_detects_bytes(self):
         """parse_json_type should detect valid base64 as BYTES."""

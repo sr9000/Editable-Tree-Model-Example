@@ -41,6 +41,9 @@ Model".
   primitive in `tree_actions/anchors.py`. This ensures consistency across different UI interactions.
 - **Type-Centric**: Type inference (`tree/types.py`) and coercion (`tree/item_coercion.py`) are the source of truth for
   how data is handled. Don't scatter type logic in the UI.
+- **Base64 inference guard**: Automatic base64-family detection in `tree/types.py` uses valid syntax + strict decode,
+  but also a persisted minimum string length from `QSettings` (`edit_limits/base64_min_length_chars`, default `100`) to
+  reduce false positives on short human-readable strings.
 - **Surgical Model Updates**: The `DiffApplier` (`undo/diff.py`) is used during Undo/Redo to emit minimal Qt signals.
   This preserves UI state like selection and expansion that would be lost on a full model reset.
   **Important**: `DiffApplier.apply()` bypasses `JsonTreeItem.set_data()` — special type handling (e.g., `RAW_FLOAT`
