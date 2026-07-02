@@ -8,6 +8,7 @@ sizes, invalid length (not mod 4), invalid characters, and empty string.
 import base64
 
 import settings
+from state.edit_limits import set_base64_inference_min_length_chars
 from tree.inference_limits import (
     affix_inference_allowed,
     base64_syntax_valid,
@@ -15,6 +16,7 @@ from tree.inference_limits import (
     datetime_inference_allowed,
     format_preview_decode_allowed,
 )
+from tree.types import JsonType, _looks_like_base64, parse_json_type
 
 
 class TestDatetimeInferenceAllowed:
@@ -127,6 +129,28 @@ class TestBase64SyntaxValid:
     def test_too_much_padding(self):
         # "Y===" has 3 padding chars, regex allows max 2
         assert base64_syntax_valid("Y===") is False
+
+
+class TestBase64InferenceMinimumLength:
+    def teardown_method(self):
+        set_base64_inference_min_length_chars(settings.BASE64_INFERENCE_MIN_LENGTH_CHARS)
+
+    def test_short_valid_base64_is_not_inferred_by_default(self):
+        assert len("bXkgbG92ZWx5IGJ5dGVzIQ==") < settings.BASE64_INFERENCE_MIN_LENGTH_CHARS
+        assert _looks_like_base64("bXkgbG92ZWx5IGJ5dGVzIQ==") is False
+        assert parse_json_type("bXkgbG92ZWx5IGJ5dGVzIQ==") is JsonType.STRING
+
+    def test_valid_base64_at_default_minimum_length_is_inferred(self):
+        raw = b"x" * 75
+        encoded = base64.b64encode(raw).decode("ascii")
+        assert len(encoded) == settings.BASE64_INFERENCE_MIN_LENGTH_CHARS
+        assert _looks_like_base64(encoded) is True
+        assert parse_json_type(encoded) is JsonType.BYTES
+
+    def test_lowered_minimum_allows_shorter_valid_base64(self):
+        set_base64_inference_min_length_chars(20)
+        assert _looks_like_base64("bXkgbG92ZWx5IGJ5dGVzIQ==") is True
+        assert parse_json_type("bXkgbG92ZWx5IGJ5dGVzIQ==") is JsonType.BYTES
 
 
 class TestFormatPreviewDecodeAllowed:

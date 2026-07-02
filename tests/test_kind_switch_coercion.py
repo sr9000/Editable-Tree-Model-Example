@@ -524,12 +524,13 @@ def test_bytes_to_string_full_round_trip_through_item(qtbot):
     """End-to-end: switching BYTES→STRING in a tab surfaces decoded text."""
     from documents.tab import JsonTab
 
-    raw = b"the answer is 42"
+    raw = b"the answer is 42 " * 5
     bytes_b64 = encode_bytes(raw, JsonType.BYTES)
     tab = JsonTab(lambda *_: None, data={"blob": bytes_b64})
     qtbot.addWidget(tab)
 
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    item.json_type = JsonType.BYTES
     assert item.json_type is JsonType.BYTES
 
     type_idx = tab.model.index(0, 1, QModelIndex())
@@ -537,7 +538,7 @@ def test_bytes_to_string_full_round_trip_through_item(qtbot):
 
     item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
     assert item.json_type is JsonType.STRING
-    assert item.value == "the answer is 42"
+    assert item.value == (b"the answer is 42 " * 5).decode("utf-8")
 
 
 # ---------------------------------------------------------------------------

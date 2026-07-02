@@ -406,7 +406,7 @@ def test_bool_to_string_undo_redo(qtbot):
 
 
 def test_bytes_to_zlib_undo_redo(qtbot):
-    raw = b"my lovely bytes!"
+    raw = b"my lovely bytes! " * 5
     bytes_b64 = encode_bytes(raw, JsonType.BYTES)
     tab = JsonTab(lambda *_: None, data={"blob": bytes_b64})
     qtbot.addWidget(tab)

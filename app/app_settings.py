@@ -14,10 +14,12 @@ from PySide6.QtWidgets import QDialog, QInputDialog, QMenu
 from app.dialogs.secret_prefixes_dlg import SecretPrefixesDialog
 from state.edit_limits import (
     get_attach_file_warning_limit_bytes,
+    get_base64_inference_min_length_chars,
     get_binary_edit_warning_limit_bytes,
     get_multiline_edit_warning_limit_chars,
     get_string_edit_warning_limit_chars,
     set_attach_file_warning_limit_bytes,
+    set_base64_inference_min_length_chars,
     set_binary_edit_warning_limit_bytes,
     set_multiline_edit_warning_limit_chars,
     set_string_edit_warning_limit_chars,
@@ -60,16 +62,19 @@ class AppSettingsPresenter(QObject):
         self.limit_multiline_action = QAction(win)
         self.limit_binary_action = QAction(win)
         self.limit_attach_action = QAction(win)
+        self.limit_base64_min_length_action = QAction(win)
 
         self.limit_string_action.triggered.connect(self._set_string_warning_limit)
         self.limit_multiline_action.triggered.connect(self._set_multiline_warning_limit)
         self.limit_binary_action.triggered.connect(self._set_binary_warning_limit)
         self.limit_attach_action.triggered.connect(self._set_attach_warning_limit)
+        self.limit_base64_min_length_action.triggered.connect(self._set_base64_inference_min_length)
 
         self.limits_menu.addAction(self.limit_string_action)
         self.limits_menu.addAction(self.limit_multiline_action)
         self.limits_menu.addAction(self.limit_binary_action)
         self.limits_menu.addAction(self.limit_attach_action)
+        self.limits_menu.addAction(self.limit_base64_min_length_action)
         self.limits_menu.aboutToShow.connect(self.refresh_edit_limits_menu_entries)
         self.refresh_edit_limits_menu_entries()
 
@@ -82,6 +87,7 @@ class AppSettingsPresenter(QObject):
         multiline_limit = get_multiline_edit_warning_limit_chars()
         binary_limit = get_binary_edit_warning_limit_bytes()
         attach_limit = get_attach_file_warning_limit_bytes()
+        base64_min_length = get_base64_inference_min_length_chars()
 
         self.limit_string_action.setText(
             win.tr("String edit limit... ({value} chars)").format(value=counts(string_limit))
@@ -94,6 +100,9 @@ class AppSettingsPresenter(QObject):
         )
         self.limit_attach_action.setText(
             win.tr("Attach file size limit... ({value})").format(value=format_bytes(attach_limit))
+        )
+        self.limit_base64_min_length_action.setText(
+            win.tr("Base64 inference minimum length... ({value} chars)").format(value=counts(base64_min_length))
         )
 
     def _prompt_limit_value(self, *, title: str, label: str, current: int) -> int | None:
@@ -157,3 +166,17 @@ class AppSettingsPresenter(QObject):
         set_attach_file_warning_limit_bytes(value)
         self.refresh_edit_limits_menu_entries()
         win.statusBar.showMessage(win.tr("Updated attach file warning limit"), 2000)
+
+    def _set_base64_inference_min_length(self) -> None:
+        win = self._win
+        current = get_base64_inference_min_length_chars()
+        value = self._prompt_limit_value(
+            title=win.tr("Base64 Inference Minimum Length"),
+            label=win.tr("Interpret strings as base64 starting at length (chars):"),
+            current=current,
+        )
+        if value is None:
+            return
+        set_base64_inference_min_length_chars(value)
+        self.refresh_edit_limits_menu_entries()
+        win.statusBar.showMessage(win.tr("Updated base64 inference minimum length"), 2000)

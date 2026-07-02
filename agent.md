@@ -42,6 +42,11 @@ Hard rules:
 3. **UI uses proxy model**
    - Map indices proxy↔source before touching tree items.
 
+4. **Base64 auto-inference has a persisted minimum-length guard**
+   - Automatic string→`BYTES`/`ZLIB`/`GZIP` inference only runs when the string length meets the current
+     `edit_limits/base64_min_length_chars` threshold (default `100`).
+   - Short valid base64 stays `STRING` unless the type is pinned explicitly or the threshold is lowered.
+
 ## 4) Isolation constraints (must hold)
 
 - `editors/inline/*`, `editors/windowed/*` must not import `app/`, `documents/`, `tree/`.

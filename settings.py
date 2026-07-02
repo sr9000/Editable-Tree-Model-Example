@@ -9,6 +9,7 @@ BINARY_ATTACH_WARNING_LIMIT_BYTES = 100 * 1024
 BINARY_EDIT_WARNING_LIMIT_BYTES = 100 * 1024
 STRING_EDIT_WARNING_LIMIT_CHARS = 10_000
 MULTILINE_EDIT_WARNING_LIMIT_CHARS = 100_000
+BASE64_INFERENCE_MIN_LENGTH_CHARS = 100
 
 # Secret field detection and masking defaults.
 SECRET_WORD_PREFIXES: tuple[str, ...] = (
@@ -55,8 +56,9 @@ MPQ_SAFE_MAX_SIG_DIGITS = 4_300
 # Design decisions:
 # - No INFERENCE_MAX_TOTAL_CHARS: individual gates (datetime, affix, color)
 #   effectively skip all unnecessary checks; a top-level fast path is redundant.
-# - No INFERENCE_MAX_BASE64_PROBE_CHARS: base64 uses content-based syntax
-#   validation (len mod 4 + alphabet regex) instead of a length cap.
+# - No INFERENCE_MAX_BASE64_PROBE_CHARS: base64 does not use a performance
+#   cap; it uses content-based syntax validation plus a separate minimum-length
+#   false-positive guard.
 # - No EDITABLE_DECODE_LIMIT_BYTES: if base64 syntax is valid, decode is allowed.
 
 # parse_datetime_text() regex and datetime conversion.

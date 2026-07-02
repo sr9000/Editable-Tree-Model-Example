@@ -4,6 +4,7 @@ from PySide6.QtCore import QSettings
 
 from settings import (
     APPLICATION_ID,
+    BASE64_INFERENCE_MIN_LENGTH_CHARS,
     BINARY_ATTACH_WARNING_LIMIT_BYTES,
     BINARY_EDIT_WARNING_LIMIT_BYTES,
     MULTILINE_EDIT_WARNING_LIMIT_CHARS,
@@ -14,6 +15,7 @@ _STRING_LIMIT_KEY = "edit_limits/string_chars"
 _MULTILINE_LIMIT_KEY = "edit_limits/multiline_chars"
 _BINARY_EDIT_LIMIT_KEY = "edit_limits/binary_bytes"
 _ATTACH_LIMIT_KEY = "edit_limits/attach_bytes"
+_BASE64_MIN_LENGTH_KEY = "edit_limits/base64_min_length_chars"
 
 
 def _settings() -> QSettings:
@@ -58,3 +60,11 @@ def get_attach_file_warning_limit_bytes() -> int:
 
 def set_attach_file_warning_limit_bytes(limit: int) -> None:
     _settings().setValue(_ATTACH_LIMIT_KEY, _coerce_positive_int(limit, default=BINARY_ATTACH_WARNING_LIMIT_BYTES))
+
+
+def get_base64_inference_min_length_chars() -> int:
+    return _coerce_positive_int(_settings().value(_BASE64_MIN_LENGTH_KEY), default=BASE64_INFERENCE_MIN_LENGTH_CHARS)
+
+
+def set_base64_inference_min_length_chars(limit: int) -> None:
+    _settings().setValue(_BASE64_MIN_LENGTH_KEY, _coerce_positive_int(limit, default=BASE64_INFERENCE_MIN_LENGTH_CHARS))
