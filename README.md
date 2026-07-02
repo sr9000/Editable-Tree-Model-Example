@@ -24,9 +24,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Python **3.12+** is expected. Dependencies are pinned in
-`requirements.txt` and include PySide6, PyYAML, simplejson, gmpy2,
-python-dateutil, tzdata, pytest, and `jsonschema[format]`.
+Python **3.12+** is expected. Dependencies are pinned in `requirements.txt` and include PySide6, PyYAML, simplejson,
+gmpy2, python-dateutil, tzdata, pytest, and `jsonschema[format]`.
 
 ### Run the app
 
