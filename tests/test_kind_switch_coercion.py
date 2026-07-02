@@ -664,6 +664,36 @@ def test_affix_to_string_to_affix_undo_redo_round_trip(qtbot):
     assert item.value == NumberAffix(AffixKind.UNITS, "$", False, 10)
 
 
+@pytest.mark.parametrize(
+    ("original", "target_type"),
+    [
+        (
+            NumberAffix(AffixKind.CURRENCY, "lvl", True, 7, 4, -1, True),
+            JsonType.INTEGER_CURRENCY,
+        ),
+        (
+            NumberAffix(AffixKind.CURRENCY, "lvl", True, mpq("3/2"), 4, 3, True),
+            JsonType.FLOAT_CURRENCY,
+        ),
+        (
+            NumberAffix(AffixKind.UNITS, "kg", False, 12, 3, -1, False),
+            JsonType.INTEGER_UNITS,
+        ),
+        (
+            NumberAffix(AffixKind.UNITS, "%", False, mpq("1999/20"), 0, 3, False),
+            JsonType.FLOAT_UNITS,
+        ),
+    ],
+    ids=["int-currency", "float-currency", "int-units", "float-units"],
+)
+def test_affix_to_string_to_same_affix_type_preserves_metadata(original, target_type):
+    ok, text = coerce_value_for_type(JsonType.STRING, original, strict=False, old_type=target_type)
+    assert ok
+    ok, reparsed = coerce_value_for_type(target_type, text, strict=False, old_type=JsonType.STRING)
+    assert ok
+    assert reparsed == original
+
+
 def test_bytes_to_integer_returns_decoded_length():
     """Switching from a bytes-family kind to INTEGER returns the underlying
     byte length, which is meaningful (file/blob size)."""

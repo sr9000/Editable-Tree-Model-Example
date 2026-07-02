@@ -370,6 +370,17 @@ def coerce_value_for_type(
             return AffixKind.CURRENCY
         return AffixKind.UNITS
 
+    def _rebuild_affix(parsed: NumberAffix, *, kind: AffixKind, number: int | mpq) -> NumberAffix:
+        return NumberAffix(
+            kind=kind,
+            affix=parsed.affix,
+            space=parsed.space,
+            number=number,
+            integral_digits=parsed.integral_digits,
+            fractional_digits=parsed.fractional_digits,
+            explicit_plus=parsed.explicit_plus,
+        )
+
     # Targeting the RAW_FLOAT pseudo-type: always keep the value as a raw
     # numeric literal (this path is only reachable programmatically; the type
     # is not user-selectable).
@@ -470,12 +481,12 @@ def coerce_value_for_type(
                     truncated = _int_from_truncated(parsed.number)
                     if truncated is None:
                         return False, None
-                    return True, NumberAffix(kind=kind, affix=parsed.affix, space=parsed.space, number=truncated)
+                    return True, _rebuild_affix(parsed, kind=kind, number=truncated)
             if isinstance(value, NumberAffix):
                 truncated = _int_from_truncated(value.number)
                 if truncated is None:
                     return False, None
-                return True, NumberAffix(kind=kind, affix=value.affix, space=value.space, number=truncated)
+                return True, _rebuild_affix(value, kind=kind, number=truncated)
             truncated = _int_from_truncated(value)
             if truncated is None:
                 return (
@@ -493,12 +504,12 @@ def coerce_value_for_type(
                     q = _to_mpq_or_none(parsed.number)
                     if q is None:
                         return False, None
-                    return True, NumberAffix(kind=kind, affix=parsed.affix, space=parsed.space, number=q)
+                    return True, _rebuild_affix(parsed, kind=kind, number=q)
             if isinstance(value, NumberAffix):
                 q = _to_mpq_or_none(value.number)
                 if q is None:
                     return False, None
-                return True, NumberAffix(kind=kind, affix=value.affix, space=value.space, number=q)
+                return True, _rebuild_affix(value, kind=kind, number=q)
             q = _to_mpq_or_none(value)
             if q is None:
                 return (
