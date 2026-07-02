@@ -34,6 +34,26 @@ def test_currency_affix_editor_commit(qtbot):
     assert item.value == NumberAffix(AffixKind.CURRENCY, "$", True, 12, 4, -1)
 
 
+def test_currency_affix_editor_commit_with_explicit_plus(qtbot):
+    tab = JsonTab(lambda *_: None, data={"v": NumberAffix(AffixKind.CURRENCY, "pepe", False, 7)})
+    qtbot.addWidget(tab)
+
+    index = _value_index(tab)
+    editor = tab.view_controller.value_delegate.createEditor(
+        tab.view, QStyleOptionViewItem(), tab.view_controller.source_to_view(index)
+    )
+    assert isinstance(editor, AffixCompositeEditor)
+    tab.view_controller.value_delegate.setEditorData(editor, tab.view_controller.source_to_view(index))
+
+    editor.affix_combo.setCurrentText("pepe")
+    qtbot.mouseClick(editor.plus_button, Qt.MouseButton.LeftButton)
+    editor.number_editor.setValue(777)
+    tab.view_controller.value_delegate.setModelData(editor, tab.model, tab.view_controller.source_to_view(index))
+
+    item = tab.model.get_item(tab.model.index(0, 0, QModelIndex()))
+    assert item.value == NumberAffix(AffixKind.CURRENCY, "pepe", False, 777, 0, -1, True)
+
+
 def test_units_affix_editor_commit_float(qtbot):
     tab = JsonTab(lambda *_: None, data={"v": NumberAffix(AffixKind.UNITS, "%", False, mpq("1/2"))})
     qtbot.addWidget(tab)
@@ -83,6 +103,28 @@ def test_integer_affix_editor_shows_width_spinbox_and_builds_selected_width(qtbo
 
     built = editor.build_value()
     assert built == NumberAffix(AffixKind.CURRENCY, "abc-", False, 12, 5, -1)
+
+
+def test_affix_editor_plus_toggle_round_trips_explicit_positive_sign(qtbot):
+    editor = AffixCompositeEditor(
+        None,
+        kind=AffixKind.CURRENCY,
+        is_integer=True,
+        mru_items=["pepe"],
+    )
+    qtbot.addWidget(editor)
+    editor.show()
+
+    editor.set_value(NumberAffix(AffixKind.CURRENCY, "pepe", False, 777, 0, -1, True))
+
+    assert editor.plus_button.isChecked()
+    assert editor.plus_button.text() == "Plus"
+
+    qtbot.mouseClick(editor.plus_button, Qt.MouseButton.LeftButton)
+    assert editor.build_value() == NumberAffix(AffixKind.CURRENCY, "pepe", False, 777)
+
+    qtbot.mouseClick(editor.plus_button, Qt.MouseButton.LeftButton)
+    assert editor.build_value() == NumberAffix(AffixKind.CURRENCY, "pepe", False, 777, 0, -1, True)
 
 
 def test_float_affix_editor_shows_precision_spinbox_and_updates_step(qtbot):

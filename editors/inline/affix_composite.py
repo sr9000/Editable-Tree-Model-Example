@@ -45,6 +45,12 @@ class AffixCompositeEditor(QWidget):
         self.space_button.toggled.connect(self._on_space_toggled)
         self._update_space_button_width()
 
+        self.plus_button = QPushButton("Plain", parent=self)
+        self.plus_button.setCheckable(True)
+        self.plus_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+        self.plus_button.setToolTip("Preserve explicit leading plus for positive values")
+        self.plus_button.toggled.connect(self._on_plus_toggled)
+
         self.width_button = QPushButton("Width", parent=self)
         self.width_button.setCheckable(True)
         self.width_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
@@ -89,6 +95,7 @@ class AffixCompositeEditor(QWidget):
                 self.affix_combo.addItem(affix)
 
         layout.addWidget(self.space_button)
+        layout.addWidget(self.plus_button)
         layout.addWidget(self.width_button)
         layout.addWidget(self.width_spinbox)
         if self.precision_button:
@@ -105,6 +112,9 @@ class AffixCompositeEditor(QWidget):
 
     def _on_space_toggled(self, checked: bool) -> None:
         self.space_button.setText(self._space_button_text(bool(checked)))
+
+    def _on_plus_toggled(self, checked: bool) -> None:
+        self.plus_button.setText("Plus" if checked else "Plain")
 
     def _on_width_toggled(self, checked: bool) -> None:
         self.width_button.setText("Width" if checked else "Short")
@@ -183,6 +193,7 @@ class AffixCompositeEditor(QWidget):
         if self.affix_combo.lineEdit() is not None:
             self.affix_combo.lineEdit().setText(text)
         self.space_button.setChecked(bool(value.space))
+        self.plus_button.setChecked(bool(value.explicit_plus))
 
         self.number_editor.setValue(value.number)
         self.set_invalid(False)
@@ -218,4 +229,5 @@ class AffixCompositeEditor(QWidget):
             number=self.number_editor.value(),
             integral_digits=new_integral,
             fractional_digits=new_fractional,
+            explicit_plus=self.plus_button.isChecked() and self.number_editor.value() >= 0,
         )

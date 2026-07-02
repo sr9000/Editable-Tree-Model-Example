@@ -29,6 +29,7 @@ class NumberAffix:
     number: int | mpq
     integral_digits: int = 0
     fractional_digits: int = -1
+    explicit_plus: bool = False
 
     def __str__(self) -> str:
         try:
@@ -71,7 +72,7 @@ def _split_squashed_currency_sign(
     has_space: bool,
     max_affix_len: int,
 ) -> tuple[str, str] | None:
-    if has_space or not num_text or num_text[0] not in "+-":
+    if has_space or not num_text or num_text[0] != "-":
         return None
 
     unsigned = num_text[1:]
@@ -140,7 +141,7 @@ def parse_number_affix(s: str, *, max_affix_len: int = 16, allow_expensive: bool
                 )
                 if squashed is not None:
                     affix, num_text = squashed
-                elif m.group("sp") == "" and num_text.startswith(("-", "+")):
+                elif m.group("sp") == "" and num_text.startswith("-"):
                     return None
 
             if not _is_valid_affix(affix, kind=kind, max_affix_len=max_affix_len):
@@ -175,6 +176,7 @@ def parse_number_affix(s: str, *, max_affix_len: int = 16, allow_expensive: bool
                 number=number,
                 integral_digits=integral_digits,
                 fractional_digits=fractional_digits,
+                explicit_plus=num_text.startswith("+"),
             )
 
     return None
@@ -199,7 +201,7 @@ def format_number_affix(na: NumberAffix) -> str:
 
         if na.integral_digits > 0:
             sign = "-" if int_part.startswith("-") else ""
-            digits = int_part.lstrip("-")
+            digits = int_part.lstrip("+-")
             if len(digits) < na.integral_digits:
                 int_part = sign + digits.zfill(na.integral_digits)
 
@@ -216,6 +218,9 @@ def format_number_affix(na: NumberAffix) -> str:
                 number_text = int_part
         else:
             number_text = int_part
+
+    if na.explicit_plus and na.number >= 0 and not number_text.startswith(("+", "-")):
+        number_text = "+" + number_text
 
     gap = " " if na.space else ""
 
