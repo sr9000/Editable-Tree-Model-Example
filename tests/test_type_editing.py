@@ -4,6 +4,7 @@ from PySide6.QtCore import QEvent, QModelIndex, Qt
 from PySide6.QtGui import QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QLineEdit, QStyleOptionViewItem, QWidget
 
+from core.raw_numeric import RawNumericValue
 from delegates.type_delegate import JsonTypeDelegate
 from documents.tab import JsonTab
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
@@ -48,6 +49,34 @@ def test_type_change_sets_explicit_type_and_coerces_value():
     # Explicit INTEGER typing rejects incompatible value text
     assert not model.setData(value_index, "not-an-int")
     assert item.value == 42
+
+
+def test_type_change_to_float_preserves_unsupported_numeric_literal_as_raw_float():
+    model = JsonTreeModel({"value": "31e-327018450730"})
+    type_index = model.index(0, 1, QModelIndex())
+
+    assert model.setData(type_index, JsonType.FLOAT)
+
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.explicit_type is True
+    assert item.json_type is JsonType.RAW_FLOAT
+    assert isinstance(item.value, RawNumericValue)
+    assert item.value.raw == "31e-327018450730"
+
+
+def test_explicit_float_edit_accepts_unsupported_numeric_literal_as_raw_float():
+    model = JsonTreeModel({"value": 1.5})
+    type_index = model.index(0, 1, QModelIndex())
+    value_index = model.index(0, 2, QModelIndex())
+
+    assert model.setData(type_index, JsonType.FLOAT)
+    assert model.setData(value_index, "31e+327018450730")
+
+    item = model.get_item(model.index(0, 0, QModelIndex()))
+    assert item.explicit_type is True
+    assert item.json_type is JsonType.RAW_FLOAT
+    assert isinstance(item.value, RawNumericValue)
+    assert item.value.raw == "31e+327018450730"
 
 
 def test_type_pinning_keeps_string_for_base64_like_value():

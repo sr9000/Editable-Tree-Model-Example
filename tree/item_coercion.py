@@ -12,8 +12,8 @@ from pandas import Timestamp
 from core.datetime_parsing.enums import DateTimeCategory
 from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
-from core.raw_numeric import RawNumericValue
-from core.safe_mpq import safe_mpq_from_any
+from core.raw_numeric import REASON_UNKNOWN, RawNumericValue, raw_numeric_text_is_acceptable
+from core.safe_mpq import parse_mpq, safe_mpq_from_any
 from mpq2py import mpq_serialization
 from settings import NUMBER_AFFIX_MAX_LEN
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
@@ -462,6 +462,12 @@ def coerce_value_for_type(
             if _is_temporal_type(old_type):
                 # Same safety rule as INTEGER for non-applicable temporal transitions.
                 return (False, None) if strict else (True, stub_float())
+            if isinstance(value, str):
+                result = parse_mpq(value)
+                if result.value is not None:
+                    return True, result.value
+                if raw_numeric_text_is_acceptable(value):
+                    return True, RawNumericValue(raw=value, reason=result.reason or REASON_UNKNOWN)
             q = _to_mpq_or_none(value)
             if q is not None:
                 return True, q

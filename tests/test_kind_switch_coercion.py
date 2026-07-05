@@ -23,6 +23,7 @@ from PySide6.QtCore import QModelIndex
 from core.datetime_parsing.enums import DateTimeCategory
 from core.datetime_parsing.nano_time import NanoTime
 from core.datetime_parsing.regex import parse_datetime_text
+from core.raw_numeric import REASON_OVERFLOW, REASON_UNDERFLOW, RawNumericValue
 from tree.codecs.bytes_codec import decode_bytes, encode_bytes
 from tree.item_coercion import coerce_value_for_type
 from tree.model import JsonTreeModel
@@ -179,6 +180,24 @@ def test_invalid_date_string_to_float_uses_default_fallback():
         mpq("6.62607015"),
         mpq("9.80665"),
     }
+
+
+def test_string_underflow_to_float_preserves_raw_numeric():
+    ok, result = coerce_value_for_type(JsonType.FLOAT, "31e-327018450730", strict=False, old_type=JsonType.STRING)
+
+    assert ok
+    assert isinstance(result, RawNumericValue)
+    assert result.raw == "31e-327018450730"
+    assert result.reason == REASON_UNDERFLOW
+
+
+def test_string_overflow_to_float_preserves_raw_numeric_even_in_strict_mode():
+    ok, result = coerce_value_for_type(JsonType.FLOAT, "31e+327018450730", strict=True, old_type=JsonType.STRING)
+
+    assert ok
+    assert isinstance(result, RawNumericValue)
+    assert result.raw == "31e+327018450730"
+    assert result.reason == REASON_OVERFLOW
 
 
 def test_datetime_to_integer_round_trip():
