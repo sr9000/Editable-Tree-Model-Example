@@ -10,6 +10,7 @@ from PySide6.QtCore import QMimeData, QModelIndex
 from PySide6.QtWidgets import QApplication, QTreeView
 
 from app.main_window import MainWindow
+from core.raw_numeric import REASON_OVERFLOW, REASON_UNDERFLOW, RawNumericValue
 from documents.tab import JsonTab
 from state.clipboard_settings import (
     CLIPBOARD_TEXT_FORMAT_JSON,
@@ -18,12 +19,18 @@ from state.clipboard_settings import (
     set_clipboard_text_format,
 )
 from tree.model import JsonTreeModel
+from tree.types import JsonType
 from tree_actions.clipboard import (
     MIME_JSON_TREE,
     clipboard_text_is_valid_data,
     clipboard_to_tab_data,
     copy_selection,
     entries_from_mime,
+)
+from tree_actions.paste import paste_from_clipboard
+
+_EXTREME_FLOATS_JSON = (
+    '{"underfloat": 31e-327018450730, ' '"overfloat": 31e+327018450730, ' '"untouchable": "$ 31e-327018450730"}'
 )
 
 
@@ -41,6 +48,16 @@ def _reset_format():
     set_clipboard_text_format(CLIPBOARD_TEXT_FORMAT_JSON)
 
 
+def _find_named_item(root, name: str):
+    for child in root.child_items:
+        if child.name == name:
+            return child
+        found = _find_named_item(child, name)
+        if found is not None:
+            return found
+    return None
+
+
 # ---------------------------------------------------------------------------
 # entries_from_mime — YAML fallback
 # ---------------------------------------------------------------------------
@@ -48,11 +65,11 @@ def _reset_format():
 
 def test_entries_from_mime_accepts_yaml_mapping(qtbot):
     mime = QMimeData()
-    mime.setText("key1: value1\nkey2: value2\n")
+    mime.setText("key1: alpha\nkey2: beta\n")
     result = entries_from_mime(mime)
     assert result is not None
     data = {e["name"]: e["value"] for e in result}
-    assert data == {"key1": "value1", "key2": "value2"}
+    assert data == {"key1": "alpha", "key2": "beta"}
 
 
 def test_entries_from_mime_accepts_yaml_list(qtbot):
@@ -83,6 +100,23 @@ def test_entries_from_mime_json_takes_priority_over_yaml(qtbot):
     assert result is not None
     assert result[0]["name"] == "x"
     assert result[0]["value"] == 42
+
+
+def test_entries_from_mime_preserves_extreme_json_numbers_as_raw_numeric(qtbot):
+    mime = QMimeData()
+    mime.setText(_EXTREME_FLOATS_JSON)
+
+    result = entries_from_mime(mime)
+
+    assert result is not None
+    data = {e["name"]: e["value"] for e in result}
+    assert isinstance(data["underfloat"], RawNumericValue)
+    assert data["underfloat"].raw == "31e-327018450730"
+    assert data["underfloat"].reason == REASON_UNDERFLOW
+    assert isinstance(data["overfloat"], RawNumericValue)
+    assert data["overfloat"].raw == "31e+327018450730"
+    assert data["overfloat"].reason == REASON_OVERFLOW
+    assert data["untouchable"] == "$ 31e-327018450730"
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +156,23 @@ def test_clipboard_to_tab_data_json(qtbot):
     data, fmt = clipboard_to_tab_data()
     assert data == {"foo": "bar"}
     assert fmt == SAVE_FORMAT_JSON
+
+
+def test_clipboard_to_tab_data_json_preserves_extreme_floats(qtbot):
+    from io_formats.detect import SAVE_FORMAT_JSON
+
+    _set_clipboard_text(_EXTREME_FLOATS_JSON)
+
+    data, fmt = clipboard_to_tab_data()
+
+    assert fmt == SAVE_FORMAT_JSON
+    assert isinstance(data["underfloat"], RawNumericValue)
+    assert data["underfloat"].raw == "31e-327018450730"
+    assert data["underfloat"].reason == REASON_UNDERFLOW
+    assert isinstance(data["overfloat"], RawNumericValue)
+    assert data["overfloat"].raw == "31e+327018450730"
+    assert data["overfloat"].reason == REASON_OVERFLOW
+    assert data["untouchable"] == "$ 31e-327018450730"
 
 
 def test_clipboard_to_tab_data_yaml(qtbot):
@@ -281,6 +332,66 @@ def test_new_from_clipboard_creates_tab_with_json_data(qtbot):
         win.close()
         win.deleteLater()
         QApplication.processEvents()
+
+
+def test_new_from_clipboard_preserves_extreme_floats(qtbot):
+    _set_clipboard_text(_EXTREME_FLOATS_JSON)
+    win = MainWindow(yaml_filename="")
+    qtbot.addWidget(win)
+    try:
+        initial_count = win.tabWidget.count()
+        win.new_from_clipboard()
+        assert win.tabWidget.count() == initial_count + 1
+
+        tab = _current_tab(win)
+        root = tab.model.root_item.to_json()
+        assert isinstance(root["underfloat"], RawNumericValue)
+        assert root["underfloat"].raw == "31e-327018450730"
+        assert isinstance(root["overfloat"], RawNumericValue)
+        assert root["overfloat"].raw == "31e+327018450730"
+
+        under_item = _find_named_item(tab.model.root_item, "underfloat")
+        over_item = _find_named_item(tab.model.root_item, "overfloat")
+        assert under_item is not None
+        assert over_item is not None
+        assert under_item.json_type is JsonType.RAW_FLOAT
+        assert over_item.json_type is JsonType.RAW_FLOAT
+    finally:
+        for i in range(win.tabWidget.count()):
+            w = win.tabWidget.widget(i)
+            if isinstance(w, JsonTab):
+                w.undo_stack.setClean()
+        win.close()
+        win.deleteLater()
+        QApplication.processEvents()
+
+
+def test_paste_from_clipboard_preserves_extreme_floats(qtbot):
+    _set_clipboard_text(_EXTREME_FLOATS_JSON)
+
+    tab = JsonTab(lambda *_: None, data={"target": []})
+    qtbot.addWidget(tab)
+    target_view = tab.view.model().index(0, 0, QModelIndex())
+    tab.view.setCurrentIndex(target_view)
+
+    assert paste_from_clipboard(tab.view)
+
+    target = tab.model.index(0, 0, QModelIndex())
+    pasted = tab.model.get_item(target).to_json()
+    assert isinstance(pasted, list)
+    assert len(pasted) == 3
+    assert isinstance(pasted[0], RawNumericValue)
+    assert pasted[0].raw == "31e-327018450730"
+    assert pasted[0].reason == REASON_UNDERFLOW
+    assert isinstance(pasted[1], RawNumericValue)
+    assert pasted[1].raw == "31e+327018450730"
+    assert pasted[1].reason == REASON_OVERFLOW
+    assert pasted[2] == "$ 31e-327018450730"
+
+    child0 = tab.model.get_item(tab.model.index(0, 0, target))
+    child1 = tab.model.get_item(tab.model.index(1, 0, target))
+    assert child0.json_type is JsonType.RAW_FLOAT
+    assert child1.json_type is JsonType.RAW_FLOAT
 
 
 def test_new_from_clipboard_creates_tab_with_yaml_data(qtbot):

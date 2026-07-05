@@ -7,6 +7,7 @@ from PySide6.QtCore import QMimeData
 from PySide6.QtWidgets import QApplication, QTreeView
 
 from core.raw_numeric import REASON_UNKNOWN, RawNumericValue
+from io_formats import SAVE_FORMAT_JSON, load_text_with_format
 from mpq2py import MpqSafeDumper, mpq_json_default, raw_numeric_is_json_safe
 from tree.model import JsonTreeModel
 from tree.types import JsonType
@@ -290,23 +291,7 @@ def entries_from_mime(mime: QMimeData) -> list[dict[str, Any]] | None:
     if not text:
         return None
 
-    # Try JSON first, then YAML.
-    parsed = None
-    try:
-        parsed = json.loads(text)
-    except Exception:
-        pass
-
-    if parsed is None:
-        try:
-            yaml_parsed = yaml.safe_load(text)
-            # Only accept structured types from YAML; bare scalars are ambiguous
-            # (any plain string would be "valid" YAML, which is not useful here).
-            if isinstance(yaml_parsed, (dict, list)):
-                parsed = yaml_parsed
-        except Exception:
-            pass
-
+    parsed, _fmt = load_text_with_format(text, allow_scalar_yaml=False)
     if parsed is None:
         return None
 
@@ -357,8 +342,6 @@ def clipboard_to_tab_data() -> tuple[Any, str | None]:
     Returns (None, None) when the clipboard contains nothing usable.
     save_format uses SAVE_FORMAT_* constants from io_formats.detect.
     """
-    from io_formats.detect import SAVE_FORMAT_JSON, SAVE_FORMAT_YAML, SAVE_FORMAT_YAML_MULTI
-
     mime = QApplication.clipboard().mimeData()
     if mime is None:
         return None, None
@@ -374,27 +357,8 @@ def clipboard_to_tab_data() -> tuple[Any, str | None]:
     if not text:
         return None, None
 
-    # JSON
-    try:
-        data = json.loads(text)
-        return data, SAVE_FORMAT_JSON
-    except Exception:
-        pass
-
-    # YAML — detect multi-doc via load_all
-    try:
-        docs = list(yaml.safe_load_all(text))
-        # Only accept structured types; bare scalars (strings, numbers) are not useful.
-        docs = [d for d in docs if isinstance(d, (dict, list))]
-        if not docs:
-            return None, None
-        if len(docs) > 1:
-            return docs, SAVE_FORMAT_YAML_MULTI
-        return docs[0], SAVE_FORMAT_YAML
-    except Exception:
-        pass
-
-    return None, None
+    data, save_format = load_text_with_format(text, allow_scalar_yaml=False)
+    return data, save_format
 
 
 # ---------------------------------------------------------------------------

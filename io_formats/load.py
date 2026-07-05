@@ -146,6 +146,65 @@ def _append_json_pointer(parent_path: str, segment: str | int) -> str:
     return f"{parent_path}/{token}"
 
 
+def load_text_with_format(
+    text: str,
+    *,
+    allow_scalar_yaml: bool = True,
+    on_progress: Callable[[int, str], None] | None = None,
+) -> tuple[Any, str] | tuple[None, None]:
+    """Parse structured *text* using the same safe numeric rules as file load.
+
+    JSON uses ``_safe_parse_float`` / ``_safe_parse_constant`` so unsupported
+    numerics are preserved as ``RawNumericValue``. YAML uses ``MpqSafeLoader`` so
+    float-like scalars follow the same preservation rules.
+
+    When ``allow_scalar_yaml`` is False, bare YAML scalars are rejected and only
+    mapping/list payloads are accepted. This matches clipboard semantics, where
+    arbitrary plain text should not become paste-able structured data.
+    """
+
+    stripped = text.strip()
+    if not stripped:
+        return None, None
+
+    try:
+        return (
+            _decode_number_affixes(
+                simplejson.loads(
+                    stripped,
+                    parse_float=_safe_parse_float,
+                    parse_constant=_safe_parse_constant,
+                ),
+                on_progress=on_progress,
+            ),
+            SAVE_FORMAT_JSON,
+        )
+    except Exception:
+        pass
+
+    try:
+        docs = [
+            _decode_number_affixes(doc, on_progress=on_progress)
+            for doc in yaml.load_all(stripped, Loader=MpqSafeLoader)
+        ]
+    except Exception:
+        return None, None
+
+    if not docs:
+        return None, None
+
+    if len(docs) > 1:
+        docs = [doc for doc in docs if isinstance(doc, (dict, list))]
+        if not docs:
+            return None, None
+        return docs, SAVE_FORMAT_YAML_MULTI
+
+    doc = docs[0]
+    if not allow_scalar_yaml and not isinstance(doc, (dict, list)):
+        return None, None
+    return doc, SAVE_FORMAT_YAML
+
+
 def load_file(path: str) -> Any:
     data, _fmt = load_file_with_format(path)
     return data
