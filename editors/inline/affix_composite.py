@@ -51,7 +51,7 @@ class AffixCompositeEditor(QWidget):
         self.plus_button.setToolTip("Preserve explicit leading plus for positive values")
         self.plus_button.toggled.connect(self._on_plus_toggled)
 
-        self.width_button = QPushButton("Width", parent=self)
+        self.width_button = QPushButton("Short", parent=self)
         self.width_button.setCheckable(True)
         self.width_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         self.width_button.setToolTip("Preserve leading zeros")
@@ -70,7 +70,7 @@ class AffixCompositeEditor(QWidget):
             self.precision_spinbox = None
         else:
             self.number_editor = QMpqSpinBox(self)
-            self.precision_button = QPushButton("Precision", parent=self)
+            self.precision_button = QPushButton("Strip", parent=self)
             self.precision_button.setCheckable(True)
             self.precision_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
             self.precision_button.setToolTip("Preserve trailing zeros")
