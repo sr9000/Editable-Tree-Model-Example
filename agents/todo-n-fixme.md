@@ -69,7 +69,7 @@ Format: `- [ ] [scope] description — file:symbol`._
   imports across the tree, so it needs its own commit. — `Makefile:lint`
 - [ ] [tooling] `pytest-cov` (^7.0.0) is now declared in the Poetry
   `test` dependency group; still need to commit a coverage snapshot to
-  `ai-memory/coverage.md`.
+  `agents/coverage.md`.
 - [ ] [smell] `JsonTreeItem.row()` returns `0` for the root; return `-1`
   to signal "no parent". — `tree/item.py:73`
 - [ ] [smell] `ValueDelegate.createEditor` raises `ValueError` for

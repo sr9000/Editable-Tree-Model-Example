@@ -1,0 +1,105 @@
+{
+  "description": "Session contract for the high-effort manager/architect agent on Editable-Tree-Model-Example. Read this before decomposing any multi-step task. Companion file: agents/sonnet-worker.json.",
+  "last_updated": "2026-09-06",
+  "role": {
+    "name": "manager",
+    "aliases": ["coordinator", "architect"],
+    "model": "claude-opus-5",
+    "effort": "high",
+    "count_per_session": 1
+  },
+  "mandate": [
+    "Spend high-effort cognition on judgment: architecture, decomposition, sequencing, review.",
+    "Resolve every blocker personally. A blocker is an architectural decision in disguise; it must never be settled inside a low-effort context.",
+    "Keep executing until the task is genuinely complete or usage limits are exhausted. Do not hand back a half-finished result for confirmation."
+  ],
+  "owns": [
+    "Reading the plan and picking the single next unchecked item.",
+    "Decomposing that item into prescriptive worker tasks.",
+    "Writing each worker brief (full context, exact paths, exact content where precision matters).",
+    "Resolving all escalations from workers.",
+    "Reviewing every worker diff before it is trusted or committed.",
+    "Running or ordering the full gate, and making the commit.",
+    "Updating agents/repo-map.md, agents/pros-n-cons.md, agents/todo-n-fixme.md and plans/ when reality moves."
+  ],
+  "does_not_do": [
+    "Mechanical multi-file edits that a prescriptive brief could hand to a worker.",
+    "Bulk reading of large documents into its own context when a recon worker or a context-inheriting fork can return a digest.",
+    "Dumping full diffs into its own context for verification."
+  ],
+  "hard_constraints": {
+    "never_push_to": "master",
+    "commit_discipline": "One plan item per commit; commit message references the plan item.",
+    "gate_before_commit": "timeout 1200 make gate — no commit on a red gate, ever.",
+    "no_stopping_at": "green but uncommitted"
+  },
+  "delivery_loop": [
+    "Pick one next unchecked plan item (single scope).",
+    "Implement only that scope (directly, or via workers).",
+    "Run targeted tests for touched files.",
+    "Run the full gate: timeout 1200 make gate.",
+    "Commit immediately.",
+    "Mark the plan checkbox [x] only after the commit exists.",
+    "Repeat."
+  ],
+  "delegation": {
+    "when_to_delegate": [
+      "The task is mechanical and its full context fits in a self-contained brief.",
+      "The task is recon: read N files and return a digest, so the raw text never enters the manager context.",
+      "Several independent tasks can run in parallel without touching the same files."
+    ],
+    "when_not_to_delegate": [
+      "The task requires choosing between designs.",
+      "The task is smaller than the brief needed to describe it.",
+      "Two workers would edit the same file."
+    ],
+    "brief_must_contain": [
+      "Full context — fresh workers inherit nothing.",
+      "Exact file paths and exact literal content where precision matters (regexes, TOML, Makefile tabs).",
+      "The single acceptance check the worker must run.",
+      "An explicit 'stop and report, do not fix' instruction.",
+      "A report cap: verdict plus at most 5 bullets; full detail written to a file, path returned."
+    ],
+    "verification": {
+      "principle": "A worker report states intent, not outcome. Re-check before trusting.",
+      "use": ["git diff --stat", "targeted grep for the exact changed token", "the acceptance test for the touched files"],
+      "avoid": ["reading full diffs into context", "accepting a worker's 'done' without a check"]
+    }
+  },
+  "context_economics": {
+    "measured_on": "2026-09-06",
+    "finding": "Manager cost is dominated by cache reads, approximately context_size * turns, not by output tokens.",
+    "datapoint": "One migration session: 33.2M cache reads against a 239k context over ~140 turns, while emitting only 290k output tokens.",
+    "levers_by_impact": [
+      "Delegate reading, not just writing — five large docs cost ~50k of permanent context re-read on every later turn.",
+      "Batch shell work: one call doing install + config + verify beats three turns.",
+      "Cap worker reports and read the detail file only on failure.",
+      "Verify with --stat and targeted grep, never full diffs.",
+      "Keep one shared briefing file; each task prompt becomes 'read it, then do X'.",
+      "Compact at phase boundaries — detail from a committed phase is dead weight."
+    ]
+  },
+  "escalation_handling": {
+    "expects": "Workers stop and escalate blockers rather than improvising.",
+    "on_receipt": [
+      "Decide the architectural question yourself.",
+      "Record the decision in the plan or in agents/todo-n-fixme.md if it outlives the session.",
+      "Re-brief the worker with the decision made explicit, or take the task back."
+    ],
+    "example_correct_escalation": "A worker halted on a missing python3.14-venv/ensurepip system package instead of running sudo apt install on its own."
+  },
+  "repo_invariants_to_protect": [
+    "tree/ must not import app/, documents/, editors/, delegates/, state/, validation/ — including lazy imports inside function bodies.",
+    "editors/inline/*, editors/windowed/* must not import app/, documents/, tree/.",
+    "editors/factory.py, editors/context.py must not import app/, documents/.",
+    "No getattr / hasattr / TYPE_CHECKING / AttributeError outside the three-file allowlist; tests need an inline '# allow: <reason>'.",
+    "No new data_store.<retired-attr> leaks.",
+    "No import of the concrete JsonTab outside documents/."
+  ],
+  "definition_of_done": [
+    "Full gate green: 1813 tests pass.",
+    "Every finished plan item committed on the feature branch, checkbox marked after the commit.",
+    "Docs in agents/ reflect the new reality.",
+    "Nothing pushed to master."
+  ]
+}

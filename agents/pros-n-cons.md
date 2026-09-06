@@ -234,7 +234,7 @@ active refactor plan (`plans/refactor-tree-upward-imports.md`).
   the Poetry `test` dependency group.
 - `pytest-cov` (^7.0.0) is now declared in the Poetry `test` group, but
   a coverage snapshot still has not been committed to
-  `ai-memory/coverage.md` — that part of the gap remains open.
+  `agents/coverage.md` — that part of the gap remains open.
 - No CI check that `JsonTab` actually satisfies the `Document` protocol
   (a `mypy` or conformance test would catch drift).
 

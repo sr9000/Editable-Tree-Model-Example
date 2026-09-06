@@ -262,10 +262,15 @@ configuration; the black/isort configuration now lives in `pyproject.toml`.
 
 ## Project documentation
 
-- `ai-memory/repo-map.md` — dense module-by-module map for agents and
+- `AGENTS.md` — canonical agent guide: the manager/worker operating model,
+  setup, delivery loop, gate guardrails, architecture traps. `CLAUDE.md`
+  just points here.
+- `agents/opus-manager.json` / `agents/sonnet-worker.json` — per-role session
+  contracts for coordinating and worker agents.
+- `agents/repo-map.md` — dense module-by-module map for agents and
   contributors.
-- `ai-memory/pros-n-cons.md` — current strengths, caveats, and gaps.
-- `ai-memory/todo-n-fixme.md` — active open work only.
+- `agents/pros-n-cons.md` — current strengths, caveats, and gaps.
+- `agents/todo-n-fixme.md` — active open work only.
 - `plans/` — feature plans and definitions of done for larger changes.
 ## Dev setup
 Activate the repo-local git hooks (run once after cloning):

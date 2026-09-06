@@ -3,7 +3,7 @@
 _This is a condensed index and architectural summary. LLM agents should refer to direct source files for implementation
 details._
 **Last updated:** 2026-09-06 (after raw-numeric edit-flow fix; added DiffApplier RAW_FLOAT routing,
-integer promotion for whole-number mpq edits, and `agent.md`; also reflects the migration to Poetry
+integer promotion for whole-number mpq edits, and `AGENTS.md`; also reflects the migration to Poetry
 dependency management on Python 3.14).
 
 ## 1) High-level Purpose

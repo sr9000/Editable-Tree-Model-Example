@@ -120,7 +120,7 @@ PyYAML 6.0.3, simplejson 4.1.1, pandas 3.0.3 all ship cp314 wheels.
 
 - **`make lint`'s `autoflake` step has always been a no-op.** It runs bare
   `autoflake .`; without `--in-place` autoflake only prints diffs. Verified
-  empirically. Left as-is and tracked in `ai-memory/todo-n-fixme.md` rather than
+  empirically. Left as-is and tracked in `agents/todo-n-fixme.md` rather than
   "fixed" here, because enabling it would rewrite imports repo-wide.
 - **black 25.1.0 → 25.12.0 produced zero net diff.** The formatter bump was a
   non-event, confirmed against the pre-migration baseline.
