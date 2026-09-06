@@ -49,8 +49,9 @@ For plan-based work, execute exactly this loop:
 4. **Run the full gate** — `timeout 1200 make gate`.
 5. **Commit immediately** (message references the plan item).
 6. **Mark the plan checkbox `[x]`** — only after the commit exists.
-7. **Update `READ_AFTER_COMPACT.md`, then compact.** A committed item's file bodies, diffs and
-   worker reports are dead weight you re-read on every later turn.
+7. **Update `READ_AFTER_COMPACT.md`, then compact — every time, without assessing.** A committed
+   item is a milestone; its file bodies, diffs and worker reports are dead weight you re-read on
+   every later turn. A rule you stop to evaluate is a rule that always answers "not yet".
 8. Repeat.
 
 Hard rules:
@@ -179,13 +180,14 @@ turn of the session.
 
 Levers, by impact:
 
-1. **Compact aggressively, and early.** The highest-leverage lever, because it is the only one that
-   reduces cost *retroactively* across the rest of the session — every other lever merely avoids
-   adding more. Compact after each committed item, after acting on a large recon digest, and before
-   a long tail of verification turns. Do not wait until the context is visibly full; by then you
-   have paid for it on every turn since it filled. Dropping something you might need is cheaper
-   than carrying twenty things you might not — re-reading one file costs far less than re-reading
-   all of them every turn.
+1. **Let context grow untended; compact at every milestone.** The highest-leverage lever, because
+   it is the only one that reduces cost *retroactively* across the rest of the session — every
+   other lever merely avoids adding more. Do not manage context continuously and do not spend turns
+   estimating how full you are; let it grow between milestones, then compact at each one
+   preemptively. A milestone is any point where work becomes durable outside your context: a commit,
+   or a finished investigation whose conclusions are in the ledger. You can trigger a compaction at
+   any time — one milestone early costs almost nothing, one milestone late is paid for on every
+   turn that follows.
 2. **Delegate reading, not just writing.** Five large docs cost ~50k of permanent context, re-read
    on every later turn. Send a recon worker for a digest, or use a context-inheriting fork so the
    raw output never lands in the manager.
@@ -197,11 +199,16 @@ Levers, by impact:
 6. **Verify with `--stat` and targeted `grep`**, never full diffs.
 7. **One shared briefing file** per project context; each task prompt becomes "read it, then do X".
 
+**Plan first — it is what creates the milestones.** A plan need not be complete or correct; the far
+items can be placeholders refined as you go, and a wrong one costs nothing because it was never
+load-bearing. Its real job is to manufacture the points at which work becomes durable and context
+can be dropped. Without a plan there is no natural place to compact, so context grows to the end of
+the session — which is how a session ends up spending most of its budget re-reading its own history.
+
 **Keep a ledger.** `READ_AFTER_COMPACT.md` at the repo root holds the goal in the user's own terms,
 item status, decisions already made, deliberately excluded scope, and the next action. Update it at
 every loop step and read it first after any compaction. You cannot query your own context size —
-`/context` is the user's command — so compact on observable events (an item committed, a digest
-acted on, a large file read) rather than on a threshold you cannot see.
+`/context` is the user's command — so do not try; compact at milestones instead.
 
 ---
 
