@@ -69,59 +69,67 @@ PyYAML 6.0.3, simplejson 4.1.1, pandas 3.0.3 all ship cp314 wheels.
 
 ### Phase 0 — Baseline
 
-- [ ] **T1** Prove the codebase passes `make gate` on Python 3.14 in a throwaway
-  venv, before Poetry enters the picture. Isolates "does 3.14 work" from "does
-  Poetry work". *(worker)*
-- [ ] **T2** Resolve whatever T1 surfaces. *(coordinator)*
+- [x] **T1** Prove the codebase passes `make gate` on Python 3.14 in a throwaway
+  venv, before Poetry enters the picture. **Result: fully green — 1813 passed,
+  zero lint drift.** The 3.14 jump was validated independently of Poetry.
+- [x] **T2** Resolve what T1 surfaced (all environment gaps, no code defects).
 
-### Phase 1 — Poetry bootstrap
+### Phase 1 — Poetry bootstrap — commit `b2a70b7`
 
-- [ ] **T3** Install Poetry (`uv tool install poetry`; no poetry/pipx present),
-  set `virtualenvs.in-project true` so `.venv/` stays put and `agent.md`'s
-  `. .venv/bin/activate` contract survives. *(worker)*
-- [ ] **T4** Author `pyproject.toml`: `package-mode = false`,
-  `requires-python = ">=3.14,<3.15"`, dependency groups `main` / `dev` / `test` /
-  `build`. *(coordinator — architecture artifact)*
-- [ ] **T5** Remove the broken `.venv`, run `poetry install`, commit
-  `poetry.lock`. *(worker)*
+- [x] **T3** Poetry 2.4.3 installed via `uv tool install`; in-project venv
+  configured via committed `poetry.toml`.
+- [x] **T4** `pyproject.toml` authored with `package-mode = false` and
+  main / dev / test / optional-build groups.
+- [x] **T5** Broken `.venv` removed, `poetry install` clean, `poetry.lock`
+  committed (48 packages installed, 3.14.4).
 
-### Phase 2 — Config consolidation
+### Phase 2 — Config consolidation — commit `1937f35`
 
-- [ ] **T6** Move `[tool.black]`, `[tool.isort]`, `[tool.autoflake]` config from
-  Makefile CLI flags into `pyproject.toml`. Black auto-discovers `pyproject.toml`
-  once it exists, so leaving config split risks silent divergence. *(worker)*
-- [ ] **T7** Move `pytest.ini` into `[tool.pytest.ini_options]` and **delete
-  `pytest.ini`** — it wins over `pyproject.toml` otherwise. `pythonpath = ["."]`
-  is load-bearing for the flat layout and must carry over exactly. *(worker)*
-- [ ] **T8** Rewrite Makefile targets to use `poetry run` so they work without an
-  activated shell. *(worker)*
+- [x] **T6** `[tool.black]` and `[tool.isort]` moved into `pyproject.toml`.
+  Used `extend_skip`, not `skip`: `skip` *replaces* isort's built-in skip list
+  (which covers `.venv`, `build`, `dist`) rather than adding to it.
+  **No `[tool.autoflake]`** — see §6.
+- [x] **T7** `pytest.ini` folded into `[tool.pytest.ini_options]` and deleted.
+  pytest confirms `configfile: pyproject.toml`.
+- [x] **T8** Makefile targets now use `poetry run`.
 
-### Phase 3 — Interop
+### Phase 3 — Interop — commit `3f1f4a8`
 
-- [ ] **T9** Add `poetry-plugin-export`; regenerate `requirements.txt` from the
-  lock (main group only); add a `make requirements` target. *(worker)*
-- [ ] **T10** Add a CI freshness check so the generated `requirements.txt` cannot
-  silently rot — the known failure mode of the export approach. *(worker)*
-- [ ] **T11** Update `release.yml`: `PYTHON_VERSION` 3.12→3.14,
-  `PYINSTALLER_VERSION` 6.10.0→6.15.0+. `no-reflection.yml` is pure bash and is
-  untouched. *(worker)*
+- [x] **T9** `poetry-plugin-export` added; `requirements.txt` regenerated
+  (9 hand-written lines → 26 transitive pins, correctly dropping `pytest`);
+  `make requirements` target added.
+- [x] **T10** CI freshness job added, with Poetry pinned to 2.4.3 so export
+  formatting differences cannot fail it spuriously.
+- [x] **T11** `release.yml` moved to Python 3.14 / PyInstaller 6.22.2.
 
 ### Phase 4 — Verify the bundle
 
-- [ ] **T12** Local PyInstaller build on 3.14 with the upgraded version; confirm
-  the produced binary launches. Check whether the spec's numpy/pandas
-  `collect_all` block is still required. *(worker, escalate on failure)*
+- [x] **T12** PyInstaller 6.22.2 build succeeds on 3.14. 114 MB single-file
+  binary starts cleanly under offscreen Qt with no missing modules. The spec's
+  numpy/pandas `collect_all` block was left untouched and still works.
 
-### Phase 5 — Sync agent memory
+### Phase 5 — Sync agent memory — commit `0f6add7`
 
-- [ ] **T13** `README.md` — quick start (venv/pip → Poetry), Development section,
-  and the dangling `ai-memory/history.md` reference at line 271.
-- [ ] **T14** `agent.md` §1 First commands.
-- [ ] **T15** `packaging/README.md` local build steps + PyInstaller version.
-- [ ] **T16** `ai-memory/repo-map.md` §11 Commands & Gates.
-- [ ] **T17** `ai-memory/pros-n-cons.md` — Tooling gaps section: `pytest-qt` and
-  `pytest-cov` are now declared.
-- [ ] **T18** `ai-memory/todo-n-fixme.md` — mark the two `[tooling]` items `[x]`.
+- [x] **T13**–**T18** All six doc files updated. Stale facts corrected along the
+  way: test count was 1023/1124/1181 across docs (actual 1813), the packaging
+  README described a one-folder distribution when the spec builds single-file,
+  the `ai-memory/history.md` link was dangling, and the README's claim of flaky
+  offscreen color-scheme tests was obsolete.
+
+## 6. Findings worth keeping
+
+- **`make lint`'s `autoflake` step has always been a no-op.** It runs bare
+  `autoflake .`; without `--in-place` autoflake only prints diffs. Verified
+  empirically. Left as-is and tracked in `ai-memory/todo-n-fixme.md` rather than
+  "fixed" here, because enabling it would rewrite imports repo-wide.
+- **black 25.1.0 → 25.12.0 produced zero net diff.** The formatter bump was a
+  non-event, confirmed against the pre-migration baseline.
+- **Environment gaps hit along the way** (all sandbox provisioning, no code
+  defects): `python3.14-venv`, the Qt runtime libraries, and `libpython3.14`
+  (required by PyInstaller). CI is unaffected — `actions/setup-python` ships a
+  shared library and the release workflow already installs the Qt libs.
+- **`release.yml` remains `workflow_dispatch`-only.** There is still no CI job
+  that runs the test suite, so the bundle path is only exercised on demand.
 
 ## 5. Final gate
 
