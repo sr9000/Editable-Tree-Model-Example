@@ -1,4 +1,4 @@
-.PHONY: ui lint dev-setup check-no-reflection check-editors-isolation check-tree-isolation test gate
+.PHONY: ui lint dev-setup check-no-reflection check-editors-isolation check-tree-isolation test gate requirements
 
 UI_PY := \
 	ui/mainwindow.py \
@@ -68,3 +68,8 @@ test: ui
 # Order matches plans/20-decouple-jsontab.md §0.2: lint -> reflection ->
 # full test suite. Any failure aborts the chain immediately.
 gate: lint check-no-reflection test
+
+# requirements.txt is GENERATED from poetry.lock — never edit it by hand.
+# Regenerate after any dependency change and commit the result.
+requirements:
+	poetry export --only main --without-hashes -f requirements.txt -o requirements.txt

@@ -22,8 +22,10 @@ permissions:
   contents: write
 
 env:
-  PYTHON_VERSION: "3.12"
-  PYINSTALLER_VERSION: "6.10.0"
+  PYTHON_VERSION: "3.14"
+  # Must match the pyinstaller version resolved in poetry.lock. 6.10.0 declared
+  # requires_python "<3.14" and cannot build on Python 3.14.
+  PYINSTALLER_VERSION: "6.22.2"
   APP_NAME: EditableTreeModel
 
 jobs:

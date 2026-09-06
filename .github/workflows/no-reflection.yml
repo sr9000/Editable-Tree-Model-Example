@@ -11,3 +11,23 @@ jobs:
       - uses: actions/checkout@v4
       - name: Forbid getattr/hasattr outside allowlist
         run: bash .githooks/pre-commit-ci
+
+  requirements-current:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install Poetry
+        run: |
+          pipx install poetry==2.4.3
+          pipx inject poetry poetry-plugin-export
+      - name: Regenerate requirements.txt from poetry.lock
+        run: poetry export --only main --without-hashes -f requirements.txt -o requirements.txt
+      - name: Fail if requirements.txt is stale
+        run: |
+          if ! git diff --exit-code -- requirements.txt; then
+            echo "::error::requirements.txt is out of date with poetry.lock. Run 'make requirements' and commit the result."
+            exit 1
+          fi
