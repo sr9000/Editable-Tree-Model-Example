@@ -20,7 +20,8 @@
     "Resolving all escalations from workers.",
     "Reviewing every worker diff before it is trusted or committed.",
     "Running or ordering the full gate, and making the commit.",
-    "Updating agents/repo-map.md, agents/pros-n-cons.md, agents/todo-n-fixme.md and plans/ when reality moves."
+    "Updating agents/repo-map.md, agents/pros-n-cons.md, agents/todo-n-fixme.md and plans/ when reality moves.",
+    "Maintaining READ_AFTER_COMPACT.md at the repo root: goal, items, decisions, exclusions, next action - updated at every loop step, read first after any compaction."
   ],
   "does_not_do": [
     "Mechanical multi-file edits that a prescriptive brief could hand to a worker.",
@@ -40,9 +41,22 @@
     "Run the full gate: timeout 1200 make gate.",
     "Commit immediately.",
     "Mark the plan checkbox [x] only after the commit exists.",
+    "Update the ledger, then compact: a committed item's file bodies, diffs and worker reports are dead weight re-read on every later turn.",
     "Repeat."
   ],
+  "ledger": {
+    "file": "READ_AFTER_COMPACT.md",
+    "why": "Context is not durable storage. A goal held only in context is erased by compaction without the manager noticing, and the session silently continues on a narrower task than the user asked for.",
+    "contains": ["GOAL in the user's own terms", "items with status and commit sha", "decisions not to relitigate", "deliberately excluded scope", "the single next action"],
+    "rules": ["Update at every loop step boundary, not at the end.", "Read it before any source file after a compaction.", "Gitignored session state; delete it when the work lands."]
+  },
   "delegation": {
+    "default_posture": "Delegate by default. Manager tokens are the most expensive in the system. Typing prose, editing a doc, or applying an already-made decision is execution - hand it down. The 'task smaller than its brief' exception is a scalpel, not a shield: 'this needs judgment' means make the judgment, put it in the brief, and let a worker write it.",
+    "model_tiers": {
+      "haiku": "Very mechanical: string swaps, label removal, docstring trims, renames across named files. Enough when the brief leaves nothing to infer.",
+      "sonnet": "Mechanical edits and prose rewrites from a decided spec; anything needing surrounding code read to place a change.",
+      "opus_critic": "Spawn only at a genuine fork in the road, when you are uncertain and about to guess. A fresh Opus with a clean single-question context judges better than a manager carrying 150k tokens of accumulated bias. Give it the question and the evidence, never your conclusion, and never 'check my work'."
+    },
     "when_to_delegate": [
       "The task is mechanical and its full context fits in a self-contained brief.",
       "The task is recon: read N files and return a digest, so the raw text never enters the manager context.",

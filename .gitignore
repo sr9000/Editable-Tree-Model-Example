@@ -71,3 +71,6 @@ Thumbs.db
 *.AppImage
 *.dmg
 appimagetool
+
+# Manager session ledger (see .claude/skills/teamwork/SKILL.md); not a deliverable.
+READ_AFTER_COMPACT.md

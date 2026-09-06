@@ -13,7 +13,7 @@ then read your own contract:
 | Role | Model / effort | Contract | One-line job |
 |:---|:---|:---|:---|
 | **Manager / architect** | Opus, high effort | `agents/opus-manager.json` | Decide, decompose, review, gate, commit. |
-| **Worker / subagent** | Sonnet, low effort | `agents/sonnet-worker.json` | Execute one prescriptive task. Escalate, never improvise. |
+| **Worker / subagent** | Haiku or Sonnet, low effort | `agents/sonnet-worker.json` | Execute one prescriptive task. Escalate, never improvise. |
 
 The two JSON files are the machine-readable session contracts — scope, allowed commands, escalation
 triggers, report format. **This file is the shared briefing; those files are your role's rules.**
@@ -49,7 +49,9 @@ For plan-based work, execute exactly this loop:
 4. **Run the full gate** — `timeout 1200 make gate`.
 5. **Commit immediately** (message references the plan item).
 6. **Mark the plan checkbox `[x]`** — only after the commit exists.
-7. Repeat.
+7. **Update `READ_AFTER_COMPACT.md`, then compact.** A committed item's file bodies, diffs and
+   worker reports are dead weight you re-read on every later turn.
+8. Repeat.
 
 Hard rules:
 
@@ -66,6 +68,12 @@ Hard rules:
 every diff, the gate, and the commit. Delegates mechanical edits *and reading* — a recon worker that
 returns a digest is far cheaper than five large files landing permanently in the manager's context.
 
+**Delegate by default, and tier the worker.** Manager tokens are the most expensive in the system.
+Haiku is enough for very mechanical work whose brief leaves nothing to infer; Sonnet for edits and
+prose rewrites from a decided spec; a fresh **Opus critic** — given the question and the evidence,
+never your conclusion — when you are uncertain and about to guess. "This needs judgment" is a reason
+to make the judgment and put it in the brief, not a reason to keep the typing.
+
 **Worker briefs must be self-contained.** Fresh workers inherit nothing. Every brief carries:
 
 - full context (no "as discussed"), exact file paths, and exact literal content wherever precision
@@ -77,8 +85,9 @@ returns a digest is far cheaper than five large files landing permanently in the
 **Trust but verify.** A worker report states intent, not outcome. Re-check with `git diff --stat`
 and a targeted `grep` for the exact changed token — never by pulling a full diff into context.
 
-**Do not delegate** a task that needs a design choice, a task smaller than the brief describing it,
-or two tasks that touch the same file.
+**Do not delegate** a task needing a design choice not yet made, or two tasks that touch the same
+file. The "smaller than its brief" exception covers a one-line fix — it is a scalpel, not a shield:
+"this needs judgment" means make the judgment, put it in the brief, and let a worker write it.
 
 **Known worker failure mode:** backgrounding a long command and reporting "waiting for X" instead of
 the result. Require the command to actually exit before replying.
@@ -187,6 +196,12 @@ Levers, by impact:
 5. **Cap worker reports** and read the detail file only when something failed.
 6. **Verify with `--stat` and targeted `grep`**, never full diffs.
 7. **One shared briefing file** per project context; each task prompt becomes "read it, then do X".
+
+**Keep a ledger.** `READ_AFTER_COMPACT.md` at the repo root holds the goal in the user's own terms,
+item status, decisions already made, deliberately excluded scope, and the next action. Update it at
+every loop step and read it first after any compaction. You cannot query your own context size —
+`/context` is the user's command — so compact on observable events (an item committed, a digest
+acted on, a large file read) rather than on a threshold you cannot see.
 
 ---
 
