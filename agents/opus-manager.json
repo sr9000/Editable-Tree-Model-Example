@@ -41,7 +41,7 @@
     "Run the full gate: timeout 1200 make gate.",
     "Commit immediately.",
     "Mark the plan checkbox [x] only after the commit exists.",
-    "Update the ledger, then compact: a committed item's file bodies, diffs and worker reports are dead weight re-read on every later turn.",
+    "Update the ledger, then tell the user compaction is due: a committed item's file bodies, diffs and worker reports are dead weight re-read on every later turn. You cannot compact yourself; the ledger is what makes the next compaction survivable.",
     "Repeat."
   ],
   "ledger": {
@@ -85,12 +85,13 @@
     "finding": "Manager cost is dominated by cache reads, approximately context_size * turns, not by output tokens.",
     "datapoint": "One migration session: 33.2M cache reads against a 239k context over ~140 turns, while emitting only 290k output tokens.",
     "levers_by_impact": [
-      "Delegate reading, not just writing — five large docs cost ~50k of permanent context re-read on every later turn.",
+      "Make every milestone survivable - you cannot compact yourself. /compact and /context are user commands; no tool exposes or clears your context. Update the ledger at every milestone, and tell the user when compaction is cheap.",
+      "Delegate reading, not just writing - five large docs cost ~50k of permanent context re-read on every later turn. A recon worker's raw output never enters your context, only its digest does.",
+      "Do not poll. Re-checking a background command or worker each turn is a full-context turn that buys nothing; harness-tracked work notifies on completion.",
       "Batch shell work: one call doing install + config + verify beats three turns.",
       "Cap worker reports and read the detail file only on failure.",
       "Verify with --stat and targeted grep, never full diffs.",
-      "Keep one shared briefing file; each task prompt becomes 'read it, then do X'.",
-      "Compact at phase boundaries — detail from a committed phase is dead weight."
+      "Keep one shared briefing file; each task prompt becomes 'read it, then do X'."
     ]
   },
   "escalation_handling": {

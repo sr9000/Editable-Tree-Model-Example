@@ -49,9 +49,10 @@ For plan-based work, execute exactly this loop:
 4. **Run the full gate** — `timeout 1200 make gate`.
 5. **Commit immediately** (message references the plan item).
 6. **Mark the plan checkbox `[x]`** — only after the commit exists.
-7. **Update `READ_AFTER_COMPACT.md`, then compact — every time, without assessing.** A committed
-   item is a milestone; its file bodies, diffs and worker reports are dead weight you re-read on
-   every later turn. A rule you stop to evaluate is a rule that always answers "not yet".
+7. **Update `READ_AFTER_COMPACT.md`, then tell the user compaction is due.** A committed item is a
+   milestone; its file bodies, diffs and worker reports are dead weight you re-read on every later
+   turn. You cannot compact yourself, so the ledger is what makes the next compaction — whenever it
+   lands — cost nothing. Then say plainly that now is a cheap moment to run `/compact`.
 8. Repeat.
 
 Hard rules:
@@ -180,14 +181,15 @@ turn of the session.
 
 Levers, by impact:
 
-1. **Let context grow untended; compact at every milestone.** The highest-leverage lever, because
-   it is the only one that reduces cost *retroactively* across the rest of the session — every
-   other lever merely avoids adding more. Do not manage context continuously and do not spend turns
-   estimating how full you are; let it grow between milestones, then compact at each one
-   preemptively. A milestone is any point where work becomes durable outside your context: a commit,
-   or a finished investigation whose conclusions are in the ledger. You can trigger a compaction at
-   any time — one milestone early costs almost nothing, one milestone late is paid for on every
-   turn that follows.
+1. **Make every milestone survivable — you cannot compact yourself.** `/compact` and `/context` are
+   the user's commands; no tool exposes your context size or clears it, and compaction reaches you
+   only when the harness fires it automatically or the user runs it. Neither warns you first. So do
+   not try to manage context continuously and do not estimate how full you are. Instead: update the
+   ledger at every milestone, because it is the only thing that crosses a compaction intact; keep
+   what you never need out of context in the first place, which is the lever you do control (a
+   recon worker's raw output never enters your context, only its digest does); and at each
+   milestone tell the user that now is a cheap moment to compact. Never claim to have compacted —
+   an impossible instruction is not refused, it is silently skipped.
 2. **Delegate reading, not just writing.** Five large docs cost ~50k of permanent context, re-read
    on every later turn. Send a recon worker for a digest, or use a context-inheriting fork so the
    raw output never lands in the manager.
@@ -207,8 +209,9 @@ the session — which is how a session ends up spending most of its budget re-re
 
 **Keep a ledger.** `READ_AFTER_COMPACT.md` at the repo root holds the goal in the user's own terms,
 item status, decisions already made, deliberately excluded scope, and the next action. Update it at
-every loop step and read it first after any compaction. You cannot query your own context size —
-`/context` is the user's command — so do not try; compact at milestones instead.
+every loop step and read it first after any compaction. You cannot query your own context size or
+trigger a compaction — both are user commands — so the ledger is not an optimization: it is the
+only reason an unannounced compaction is survivable.
 
 ---
 
