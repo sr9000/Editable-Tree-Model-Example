@@ -19,20 +19,20 @@ is awkward to maintain in a plain text editor.
 ```bash
 git clone <this repo>
 cd Editable-Tree-Model-Example
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+poetry install
 ```
 
-Python **3.12+** is expected. Dependencies are pinned in `requirements.txt` and include PySide6, PyYAML, simplejson,
-gmpy2, python-dateutil, tzdata, pytest, and `jsonschema[format]`.
+Python **3.14** is required. Dependencies are declared in `pyproject.toml` and locked in
+`poetry.lock`; they include PySide6, PyYAML, simplejson, gmpy2, python-dateutil, tzdata, pytest,
+and `jsonschema[format]`. `requirements.txt` is generated from the lock file for packaging use
+(see below) and should not be edited by hand.
 
 ### Run the app
 
 ```bash
-python main.py
-python main.py data.json
-python main.py data.yaml
+poetry run python main.py
+poetry run python main.py data.json
+poetry run python main.py data.yaml
 ```
 
 You can also drag one or more local `.json`, `.jsonl`, `.ndjson`,
@@ -243,13 +243,11 @@ Overwrite to save your edits over disk, or Cancel.
 ### Run tests
 
 ```bash
-QT_QPA_PLATFORM=offscreen pytest
+make test
 ```
 
-The suite currently collects **1023 tests**. A small set of
-color-scheme tests is known to be platform-sensitive under Qt's
-offscreen QPA plugin because offscreen does not round-trip
-`QStyleHints.setColorScheme` like real desktop platforms do.
+`poetry run pytest` works directly as an alternative. The suite currently collects
+**1813 tests**, all passing.
 
 ### Lint and format
 
@@ -258,7 +256,7 @@ make lint
 ```
 
 The `lint` target runs autoflake, isort, and black with the repository
-configuration.
+configuration; the black/isort configuration now lives in `pyproject.toml`.
 
 ---
 
@@ -268,7 +266,6 @@ configuration.
   contributors.
 - `ai-memory/pros-n-cons.md` — current strengths, caveats, and gaps.
 - `ai-memory/todo-n-fixme.md` — active open work only.
-- `ai-memory/history.md` — archived resolved phase/feature history.
 - `plans/` — feature plans and definitions of done for larger changes.
 ## Dev setup
 Activate the repo-local git hooks (run once after cloning):

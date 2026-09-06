@@ -1,16 +1,18 @@
 # Agent Guide — Editable-Tree-Model-Example (compact)
 
 _High-signal rules for AI agents. Keep this brief and actionable._
-**Last updated:** 2026-06-13
+**Last updated:** 2026-09-06
 
 ## 1) First commands (always)
 
 ```bash
+poetry install
 . .venv/bin/activate
 timeout 1200 make gate
 ```
 
-- Tools live in `.venv`.
+- The environment is managed by Poetry; the venv is in-project at `.venv/`. Python 3.14 is required.
+- `poetry run <cmd>` works as an alternative to activating.
 - `make gate` is mandatory before every commit.
 
 ## 2) Mandatory delivery loop (do not skip steps)

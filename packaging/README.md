@@ -6,19 +6,22 @@ into standalone formats via [PyInstaller](https://pyinstaller.org/).
 ## Local build (any OS)
 
 ```bash
-pip install -r requirements.txt
-pip install pyinstaller==6.10.0
-pyinstaller --noconfirm --clean EditableTreeModel.spec
+poetry install --with build
+poetry run pyinstaller --noconfirm --clean EditableTreeModel.spec
 ```
 
-The resulting one-folder distribution is written to `dist/EditableTreeModel/`.
+PyInstaller is pinned at 6.22.2 in the optional `build` dependency group; 6.10.0 cannot be used
+because it declares `requires_python = "<3.14"`.
 
-* **Windows** — `dist/EditableTreeModel/EditableTreeModel.exe` plus its
-  support files. The folder can be zipped and shipped as-is.
-* **macOS** — In addition to the folder, PyInstaller produces
+The resulting single-file executable is written to `dist/EditableTreeModel`
+(`dist/EditableTreeModel.exe` on Windows).
+
+* **Windows** — `dist/EditableTreeModel.exe`. The file can be zipped and
+  shipped as-is.
+* **macOS** — In addition to the standalone executable, PyInstaller produces
   `dist/EditableTreeModel.app`, which can be packed into a `.dmg`
   with `hdiutil create`.
-* **Linux** — The folder is repackaged into an AppImage by the release
+* **Linux** — The executable is repackaged into an AppImage by the release
   workflow using the helper scripts in `packaging/linux/`
   (`AppRun`, `.desktop`, `.svg` icon) and
   [`appimagetool`](https://github.com/AppImage/AppImageKit).

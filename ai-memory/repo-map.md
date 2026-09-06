@@ -2,8 +2,9 @@
 
 _This is a condensed index and architectural summary. LLM agents should refer to direct source files for implementation
 details._
-**Last updated:** 2026-06-13 (after raw-numeric edit-flow fix; added DiffApplier RAW_FLOAT routing,
-integer promotion for whole-number mpq edits, and `agent.md`).
+**Last updated:** 2026-09-06 (after raw-numeric edit-flow fix; added DiffApplier RAW_FLOAT routing,
+integer promotion for whole-number mpq edits, and `agent.md`; also reflects the migration to Poetry
+dependency management on Python 3.14).
 
 ## 1) High-level Purpose
 
@@ -247,10 +248,11 @@ App-level dialog implementations live in `app/dialogs/` (`attach_schema_dlg.py`,
 ## 11) Commands & Gates
 
 ```bash
-make test                    # QT_QPA_PLATFORM=offscreen timeout 600 pytest -q (1124 pass)
+make test                    # QT_QPA_PLATFORM=offscreen timeout 600 poetry run pytest -q (1813 pass)
 make check-no-reflection     # forbid getattr/hasattr/TYPE_CHECKING outside allowlist
 make check-editors-isolation # forbid app/documents/tree imports in concrete editor widgets
 make check-tree-isolation    # forbid app/documents/editors/delegates/state/validation imports in tree/
-make lint                    # autoflake + isort + black (in place; line-length 120, UI files skipped)
+make lint                    # poetry run autoflake + isort + black (in place; line-length 120, UI files skipped)
 make gate                    # full DoD gate (lint → reflection → editors-isolation → tree-isolation → tests)
+make requirements            # regenerate requirements.txt from poetry.lock (poetry export --only main)
 ```

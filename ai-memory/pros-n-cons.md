@@ -11,7 +11,7 @@ with exact-rational numerics (`gmpy2.mpq`), a typed undo/redo system,
 JSON-Schema validation, and a theming stack. See `repo-map.md` for the
 module breakdown.
 
-_Test surface: **1181 collected**. `make gate` runs lint →
+_Test surface: **1813 collected**. `make gate` runs lint →
 no-reflection → editor-isolation → tests._
 
 ---
@@ -160,7 +160,12 @@ no-reflection → editor-isolation → tests._
 
 ### Code quality & tooling
 
-- Modern Python 3.12+ (`match`/`case`, `StrEnum`, type hints).
+- Modern Python 3.14+ (`match`/`case`, `StrEnum`, type hints).
+- **Dependencies declared and locked with Poetry** (`pyproject.toml` +
+  committed `poetry.lock`), replacing a hand-maintained
+  `requirements.txt` that had omitted the entire dev toolchain
+  (`black`, `isort`, `autoflake`, `mypy`, `vulture`) that `make gate`
+  depends on.
 - **No `TODO`/`FIXME`/`XXX`/`HACK` markers in production code** (verified
   2026-06-01).
 - `make gate` chains lint, no-reflection, editor-isolation, and tests;
@@ -224,9 +229,12 @@ active refactor plan (`plans/refactor-tree-upward-imports.md`).
 
 ### Tooling gaps (audit grade B)
 
-- `pytest-qt` not pinned in `requirements.txt` (theme tests use
-  `qtbot`).
-- No coverage snapshot (`pytest-cov` → `ai-memory/coverage.md`).
+- ~~`pytest-qt` not pinned in `requirements.txt` (theme tests use
+  `qtbot`).~~ **Resolved** — `pytest-qt` (^4.5.0) is now declared in
+  the Poetry `test` dependency group.
+- `pytest-cov` (^7.0.0) is now declared in the Poetry `test` group, but
+  a coverage snapshot still has not been committed to
+  `ai-memory/coverage.md` — that part of the gap remains open.
 - No CI check that `JsonTab` actually satisfies the `Document` protocol
   (a `mypy` or conformance test would catch drift).
 
@@ -273,8 +281,9 @@ the last architectural inversion and closing QA gaps:
    shared datetime-parsing and bytes/color codecs out of `editors/` and
    `delegates/`; inject secret-name matching into `JsonTreeItem`). See
    `plans/refactor-tree-upward-imports.md`.
-2. **High priority** — pin `pytest-qt`, wire `make test`, add the
-   delegate-matrix and I/O round-trip property tests.
+2. **High priority** — add the delegate-matrix and I/O round-trip
+   property tests. (`pytest-qt` pinning and `make test` wiring are done —
+   both are now declared in the Poetry `test` group.)
 3. **Medium** — split `tree_actions/structure.py`, extract a
    file-operation presenter from `MainWindow`, narrow
    `IoController.save()`.
