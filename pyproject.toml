@@ -36,3 +36,32 @@ optional = true
 # PyInstaller 6.10.0 declares requires_python = "<3.14" and cannot be used on
 # Python 3.14. 6.15.0 is the first release that permits it.
 pyinstaller = "^6.15.0"
+
+[tool.isort]
+# extend_skip (not skip) so isort's built-in skip list — which covers .venv,
+# build and dist — is preserved rather than replaced.
+skip_gitignore = true
+extend_skip = [
+    "ui/mainwindow.py",
+    "ui/json_tab_ui.py",
+    "ui/dialogs/attach_schema_dialog.py",
+    "ui/dialogs/qmultiline_dialog.py",
+    "ui/dialogs/qhex_dialog.py",
+    "ui/dialogs/secret_prefixes_dialog.py",
+]
+
+[tool.black]
+line-length = 120
+# TOML literal string: backslashes are regex syntax, not TOML escapes.
+extend-exclude = 'ui/mainwindow\.py|ui/json_tab_ui\.py|ui/dialogs/(attach_schema_dialog|qmultiline_dialog|qhex_dialog|secret_prefixes_dialog)\.py'
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+markers = [
+    "perf: opt-in performance tests for parsing vulnerability measurement (deselect with '-m \"not perf\"')",
+]
+filterwarnings = [
+    "ignore:Failed to disconnect:RuntimeWarning",
+    "ignore::DeprecationWarning:documents.tab",
+    "ignore::DeprecationWarning:tests",
+]
