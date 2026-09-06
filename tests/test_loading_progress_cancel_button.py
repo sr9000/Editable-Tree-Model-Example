@@ -1,4 +1,4 @@
-"""Tests for loading progress cancellation button wiring (Plan 3, Commit 3.2)."""
+"""Tests for loading progress cancellation button wiring."""
 
 from __future__ import annotations
 

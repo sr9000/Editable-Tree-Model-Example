@@ -1,4 +1,4 @@
-"""Length-gate helpers for expensive type inference (Plan 1).
+"""Length-gate helpers for expensive type inference.
 
 Each ``*_inference_allowed`` helper returns ``True`` when the text is short
 enough to run the corresponding expensive branch, or when ``allow_expensive``

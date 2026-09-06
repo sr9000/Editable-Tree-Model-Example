@@ -1,4 +1,4 @@
-"""Tests for tab-close progress ownership (Plan 4, Commit 4.3)."""
+"""Tests for tab-close progress ownership."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for loading cancellation primitives (Plan 3, Commit 3.1)."""
+"""Tests for loading cancellation primitives."""
 
 from __future__ import annotations
 

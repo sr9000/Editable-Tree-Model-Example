@@ -1,4 +1,4 @@
-"""Tests for cooperative cancellation during chunked build (Plan 3, Commit 3.4)."""
+"""Tests for cooperative cancellation during chunked build."""
 
 from __future__ import annotations
 

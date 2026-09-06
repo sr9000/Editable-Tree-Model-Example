@@ -27,7 +27,7 @@ class LoadingProgressDialog(QWidget):
     parent : QWidget | None
         Parent widget.
     cancellable : bool
-        If True, show a Cancel button. In Plan 2 this is always False.
+        If True, show a Cancel button. Currently always False.
     delay_ms : int | None
         Override for the show delay. Defaults to LOADING_PROGRESS_DELAY_MS.
     """

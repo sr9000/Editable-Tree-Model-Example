@@ -1,4 +1,4 @@
-"""Tests for cancellation during worker parse stage (Plan 3, Commit 3.3)."""
+"""Tests for cancellation during worker parse stage."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for close-progress dialog reuse (Plan 4, Commit 4.2)."""
+"""Tests for close-progress dialog reuse."""
 
 from __future__ import annotations
 

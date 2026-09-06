@@ -58,8 +58,8 @@ class FontProfile:
 
 @runtime_checkable
 class FontProfileAware(Protocol):
-    # Plan 21 O3: the tab's font/theme behaviour moved onto its appearance
-    # controller, so a subscriber is "font aware" when it exposes
+    # The tab's font/theme behaviour lives on its appearance controller,
+    # so a subscriber is "font aware" when it exposes
     # ``appearance.apply_font_profile(profile)`` rather than a top-level
     # ``apply_font_profile``.
     @property

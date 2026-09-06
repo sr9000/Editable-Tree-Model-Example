@@ -43,15 +43,15 @@ MPQ_SAFE_MAX_ABS_EXPONENT = 10_000
 MPQ_SAFE_MAX_SIG_DIGITS = 4_300
 
 # ---------------------------------------------------------------------------
-# Inference safety limits (Plan 1 — length limits for expensive inference)
+# Inference safety limits — length limits for expensive inference
 # ---------------------------------------------------------------------------
 # These constants gate expensive inference work (regex, datetime parsing,
 # color checks) during automatic type classification.
 # They are NOT user-exposed settings and must not use QSettings.
 #
-# Values are justified by reports/parsing-vulnerability-2026-06-13.md which
-# measured 832 rows across 16 registry entries and 13 adversarial families
-# at sizes 1024, 4096, 16384, and 65536.
+# Values come from a parsing-vulnerability measurement (2026-06-13) over 832
+# rows across 16 registry entries and 13 adversarial families, at sizes 1024,
+# 4096, 16384, and 65536.
 #
 # Design decisions:
 # - No INFERENCE_MAX_TOTAL_CHARS: individual gates (datetime, affix, color)
@@ -82,7 +82,7 @@ INFERENCE_MAX_COLOR_CHARS: int = 10
 FORMAT_PREVIEW_DECODE_LIMIT_BYTES: int = 100
 
 # ---------------------------------------------------------------------------
-# Loading progress widget (Plan 2 — delayed progress bar for big files)
+# Loading progress widget — delayed progress bar for big files
 # ---------------------------------------------------------------------------
 # The progress widget only appears if a load operation takes longer than this
 # delay. Fast loads complete before the widget shows, avoiding visual noise.
