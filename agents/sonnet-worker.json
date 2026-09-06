@@ -50,7 +50,7 @@
     "A gate or isolation check fails for a reason your change did not introduce.",
     "The fix would require touching a file outside your brief.",
     "A command fails for environment reasons (missing interpreter, missing system package, no network).",
-    "The test count comes back as anything other than 1813 — something is miscollected.",
+    "The test count differs from the count stated in AGENTS.md §7 — something is miscollected.",
     "You are about to guess."
   ],
   "escalation_format": {
@@ -72,7 +72,7 @@
   "repo_facts_you_need": {
     "python": "3.14, managed by Poetry; in-project venv at .venv/",
     "run_tools_via": "poetry run <cmd>, or activate .venv/bin/activate",
-    "tests": "QT_QPA_PLATFORM=offscreen is required; the full suite is 1813 tests",
+    "tests": "QT_QPA_PLATFORM=offscreen is required; AGENTS.md §7 states the expected suite size",
     "targeted_tests": "QT_QPA_PLATFORM=offscreen poetry run pytest -q tests/test_<x>.py",
     "full_gate": "timeout 1200 make gate — run it only if your brief tells you to; the manager owns the commit either way",
     "lint_caveat": "make lint runs bare `autoflake .` with no --in-place, so it never removes unused imports. It is effectively isort + black. Do not assume imports were cleaned.",

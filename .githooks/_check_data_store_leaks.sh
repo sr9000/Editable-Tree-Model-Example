@@ -3,9 +3,8 @@
 # .githooks/pre-commit-ci (whole-tree scope) to forbid new leaks of
 # JsonTab.data_store internals into production code outside documents/.
 #
-# Per plans/20-decouple-jsontab.md Phase B/C/D/E/F: each phase migrates
-# external callers off a specific attribute, then appends that attribute
-# to FORBIDDEN_DATA_STORE_ATTRS below so the leak cannot return.
+# As each retired attribute loses its last external caller it is appended to
+# FORBIDDEN_DATA_STORE_ATTRS below, so the leak cannot return.
 #
 # Usage:
 #   bash .githooks/_check_data_store_leaks.sh <file> [<file> ...]
@@ -50,7 +49,7 @@ for f in "$@"; do
         documents/*|tests/*) continue ;;
     esac
     if grep -nE "$pattern" "$f" >/dev/null; then
-        echo "ERROR: $f reintroduces a retired data_store leak (see plans/20-decouple-jsontab.md):"
+        echo "ERROR: $f reintroduces a retired data_store leak:"
         grep -nE "$pattern" "$f"
         fail=1
     fi

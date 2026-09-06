@@ -133,6 +133,6 @@ PyYAML 6.0.3, simplejson 4.1.1, pandas 3.0.3 all ship cp314 wheels.
 
 ## 5. Final gate
 
-- [ ] `make gate` green under Poetry on 3.14.
-- [ ] `poetry.lock` committed.
-- [ ] Feature branch only. **Never pushed to `master`.**
+- [x] `make gate` green under Poetry on 3.14.
+- [x] `poetry.lock` committed.
+- [x] Feature branch only. **Never pushed to `master`.**

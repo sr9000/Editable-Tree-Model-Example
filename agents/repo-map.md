@@ -2,9 +2,7 @@
 
 _This is a condensed index and architectural summary. LLM agents should refer to direct source files for implementation
 details._
-**Last updated:** 2026-09-06 (after raw-numeric edit-flow fix; added DiffApplier RAW_FLOAT routing,
-integer promotion for whole-number mpq edits, and `AGENTS.md`; also reflects the migration to Poetry
-dependency management on Python 3.14).
+**Last updated:** 2026-09-06 (docs-gap cleanup: corrected the `tree/` layout listing, removed dead plan and report references, single-sourced the test count to `AGENTS.md` §7).
 
 ## 1) High-level Purpose
 
@@ -32,7 +30,6 @@ Model".
 | **Theming**         | `themes/`, `app/theme_controller.py`                                                                            |
 | **Persistence**     | `state/` (View state, settings), `io_formats/` (File I/O)                                                       |
 | **Generated UI**    | `ui/` (mainwindow, json_tab + .ui sources), `ui/dialogs/` (.ui-backed dialog schemas)                           |
-| **Reviews/Reports** | `reports/` (architecture & code-quality review docs)                                                            |
 
 ## 3) Core Invariants & Repo Rules
 
@@ -56,10 +53,10 @@ Model".
   `RawNumericValue` (`core/raw_numeric.py`) with type `JsonType.RAW_FLOAT`. Edits go through
   `JsonTreeItem._set_raw_numeric_value()` which handles: safe-parse → int/float conversion, unchanged → preserve,
   regex-match → keep raw, regex-violate → reject. Whole-number mpq results are promoted to `int` for `INTEGER` type.
-- **No external `data_store.*` reads** (Plan 20). External callers (`app/`, `undo/`, `tree_actions/`, `state/`) must
+- **No external `data_store.*` reads**. External callers (`app/`, `undo/`, `tree_actions/`, `state/`) must
   reach state through typed `JsonTab.*` properties. The pre-commit hook
   `.githooks/_check_data_store_leaks.sh` enforces this for 17 retired attributes.
-- **Viewport via signal** (Plan 20 Phase D). Selection / expand / scroll happen through
+- **Viewport via signal**. Selection / expand / scroll happen through
   `JsonTab.view_controller.request_*` calls that emit `viewportRequested(kind, payload)`. Undo commands NEVER call
   `setCurrentIndex` directly.
 - **No reflection**: `getattr` / `hasattr` / `TYPE_CHECKING` / `AttributeError` are banned outside a tiny allowlist
@@ -178,7 +175,7 @@ core/
     └── nano_time.py         NanoTime dataclass for exact nanosecond precision.
 ```
 
-## 8b) `tree/` module layout (partial — codecs subpackage)
+## 8b) `tree/` module layout
 
 ```
 tree/
@@ -186,27 +183,18 @@ tree/
 │   ├── __init__.py
 │   ├── bytes_codec.py       decode_bytes / encode_bytes for BYTES/ZLIB/GZIP.
 │   └── color_codec.py       parse_color / color_to_html / normalize_color_string.
-├── model.py
-├── item.py
-├── filter_proxy.py
-├── types.py
-├── item_coercion.py
-├── actions/anchors.py
-├── commands.py
-├── diff.py
-├── actions/anchors.py
-├── actions/clipboard.py
-├── actions/dnd.py
-├── actions/move.py
-├── actions/sort.py
-├── validation/
-├── app/validation_presenter.py
-├── themes/
-├── app/theme_controller.py
-├── state/
-├── io_formats/
-├── ui/
-├── dialogs/
+├── filter_proxy.py          Search/filter proxy model.
+├── inference_limits.py      Persisted thresholds for type inference.
+├── item.py                  JsonTreeItem.
+├── item_coercion.py         Type conversion.
+├── item_names.py            Name helpers (unique_child_name).
+├── model.py                 JsonTreeModel.
+├── model_protocol.py        TreeModelLike protocol.
+├── model_roles.py           Custom Qt item-data roles.
+├── stubs.py                 Placeholder values for ambiguous conversions.
+├── types.py                 JsonType enum + inference.
+├── types_datetime.py        Datetime conversion lattice.
+└── view.py                  JsonTreeView (drag-drop clearOrRemove workaround).
 ```
 
 ## 9) `delegates/` module layout (post editors/ extraction)
@@ -248,7 +236,7 @@ App-level dialog implementations live in `app/dialogs/` (`attach_schema_dlg.py`,
 ## 11) Commands & Gates
 
 ```bash
-make test                    # QT_QPA_PLATFORM=offscreen timeout 600 poetry run pytest -q (1813 pass)
+make test                    # QT_QPA_PLATFORM=offscreen timeout 600 poetry run pytest -q (see AGENTS.md §7 for the expected count)
 make check-no-reflection     # forbid getattr/hasattr/TYPE_CHECKING outside allowlist
 make check-editors-isolation # forbid app/documents/tree imports in concrete editor widgets
 make check-tree-isolation    # forbid app/documents/editors/delegates/state/validation imports in tree/

@@ -152,8 +152,10 @@ Run a single check in isolation with `make check-tree-isolation` / `make check-e
 - `QT_QPA_PLATFORM=offscreen` is required for pytest.
 - Focused tests while developing, full gate before the commit.
 - Every bug fix and plan checkpoint gets a regression test.
-- The full suite is **1813 tests**, all passing on Python 3.14. **A count other than 1813 means
-  something is miscollected — investigate before trusting a green run.**
+- The full suite is **1813 tests**, all passing on Python 3.14. This is the single
+  canonical statement of the count — every other file points here rather than
+  repeating it. **A different count means something is miscollected — investigate
+  before trusting a green run.**
 
 ---
 
@@ -163,16 +165,28 @@ Manager cost is dominated by **cache reads ≈ context size × turns**, not by o
 session burned 33.2M cache reads against a 239k context over ~140 turns while emitting only 290k
 output tokens. Shrinking context and cutting turn count beat delegating more tasks.
 
+Both factors compound: context you fail to drop is re-read, and re-paid for, on every remaining
+turn of the session.
+
 Levers, by impact:
 
-1. **Delegate reading, not just writing.** Five large docs cost ~50k of permanent context, re-read
+1. **Compact aggressively, and early.** The highest-leverage lever, because it is the only one that
+   reduces cost *retroactively* across the rest of the session — every other lever merely avoids
+   adding more. Compact after each committed item, after acting on a large recon digest, and before
+   a long tail of verification turns. Do not wait until the context is visibly full; by then you
+   have paid for it on every turn since it filled. Dropping something you might need is cheaper
+   than carrying twenty things you might not — re-reading one file costs far less than re-reading
+   all of them every turn.
+2. **Delegate reading, not just writing.** Five large docs cost ~50k of permanent context, re-read
    on every later turn. Send a recon worker for a digest, or use a context-inheriting fork so the
    raw output never lands in the manager.
-2. **Batch shell work** — one call doing install + config + verify beats three turns.
-3. **Cap worker reports** and read the detail file only when something failed.
-4. **Verify with `--stat` and targeted `grep`**, never full diffs.
-5. **One shared briefing file** per project context; each task prompt becomes "read it, then do X".
-6. **Compact at phase boundaries** — detail from a committed phase is dead weight.
+3. **Do not poll.** Re-checking a background command or worker each turn is the cheapest-looking
+   and most expensive habit available: every poll is a full-context turn that buys nothing.
+   Harness-tracked work notifies on completion — do other work until it does.
+4. **Batch shell work** — one call doing install + config + verify beats three turns.
+5. **Cap worker reports** and read the detail file only when something failed.
+6. **Verify with `--stat` and targeted `grep`**, never full diffs.
+7. **One shared briefing file** per project context; each task prompt becomes "read it, then do X".
 
 ---
 

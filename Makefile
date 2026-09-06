@@ -38,7 +38,7 @@ lint: ui
 dev-setup:
 	git config core.hooksPath .githooks
 	@chmod +x .githooks/pre-commit .githooks/pre-commit-ci
-	@echo "git hooks active at .githooks/ (see plans/10-allowlist-and-precommit-hook.md)"
+	@echo "git hooks active at .githooks/"
 
 # Whole-tree scan: fails the build on any new getattr/hasattr outside
 # the allowlist. Mirrors the staged-files check in .githooks/pre-commit.
@@ -57,16 +57,13 @@ check-editors-isolation:
 check-tree-isolation:
 	bash .githooks/_check_tree_isolation.sh
 
-# Full test suite under the offscreen Qt platform with a hard 10-minute
-# wall-clock cap (see plans/20-decouple-jsontab.md Step A3 / DoD rules).
-# `PYTEST_ARGS` lets callers tack on `-k pattern` or `--lf` without
-# editing the recipe.
+# Full test suite under the offscreen Qt platform, capped at 10 minutes.
+# PYTEST_ARGS lets callers add `-k pattern` or `--lf` without editing the recipe.
 test: ui
 	QT_QPA_PLATFORM=offscreen timeout 600 poetry run pytest -q $(PYTEST_ARGS)
 
-# Composite DoD gate used after every step of the decouple-jsontab plan.
-# Order matches plans/20-decouple-jsontab.md §0.2: lint -> reflection ->
-# full test suite. Any failure aborts the chain immediately.
+# Full gate: lint -> reflection/isolation checks -> tests.
+# Any failure aborts the chain immediately.
 gate: lint check-no-reflection test
 
 # requirements.txt is GENERATED from poetry.lock — never edit it by hand.

@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # Block new getattr/hasattr in production code outside an explicit allowlist.
 #
-# Background: see reports/getattr-usage-analysis.md and
-# plans/00-overview.md ... plans/10-allowlist-and-precommit-hook.md.
 # Install once per clone with:
 #   git config core.hooksPath .githooks
 
@@ -62,14 +60,14 @@ for f in $staged_py; do
     fi
 done
 
-# Plan 20: forbid new data_store.<retired-attr> leaks (Phase B+).
+# Forbid new data_store.<retired-attr> leaks.
 if [[ -n "$staged_py" ]]; then
     if ! bash "$(dirname "$0")/_check_data_store_leaks.sh" $staged_py; then
         fail=1
     fi
 fi
 
-# Plan 21 K4: forbid imports of the concrete ``JsonTab`` outside documents/.
+# Forbid imports of the concrete ``JsonTab`` outside documents/.
 if [[ -n "$staged_py" ]]; then
     if ! bash "$(dirname "$0")/_check_jsontab_import_leaks.sh" $staged_py; then
         fail=1

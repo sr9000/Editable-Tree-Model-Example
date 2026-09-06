@@ -246,8 +246,8 @@ Overwrite to save your edits over disk, or Cancel.
 make test
 ```
 
-`poetry run pytest` works directly as an alternative. The suite currently collects
-**1813 tests**, all passing.
+`poetry run pytest` works directly as an alternative. `AGENTS.md` §7 records the
+expected test count; a different count means something is miscollected.
 
 ### Lint and format
 
@@ -278,8 +278,7 @@ Activate the repo-local git hooks (run once after cloning):
 make dev-setup
 ```
 This installs `.githooks/pre-commit`, which rejects new `getattr` /
-`hasattr` calls outside the small allowlist documented in
-`plans/10-allowlist-and-precommit-hook.md` (`jsontream/__init__.py`,
+`hasattr` calls outside a small allowlist (`jsontream/__init__.py`,
 `validation/error_adapter.py`, `app/runtime_compat.py`). Tests may use
 reflection but must justify each call with an inline `# allow: <reason>`
 comment. CI runs the same check via `make check-no-reflection`.

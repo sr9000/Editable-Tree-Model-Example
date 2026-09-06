@@ -97,7 +97,7 @@
     "No import of the concrete JsonTab outside documents/."
   ],
   "definition_of_done": [
-    "Full gate green: 1813 tests pass.",
+    "Full gate green: the full suite passes at the count stated in AGENTS.md §7.",
     "Every finished plan item committed on the feature branch, checkbox marked after the commit.",
     "Docs in agents/ reflect the new reality.",
     "Nothing pushed to master."
