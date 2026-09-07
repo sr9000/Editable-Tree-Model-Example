@@ -31,12 +31,8 @@ class InlineEditController(QObject):
         if lossy:
             tab.show_status("Type change dropped existing child nodes", 3000)
 
-        # Auto-reopen the value editor only when the type change came from a
-        # user-driven combo commit (Phase 5.1). Programmatic ``model.setData``
-        # paths (tests, scripted edits) bypass the delegate entirely so
-        # ``_interactive`` stays ``False`` and we avoid the spurious
-        # "edit: editing failed" warning that
-        # ``tests/test_smoke_mainwindow.py`` regression-tests.
+        # Auto-reopen the value editor only when ``type_delegate.interactive``
+        # is ``True``; see delegates/type_delegate.py for why that flag exists.
         if not tab.view_state.type_delegate.interactive:
             return
         if not value_index.isValid():

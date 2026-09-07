@@ -1,4 +1,4 @@
-"""Regression invariants for loading cancellation (Plan 3, Commit 3.6)."""
+"""Regression invariants for loading cancellation."""
 
 from __future__ import annotations
 

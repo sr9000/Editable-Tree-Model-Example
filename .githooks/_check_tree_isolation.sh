@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Enforce the tree/ isolation contract (refactor-tree-upward-imports plan §4):
+# Enforce the tree/ isolation contract:
 #   - tree/*.py must NOT import from app/, documents/, editors/, delegates/,
 #     state/, or validation/ — tree/ is the low-level data package.
 #   - Lazy imports inside function bodies are also forbidden (the dependency

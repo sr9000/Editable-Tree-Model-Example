@@ -1,0 +1,29 @@
+# CLAUDE.md
+
+Agent guidance for this project lives in **[AGENTS.md](AGENTS.md)** — read it first.
+
+`AGENTS.md` is the canonical, tool-agnostic entry point: the manager/worker
+operating model, environment setup, the mandatory delivery loop, the guardrails
+`make gate` enforces, and the architecture traps that are easy to miss.
+
+This file exists only so that Claude Code picks up the same instructions. Keep
+content in `AGENTS.md`; do not duplicate it here.
+
+Decide your role first, then read its contract:
+
+- `agents/opus-manager.json` — session contract for the high-effort
+  manager/architect: what it owns, how it delegates, how it verifies.
+- `agents/sonnet-worker.json` — session contract for a low-effort worker
+  subagent: scope, allowed commands, escalation triggers, report format.
+
+Further context:
+
+- `.claude/skills/teamwork/SKILL.md` — the delivery loop as an invocable skill,
+  `/teamwork [item]`. Tracked here, so a fresh clone restores it with no setup.
+  It states the four preconditions that gate delegating to a subagent.
+- `agents/tmux-self-drive.md` — when the session runs in tmux, how to issue your
+  own `/compact` and `/context` and read your own pane (and what never to send).
+- `agents/repo-map.md` — module-by-module map of the codebase.
+- `agents/pros-n-cons.md` — current strengths, caveats, and gaps.
+- `agents/todo-n-fixme.md` — active open work.
+- `plans/` — plans and definitions of done for larger changes.

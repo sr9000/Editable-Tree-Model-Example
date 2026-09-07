@@ -1,4 +1,4 @@
-"""Tests for atomic cancel-safe reload behavior (Plan 3, Commit 3.5)."""
+"""Tests for atomic cancel-safe reload behavior."""
 
 from __future__ import annotations
 

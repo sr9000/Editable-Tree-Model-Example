@@ -8,9 +8,8 @@ hook can forbid stringly-typed reflection, and ``tree_actions`` does
 not import the concrete ``documents.tab`` module.
 
 The return type is the :class:`documents.seams.document_protocol.Document`
-protocol (per ``plans/21-promote-substates-to-controllers.md`` Phase
-K3); every consumer in ``tree_actions/`` calls only Document-declared
-attributes (Phase K1 audit).
+protocol; every consumer in ``tree_actions/`` calls only Document-declared
+attributes.
 """
 
 from __future__ import annotations

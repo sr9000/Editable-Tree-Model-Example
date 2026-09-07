@@ -183,11 +183,9 @@ class JsonTab(QWidget, JsonTabWidgetMarker):
     def appearance(self) -> JsonTabAppearanceController:
         """Theme / font / icon-size / key-column appearance controller.
 
-        Plan 21 O3 retired the 14 ``set_theme`` / ``apply_font_profile`` /
-        ``zoom_*`` / ``set_*_font_*`` / ``resize_key_columns`` /
-        ``_scale_columns_for_font`` / ``_set_font_pt`` /
-        ``_sync_icon_size_with_font`` / ``_on_model_reset`` forwarders on
-        ``JsonTab``; callers reach the behaviour through ``tab.appearance.*``.
+        Callers reach this behaviour through ``tab.appearance.*`` rather
+        than through forwarders on ``JsonTab`` itself. See
+        ``app/font_controller.py`` for the rationale.
         """
         assert self._appearance is not None, "appearance accessed before bootstrap"
         return self._appearance

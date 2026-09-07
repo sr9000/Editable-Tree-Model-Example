@@ -1,0 +1,80 @@
+{
+  "description": "Canonical work-breakdown vocabulary for this repo and the context action that closes each level. Three levels only: epic > milestone > task. The words are NOT interchangeable. 'plan item' is retired in favour of 'milestone'.",
+  "last_updated": "2026-09-07",
+  "authority": "This file is the single source of truth for these four words. AGENTS.md, .claude/skills/teamwork/SKILL.md and agents/*.json USE the vocabulary and must not redefine it.",
+  "why_this_file_exists": [
+    "Before this file, 'plan item' and 'milestone' were used interchangeably for the same commit-sized unit, and there was no word at all for the user's whole request. A boundary with no name gets no boundary action, so context was carried across unrelated requests instead of being cleared.",
+    "JSON, not prose: a level is a record with a mandatory boundary_action field, so 'which action closes this?' cannot be answered by vibes."
+  ],
+
+  "levels": [
+    {
+      "level": 1,
+      "name": "epic",
+      "definition": "A big, INDEPENDENT user request. Independent is the load-bearing word: an epic must be startable from a cold context holding nothing but READ_AFTER_COMPACT.md and the repo. If it cannot, it is not an epic — it is a milestone of the epic it depends on.",
+      "authored_by": "the user, in the user's own words",
+      "owned_by": "manager (opus, high effort)",
+      "granularity": "hours of work; several milestones; one coherent deliverable",
+      "ends_when": "every milestone under it is committed, the gate is green ALONE, and the ledger's epic line is checked",
+      "boundary_action": "/clear",
+      "boundary_rule": "Recommended before starting the NEXT queued epic. /clear is NOT /compact: it leaves NO summary behind. The ledger is therefore not optional at an epic boundary — it is the only bridge across it. Write the ledger, then clear, never the reverse.",
+      "ledger_representation": "the EPIC QUEUE section; the active epic quotes the user's ask verbatim",
+      "concurrency": "one epic in flight. Queued epics are LISTED in the ledger, never started early.",
+      "manager_must_not": "rename the epic into a tidier summary of its own. The user's phrasing is the guard against silently delivering a smaller thing than was asked for."
+    },
+    {
+      "level": 2,
+      "name": "milestone",
+      "definition": "A part of an epic that ends in exactly ONE commit on a green gate. This is the unit the delivery loop iterates over.",
+      "authored_by": "manager (opus, high effort)",
+      "authoring_is_dynamic": "Milestones are written, reordered, split and RESCHEDULED as evidence arrives — they are never frozen at plan time. Write the next one or two concretely and the rest as placeholders. A far milestone that turns out wrong costs nothing because it was never load-bearing; waiting for the whole shape before naming any is the expensive move.",
+      "owned_by": "manager",
+      "executed_by": "workers, via tasks. The manager executes only what a brief genuinely cannot carry.",
+      "granularity": "one commit; one scope; typically 1-5 tasks",
+      "ends_when": "gate green ALONE, commit exists, checkbox flipped to [x], stale-process sweep clean, ledger updated",
+      "boundary_action": "/compact",
+      "boundary_rule": "Unconditional after every committed milestone, at ANY context reading including 7%. Order is fixed: ledger first, /compact second, end the turn third. A committed milestone you have not compacted after is not done, and the next milestone does not begin.",
+      "why_unconditional": "A threshold is a loophole. A manager mid-work always finds its current context affordable and reasons its way past the boundary; a step with a stopping point does not lose to momentum.",
+      "ledger_representation": "one checkbox line under the active epic",
+      "real_purpose": "Milestones exist to MANUFACTURE the points where work becomes durable and context can be dropped. No plan means no milestones, and context then grows untended to the end of the session."
+    },
+    {
+      "level": 3,
+      "name": "task",
+      "definition": "One piece of milestone work small enough to fit a self-contained brief that a COLD worker can execute with no conversation history.",
+      "authored_by": "manager — the brief, with every design choice already made",
+      "executed_by": "worker: sonnet at low effort, or haiku at low effort when the brief specifies exact literals and leaves nothing to infer",
+      "granularity": "one brief; one acceptance check; files disjoint from any task running in parallel",
+      "sizing_rule": "Size a task by whether a cold worker can execute the brief with no conversation history — NOT by how long it would take you. 'I could do this faster myself' is the most expensive sentence in this workflow.",
+      "ends_when": "the worker reports DONE / BLOCKED / PARTIAL and the manager has re-verified independently with git diff --stat, a targeted grep for the changed token, and the acceptance check",
+      "boundary_action": "/context",
+      "boundary_rule": "Run /context after every 3-5 workers. Fire /compact PREEMPTIVELY — without waiting for the milestone boundary — whenever a task returns a large payload: a long report, a generated document, a build log, a recon digest you have already acted on.",
+      "why_measure_here": "Context pressure is created at task granularity but was previously only ever discovered at milestone granularity, 3-5 workers too late. Measuring at the level that creates the pressure is what makes the milestone /compact a formality instead of a rescue.",
+      "ledger_representation": "the 'worker <label>, files: <paths>' suffix on the in-flight milestone line"
+    }
+  ],
+
+  "boundary_actions": {
+    "principle": "Each level closes with the cheapest context action that lets the next unit of that level start clean.",
+    "epic": "/clear — full reset; NO summary survives; the ledger is the only bridge",
+    "milestone": "/compact — a lossy summary survives; the ledger is still written FIRST",
+    "task": "/context — measure only; then /compact early if over-utilised",
+    "escalation_is_upward_only": "A lower level may fire a HIGHER level's action early — a task that returned a huge log may trigger /compact immediately. A level may never SKIP its own action, and never substitutes a lower level's action for its own (/context is not a substitute for /compact at a milestone).",
+    "self_drive_precondition": "Issuing these yourself requires a tmux session — test with [ -n \"$TMUX\" ], never assume. Outside tmux, say plainly that now is a cheap moment for the user to run it, and stop the turn. See agents/tmux-self-drive.md for the exact snippet; do not reconstruct it from memory."
+  },
+
+  "naming_rules": [
+    "'plan item' is RETIRED. Say milestone.",
+    "Never call a worker brief a milestone; never call a commit-sized scope a task.",
+    "An epic is the user's request in the user's words. A milestone is yours to write and reschedule. A task is a brief.",
+    "If you cannot name which of the three a piece of work is, you cannot know which context action closes it — that is the symptom the vocabulary exists to catch."
+  ],
+
+  "anti_patterns": [
+    "Treating an epic boundary as a milestone boundary: /compact instead of /clear carries an entire finished request's context into an unrelated one, and pays for it on every remaining turn.",
+    "Freezing the milestone list at plan time, then following it after the evidence has moved. Milestones are rescheduled by design.",
+    "Starting a queued epic because the current one 'is basically done'. Commit, sweep, clear, then start.",
+    "Reaching a milestone boundary and discovering the context is already full. The /context check at task boundaries exists to catch that 3-5 workers earlier.",
+    "Absorbing a task back because verifying a hypothesis feels like judgement. Choosing the hypothesis is judgement; running the experiment is execution, and it is delegable by default."
+  ]
+}

@@ -10,7 +10,7 @@ binding differences).
 
 Every other module imports the typed helper it needs from here instead
 of calling ``getattr`` / ``hasattr`` directly. Allowlisted by the
-project-wide pre-commit hook (see ``plans/10-allowlist-and-precommit-hook.md``).
+project-wide pre-commit hook.
 """
 
 from __future__ import annotations

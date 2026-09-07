@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Enforce the editors/ isolation contract (responsibility-segregation plan §2.5):
+# Enforce the editors/ isolation contract:
 #   - Concrete widgets (editors/inline/**, editors/windowed/**) must NOT import
 #     from app/, documents/, or tree/ -- they stay self-hosted, reusable QWidgets.
 #   - The dispatch seam (top-level editors/*.py, e.g. factory.py / context.py) must

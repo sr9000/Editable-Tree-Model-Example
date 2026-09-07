@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v0.1.0). Will be created if it does not exist."
-        required: true
+        description: "Release tag (e.g. v0.1.0), created if it does not exist. Optional: leave empty to build artifacts without publishing a release."
+        required: false
+        default: ""
         type: string
       prerelease:
         description: "Mark the GitHub release as a pre-release"
@@ -22,8 +23,10 @@ permissions:
   contents: write
 
 env:
-  PYTHON_VERSION: "3.12"
-  PYINSTALLER_VERSION: "6.10.0"
+  PYTHON_VERSION: "3.14"
+  # Must match the pyinstaller version resolved in poetry.lock. 6.10.0 declared
+  # requires_python "<3.14" and cannot build on Python 3.14.
+  PYINSTALLER_VERSION: "6.22.2"
   APP_NAME: EditableTreeModel
 
 jobs:
@@ -82,6 +85,9 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ inputs.tag }}"
+          if ([string]::IsNullOrEmpty($tag)) {
+            $tag = "dev-" + "$env:GITHUB_SHA".Substring(0,7)
+          }
           $asset = "${{ env.APP_NAME }}-$tag-${{ matrix.artifact_name }}.zip"
           Compress-Archive -Path "dist/${{ env.APP_NAME }}.exe" -DestinationPath "dist/$asset"
           "ASSET_PATH=dist/$asset" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -93,6 +99,7 @@ jobs:
         shell: bash
         run: |
           tag="${{ inputs.tag }}"
+          tag="${tag:-dev-${GITHUB_SHA:0:7}}"
           asset="${APP_NAME}-${tag}-${{ matrix.artifact_name }}.dmg"
           mkdir -p dist/dmg-staging
           cp -R "dist/${APP_NAME}.app" dist/dmg-staging/
@@ -111,6 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ inputs.tag }}"
+          tag="${tag:-dev-${GITHUB_SHA:0:7}}"
           asset="${APP_NAME}-${tag}-${{ matrix.artifact_name }}.AppImage"
 
           APPDIR="dist/${APP_NAME}.AppDir"
@@ -149,6 +157,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
+    if: ${{ inputs.tag != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -1,0 +1,67 @@
+[tool.poetry]
+# This project is a flat-layout desktop application (18 top-level packages plus
+# main.py), not a distributable library. package-mode = false tells Poetry to
+# manage the virtualenv and lock file only, and never to build or install the
+# project itself. Imports keep working via pytest's `pythonpath` setting.
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.14,<3.15"
+PySide6 = "^6.11.1"
+PyYAML = "^6.0.3"
+simplejson = "^4.1.1"
+gmpy2 = "^2.3.0"
+python-dateutil = "^2.9.0.post0"
+tzdata = "^2026.2"
+jsonschema = { version = "^4.26.0", extras = ["format"] }
+pandas = "^3.0.3"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^9.0.3"
+pytest-qt = "^4.5.0"
+pytest-cov = "^7.0.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.1.0"
+isort = "^6.0.1"
+autoflake = "^2.3.1"
+mypy = "^2.1.0"
+vulture = "^2.16"
+
+# Only needed to produce release bundles; opt in with `poetry install --with build`.
+[tool.poetry.group.build]
+optional = true
+
+[tool.poetry.group.build.dependencies]
+# PyInstaller 6.10.0 declares requires_python = "<3.14" and cannot be used on
+# Python 3.14. 6.15.0 is the first release that permits it.
+pyinstaller = "^6.15.0"
+
+[tool.isort]
+# extend_skip (not skip) so isort's built-in skip list — which covers .venv,
+# build and dist — is preserved rather than replaced.
+skip_gitignore = true
+extend_skip = [
+    "ui/mainwindow.py",
+    "ui/json_tab_ui.py",
+    "ui/dialogs/attach_schema_dialog.py",
+    "ui/dialogs/qmultiline_dialog.py",
+    "ui/dialogs/qhex_dialog.py",
+    "ui/dialogs/secret_prefixes_dialog.py",
+]
+
+[tool.black]
+line-length = 120
+# TOML literal string: backslashes are regex syntax, not TOML escapes.
+extend-exclude = 'ui/mainwindow\.py|ui/json_tab_ui\.py|ui/dialogs/(attach_schema_dialog|qmultiline_dialog|qhex_dialog|secret_prefixes_dialog)\.py'
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+markers = [
+    "perf: opt-in performance tests for parsing vulnerability measurement (deselect with '-m \"not perf\"')",
+]
+filterwarnings = [
+    "ignore:Failed to disconnect:RuntimeWarning",
+    "ignore::DeprecationWarning:documents.tab",
+    "ignore::DeprecationWarning:tests",
+]

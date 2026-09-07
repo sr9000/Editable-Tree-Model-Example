@@ -1,4 +1,4 @@
-"""Responsiveness tests for large tab close progress (Plan 4, Commit 4.4)."""
+"""Responsiveness tests for large tab close progress."""
 
 from __future__ import annotations
 

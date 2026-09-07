@@ -109,11 +109,8 @@ def handle_drop(view, model, mime, action: Qt.DropAction, row: int, column: int,
     if action == Qt.DropAction.MoveAction:
         source_rows = model.consume_drag_source_rows()
         if source_rows:
-            # Internal same-model move: let the tab perform the structural
-            # change as a single undo step. Mark the originating view so its
-            # overridden ``startDrag`` skips Qt's default post-drag
-            # ``clearOrRemove`` (which would otherwise delete the freshly
-            # placed destination rows — the "disappearing item" bug).
+            # Internal same-model move: mark the originating view so its
+            # overridden ``startDrag`` skips Qt's default post-drag cleanup; see tree/view.py.
             moved = tab.mutations.push_move_rows(source_rows, target_parent, target_row, label="drag move")
             if moved and isinstance(view, JsonTreeView):
                 view.mark_drag_handled_internally()
