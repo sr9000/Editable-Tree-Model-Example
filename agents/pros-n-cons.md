@@ -159,9 +159,9 @@ But the `windows-latest` / `macos-latest` legs in
 `.github/workflows/release.yml` (`workflow_dispatch`) HAVE now run and are
 green: run `34116256891` produced all three platforms' artifacts (linux
 AppImage, windows zip, macos dmg) from a tagless dispatch with no publish, and
-run `34117094101` proved the full tagged release path including a published
-GitHub Release. GHA is the supported route to Windows and macOS builds, and it
-works.
+run `34118803328` on master shipped **v1.4.0** through the full tagged release
+path — four jobs green, three assets published. GHA is the supported route to
+Windows and macOS builds, and it works.
 
 ### File-size outliers (audit Low)
 

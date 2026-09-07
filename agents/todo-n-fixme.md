@@ -50,20 +50,42 @@ instead of re-deriving it._
 - Proof, tagless build — run `34116256891`: all three Build jobs green,
   `Publish GitHub Release` correctly skipped. Artifacts: linux AppImage
   134503586 bytes, windows zip 92971831 bytes, macos dmg 73473150 bytes.
-- Proof, full release path — run `34117094101` with tag `v0.0.0-ci-debug.1`
-  (prerelease): all four jobs green including Publish, three assets attached
-  as `EditableTreeModel-v0.0.0-ci-debug.1-<platform>.<ext>`.
+- Proof, full release path — run `34118803328`, dispatched on **master** with
+  `tag=v1.4.0`: all four jobs green including Publish. Three assets attached,
+  named `EditableTreeModel-v1.4.0-<platform>.<ext>` (AppImage 134583488 bytes,
+  dmg 74575924 bytes, windows zip 92942999 bytes). This is the released
+  artifact set; **v1.4.0 is the first release built on Poetry + Python 3.14**.
 - Validity evidence for the Windows binary — a produced `.exe` is not by
-  itself proof of a working build (see the Wine `.exe` above). The
-  `windows-latest` build log has ZERO occurrences of `icuuc`, `DLL load
-  failed`, or `Qt6Core`, and PyInstaller processed `hook-PySide6.py` as a
-  standard module hook — the direct contrast with the Wine attempt, where the
-  same hook failed at WARNING level while still emitting an `.exe`.
+  itself proof of a working build (see the Wine `.exe` above). Three
+  independent checks on `EditableTreeModel.exe` (93705189 bytes) from v1.4.0:
+  1. PE structure: `MZ` -> `PE\0\0` -> machine `0x8664` -> PE32+ (`0x20b`) ->
+     subsystem 2 (GUI).
+  2. PyInstaller CArchive cookie (magic `MEI\014\013\012\013\016`) 88 bytes
+     from EOF: embedded package 93312485 bytes — 99.6% of the file — Python
+     version `314`, bundled runtime `python314.dll`.
+  3. The archive's **TOC, enumerated**: 3617 entries, including
+     `PySide6\Qt6Core.dll`, `Qt6Gui/Widgets/Quick/Qml/Pdf/OpenGL/Network`,
+     the `QtCore/QtGui/QtWidgets/QtNetwork` `.pyd` modules, `python314.dll`,
+     `PySide6\plugins\platforms\qwindows.dll`, and the `main` entry script.
+  To parse the TOC yourself, note the entry header is **18** bytes
+  (`!iIIIBc`); a 22-byte guess silently truncates every name and makes a
+  correct bundle look empty.
+  Grepping the onefile `.exe` for `Qt6Core` returns nothing, but that is
+  **inconclusive by construction** — the payload is compressed. The TOC is the
+  valid check, and it is positive. Do not read the grep as a failure.
+  The build log has ZERO occurrences of `icuuc` or `DLL load failed`, and
+  PyInstaller processed `hook-PySide6.py` as a standard module hook — the
+  direct contrast with the Wine attempt, where the same hook failed at WARNING
+  level while still emitting an `.exe`.
+- ICU is absent from the bundle (0 TOC entries) and that is **correct** for a
+  Windows target: `icuuc.dll` is an OS component there. The Wine failure was
+  the OS side not providing it, not the bundle omitting it. Do not "fix" this
+  by bundling ICU.
 - CI fact worth keeping so nobody re-derives it: `workflow_dispatch` inputs
   are validated by GitHub against the workflow file **on the dispatched ref**,
-  not the one on the default branch. The tagless dispatch above worked from
-  this branch even though master's copy of the workflow still declares `tag`
-  as required.
+  not the one on the default branch. A tagless dispatch worked from a feature
+  branch while master's copy still declared `tag` as required — master has
+  since been fixed by the same PR, but the rule is the durable part.
 - `windows-latest` build log warning `WARNING: Hidden import "jinja2" not
   found!` is investigated and dismissed as benign. pandas is imported in this
   codebase only for its datetime types (`Timestamp`/`Timedelta`, in
