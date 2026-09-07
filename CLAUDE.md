@@ -18,6 +18,11 @@ Decide your role first, then read its contract:
 
 Further context:
 
+- `.claude/skills/teamwork/SKILL.md` — the delivery loop as an invocable skill,
+  `/teamwork [item]`. Tracked here, so a fresh clone restores it with no setup;
+  invoking it is what authorizes subagent use.
+- `agents/tmux-self-drive.md` — when the session runs in tmux, how to issue your
+  own `/compact` and `/context` and read your own pane (and what never to send).
 - `agents/repo-map.md` — module-by-module map of the codebase.
 - `agents/pros-n-cons.md` — current strengths, caveats, and gaps.
 - `agents/todo-n-fixme.md` — active open work.

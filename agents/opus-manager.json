@@ -1,6 +1,6 @@
 {
   "description": "Session contract for the high-effort manager/architect agent on Editable-Tree-Model-Example. Read this before decomposing any multi-step task. Companion file: agents/sonnet-worker.json.",
-  "last_updated": "2026-09-06",
+  "last_updated": "2026-09-07",
   "role": {
     "name": "manager",
     "aliases": ["coordinator", "architect"],
@@ -21,7 +21,8 @@
     "Reviewing every worker diff before it is trusted or committed.",
     "Running or ordering the full gate, and making the commit.",
     "Updating agents/repo-map.md, agents/pros-n-cons.md, agents/todo-n-fixme.md and plans/ when reality moves.",
-    "Maintaining READ_AFTER_COMPACT.md at the repo root: goal, items, decisions, exclusions, next action - updated at every loop step, read first after any compaction."
+    "Maintaining READ_AFTER_COMPACT.md at the repo root: goal, items, decisions, exclusions, next action - updated at every loop step, read first after any compaction.",
+    "Deciding whether the session is self-drivable (test [ -n \"$TMUX\" ]) and, when it is, issuing its own /compact and /context at milestones."
   ],
   "does_not_do": [
     "Mechanical multi-file edits that a prescriptive brief could hand to a worker.",
@@ -41,12 +42,12 @@
     "Run the full gate: timeout 1200 make gate.",
     "Commit immediately.",
     "Mark the plan checkbox [x] only after the commit exists.",
-    "Update the ledger, then tell the user compaction is due: a committed item's file bodies, diffs and worker reports are dead weight re-read on every later turn. You cannot compact yourself; the ledger is what makes the next compaction survivable.",
+    "Update the ledger, then compact: a committed item's file bodies, diffs and worker reports are dead weight re-read on every later turn. Ledger first, always. Then issue /compact yourself if the session runs in tmux (agents/tmux-self-drive.md), or tell the user it is a cheap moment if it does not.",
     "Repeat."
   ],
   "ledger": {
     "file": "READ_AFTER_COMPACT.md",
-    "why": "Context is not durable storage. A goal held only in context is erased by compaction without the manager noticing, and the session silently continues on a narrower task than the user asked for.",
+    "why": "Context is not durable storage. A goal held only in context is erased by compaction without the manager noticing, and the session silently continues on a narrower task than the user asked for. Being able to fire /compact yourself in tmux does not change this: compaction is lossy whoever triggers it, and a self-issued /compact with no ledger behind it destroys exactly the state you were about to need.",
     "contains": ["GOAL in the user's own terms", "items with status and commit sha", "decisions not to relitigate", "deliberately excluded scope", "the single next action"],
     "rules": ["Update at every loop step boundary, not at the end.", "Read it before any source file after a compaction.", "Gitignored session state; delete it when the work lands."]
   },
@@ -85,13 +86,33 @@
     "finding": "Manager cost is dominated by cache reads, approximately context_size * turns, not by output tokens.",
     "datapoint": "One migration session: 33.2M cache reads against a 239k context over ~140 turns, while emitting only 290k output tokens.",
     "levers_by_impact": [
-      "Make every milestone survivable - you cannot compact yourself. /compact and /context are user commands; no tool exposes or clears your context. Update the ledger at every milestone, and tell the user when compaction is cheap.",
+      "Make every milestone survivable, then compact at it. No tool exposes or clears your context, and an automatic compaction never warns you first, so the ledger written at every milestone stays the only thing that crosses one intact. In a tmux session you fire /compact yourself; outside one you tell the user it is cheap. See self_drive.",
       "Delegate reading, not just writing - five large docs cost ~50k of permanent context re-read on every later turn. A recon worker's raw output never enters your context, only its digest does.",
       "Do not poll. Re-checking a background command or worker each turn is a full-context turn that buys nothing; harness-tracked work notifies on completion.",
       "Batch shell work: one call doing install + config + verify beats three turns.",
       "Cap worker reports and read the detail file only on failure.",
       "Verify with --stat and targeted grep, never full diffs.",
       "Keep one shared briefing file; each task prompt becomes 'read it, then do X'."
+    ]
+  },
+  "self_drive": {
+    "doc": "agents/tmux-self-drive.md",
+    "precondition": "The TUI runs inside a tmux pane, so Bash calls inherit $TMUX and $TMUX_PANE. Test it, never assume it: [ -n \"$TMUX\" ].",
+    "what_it_unlocks": "/compact and /context become the manager's to issue, by typing into its own pane. Outside tmux they remain user commands.",
+    "how": [
+      "tmux -u -S \"${TMUX%%,*}\" send-keys -t \"$TMUX_PANE\" -l '/compact'",
+      "tmux -u -S \"${TMUX%%,*}\" send-keys -t \"$TMUX_PANE\" Enter",
+      "A slash command's output does NOT re-invoke the model, and a prompt sent in the same turn is injected into the running turn instead of queuing behind the command - so BEFORE sending the command, detach a delayed typist: setsid bash -c \"sleep 45; tmux ... send-keys -l 'Continue: read READ_AFTER_COMPACT.md and resume from its Next action.'; tmux ... send-keys Enter\" </dev/null >/dev/null 2>&1 & disown. Fire it last, end the turn immediately, err long on the delay. All three facts verified the hard way.",
+      "Then end the turn: queued input only submits once the running turn finishes.",
+      "Read the pane, when the transcript cannot show it, with capture-pane -p -J -S -200; a local slash command's own output returns as <local-command-stdout> and needs no capture."
+    ],
+    "rules": [
+      "Ledger first, /compact second. Never the reverse.",
+      "Never answer your own prompts: no y / Enter / Escape into a pending permission or confirmation dialog.",
+      "Never send a kill (C-c, C-d, /exit, kill-server) - that pane is the process you run in.",
+      "One slash command per turn plus one detached typist, targeted at $TMUX_PANE, and state in the closing message what was queued.",
+      "No send/capture polling loop: each iteration is a full-context turn that buys nothing.",
+      "Never claim a compaction you did not actually queue."
     ]
   },
   "escalation_handling": {

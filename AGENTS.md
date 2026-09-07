@@ -1,7 +1,7 @@
 # Agent Guide — Editable-Tree-Model-Example
 
 _How agents are expected to work in this repository. High-signal and prescriptive; keep it that way._
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-07
 
 ---
 
@@ -17,6 +17,13 @@ then read your own contract:
 
 The two JSON files are the machine-readable session contracts — scope, allowed commands, escalation
 triggers, report format. **This file is the shared briefing; those files are your role's rules.**
+
+The manager's loop is also packaged as an invocable skill at
+`.claude/skills/teamwork/SKILL.md` — **tracked in this repo**, so cloning restores it and
+Claude Code discovers it with no setup step. Run it with `/teamwork [item]`; invoking it is what
+authorizes subagent use. The skill is the *procedure* only: it deliberately carries no test counts,
+no allowlist line numbers, and no gate composition, because those live here and in the contracts.
+Nothing else under `.claude/` is tracked (`settings.local.json` is machine-local and ignored).
 
 **The single rule that matters most:** _workers do not resolve blockers._ A blocker is an
 architectural decision wearing a bug's clothing, and settling it inside a low-effort context hides
@@ -49,10 +56,12 @@ For plan-based work, execute exactly this loop:
 4. **Run the full gate** — `timeout 1200 make gate`.
 5. **Commit immediately** (message references the plan item).
 6. **Mark the plan checkbox `[x]`** — only after the commit exists.
-7. **Update `READ_AFTER_COMPACT.md`, then tell the user compaction is due.** A committed item is a
-   milestone; its file bodies, diffs and worker reports are dead weight you re-read on every later
-   turn. You cannot compact yourself, so the ledger is what makes the next compaction — whenever it
-   lands — cost nothing. Then say plainly that now is a cheap moment to run `/compact`.
+7. **Update `READ_AFTER_COMPACT.md`, then compact.** A committed item is a milestone; its file
+   bodies, diffs and worker reports are dead weight you re-read on every later turn. The ledger is
+   what makes a compaction cost nothing, so it is written *first*, always. Then: if the session is
+   running inside tmux you issue `/compact` yourself (`agents/tmux-self-drive.md`); if it is not,
+   say plainly that now is a cheap moment for the user to run it. Check which case you are in —
+   `[ -n "$TMUX" ]` — instead of assuming either.
 8. Repeat.
 
 Hard rules:
@@ -181,15 +190,15 @@ turn of the session.
 
 Levers, by impact:
 
-1. **Make every milestone survivable — you cannot compact yourself.** `/compact` and `/context` are
-   the user's commands; no tool exposes your context size or clears it, and compaction reaches you
-   only when the harness fires it automatically or the user runs it. Neither warns you first. So do
-   not try to manage context continuously and do not estimate how full you are. Instead: update the
-   ledger at every milestone, because it is the only thing that crosses a compaction intact; keep
-   what you never need out of context in the first place, which is the lever you do control (a
-   recon worker's raw output never enters your context, only its digest does); and at each
-   milestone tell the user that now is a cheap moment to compact. Never claim to have compacted —
-   an impossible instruction is not refused, it is silently skipped.
+1. **Make every milestone survivable, then compact at it.** No *tool* exposes your context size or
+   clears it, and an automatic compaction never warns you first — so the ledger, written at every
+   milestone, remains the only thing that crosses a compaction intact. What changes is who fires
+   the compaction. **In a tmux session you can run `/compact` and `/context` on yourself** by
+   typing into your own pane with `send-keys`; see `agents/tmux-self-drive.md` for the exact
+   mechanism, its deferred timing, and the things you must never send. Outside tmux they are still
+   the user's commands and the most you can do is say when compacting is cheap. Either way: write
+   the ledger *before* the compaction, never after, and never claim a compaction you did not
+   actually queue.
 2. **Delegate reading, not just writing.** Five large docs cost ~50k of permanent context, re-read
    on every later turn. Send a recon worker for a digest, or use a context-inheriting fork so the
    raw output never lands in the manager.
@@ -209,9 +218,10 @@ the session — which is how a session ends up spending most of its budget re-re
 
 **Keep a ledger.** `READ_AFTER_COMPACT.md` at the repo root holds the goal in the user's own terms,
 item status, decisions already made, deliberately excluded scope, and the next action. Update it at
-every loop step and read it first after any compaction. You cannot query your own context size or
-trigger a compaction — both are user commands — so the ledger is not an optimization: it is the
-only reason an unannounced compaction is survivable.
+every loop step and read it first after any compaction. Being able to *fire* a compaction from
+inside tmux does not make the ledger optional: compaction is lossy either way, the harness can
+still fire one unannounced, and a self-issued `/compact` with no ledger behind it destroys exactly
+the state you were about to need.
 
 ---
 
@@ -224,6 +234,9 @@ After a change lands, update what it invalidated:
 - `agents/pros-n-cons.md` — strengths, caveats, gaps.
 - `agents/todo-n-fixme.md` — open work only; delete what is done.
 - `agents/opus-manager.json`, `agents/sonnet-worker.json` — the role contracts.
+- `agents/tmux-self-drive.md` — self-issued slash commands and pane capture when running in tmux.
+- `.claude/skills/teamwork/SKILL.md` — the invocable form of the delivery loop. It restates §2 and
+  §8 as a procedure; when either changes, bump the skill's `version:` and change it in step.
 - `plans/` — plans and definitions of done. **A plan file may be deleted when complete; if you
   delete one, grep for references to it first** (`README.md`, `Makefile`, `.githooks/*`, docstrings)
   and retarget them, or you leave dangling pointers behind.

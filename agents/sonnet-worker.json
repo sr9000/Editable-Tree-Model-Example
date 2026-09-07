@@ -1,6 +1,6 @@
 {
   "description": "Session contract for a low-effort worker subagent on Editable-Tree-Model-Example. If you are a subagent, this file describes what your session is and is not. Companion file: agents/opus-manager.json.",
-  "last_updated": "2026-09-06",
+  "last_updated": "2026-09-07",
   "role": {
     "name": "worker",
     "aliases": ["subagent", "executor"],
@@ -42,7 +42,8 @@
     "Editing pyproject.toml, poetry.lock, Makefile, or .githooks/* unless the brief names them literally.",
     "Relaxing, allowlisting around, or deleting an isolation check to make your change pass.",
     "Adding a pytest.ini — lint and pytest config lives in pyproject.toml and a pytest.ini would silently override it.",
-    "Widening the scope because the fix 'obviously' needs one more file."
+    "Widening the scope because the fix 'obviously' needs one more file.",
+    "tmux send-keys / capture-pane / any other attempt to drive a terminal session. Self-drive belongs to the manager alone (agents/tmux-self-drive.md); you are a subagent with no pane of your own, and a stray send-keys types into the manager's."
   ],
   "escalate_when": [
     "The brief and the actual file contents disagree.",

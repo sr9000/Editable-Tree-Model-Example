@@ -74,3 +74,8 @@ appimagetool
 
 # Manager session ledger (see .claude/skills/teamwork/SKILL.md); not a deliverable.
 READ_AFTER_COMPACT.md
+
+### --- Agent tooling ---
+# .claude/skills/ IS tracked: it is how a fresh clone restores the teamwork skill.
+# Only the machine-local settings file is ignored.
+.claude/settings.local.json
