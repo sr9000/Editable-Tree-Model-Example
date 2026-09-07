@@ -35,13 +35,50 @@ instead of re-deriving it._
   stale post-Poetry-migration. **Future agents must not "fix" it.**
 - macOS hits a strictly harder version of the same wall: it needs Apple
   tooling, and the spec's `BUNDLE()` step is darwin-only.
-- [ ] [ci] The real route to Windows and macOS artifacts is
-  `.github/workflows/release.yml` (`workflow_dispatch`-only; matrix includes
+- Windows and macOS builds are now **DONE**, proven working, via
+  `.github/workflows/release.yml` (`workflow_dispatch`; matrix includes
   `windows-latest` and `macos-latest`; `PYTHON_VERSION` 3.14,
-  `PYINSTALLER_VERSION` 6.22.2, spec mode). Running it needs the branch pushed
-  and the dispatch triggered — nothing was pushed as part of the
-  investigation, and doing so is the user's decision, not an agent's.
+  `PYINSTALLER_VERSION` 6.22.2, spec mode). GHA is the only route to these two
+  platforms — the local-impossibility reasoning above is exactly why — but on
+  GHA it works cleanly. The workflow's `tag` input is now optional (default
+  `""`): a tagless dispatch builds all three platforms and uploads artifacts
+  while publishing nothing (the `release` job is gated on
+  `if: inputs.tag != ''`); packaging steps fall back to naming assets
+  `dev-<7-char-sha>` when the tag is empty. A dispatch with a tag additionally
+  publishes a GitHub Release.
   — `.github/workflows/release.yml`
+- Proof, tagless build — run `34116256891`: all three Build jobs green,
+  `Publish GitHub Release` correctly skipped. Artifacts: linux AppImage
+  134503586 bytes, windows zip 92971831 bytes, macos dmg 73473150 bytes.
+- Proof, full release path — run `34117094101` with tag `v0.0.0-ci-debug.1`
+  (prerelease): all four jobs green including Publish, three assets attached
+  as `EditableTreeModel-v0.0.0-ci-debug.1-<platform>.<ext>`.
+- Validity evidence for the Windows binary — a produced `.exe` is not by
+  itself proof of a working build (see the Wine `.exe` above). The
+  `windows-latest` build log has ZERO occurrences of `icuuc`, `DLL load
+  failed`, or `Qt6Core`, and PyInstaller processed `hook-PySide6.py` as a
+  standard module hook — the direct contrast with the Wine attempt, where the
+  same hook failed at WARNING level while still emitting an `.exe`.
+- CI fact worth keeping so nobody re-derives it: `workflow_dispatch` inputs
+  are validated by GitHub against the workflow file **on the dispatched ref**,
+  not the one on the default branch. The tagless dispatch above worked from
+  this branch even though master's copy of the workflow still declares `tag`
+  as required.
+- [ ] [ci] `windows-latest` build log: `WARNING: Hidden import "jinja2" not
+  found!`. jinja2 is pandas' optional dependency for `pandas.Styler` HTML
+  styling and is not in this repo's dependency set, so the frozen bundle
+  lacks it. Confirm whether the app ever exercises pandas styling (harmless if
+  not) or dismiss explicitly — do not treat as already fixed.
+  — `.github/workflows/release.yml`
+- [ ] [ci] Master's `.github/workflows/release.yml` still pins
+  `PYTHON_VERSION: "3.12"` and `PYINSTALLER_VERSION: "6.10.0"`. PyInstaller
+  6.10.0 declares `requires_python <3.14` and cannot build this app at all —
+  only this branch (`migrate-to-poetry-py314`) has the 3.14 / 6.22.2 fix, so
+  the Release workflow is broken on master until this branch merges.
+  — `.github/workflows/release.yml`
+- [ ] [ci] The debug prerelease `v0.0.0-ci-debug.1` (from proof run
+  `34117094101`) is a disposable throwaway, not a real product release —
+  delete it once it is no longer needed as evidence.
 
 ## High priority
 

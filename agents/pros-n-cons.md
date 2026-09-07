@@ -149,15 +149,19 @@ check and the `requirements.txt` freshness check; `release.yml` is
 go green having run nothing but a grep. This is now the most consequential gap in
 the repo.
 
-### Packaging is Linux-only locally
+### Packaging is Linux-only locally (Windows/macOS via GHA, now proven)
 
-Windows and macOS artifacts cannot be produced on this host at all.
-`packaging/docker/` gives a reproducible, containerised **Linux**
-PyInstaller build; Windows and macOS builds exist only as `windows-latest` /
-`macos-latest` legs in `.github/workflows/release.yml`
-(`workflow_dispatch`-only), which have never been observed to run. See
-`agents/todo-n-fixme.md` for the measured, settled reasons (PyInstaller
-cannot cross-compile; Wine lacks the `icuuc.dll` Qt6Core needs).
+Windows and macOS artifacts still cannot be produced on this host at all —
+`packaging/docker/` gives a reproducible, containerised **Linux** PyInstaller
+build only. See `agents/todo-n-fixme.md` for the measured, settled reasons
+(PyInstaller cannot cross-compile; Wine lacks the `icuuc.dll` Qt6Core needs).
+But the `windows-latest` / `macos-latest` legs in
+`.github/workflows/release.yml` (`workflow_dispatch`) HAVE now run and are
+green: run `34116256891` produced all three platforms' artifacts (linux
+AppImage, windows zip, macos dmg) from a tagless dispatch with no publish, and
+run `34117094101` proved the full tagged release path including a published
+GitHub Release. GHA is the supported route to Windows and macOS builds, and it
+works.
 
 ### File-size outliers (audit Low)
 
