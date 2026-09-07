@@ -3,7 +3,7 @@ name: teamwork
 description: Run work in this repo under its manager/worker operating model — establish a green baseline, take one plan item at a time, delegate mechanical edits and recon to cold low-effort workers, verify every worker diff, run the full gate, and commit. Use when starting plan-based work, when delegating to subagents, when a worker escalates a blocker, or when the user asks to work as a team / manager / coordinator.
 argument-hint: [plan item or task to run through the loop]
 user-invocable: true
-version: 0.4.0
+version: 0.5.0
 ---
 
 # Teamwork — manager/worker delivery loop
@@ -130,14 +130,25 @@ Execute exactly this, one item at a time:
 5. **Commit immediately**, message referencing the plan item.
 6. **Mark the checkbox `[x]`** — in the plan and in the ledger — only after the
    commit exists.
-7. **Update the ledger.** The committed item is a milestone: its file bodies,
+7. **Sweep for stale processes.** Run `ps aux` (or
+   `ps -eo pid,ppid,etimes,args`) after every milestone to find shells and
+   agents left behind by the work just committed; kill what is stale. Real
+   example: a background waiter —
+   `until ! pgrep -f "packaging/docker/build.sh"; do sleep 3; done` — matched
+   **itself**, because `pgrep -f` matches full command lines and the pattern
+   was a literal in the waiter's own command line, so the condition could never
+   go false and it spun every 3s for the rest of the session. Two independent
+   agents in one session built that same self-matching loop, so it is a shape
+   to check for, not a one-off. Fix: wait on a captured PID, or break
+   self-matching with a bracket class such as `'[p]ackaging/docker/build.sh'`.
+8. **Update the ledger.** The committed item is a milestone: its file bodies,
    diffs, worker reports and logs are now dead weight you re-read on every
    remaining turn. Move what survives into the ledger — that comes first,
    always, because compaction is lossy whoever fires it.
-8. **Check context, then compact. Then stop the turn.** In a tmux session,
+9. **Check context, then compact. Then stop the turn.** In a tmux session,
    issue `/context`, read it, and issue `/compact` yourself (§6b); outside one,
    say plainly that now is a cheap moment for the user to run it, and stop.
-9. Repeat — *after* the compaction, never before.
+10. Repeat — *after* the compaction, never before.
 
 Hard stops, no exceptions:
 
@@ -146,7 +157,7 @@ Hard stops, no exceptions:
 - Never push to `master`. Feature branches only.
 - Do not batch plan items into one commit unless the plan says so.
 - "Green but uncommitted" is an unfinished task, not a handoff.
-- **Steps 7 and 8 are unconditional, and step 8 ends the turn.** Not "when
+- **Steps 8 and 9 are unconditional, and step 9 ends the turn.** Not "when
   context is high" — *every* committed item, at any reading, including 7%.
   There is no percentage that excuses skipping it, because the threshold is
   the loophole: a manager mid-task will always find its current context
@@ -182,6 +193,37 @@ scalpel, not a shield.** "Rewriting this document needs judgment" is not a
 reason to keep it; make the judgment, put it in the brief as a decision, and let
 a worker write the prose. Keeping routine work because you can do it well is the
 single easiest way to burn a session's budget.
+
+**Hypothesis verification, diagnosis, and benchmarking are delegable by
+default — they are execution, not judgement.** Choosing the hypothesis and
+interpreting the result is judgement; running the experiment that tests it is
+not, and "let me just test whether X works" is exactly the shape of routine
+work the scalpel exception above warns about keeping. This is the mirror image
+of that exception, not a restatement of it: the scalpel covers a task too
+*small* for a brief, this covers a task that only *feels* like thinking because
+it involves finding something out.
+
+This happened in this session: the manager ran an entire tmux transport
+investigation personally — buffer round-trip fidelity, bracketed-paste versus
+`send-keys` on a multi-line payload, and a shell-quoting failure repro — and
+justified keeping it as "workers are forbidden `send-keys`, so this is
+manager-only." That justification was false, and the user halted the manager
+mid-turn over it. Every one of those experiments ran against throwaway scratch
+tmux sessions the manager created from nothing — proof a worker could have
+created and driven identical ones. A worker **may** create and drive its own
+scratch tmux session on the same socket (`new-session -d -s <scratch>`,
+`send-keys` / `capture-pane` / `paste-buffer` targeting only that scratch
+session, `kill-session` on it when done) — but only when its brief explicitly
+grants that permission; it is never an always-on default, and a worker may
+**never** target the manager's pane or the session the TUI runs in. See
+`agents/tmux-self-drive.md` for the rule stated where the rest of the
+self-drive prohibitions live.
+
+This is the opposite direction from §4's "When to take a task back": that
+section covers absorbing a task back *after* a worker reported badly. This is
+never delegating a task in the first place, because running the experiment
+felt like thinking. Both put the most expensive tokens in the system on the
+cheapest work.
 
 Pick the worker shape deliberately:
 
@@ -330,6 +372,11 @@ it** (plain text is injected into the *running* turn while the slash command
 waits for turn end, so the prompt would arrive first). The fix is a detached
 delayed typist, fired last, with the turn ended immediately after.
 
+Prompt text goes through a tmux buffer (`load-buffer` + `paste-buffer`, not
+`send-keys`), so quotes, newlines and shell metacharacters in the prompt cannot
+break the command that carries it — see `agents/tmux-self-drive.md` for the
+measured evidence.
+
 **`agents/tmux-self-drive.md` holds the exact snippet — copy it from there, do
 not reconstruct it from memory and do not paste a second copy into this file.**
 An earlier version of this skill inlined that snippet; the delay constant then
@@ -360,7 +407,7 @@ In order of impact:
 1. **Compact aggressively, and early.** This is the highest-leverage lever
    because it is the only one that reduces cost *retroactively* for the whole
    remaining session — every other lever only avoids adding more. Compact at
-   each committed item (§2 step 7), after a large recon digest has been acted
+   each committed item (§2b step 9), after a large recon digest has been acted
    on, and before any long tail of verification turns — yourself when the
    session is self-drivable (§6b), otherwise by telling the user. Do not wait
    to be told the context is full; by then you have already paid for it on

@@ -44,6 +44,13 @@ behaviour of telling the user that now is a cheap moment to run `/compact`.
 
 ## 2) Send a command to yourself
 
+**Two payloads, two mechanisms.** A short slash command or a bare key press
+has no metacharacters and is safe as a `send-keys` literal. Prompt text is
+arbitrary text and is not — it goes through a tmux buffer, never a shell
+command line. Use each only for what it is good for.
+
+### Slash commands and keys: `send-keys`
+
 ```bash
 tmux -u -S "${TMUX%%,*}" send-keys -t "$TMUX_PANE" -l '/compact'
 tmux -u -S "${TMUX%%,*}" send-keys -t "$TMUX_PANE" Enter
@@ -51,7 +58,8 @@ tmux -u -S "${TMUX%%,*}" send-keys -t "$TMUX_PANE" Enter
 
 `-l` sends the text literally, so payloads containing tmux key names (`Space`,
 `Enter`, `C-c`) cannot be reinterpreted as keystrokes. Send `Enter` as its own
-call.
+call. This is correct for a short slash command with no metacharacters, and for
+sending the bare `Enter` key — nothing beyond that.
 
 **It is deferred, not immediate.** The keystrokes land in the TUI's input box.
 While a turn is running the input queues and submits only when that turn ends.
@@ -75,38 +83,91 @@ input kinds take different paths:
 Send both in one turn and the prompt arrives first, then the command fires into
 silence — the failure you were trying to avoid, with an extra step.
 
-**So detach a typist that types the prompt some seconds after the turn ends:**
+### Prompt text: `load-buffer` + `paste-buffer`
+
+Detach a typist that pastes the prompt from a tmux buffer some seconds after
+the turn ends. The prompt text never appears on a shell command line — only a
+buffer name and a pane id do, and neither can contain a metacharacter:
 
 ```bash
 S="${TMUX%%,*}"; P="$TMUX_PANE"
+PROMPT=/tmp/restore-prompt.txt
+
+# Heredoc delimiter QUOTED -> zero interpolation, zero escaping. Arbitrary markup is safe.
+cat > "$PROMPT" <<'PROMPT_EOF'
+Continue: read READ_AFTER_COMPACT.md first, before any source file, and resume
+from its Next action. Do not start new work.
+PROMPT_EOF
+
+tmux -u -S "$S" load-buffer -b restore "$PROMPT"
 setsid bash -c "sleep 5; \
-  tmux -u -S '$S' send-keys -t '$P' -l 'Continue: read READ_AFTER_COMPACT.md and resume from its Next action.'; \
+  tmux -u -S '$S' paste-buffer -b restore -t '$P' -p -d; \
   tmux -u -S '$S' send-keys -t '$P' Enter" </dev/null >/dev/null 2>&1 &
 disown
-tmux -u -S "$S" send-keys -t "$P" -l '/compact'
+tmux -u -S "$S" send-keys -t "$P" -l '/clear'
 tmux -u -S "$S" send-keys -t "$P" Enter
 ```
 
-- `setsid` + `</dev/null` + `disown` are what let it outlive the tool call.
+- `-p` = bracketed paste, so newlines in the prompt insert as text instead of
+  submitting mid-paste.
+- `-d` = delete the buffer after pasting, so a later paste cannot resurrect a
+  stale prompt.
+- `Enter` is a **separate** `send-keys` call — `paste-buffer` never submits,
+  bracketed or not.
+- The 5s delay is unchanged from the `send-keys` version and still correct for
+  the same reason: input arriving while the session is busy is queued, not
+  dropped.
+- `setsid` + `</dev/null` + `disown` are what let the typist outlive the tool
+  call.
 - **Fire the typist as the last thing you do, then end the turn.** The delay is
   wall-clock from *send* time, not from turn end; if the turn runs longer than
   the delay the typist fires mid-turn and is wasted as an injected message.
-- **~5s is enough, even for `/compact`.** The delay does not have to outlast the
-  compaction: text that arrives while the session is busy is *queued*, not
-  dropped, and lands as soon as the session is free. The only thing the delay
-  must outlast is the remainder of *your own turn* after you detach the typist —
-  and since the typist is the last thing you fire, that is two `send-keys` calls
-  and a closing message. Too short is still the real hazard: a typist that fires
-  before the turn ends is injected into the running turn and wasted, leaving the
-  `/compact` to fire into silence.
+- **~5s is enough, even for `/compact` or `/clear`.** The delay does not have
+  to outlast the compaction: text that arrives while the session is busy is
+  *queued*, not dropped, and lands as soon as the session is free. The only
+  thing the delay must outlast is the remainder of *your own turn* after you
+  detach the typist — and since the typist is the last thing you fire, that is
+  a `load-buffer`, two `send-keys` calls, and a closing message. Too short is
+  still the real hazard: a typist that fires before the turn ends is injected
+  into the running turn and wasted, leaving the queued command to fire into
+  silence.
 - Write the prompt **self-contained**, as if a stranger sent it. After a
-  `/compact` it and the ledger are the entire brief.
+  `/compact` or `/clear` it and the ledger are the entire brief.
 
 **Say what you queued** in your closing message. From the user's side an
-unannounced self-issued `/compact` looks like the session lost its mind.
+unannounced self-issued `/compact` or `/clear` looks like the session lost its
+mind.
 
 You do **not** need `capture-pane` for a slash command's own output — it comes
 back in the transcript.
+
+### Why not send-keys for prompt text
+
+Measured directly, in this sandbox, today:
+
+- **`send-keys -l` drops bytes.** A 424-byte payload delivered 423 bytes via
+  `send-keys -l` — it dropped the trailing newline. `paste-buffer` delivered
+  all 424.
+- **THE DECISIVE ONE.** A payload of two shell lines separated by `\n`, pasted
+  into an interactive `bash --norc -i`: via `paste-buffer -p` both lines sat in
+  the input buffer unexecuted, no marker files created — the embedded newline
+  was inserted as text. Via `send-keys -l` the newline acted as Enter: line one
+  *executed* (marker file created), line two landed on the next prompt as a
+  separate command. For a TUI this means a multi-line prompt sent with
+  `send-keys` is submitted at the first newline, and its remaining lines arrive
+  as separate, unintended prompts.
+- **The shell-quoting layer is an independent failure.** With a prompt
+  containing one apostrophe, the nested form
+  `setsid bash -c "... send-keys -l '$PROMPT' ..."` died with
+  `bash: -c: line 1: unexpected EOF while looking for matching `'``; a second
+  nesting variant silently corrupted `It's done` into `Its`/`done\` split
+  across two lines. Silent corruption is the worse half of this — a crash at
+  least tells you something broke.
+
+`load-buffer` sidesteps all three: the prompt text is written to a file with a
+quoted heredoc delimiter (zero interpolation, zero escaping), and the tmux
+commands that follow carry only a buffer name and a pane id — neither can
+contain a metacharacter, so there is no quoting layer left to fail.
 
 ---
 
@@ -164,34 +225,62 @@ is a confusing handoff to the human sitting in front of it.
 6. **Do not poll.** `send-keys` → `capture-pane` → `send-keys` on a loop is a
    full-context turn per iteration that buys nothing. The same rule as §8 of
    `AGENTS.md`, and this mechanism makes it easy to violate by accident.
+7. **The scratch-session carve-out does not touch rules 1-6.** A worker may
+   create and drive its own scratch tmux session on this socket —
+   `new-session -d -s <scratch>`, `send-keys` / `capture-pane` / `paste-buffer`
+   targeting only that scratch session, `kill-session` on it when done — but
+   only when its brief explicitly grants that permission; it is never an
+   always-on default, and a brief that wants it must say so. A worker may
+   **never** target the manager's pane or the session the TUI runs in. Rules
+   1-6 above still govern that pane absolutely, for the manager and for every
+   worker: a stray `send-keys` into it is the failure this whole file exists to
+   prevent.
 
 ---
 
-## 5) The one that matters: self-compaction
+## 5) The ones that matter: /compact and /clear
 
-With self-drive available, step 7 of the delivery loop changes from *ask* to
-*do* — but the preparation does not change at all, because compaction is still
-lossy and still unannounced to your future self.
+With self-drive available, step 9 of the delivery loop changes from *ask* to
+*do* — but the preparation does not change at all, because both commands are
+lossy and both are unannounced to your future self.
 
 ```
 1. Commit the plan item and tick its checkbox.        (work is durable)
 2. Update READ_AFTER_COMPACT.md.                       (the ledger is the only thing that survives)
-3. Detach the typist (long delay), THEN queue /compact, say so, end the turn.
+3. Detach the typist (long delay), THEN queue /compact or /clear, say so, end the turn.
 4. After it lands: read READ_AFTER_COMPACT.md first, before any source file.
 ```
 
-Step 3 is two mechanisms, not one command. `/compact` on its own hands control
-back to the human at the exact moment your context was cleared — the most
-expensive place in the session to stall, because the next thing you do is
-re-read everything. The typist is what carries the work across.
+Step 3 is two mechanisms, not one command. `/compact` or `/clear` on its own
+hands control back to the human at the exact moment your context was cleared —
+the most expensive place in the session to stall, because the next thing you do
+is re-read everything. The typist is what carries the work across.
 
-Never reverse 2 and 3. A `/compact` queued before the ledger is written erases
-the state the ledger was supposed to carry, and you will not notice: the session
-simply continues on a narrower goal than the user asked for.
+Never reverse 2 and 3. A `/compact` or `/clear` queued before the ledger is
+written erases the state the ledger was supposed to carry, and you will not
+notice: the session simply continues on a narrower goal than the user asked
+for.
 
 `/context` is the cheap companion — queue it when you actually need the number
 (deciding whether a large recon digest is affordable), not as a habit. Its
 output costs a turn.
+
+### `/compact` vs `/clear`
+
+`/clear` resets the context; unlike `/compact` it leaves **no summary**. The
+ledger plus the pasted restore prompt are the only things that survive.
+
+Therefore: the ledger must be **complete** before `/clear` is queued, and the
+restore prompt must be **fully self-contained** — it cannot refer to "the task
+above" or anything else in session history.
+
+`/clear` is queued and fires at turn end exactly like `/compact`, so the
+typist pattern (§2) is identical for both.
+
+Choose `/clear` over `/compact` when the remaining work does not depend on
+session history at all — a clean next milestone. Choose `/compact` when
+continuity of reasoning still matters. `/clear` is the bigger saving and the
+bigger risk; the ledger is what makes it safe.
 
 ---
 
@@ -209,7 +298,22 @@ Verified live on tmux 3.6, in a session driving itself:
   behind the slash command. The second attempt proved it by arriving early;
 - **a `setsid` delayed typist does work** — third attempt, `/context` output
   landed first, then the typist's message started the next turn with no human
-  in the loop.
+  in the loop;
+- **`load-buffer` → `save-buffer` is byte-exact** — a 424-byte file with single
+  quotes, double quotes, backticks, `$(date)`, `${HOME}`, shell metacharacters,
+  a ```` ```bash ```` fence, backslashes, unicode and trailing spaces survived
+  the round trip with `cmp` reporting no difference;
+- **`paste-buffer` delivers the full payload; `send-keys -l` does not** — the
+  same 424-byte file arrived whole via `paste-buffer`, but `send-keys -l`
+  delivered only 423 bytes, dropping the trailing newline;
+- **a multi-line payload behaves oppositely under the two mechanisms** — pasted
+  via `paste-buffer -p` into an interactive `bash --norc -i`, both lines sat in
+  the input buffer unexecuted; sent via `send-keys -l`, the embedded newline
+  submitted line one and stranded line two on the next prompt;
+- **`paste-buffer -p`'s bracketed-paste wrapper is conditional on the
+  receiving application** — it appears against interactive bash and the Claude
+  Code TUI (both enable DECSET 2004) and does not against a bare `cat`; always
+  pass `-p`.
 
 Every rule in §2 was learned by breaking it. If a session shows something else
 again — a command that vanishes, one that fires mid-turn, a typist that never

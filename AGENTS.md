@@ -57,14 +57,17 @@ For plan-based work, execute exactly this loop:
 4. **Run the full gate** — `timeout 1200 make gate`.
 5. **Commit immediately** (message references the plan item).
 6. **Mark the plan checkbox `[x]`** — only after the commit exists.
-7. **Update `READ_AFTER_COMPACT.md`.** A committed item is a milestone; its file bodies, diffs
+7. **Sweep for stale processes.** Run `ps aux` after every milestone and kill shells or agents left
+   running by the work just committed — a `pgrep -f` waiter can match its own command line and spin
+   forever; see `.claude/skills/teamwork/SKILL.md` §2b for the measured example and the fix.
+8. **Update `READ_AFTER_COMPACT.md`.** A committed item is a milestone; its file bodies, diffs
    and worker reports are dead weight you re-read on every later turn. The ledger is what makes a
    compaction cost nothing, so it is written *first*, always.
-8. **Check context, then compact — then end the turn.** If the session is running inside tmux you
+9. **Check context, then compact — then end the turn.** If the session is running inside tmux you
    issue `/context` and `/compact` yourself (`agents/tmux-self-drive.md`); if it is not, say
    plainly that now is a cheap moment for the user to run it, and stop there. Check which case you
    are in — `[ -n "$TMUX" ]` — instead of assuming either.
-9. Repeat — *after* the compaction, never before.
+10. Repeat — *after* the compaction, never before.
 
 Hard rules:
 
@@ -74,7 +77,7 @@ Hard rules:
 - Do not batch plan items into one commit unless the plan says so.
 - Do not stop at "green but uncommitted". That is an unfinished task, not a handoff.
 - **Never push to `master`.** Feature branches only.
-- **Steps 7 and 8 are unconditional, and step 8 ends the turn.** Not "when context is high" —
+- **Steps 8 and 9 are unconditional, and step 9 ends the turn.** Not "when context is high" —
   every committed item, at any reading. There is no percentage that excuses skipping the
   boundary, because the threshold *is* the loophole: mid-task you will always judge your current
   context affordable and reason your way past it. A committed item you have not compacted after
@@ -108,6 +111,11 @@ and a targeted `grep` for the exact changed token — never by pulling a full di
 **Do not delegate** a task needing a design choice not yet made, or two tasks that touch the same
 file. The "smaller than its brief" exception covers a one-line fix — it is a scalpel, not a shield:
 "this needs judgment" means make the judgment, put it in the brief, and let a worker write it.
+
+**Hypothesis verification, diagnosis, and benchmarking are delegable by default** — running an
+experiment is execution, not judgement; only choosing the hypothesis and reading the result is. A
+worker may drive its own scratch tmux session when its brief says so (`agents/tmux-self-drive.md`);
+see `.claude/skills/teamwork/SKILL.md` §3 for the incident that established this.
 
 **Known worker failure mode:** backgrounding a long command and reporting "waiting for X" instead of
 the result. Require the command to actually exit before replying.
