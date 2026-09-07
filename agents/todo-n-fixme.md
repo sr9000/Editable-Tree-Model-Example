@@ -64,11 +64,23 @@ instead of re-deriving it._
   not the one on the default branch. The tagless dispatch above worked from
   this branch even though master's copy of the workflow still declares `tag`
   as required.
-- [ ] [ci] `windows-latest` build log: `WARNING: Hidden import "jinja2" not
-  found!`. jinja2 is pandas' optional dependency for `pandas.Styler` HTML
-  styling and is not in this repo's dependency set, so the frozen bundle
-  lacks it. Confirm whether the app ever exercises pandas styling (harmless if
-  not) or dismiss explicitly — do not treat as already fixed.
+- `windows-latest` build log warning `WARNING: Hidden import "jinja2" not
+  found!` is investigated and dismissed as benign. pandas is imported in this
+  codebase only for its datetime types (`Timestamp`/`Timedelta`, in
+  `tree/types.py`, `tree/item.py`, `tree/item_coercion.py`,
+  `tree/types_datetime.py`, `qt2py/__init__.py`,
+  `editors/inline/datetime/__init__.py`,
+  `editors/inline/datetime/better_dt_editor.py`,
+  `delegates/formatting/value_formatting.py`, `core/datetime_parsing/compat.py`).
+  A repo-wide search for `.style`, `Styler`, `to_html`, `to_latex`, and
+  `to_excel` found no pandas styling or HTML/Excel/LaTeX export usage
+  anywhere in the app — the only `to_html`-shaped hit is the unrelated
+  `color_to_html` in `tree/codecs/color_codec.py`. jinja2 is not in
+  `poetry.lock` and is not installed in the project venv. PyInstaller emits
+  the warning only because pandas declares jinja2 as an optional extra for
+  `pandas.Styler`; since the app never exercises that path, nothing is
+  missing at runtime. **Do not add jinja2 as a dependency, and do not
+  re-investigate this warning when it reappears in future build logs.**
   — `.github/workflows/release.yml`
 - [ ] [ci] Master's `.github/workflows/release.yml` still pins
   `PYTHON_VERSION: "3.12"` and `PYINSTALLER_VERSION: "6.10.0"`. PyInstaller
