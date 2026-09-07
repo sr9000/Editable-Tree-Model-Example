@@ -10,8 +10,9 @@ poetry install --with build
 poetry run pyinstaller --noconfirm --clean EditableTreeModel.spec
 ```
 
-PyInstaller is pinned at 6.22.2 in the optional `build` dependency group; 6.10.0 cannot be used
-because it declares `requires_python = "<3.14"`.
+The optional `build` dependency group constrains PyInstaller to `^6.15.0`; `poetry.lock`
+currently resolves that to 6.22.2. The floor is not arbitrary — 6.10.0 declares
+`requires_python = "<3.14"` and so cannot be installed on this project's Python.
 
 The resulting single-file executable is written to `dist/EditableTreeModel`
 (`dist/EditableTreeModel.exe` on Windows).

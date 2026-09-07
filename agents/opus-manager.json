@@ -102,7 +102,7 @@
     "how": [
       "tmux -u -S \"${TMUX%%,*}\" send-keys -t \"$TMUX_PANE\" -l '/compact'",
       "tmux -u -S \"${TMUX%%,*}\" send-keys -t \"$TMUX_PANE\" Enter",
-      "A slash command's output does NOT re-invoke the model, and a prompt sent in the same turn is injected into the running turn instead of queuing behind the command - so BEFORE sending the command, detach a delayed typist: setsid bash -c \"sleep 45; tmux ... send-keys -l 'Continue: read READ_AFTER_COMPACT.md and resume from its Next action.'; tmux ... send-keys Enter\" </dev/null >/dev/null 2>&1 & disown. Fire it last, end the turn immediately, err long on the delay. All three facts verified the hard way.",
+      "A slash command's output does NOT re-invoke the model, and a prompt sent in the same turn is injected into the running turn instead of queuing behind the command - so BEFORE sending the command, detach a delayed typist: setsid bash -c \"sleep 5; tmux ... send-keys -l 'Continue: read READ_AFTER_COMPACT.md and resume from its Next action.'; tmux ... send-keys Enter\" </dev/null >/dev/null 2>&1 & disown. Fire it last and end the turn immediately; ~5s suffices even for /compact, because input arriving while the session is busy is queued rather than dropped - the delay only has to outlast the rest of your own turn, and too short is the real hazard. All three facts verified the hard way.",
       "Then end the turn: queued input only submits once the running turn finishes.",
       "Read the pane, when the transcript cannot show it, with capture-pane -p -J -S -200; a local slash command's own output returns as <local-command-stdout> and needs no capture."
     ],

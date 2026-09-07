@@ -20,8 +20,9 @@ triggers, report format. **This file is the shared briefing; those files are you
 
 The manager's loop is also packaged as an invocable skill at
 `.claude/skills/teamwork/SKILL.md` — **tracked in this repo**, so cloning restores it and
-Claude Code discovers it with no setup step. Run it with `/teamwork [item]`; invoking it is what
-authorizes subagent use. The skill is the *procedure* only: it deliberately carries no test counts,
+Claude Code discovers it with no setup step. Run it with `/teamwork [item]`. Delegation is gated
+on the skill's four preconditions, not on the act of invoking it — the skill states them and every
+one is checkable. The skill is the *procedure* only: it deliberately carries no test counts,
 no allowlist line numbers, and no gate composition, because those live here and in the contracts.
 Nothing else under `.claude/` is tracked (`settings.local.json` is machine-local and ignored).
 
@@ -56,20 +57,28 @@ For plan-based work, execute exactly this loop:
 4. **Run the full gate** — `timeout 1200 make gate`.
 5. **Commit immediately** (message references the plan item).
 6. **Mark the plan checkbox `[x]`** — only after the commit exists.
-7. **Update `READ_AFTER_COMPACT.md`, then compact.** A committed item is a milestone; its file
-   bodies, diffs and worker reports are dead weight you re-read on every later turn. The ledger is
-   what makes a compaction cost nothing, so it is written *first*, always. Then: if the session is
-   running inside tmux you issue `/compact` yourself (`agents/tmux-self-drive.md`); if it is not,
-   say plainly that now is a cheap moment for the user to run it. Check which case you are in —
-   `[ -n "$TMUX" ]` — instead of assuming either.
-8. Repeat.
+7. **Update `READ_AFTER_COMPACT.md`.** A committed item is a milestone; its file bodies, diffs
+   and worker reports are dead weight you re-read on every later turn. The ledger is what makes a
+   compaction cost nothing, so it is written *first*, always.
+8. **Check context, then compact — then end the turn.** If the session is running inside tmux you
+   issue `/context` and `/compact` yourself (`agents/tmux-self-drive.md`); if it is not, say
+   plainly that now is a cheap moment for the user to run it, and stop there. Check which case you
+   are in — `[ -n "$TMUX" ]` — instead of assuming either.
+9. Repeat — *after* the compaction, never before.
 
 Hard rules:
 
+- **Run the gate alone.** No concurrent builds, no parallel workers doing heavy
+  work — a gate run alongside other heavy work proves nothing, green or red.
 - Gate red → back to implementation. **No commit.** Never relax a check to get green.
 - Do not batch plan items into one commit unless the plan says so.
 - Do not stop at "green but uncommitted". That is an unfinished task, not a handoff.
 - **Never push to `master`.** Feature branches only.
+- **Steps 7 and 8 are unconditional, and step 8 ends the turn.** Not "when context is high" —
+  every committed item, at any reading. There is no percentage that excuses skipping the
+  boundary, because the threshold *is* the loophole: mid-task you will always judge your current
+  context affordable and reason your way past it. A committed item you have not compacted after
+  is an item that is not done, and the next item does not begin.
 
 ---
 
@@ -187,6 +196,16 @@ output tokens. Shrinking context and cutting turn count beat delegating more tas
 
 Both factors compound: context you fail to drop is re-read, and re-paid for, on every remaining
 turn of the session.
+
+**Part of your context is fixed and compaction cannot touch it.** Measured on this repo
+(2026-09-07, via `/context`): immediately after a compaction the window still held ~35.8k tokens
+before a single message — system tools 21.2k (16.6k of that deferred tool schemas), memory files
+8.2k, system prompt 3.6k, skills 2.8k. Compaction only ever reclaims the *message* half. One
+milestone of manager work cost ~35k of messages, so a milestone roughly doubles the window and a
+compaction roughly halves it back. Two consequences: compacting at 7% is not premature — the
+message half is what you are clearing, and it is already the same size as the floor; and no amount
+of compaction discipline buys you the fixed 35.8k, so keeping the *number of milestones per
+session* low matters as much as compacting at each one.
 
 Levers, by impact:
 

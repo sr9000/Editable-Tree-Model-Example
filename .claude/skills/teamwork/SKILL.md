@@ -3,7 +3,7 @@ name: teamwork
 description: Run work in this repo under its manager/worker operating model — establish a green baseline, take one plan item at a time, delegate mechanical edits and recon to cold low-effort workers, verify every worker diff, run the full gate, and commit. Use when starting plan-based work, when delegating to subagents, when a worker escalates a blocker, or when the user asks to work as a team / manager / coordinator.
 argument-hint: [plan item or task to run through the loop]
 user-invocable: true
-version: 0.2.0
+version: 0.4.0
 ---
 
 # Teamwork — manager/worker delivery loop
@@ -14,7 +14,17 @@ the role contracts, and duplicating them here would create one more copy to rot.
 Read the facts from source, every session.
 
 Invoking this skill **authorizes subagent use** for the delegation described
-below, and only for that.
+below, and only for that. Authorization is not the act of invoking — nothing
+checks that. It is these four conditions, and you can check every one:
+
+1. The role contracts are loaded (§0) and the baseline is known (§1).
+2. `READ_AFTER_COMPACT.md` exists and names the item you are about to delegate.
+3. The brief is written from the §3 template, with every design choice already
+   made by you.
+4. You know how you will verify the result without reading the full diff (§3).
+
+If you cannot tick all four, you are not delegating — you are guessing out loud
+in someone else's context.
 
 ---
 
@@ -37,6 +47,12 @@ poetry install
 . .venv/bin/activate
 timeout 1200 make gate
 ```
+
+**Run the gate alone.** No concurrent builds, no parallel workers doing heavy
+work, nothing else competing for CPU while `make gate` runs. A gate run
+alongside other heavy work is not evidence of anything, green or red — a red
+one sends you chasing a fix that does not exist, and a green one was luck.
+This is the one thing §6's "batch shell work" lever never applies to (§6).
 
 Read `AGENTS.md` (shared briefing) and `agents/opus-manager.json` (your
 contract) if they are not already in context. Do not re-read what is already
@@ -108,17 +124,20 @@ Execute exactly this, one item at a time:
    the ledger as in-flight.
 2. **Implement only that scope** — directly, or via workers (§3).
 3. **Run targeted tests** for the touched files.
-4. **Run the full gate** — `timeout 1200 make gate`.
+4. **Run the full gate, alone** — `timeout 1200 make gate`, with nothing
+   else running. No concurrent builds, no parallel workers doing heavy work —
+   see the gate-alone rule in §1.
 5. **Commit immediately**, message referencing the plan item.
 6. **Mark the checkbox `[x]`** — in the plan and in the ledger — only after the
    commit exists.
-7. **Update the ledger, then compact.** The committed item is a milestone: its
-   file bodies, diffs, worker reports and logs are now dead weight you re-read
-   on every remaining turn. Move what survives into the ledger — that comes
-   first, always, because compaction is lossy whoever fires it. Then compact:
-   in a tmux session, issue `/compact` yourself (§6b); outside one, say plainly
-   that now is a cheap moment for the user to run it.
-8. Repeat.
+7. **Update the ledger.** The committed item is a milestone: its file bodies,
+   diffs, worker reports and logs are now dead weight you re-read on every
+   remaining turn. Move what survives into the ledger — that comes first,
+   always, because compaction is lossy whoever fires it.
+8. **Check context, then compact. Then stop the turn.** In a tmux session,
+   issue `/context`, read it, and issue `/compact` yourself (§6b); outside one,
+   say plainly that now is a cheap moment for the user to run it, and stop.
+9. Repeat — *after* the compaction, never before.
 
 Hard stops, no exceptions:
 
@@ -127,6 +146,19 @@ Hard stops, no exceptions:
 - Never push to `master`. Feature branches only.
 - Do not batch plan items into one commit unless the plan says so.
 - "Green but uncommitted" is an unfinished task, not a handoff.
+- **Steps 7 and 8 are unconditional, and step 8 ends the turn.** Not "when
+  context is high" — *every* committed item, at any reading, including 7%.
+  There is no percentage that excuses skipping it, because the threshold is
+  the loophole: a manager mid-task will always find its current context
+  affordable and reason its way past the boundary. Do not reason about it.
+  A committed item you have not compacted after is an item that is not done,
+  and the next item does not begin.
+
+  This is not a hypothetical. In the session that produced this rule the
+  manager committed a milestone, judged 7% context "obviously fine", walked
+  straight into the next item, and had to be halted by the user. Both this
+  file and `AGENTS.md` already said "compact at every milestone" — as advice.
+  Advice loses to momentum; a step with a stopping point does not.
 
 ---
 
@@ -188,6 +220,14 @@ Let every command exit before replying; never report a pending state.
 The first line is load-bearing. A cold worker only ever sees its contract if
 the brief tells it to read the file.
 
+**`CHECK:` must prove the artifact is new.** When the artifact a brief
+produces may already exist, a check that only tests whether it is well-formed
+cannot tell a successful run from leftovers — a stale binary from yesterday's
+build satisfies "is an ELF binary over 20MB" as well as a fresh one does.
+Fingerprint the artifact before and after, or build into a clean location —
+never merely confirm its shape. An acceptance check that a no-op can pass is
+not an acceptance check.
+
 ### Verify — a report states intent, not outcome
 
 Re-check every worker's work before trusting or committing it:
@@ -213,6 +253,18 @@ On receipt:
 1. Decide the architectural question yourself.
 2. Record it in the plan, or in `agents/todo-n-fixme.md` if it outlives the session.
 3. Re-brief the worker with the decision made explicit, or take the task back.
+
+### When to take a task back
+
+Take a task back only when the blocker is a design decision that has not been
+made. Every other failure mode — a worker that reported badly, stopped early,
+ran the wrong command, or edited the wrong file — gets a re-brief, never
+absorption. The re-brief carries the diagnosis you just made as a stated
+fact, so the worker does not rediscover it.
+
+Absorbing a worker's task converts a cheap retry into the most expensive
+tokens in the system, and it feels justified every single time — which is
+exactly why it needs a test rather than judgement.
 
 ---
 
@@ -270,30 +322,19 @@ so `/compact` and `/context` become yours to issue. **Check, do not assume:**
 Queue a command — literal text first, `Enter` as its own call — then **end the
 turn**, because queued input only submits once the current turn finishes.
 
-**A slash command's output does not re-invoke you** — it is buffered and control
-returns to the human, so a bare self-issued `/compact` parks the session at the
-worst possible moment. **And you cannot queue the prompt behind it:** plain text
-is injected into the *running* turn while the slash command waits for turn end,
-so the prompt would arrive first. Detach a typist instead:
+Two facts make the naive version fail, and both are why a self-issued
+`/compact` needs a helper: **a slash command's output does not re-invoke you**
+(it is buffered and control returns to the human, so a bare `/compact` parks the
+session at the worst possible moment), and **you cannot queue a prompt behind
+it** (plain text is injected into the *running* turn while the slash command
+waits for turn end, so the prompt would arrive first). The fix is a detached
+delayed typist, fired last, with the turn ended immediately after.
 
-```bash
-S="${TMUX%%,*}"; P="$TMUX_PANE"
-setsid bash -c "sleep 45; \
-  tmux -u -S '$S' send-keys -t '$P' -l 'Continue: read READ_AFTER_COMPACT.md and resume from its Next action.'; \
-  tmux -u -S '$S' send-keys -t '$P' Enter" </dev/null >/dev/null 2>&1 &
-disown
-tmux -u -S "$S" send-keys -t "$P" -l '/compact'
-tmux -u -S "$S" send-keys -t "$P" Enter
-```
-
-Fire the typist last and end the turn immediately — the delay is wall-clock from
-send time. Err long (~10s after `/context`, 40s+ after `/compact`). Write the
-prompt self-contained: after a compaction it and the ledger are all you have.
-
-Read your own screen with `capture-pane -p -J -S -200` (scrollback without
-moving the view) when you need something the transcript never shows; a local
-slash command's own output comes back to you as `<local-command-stdout>` and
-needs no capture.
+**`agents/tmux-self-drive.md` holds the exact snippet — copy it from there, do
+not reconstruct it from memory and do not paste a second copy into this file.**
+An earlier version of this skill inlined that snippet; the delay constant then
+drifted to three different values across three files before a user caught it.
+The same rule as §0: one copy, in the file that owns it.
 
 The non-negotiables, in full in `agents/tmux-self-drive.md`:
 
@@ -328,7 +369,9 @@ In order of impact:
    than to carry twenty you might.
 2. Delegate **reading**, not just writing — a recon worker's raw text never
    enters your context; only its digest does.
-3. Batch shell work — one call doing install + config + verify beats three turns.
+3. Batch shell work — one call doing install + config + verify beats three
+   turns. The one exception: never batch the gate in with other heavy work —
+   it runs alone (§1).
 4. Cap worker reports; open the detail file only on failure.
 5. Verify with `--stat` and targeted `grep`, never full diffs.
 

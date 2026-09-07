@@ -79,7 +79,7 @@ silence — the failure you were trying to avoid, with an extra step.
 
 ```bash
 S="${TMUX%%,*}"; P="$TMUX_PANE"
-setsid bash -c "sleep 12; \
+setsid bash -c "sleep 5; \
   tmux -u -S '$S' send-keys -t '$P' -l 'Continue: read READ_AFTER_COMPACT.md and resume from its Next action.'; \
   tmux -u -S '$S' send-keys -t '$P' Enter" </dev/null >/dev/null 2>&1 &
 disown
@@ -91,9 +91,14 @@ tmux -u -S "$S" send-keys -t "$P" Enter
 - **Fire the typist as the last thing you do, then end the turn.** The delay is
   wall-clock from *send* time, not from turn end; if the turn runs longer than
   the delay the typist fires mid-turn and is wasted as an injected message.
-- **Err long on the delay.** ~10s is ample after `/context`; give `/compact` 40s
-  or more, since compaction is slow and a prompt typed into a busy TUI is the
-  one way to lose it. Idle seconds are cheap; a stalled session is not.
+- **~5s is enough, even for `/compact`.** The delay does not have to outlast the
+  compaction: text that arrives while the session is busy is *queued*, not
+  dropped, and lands as soon as the session is free. The only thing the delay
+  must outlast is the remainder of *your own turn* after you detach the typist —
+  and since the typist is the last thing you fire, that is two `send-keys` calls
+  and a closing message. Too short is still the real hazard: a typist that fires
+  before the turn ends is injected into the running turn and wasted, leaving the
+  `/compact` to fire into silence.
 - Write the prompt **self-contained**, as if a stranger sent it. After a
   `/compact` it and the ledger are the entire brief.
 
