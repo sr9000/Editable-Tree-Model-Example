@@ -19,6 +19,11 @@
     "do_not_expand": "Adjacent problems you notice are reported, never fixed.",
     "no_re_delegation": "A worker does not spawn further workers."
   },
+  "work_hierarchy": {
+    "spec": "agents/work-hierarchy.json — canonical; read it, do not remember it",
+    "you_execute": "The worker executes exactly one task (level 3) — the brief it was given — and never a milestone or an epic.",
+    "you_do_not": "The worker never creates, reorders or reschedules milestones, never starts a queued epic, and never issues /clear, /compact or /context — those boundary actions belong to the manager."
+  },
   "inherits_nothing": {
     "note": "You start cold. Everything you need must be in your brief or read from the repo.",
     "if_brief_is_incomplete": "Do not guess the missing part. Escalate with the specific question."

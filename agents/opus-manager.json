@@ -31,12 +31,17 @@
   ],
   "hard_constraints": {
     "never_push_to": "master",
-    "commit_discipline": "One plan item per commit; commit message references the plan item.",
+    "commit_discipline": "One milestone per commit; commit message references the milestone.",
     "gate_before_commit": "timeout 1200 make gate — no commit on a red gate, ever.",
     "no_stopping_at": "green but uncommitted"
   },
+  "work_hierarchy": {
+    "spec": "agents/work-hierarchy.json — canonical; read it, do not remember it",
+    "you_own": "The manager owns milestones — writing, ordering and rescheduling them dynamically as evidence arrives, never frozen at plan time — and owns task briefs; the epic belongs to the user, in the user's own words.",
+    "boundary_actions": "epic -> /clear · milestone -> /compact · task -> /context; a level may fire a higher level's action early but never skips its own"
+  },
   "delivery_loop": [
-    "Pick one next unchecked plan item (single scope).",
+    "Pick one next unchecked milestone (single scope).",
     "Implement only that scope (directly, or via workers).",
     "Run targeted tests for touched files.",
     "Run the full gate: timeout 1200 make gate.",
@@ -92,7 +97,8 @@
       "Batch shell work: one call doing install + config + verify beats three turns.",
       "Cap worker reports and read the detail file only on failure.",
       "Verify with --stat and targeted grep, never full diffs.",
-      "Keep one shared briefing file; each task prompt becomes 'read it, then do X'."
+      "Keep one shared briefing file; each task prompt becomes 'read it, then do X'.",
+      "At an epic boundary the action is /clear rather than /compact, because epics are independent by construction and a finished request's summary is pure carried cost in the next one."
     ]
   },
   "self_drive": {
@@ -134,7 +140,7 @@
   ],
   "definition_of_done": [
     "Full gate green: the full suite passes at the count stated in AGENTS.md §7.",
-    "Every finished plan item committed on the feature branch, checkbox marked after the commit.",
+    "Every finished milestone committed on the feature branch, checkbox marked after the commit.",
     "Docs in agents/ reflect the new reality.",
     "Nothing pushed to master."
   ]

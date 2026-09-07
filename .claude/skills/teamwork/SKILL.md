@@ -1,9 +1,9 @@
 ---
 name: teamwork
-description: Run work in this repo under its manager/worker operating model — establish a green baseline, take one plan item at a time, delegate mechanical edits and recon to cold low-effort workers, verify every worker diff, run the full gate, and commit. Use when starting plan-based work, when delegating to subagents, when a worker escalates a blocker, or when the user asks to work as a team / manager / coordinator.
-argument-hint: [plan item or task to run through the loop]
+description: Run work in this repo under its manager/worker operating model — establish a green baseline, work one epic at a time through its milestones, delegate mechanical edits and recon as tasks to cold low-effort workers, verify every worker diff, run the full gate, and commit. Use when starting plan-based work, when delegating to subagents, when a worker escalates a blocker, or when the user asks to work as a team / manager / coordinator.
+argument-hint: [milestone or task to run through the loop]
 user-invocable: true
-version: 0.5.0
+version: 0.6.0
 ---
 
 # Teamwork — manager/worker delivery loop
@@ -25,6 +25,27 @@ checks that. It is these four conditions, and you can check every one:
 
 If you cannot tick all four, you are not delegating — you are guessing out loud
 in someone else's context.
+
+---
+
+## The vocabulary — epic, milestone, task
+
+`agents/work-hierarchy.json` is the authority for these three words and the
+context action that closes each — read it from source, exactly as §0 says
+role contracts must be.
+
+| Level | What it is | Written by | Executed by | Ends with | Boundary action |
+|:---|:---|:---|:---|:---|:---|
+| epic | a big, independent user request | the user, in their own words | manager, via its milestones | every milestone committed, gate green alone, ledger epic line checked | `/clear` |
+| milestone | a part of an epic ending in one commit on a green gate | manager | workers, via tasks | gate green alone, commit exists, checkbox `[x]`, ledger updated | `/compact` |
+| task | one piece of milestone work sized for a cold worker's brief | manager, as the brief | a worker | worker reports DONE/BLOCKED/PARTIAL, manager re-verifies independently | `/context` |
+
+The boundary action is not advice: a level may fire a **higher** level's
+action early — a task with a huge payload may trigger `/compact` on the
+spot — but may never skip its own action, and never substitutes a lower
+level's action for its own.
+
+"Plan item" is retired. Say milestone.
 
 ---
 
@@ -60,7 +81,7 @@ loaded — that is pure cache cost.
 
 **A green baseline before you touch anything is what makes a later red gate
 mean something.** If the gate is red on arrival, that is the first thing you
-fix, and it is not part of the plan item.
+fix, and it is not part of the milestone.
 
 Confirm the test count matches the number stated in `AGENTS.md` §7. A different
 count means miscollection — investigate before trusting any run, green or not.
@@ -88,13 +109,16 @@ Before the first edit, write `READ_AFTER_COMPACT.md` at the repo root:
 
 ```markdown
 # READ AFTER COMPACT
-GOAL: <the user's ask, in their terms, in full — not your current sub-task>
 BRANCH: <branch> · BASELINE: <gate green? test count?>
 
-## Items
-- [x] <done item> — commit <sha>
-- [ ] <in-flight item> — worker <label>, files: <paths>
-- [ ] <not started>
+## EPIC QUEUE
+- ACTIVE: "<the user's ask, in their own words, in full>"
+- queued: "<next epic, listed — not started>"
+
+## <active epic> milestones
+- [x] <done milestone> — commit <sha>
+- [ ] <in-flight milestone> — worker <label>, files: <paths>
+- [ ] <not started milestone>
 
 ## Decisions (do not relitigate)
 - <architectural call> — <one-line reason>
@@ -113,21 +137,22 @@ Rules that make it worth the tokens:
 - It is the **first** thing you read after a compaction, before any source file.
 - It is gitignored session state, not a deliverable. Delete it when the work
   lands.
-- The GOAL line is the guard against the most expensive failure mode in this
-  workflow: silently finishing a smaller task than the one you were given.
+- The active epic line is the guard against the most expensive failure mode
+  in this workflow: silently finishing a smaller thing than the one you
+  were given.
 
 ## 2b. The delivery loop
 
 Execute exactly this, one item at a time:
 
-1. **Pick one unchecked plan item** from `plans/` — single scope. Record it in
+1. **Pick one unchecked milestone** from `plans/` — single scope. Record it in
    the ledger as in-flight.
 2. **Implement only that scope** — directly, or via workers (§3).
 3. **Run targeted tests** for the touched files.
 4. **Run the full gate, alone** — `timeout 1200 make gate`, with nothing
    else running. No concurrent builds, no parallel workers doing heavy work —
    see the gate-alone rule in §1.
-5. **Commit immediately**, message referencing the plan item.
+5. **Commit immediately**, message referencing the milestone.
 6. **Mark the checkbox `[x]`** — in the plan and in the ledger — only after the
    commit exists.
 7. **Sweep for stale processes.** Run `ps aux` (or
@@ -155,7 +180,7 @@ Hard stops, no exceptions:
 - Gate red → back to implementation. **No commit.** Never relax, allowlist
   around, or delete a check to reach green.
 - Never push to `master`. Feature branches only.
-- Do not batch plan items into one commit unless the plan says so.
+- Do not batch milestones into one commit unless the plan says so.
 - "Green but uncommitted" is an unfinished task, not a handoff.
 - **Steps 8 and 9 are unconditional, and step 9 ends the turn.** Not "when
   context is high" — *every* committed item, at any reading, including 7%.
@@ -280,6 +305,15 @@ Re-check every worker's work before trusting or committing it:
 
 Never pull a full diff into your context to verify. Read the worker's detail
 file only when something failed.
+
+**Measure at the task boundary, not the milestone boundary.** Run `/context`
+after every 3-5 workers, not only at the milestone boundary in §2b step 9.
+Fire `/compact` preemptively, without waiting for the milestone, whenever a
+task returns a large payload — a long report, a generated document, a
+build log, a recon digest you have already acted on. Context pressure is
+created at task granularity but was previously only ever discovered at
+milestone granularity, several workers too late. See §6b for how to issue
+either command yourself.
 
 ---
 
@@ -413,7 +447,9 @@ In order of impact:
    to be told the context is full; by then you have already paid for it on
    every turn since it filled. If you are unsure whether something is still
    needed, it is cheaper to drop it and re-read the one file you actually need
-   than to carry twenty you might.
+   than to carry twenty you might. At an epic boundary the action is
+   `/clear`, not `/compact`, because epics are independent by construction and
+   a summary of a finished request is pure carried cost in the next one.
 2. Delegate **reading**, not just writing — a recon worker's raw text never
    enters your context; only its digest does.
 3. Batch shell work — one call doing install + config + verify beats three

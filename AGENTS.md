@@ -15,6 +15,12 @@ then read your own contract:
 | **Manager / architect** | Opus, high effort | `agents/opus-manager.json` | Decide, decompose, review, gate, commit. |
 | **Worker / subagent** | Haiku or Sonnet, low effort | `agents/sonnet-worker.json` | Execute one prescriptive task. Escalate, never improvise. |
 
+Work is organised in three levels — **epic > milestone > task** — each with
+its own mandatory context-boundary action. `agents/work-hierarchy.json` is
+the canonical definition of these words and the actions that close them;
+read it from source before using the vocabulary below, never rely on memory
+of it.
+
 The two JSON files are the machine-readable session contracts — scope, allowed commands, escalation
 triggers, report format. **This file is the shared briefing; those files are your role's rules.**
 
@@ -51,11 +57,20 @@ timeout 1200 make gate
 
 For plan-based work, execute exactly this loop:
 
-1. **Pick one next unchecked plan item** (single scope).
+| Level | What it is | Boundary action |
+|:---|:---|:---|
+| epic | the user's whole request | `/clear` |
+| milestone | one commit-sized scope | `/compact` |
+| task | one delegated worker brief | `/context` |
+
+The loop below iterates over **milestones**; each milestone is executed as
+one or more delegated **tasks**.
+
+1. **Pick one next unchecked milestone** (single scope).
 2. **Implement only that scope.**
 3. **Run targeted tests** for the touched files.
 4. **Run the full gate** — `timeout 1200 make gate`.
-5. **Commit immediately** (message references the plan item).
+5. **Commit immediately** (message references the milestone).
 6. **Mark the plan checkbox `[x]`** — only after the commit exists.
 7. **Sweep for stale processes.** Run `ps aux` after every milestone and kill shells or agents left
    running by the work just committed — a `pgrep -f` waiter can match its own command line and spin
@@ -74,7 +89,7 @@ Hard rules:
 - **Run the gate alone.** No concurrent builds, no parallel workers doing heavy
   work — a gate run alongside other heavy work proves nothing, green or red.
 - Gate red → back to implementation. **No commit.** Never relax a check to get green.
-- Do not batch plan items into one commit unless the plan says so.
+- Do not batch milestones into one commit unless the plan says so.
 - Do not stop at "green but uncommitted". That is an unfinished task, not a handoff.
 - **Never push to `master`.** Feature branches only.
 - **Steps 8 and 9 are unconditional, and step 9 ends the turn.** Not "when context is high" —
@@ -204,6 +219,13 @@ output tokens. Shrinking context and cutting turn count beat delegating more tas
 
 Both factors compound: context you fail to drop is re-read, and re-paid for, on every remaining
 turn of the session.
+
+The three boundary actions differ in kind, not just scope. `/context` only
+measures — it changes nothing and exists purely to catch pressure early.
+`/compact` keeps a lossy summary, so some continuity survives into the next
+milestone. `/clear` keeps nothing at all, so at an epic boundary the ledger
+is the only thing that bridges the gap — it must be written before the
+clear, never after, or the bridge does not exist when you need it.
 
 **Part of your context is fixed and compaction cannot touch it.** Measured on this repo
 (2026-09-07, via `/context`): immediately after a compaction the window still held ~35.8k tokens
