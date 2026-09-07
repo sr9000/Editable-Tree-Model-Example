@@ -1,6 +1,6 @@
 # JSON Editor — Pros & Cons
 
-_Last analysis: **2026-09-06** (branch `migrate-to-poetry-py314`). Carries
+_Last analysis: **2026-09-07** (branch `migrate-to-poetry-py314`). Carries
 forward the 2026-06-01 architecture audit (overall grade **A−**); that review's
 report file has since been removed from `reports/`._
 
@@ -148,6 +148,16 @@ check and the `requirements.txt` freshness check; `release.yml` is
 `workflow_dispatch`-only. The suite is a purely local gate, so a pull request can
 go green having run nothing but a grep. This is now the most consequential gap in
 the repo.
+
+### Packaging is Linux-only locally
+
+Windows and macOS artifacts cannot be produced on this host at all.
+`packaging/docker/` gives a reproducible, containerised **Linux**
+PyInstaller build; Windows and macOS builds exist only as `windows-latest` /
+`macos-latest` legs in `.github/workflows/release.yml`
+(`workflow_dispatch`-only), which have never been observed to run. See
+`agents/todo-n-fixme.md` for the measured, settled reasons (PyInstaller
+cannot cross-compile; Wine lacks the `icuuc.dll` Qt6Core needs).
 
 ### File-size outliers (audit Low)
 

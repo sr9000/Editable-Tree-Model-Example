@@ -2,7 +2,9 @@
 
 _This is a condensed index and architectural summary. LLM agents should refer to direct source files for implementation
 details._
-**Last updated:** 2026-09-06 (docs-gap cleanup: corrected the `tree/` layout listing, removed dead plan and report references, single-sourced the test count to `AGENTS.md` §7).
+**Last updated:** 2026-09-07 (added §12 Packaging: corrected `packaging/docker/` and
+`packaging/windows/` accuracy after a Windows/macOS local-build investigation;
+see `agents/todo-n-fixme.md`).
 
 ## 1) High-level Purpose
 
@@ -244,3 +246,21 @@ make lint                    # poetry run autoflake + isort + black (in place; l
 make gate                    # full DoD gate (lint → reflection → editors-isolation → tree-isolation → tests)
 make requirements            # regenerate requirements.txt from poetry.lock (poetry export --only main)
 ```
+
+## 12) Packaging
+
+- `EditableTreeModel.spec` — the single PyInstaller spec shared by all three
+  target OSes. It has only two platform branches: `sys.platform == "win32"`
+  (consumes the icon from `packaging/windows/`) and `sys.platform ==
+  "darwin"` (a `BUNDLE()` step, macOS-only).
+- `packaging/docker/` — the working, containerised **Linux** PyInstaller
+  build (`Dockerfile` + `build.sh`); bind-mounts the source read-only and
+  emits `dist/EditableTreeModel`.
+- `packaging/windows/` — an **asset directory only**: `editabletreemodel.ico`,
+  consumed by the spec's `win32` branch. It is NOT a build pipeline and
+  cannot become one on this (Linux) host — a Windows `.exe` requires a
+  Windows Python (PyInstaller cannot cross-compile), and Wine cannot supply a
+  working Qt6 (`icuuc.dll` missing). See `agents/todo-n-fixme.md` for the
+  full, measured findings. The real route to Windows/macOS artifacts is the
+  `windows-latest` / `macos-latest` legs of `.github/workflows/release.yml`
+  (`workflow_dispatch`-only).

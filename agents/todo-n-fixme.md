@@ -1,8 +1,47 @@
 # TODO & FIXME
 
-_Last updated: **2026-09-06**. Open work only — completed items are deleted, not
+_Last updated: **2026-09-07**. Open work only — completed items are deleted, not
 archived. Format: `- [ ] [scope] description — file:symbol`. Reference symbols,
 not line numbers: line numbers rot silently._
+
+## Windows/macOS packaging (settled — do not re-investigate)
+
+_A dedicated investigation concluded a Windows `.exe` cannot be built on this
+Linux host. Every fact below is measured, not assumed — cite this section
+instead of re-deriving it._
+
+- A local Windows build is impossible for two independent, inherent reasons:
+  (1) PyInstaller cannot cross-compile — it freezes using the *running*
+  interpreter, so a Windows `.exe` requires a Windows Python; this is a
+  PyInstaller limitation, not a gap in this repo. (2) Wine was tried as a way
+  to get a Windows Python on Linux, via the image `tobix/pywine:3.14`. It
+  genuinely provides Windows CPython 3.14.7 (`sys.platform == "win32"`), and
+  every non-Qt native dependency installs from win_amd64 wheels and imports
+  cleanly under it with no source builds — gmpy2, numpy, pandas, jsonschema,
+  PyYAML, simplejson, python-dateutil. ONLY Qt fails: `Qt6Core.dll` imports
+  `icuuc.dll` — the ICU library Windows itself has shipped as an OS component
+  since Windows 10 version 1703 — and Wine 11.0 does not provide it, so
+  PySide6's QtCore, QtWidgets and QtNetwork all fail to load. The PySide6
+  wheel is fine on real Windows; the gap belongs to Wine.
+- Prebuilt ICU4C DLLs do NOT close this gap: they export version-suffixed
+  symbols (e.g. `u_strlen_74`), while Qt links against the unsuffixed Windows
+  system ABI.
+- A produced `.exe` is NOT evidence of a working build: PyInstaller still
+  emitted a 22.8MB `.exe` under Wine despite the Qt failure above — its Qt
+  hook hit the same failure, logged it only at WARNING level, and silently
+  fell back to static hooks.
+- `requirements.txt` is a current, fully-pinned `poetry export` carrying
+  `python_version == "3.14"` markers. This was explicitly checked: it is NOT
+  stale post-Poetry-migration. **Future agents must not "fix" it.**
+- macOS hits a strictly harder version of the same wall: it needs Apple
+  tooling, and the spec's `BUNDLE()` step is darwin-only.
+- [ ] [ci] The real route to Windows and macOS artifacts is
+  `.github/workflows/release.yml` (`workflow_dispatch`-only; matrix includes
+  `windows-latest` and `macos-latest`; `PYTHON_VERSION` 3.14,
+  `PYINSTALLER_VERSION` 6.22.2, spec mode). Running it needs the branch pushed
+  and the dispatch triggered — nothing was pushed as part of the
+  investigation, and doing so is the user's decision, not an agent's.
+  — `.github/workflows/release.yml`
 
 ## High priority
 

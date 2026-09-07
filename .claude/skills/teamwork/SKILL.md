@@ -3,7 +3,7 @@ name: teamwork
 description: Run work in this repo under its manager/worker operating model — establish a green baseline, work one epic at a time through its milestones, delegate mechanical edits and recon as tasks to cold low-effort workers, verify every worker diff, run the full gate, and commit. Use when starting plan-based work, when delegating to subagents, when a worker escalates a blocker, or when the user asks to work as a team / manager / coordinator.
 argument-hint: [milestone or task to run through the loop]
 user-invocable: true
-version: 0.6.0
+version: 0.7.0
 ---
 
 # Teamwork — manager/worker delivery loop
@@ -250,6 +250,25 @@ never delegating a task in the first place, because running the experiment
 felt like thinking. Both put the most expensive tokens in the system on the
 cheapest work.
 
+**When a decision rests on an assumption nobody has tested, spend one probe
+task before the implementation milestone.** A decision can be well-reasoned,
+correctly recorded, and still wrong. Measured here: a build strategy was chosen
+on solid recon — the tool provably cannot cross-compile, and a container image
+with exactly the right interpreter exists — and a single delegated probe then
+killed it in nine minutes, for a reason no amount of further reasoning would
+have surfaced: a missing OS library in the emulation layer. The probe cost one
+worker. The pipeline built on the untested assumption would have cost a whole
+milestone and produced an artifact nobody could trust. So name the load-bearing
+assumption inside the decision itself, and probe the cheapest thing that would
+falsify it.
+
+When a probe does falsify a recorded decision, **correct the record in place** —
+the decision, and everything downstream that inherited it. A fallback that
+shares the failed assumption is not a fallback; it is the same bet placed
+twice. Two entries had to be retracted this way here, and a ledger that keeps
+a refuted decision next to its correction is worth more than one that quietly
+overwrites it.
+
 Pick the worker shape deliberately:
 
 | Need | Spawn | Why |
@@ -294,6 +313,17 @@ build satisfies "is an ELF binary over 20MB" as well as a fresh one does.
 Fingerprint the artifact before and after, or build into a clean location —
 never merely confirm its shape. An acceptance check that a no-op can pass is
 not an acceptance check.
+
+**And freshness is not validity.** A build tool can emit a plausible artifact
+while the thing you actually needed silently failed, if the failure is only a
+warning. Measured here: PyInstaller's Qt hook could not import PySide6 — the
+emulation layer was missing a DLL Qt6 requires — logged it at WARNING level,
+fell back to static hooks, and still produced a 22.8MB `.exe`. That file passes
+"is it new?" and passes "is it well-formed?" and is still not a working build.
+So when the acceptance check cannot actually exercise the artifact — a Windows
+binary built on Linux cannot be smoke-tested on Linux — say so plainly as a
+limit of the evidence. A produced file is not a working one, and a report that
+does not distinguish them is a report that will be believed.
 
 ### Verify — a report states intent, not outcome
 
